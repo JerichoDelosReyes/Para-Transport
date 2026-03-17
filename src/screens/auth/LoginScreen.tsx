@@ -76,7 +76,7 @@ const GoogleLogo: React.FC<{ size?: number }> = ({ size = 20 }) => (
  * Clean, minimal design following Para branding.
  */
 export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
-  const { signInWithGoogle, isLoading, error, clearError } = useAuth();
+  const { signInWithGoogle, bypassAuth, isLoading, error, clearError } = useAuth();
   const [localLoading, setLocalLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -138,6 +138,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         setLocalError(err?.message || 'An error occurred during sign-in');
       }
       // User remains on LoginScreen - no navigation
+    } finally {
+      setLocalLoading(false);
+    }
+  };
+
+  /**
+   * Handle test bypass - skip login for testing
+   */
+  const handleTestBypass = async () => {
+    setLocalLoading(true);
+    setLocalError(null);
+    clearError();
+    
+    try {
+      await bypassAuth();
+      console.log('Test bypass successful');
+    } catch (err: any) {
+      console.error('Test bypass error:', err);
+      setLocalError('Test bypass failed');
     } finally {
       setLocalLoading(false);
     }
@@ -205,6 +224,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
                   <Text style={styles.googleButtonText}>Sign in with Google</Text>
                 </>
               )}
+            </Pressable>
+
+            {/* Test Bypass Button (for development) */}
+            <Pressable
+              style={[
+                styles.testBypassButton,
+                isButtonLoading && styles.googleButtonDisabled,
+              ]}
+              onPress={handleTestBypass}
+              disabled={isButtonLoading}
+            >
+              <Text style={styles.testBypassButtonText}>Test Bypass (Dev Only)</Text>
             </Pressable>
 
             {/* Footer */}
@@ -352,6 +383,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textDark900,
     textDecorationLine: 'underline',
+  },
+  testBypassButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  testBypassButtonText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
   },
 });
 

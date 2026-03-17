@@ -3,7 +3,7 @@
  * 
  * The first screen users see when opening the Para Mobile app.
  * Features an animated "scribble" jeepney illustration, brand tagline,
- * and a single prominent "Log in" button.
+ * and beautiful login/signup buttons with premium Apple-inspired design.
  * 
  * @module screens/WelcomeScreen
  */
@@ -14,7 +14,6 @@ import {
   Text,
   StyleSheet,
   Dimensions,
-  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -29,6 +28,8 @@ import JeepneySvg from '../../assets/illustrations/welcomeScreen-jeep.svg';
 const COLORS = {
   white: '#FFFFFF',
   paraBrand: '#E9AE16',
+  paraBrandLight: '#F5C844',
+  paraBrandDark: '#D49A0C',
   paraBrand2: '#284395',
   paraBrand3: '#EF2836',
   textDark900: '#181818',
@@ -100,16 +101,10 @@ export interface WelcomeScreenProps {
  * ```
  */
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
-  // Navigation handler for Login
-  const handleLogin = () => {
+  // Navigation handler for Get Started
+  const handleGetStarted = () => {
     console.log('Navigate to Login');
     navigation?.navigate('Login');
-  };
-
-  // Navigation handler for Sign Up
-  const handleSignUp = () => {
-    console.log('Navigate to Sign Up');
-    navigation?.navigate('Login'); // For now, go to Login (can be changed later)
   };
 
   return (
@@ -121,23 +116,14 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
         {/* Hero Illustration */}
         <JeepneyIllustration size={SCREEN_WIDTH * 0.8} />
         
-        {/* Login and Sign Up Actions */}
+        {/* Get Started Action */}
         <View style={styles.authContainer}>
           <AuthButton
-            text="Log in"
-            onPress={handleLogin}
+            text="Get Started"
+            onPress={handleGetStarted}
             style={styles.loginButton}
-            testID="welcome-login-button"
+            testID="welcome-get-started-button"
           />
-          {/* New to Para? divider */}
-          <Text style={styles.dividerText}>New to Para?</Text>
-          <Pressable
-            onPress={handleSignUp}
-            style={styles.signUpButton}
-            testID="welcome-signup-button"
-          >
-            <Text style={styles.signUpButtonText}>Sign Up</Text>
-          </Pressable>
         </View>
       </View>
     </SafeAreaView>
@@ -151,7 +137,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 100,
@@ -219,38 +205,13 @@ const styles = StyleSheet.create({
   authContainer: {
     width: '100%',
     alignItems: 'center',
-    gap: 12,
+    gap: 18,
+    paddingHorizontal: 8,
   },
   loginButton: {
     width: '100%',
     height: 60,
-  },
-  dividerText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    color: COLORS.textDark500,
-    marginVertical: 4,
-  },
-  signUpButton: {
-    width: '100%',
-    height: 60,
-    backgroundColor: COLORS.white,
-    borderWidth: 2,
-    borderColor: COLORS.paraBrand,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  signUpButtonText: {
-    fontFamily: 'Inter',
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.paraBrand,
+    borderRadius: 20,
   },
 });
 
