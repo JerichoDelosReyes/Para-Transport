@@ -3,7 +3,7 @@
  * 
  * The first screen users see when opening the Para Mobile app.
  * Features an animated "scribble" jeepney illustration, brand tagline,
- * and a single prominent "Log in" button.
+ * and beautiful login/signup buttons with premium Apple-inspired design.
  * 
  * @module screens/WelcomeScreen
  */
@@ -28,6 +28,8 @@ import JeepneySvg from '../../assets/illustrations/welcomeScreen-jeep.svg';
 const COLORS = {
   white: '#FFFFFF',
   paraBrand: '#E9AE16',
+  paraBrandLight: '#F5C844',
+  paraBrandDark: '#D49A0C',
   paraBrand2: '#284395',
   paraBrand3: '#EF2836',
   textDark900: '#181818',
@@ -99,8 +101,8 @@ export interface WelcomeScreenProps {
  * ```
  */
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
-  // Navigation handler
-  const handleLogin = () => {
+  // Navigation handler for Get Started
+  const handleGetStarted = () => {
     console.log('Navigate to Login');
     navigation?.navigate('Login');
   };
@@ -114,13 +116,13 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
         {/* Hero Illustration */}
         <JeepneyIllustration size={SCREEN_WIDTH * 0.8} />
         
-        {/* Single Login Action */}
+        {/* Get Started Action */}
         <View style={styles.authContainer}>
           <AuthButton
-            text="Log in"
-            onPress={handleLogin}
+            text="Get Started"
+            onPress={handleGetStarted}
             style={styles.loginButton}
-            testID="welcome-login-button"
+            testID="welcome-get-started-button"
           />
         </View>
       </View>
@@ -135,7 +137,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 100,
@@ -203,10 +205,13 @@ const styles = StyleSheet.create({
   authContainer: {
     width: '100%',
     alignItems: 'center',
+    gap: 18,
+    paddingHorizontal: 8,
   },
   loginButton: {
-    width: 380,
+    width: '100%',
     height: 60,
+    borderRadius: 20,
   },
 });
 

@@ -126,6 +126,8 @@ export interface AuthState {
 export interface AuthContextValue extends AuthState {
   /** Sign in with Google */
   signInWithGoogle: () => Promise<boolean>;
+  /** Bypass authentication for testing */
+  bypassAuth: () => Promise<void>;
   /** Sign out current user */
   signOut: () => Promise<void>;
   /** Clear current error */
@@ -511,13 +513,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('[AuthContext] Using redirect URI:', redirectUri);
 
-      // Build Google OAuth URL with token response type
+      // Build Google OAuth URL with ID token only (simpler, no offline)
       const params = {
         client_id: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
         redirect_uri: redirectUri,
-        response_type: 'token id_token',
+        response_type: 'id_token',
         scope: 'openid profile email',
-        prompt: 'consent',
+        nonce: 'para_app_nonce',
       };
 
       const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(params).toString()}`;
@@ -653,6 +655,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const profile = await fetchUserProfile(user.uid);
     setUserProfile(profile);
   }, [user, fetchUserProfile]);
+
+  /**
+   * Bypass Authentication (For Testing Only)
+   */
+  const bypassAuth = useCallback(async (): Promise<void> => {
+    try {
+      setIsLoading(true);
+      
+      const testEmail = 'test@para.local';
+      
+      // Simulate fake user
+      const fakeUser = {
+        uid: 'test-bypass-user-id',
+        email: testEmail,
+        displayName: 'Test User',
+      } as AuthUser;
+      
+      const fakeProfile: UserProfile = {
+        uid: 'test-bypass-user-id',
+        email: testEmail,
+        displayName: 'Test User',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        hasFilledDetails: true,
+        hasCompletedOnboarding: true,
+      };
+
+      setUser(fakeUser);
+      setUserProfile(fakeProfile);
+
+      console.log('[AuthContext] Auth bypassed successfully');
+    } catch (err: any) {
+      console.error('[AuthContext] bypassAuth error:', err);
+      setError('Test bypass failed');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   /**
    * Sign out current user
@@ -1074,6 +1114,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     error,
     // Actions
     signInWithGoogle,
+    bypassAuth,
     signOut,
     clearError,
     createUserProfile,
@@ -1104,6 +1145,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoading,
     error,
     signInWithGoogle,
+    bypassAuth,
     signOut,
     clearError,
     createUserProfile,

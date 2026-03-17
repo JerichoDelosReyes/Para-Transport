@@ -76,7 +76,7 @@ const GoogleLogo: React.FC<{ size?: number }> = ({ size = 20 }) => (
  * Clean, minimal design following Para branding.
  */
 export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
-  const { signInWithGoogle, isLoading, error, clearError } = useAuth();
+  const { signInWithGoogle, bypassAuth, isLoading, error, clearError } = useAuth();
   const [localLoading, setLocalLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -96,6 +96,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     Linking.openURL(LEGAL_URLS.TERMS_OF_SERVICE).catch((err) => {
       console.error('Failed to open Terms of Service URL:', err);
     });
+  };
+
+  /**
+   * Handle back button press
+   */
+  const handleBack = () => {
+    if (navigation?.goBack) {
+      navigation.goBack();
+    }
   };
 
   /**
@@ -135,13 +144,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   };
 
   /**
-   * Handle Sign Up button press
-   * Navigate to sign up screen (currently same as sign in for simplicity)
+   * Handle test bypass - skip login for testing
    */
-  const handleSignUp = async () => {
-    // For now, use the same Google Sign-In flow for sign up
-    // Users will go through Google OAuth which creates an account if new
-    await handleGoogleSignIn();
+  const handleTestBypass = async () => {
+    setLocalLoading(true);
+    setLocalError(null);
+    clearError();
+    
+    try {
+      await bypassAuth();
+      console.log('Test bypass successful');
+    } catch (err: any) {
+      console.error('Test bypass error:', err);
+      setLocalError('Test bypass failed');
+    } finally {
+      setLocalLoading(false);
+    }
   };
 
   const isButtonLoading = isLoading || localLoading;
@@ -152,6 +170,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoid}
       >
+        {/* Back Button */}
+        <View style={styles.headerContainer}>
+          <Pressable 
+            style={styles.backButton}
+            onPress={handleBack}
+            hitSlop={10}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.content}>
           {/* Main Content */}
           <VStack style={styles.mainContent}>
@@ -197,23 +226,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               )}
             </Pressable>
 
-            {/* Sign Up Divider */}
-            <View style={styles.dividerContainer}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>New to Para?</Text>
-              <View style={styles.divider} />
-            </View>
-
-            {/* Sign Up Button */}
+            {/* Test Bypass Button (for development) */}
             <Pressable
               style={[
-                styles.signUpButton,
-                isButtonLoading && styles.signUpButtonDisabled,
+                styles.testBypassButton,
+                isButtonLoading && styles.googleButtonDisabled,
               ]}
-              onPress={handleSignUp}
+              onPress={handleTestBypass}
               disabled={isButtonLoading}
             >
-              <Text style={styles.signUpButtonText}>Create Account</Text>
+              <Text style={styles.testBypassButtonText}>Test Bypass (Dev Only)</Text>
             </Pressable>
 
             {/* Footer */}
@@ -249,6 +271,21 @@ const styles = StyleSheet.create({
   },
   keyboardAvoid: {
     flex: 1,
+  },
+  headerContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  backButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  backButtonText: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textDark900,
   },
   content: {
     flex: 1,
@@ -329,43 +366,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textDark900,
   },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.borderLight300,
-  },
-  dividerText: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    color: COLORS.textDark500,
-    paddingHorizontal: 12,
-  },
-  signUpButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.paraBrand,
-    borderRadius: 24,
-    height: 52,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  signUpButtonDisabled: {
-    opacity: 0.7,
-  },
-  signUpButtonText: {
-    fontFamily: 'Inter',
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.buttonTextDark,
-  },
   footer: {
     marginTop: 24,
     paddingHorizontal: 16,
@@ -383,6 +383,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textDark900,
     textDecorationLine: 'underline',
+  },
+  testBypassButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  testBypassButtonText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
   },
 });
 
