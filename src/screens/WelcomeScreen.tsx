@@ -14,6 +14,7 @@ import {
   Text,
   StyleSheet,
   Dimensions,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -99,10 +100,16 @@ export interface WelcomeScreenProps {
  * ```
  */
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
-  // Navigation handler
+  // Navigation handler for Login
   const handleLogin = () => {
     console.log('Navigate to Login');
     navigation?.navigate('Login');
+  };
+
+  // Navigation handler for Sign Up
+  const handleSignUp = () => {
+    console.log('Navigate to Sign Up');
+    navigation?.navigate('Login'); // For now, go to Login (can be changed later)
   };
 
   return (
@@ -114,7 +121,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
         {/* Hero Illustration */}
         <JeepneyIllustration size={SCREEN_WIDTH * 0.8} />
         
-        {/* Single Login Action */}
+        {/* Login and Sign Up Actions */}
         <View style={styles.authContainer}>
           <AuthButton
             text="Log in"
@@ -122,6 +129,15 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
             style={styles.loginButton}
             testID="welcome-login-button"
           />
+          {/* New to Para? divider */}
+          <Text style={styles.dividerText}>New to Para?</Text>
+          <Pressable
+            onPress={handleSignUp}
+            style={styles.signUpButton}
+            testID="welcome-signup-button"
+          >
+            <Text style={styles.signUpButtonText}>Sign Up</Text>
+          </Pressable>
         </View>
       </View>
     </SafeAreaView>
@@ -203,10 +219,38 @@ const styles = StyleSheet.create({
   authContainer: {
     width: '100%',
     alignItems: 'center',
+    gap: 12,
   },
   loginButton: {
-    width: 380,
+    width: '100%',
     height: 60,
+  },
+  dividerText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLORS.textDark500,
+    marginVertical: 4,
+  },
+  signUpButton: {
+    width: '100%',
+    height: 60,
+    backgroundColor: COLORS.white,
+    borderWidth: 2,
+    borderColor: COLORS.paraBrand,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  signUpButtonText: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.paraBrand,
   },
 });
 

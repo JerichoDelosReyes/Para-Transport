@@ -511,13 +511,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('[AuthContext] Using redirect URI:', redirectUri);
 
-      // Build Google OAuth URL with token response type
+      // Build Google OAuth URL with ID token only (simpler, no offline)
       const params = {
         client_id: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
         redirect_uri: redirectUri,
-        response_type: 'token id_token',
+        response_type: 'id_token',
         scope: 'openid profile email',
-        prompt: 'consent',
+        nonce: 'para_app_nonce',
       };
 
       const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(params).toString()}`;
