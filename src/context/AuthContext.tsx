@@ -14,8 +14,14 @@ import { Timestamp as FirebaseFirestoreTypesTimestamp, doc, getDoc, setDoc, coll
 
 import { auth, firestore } from '../config/firebase';
 
-// Import API service for production backend integration
-import { apiService } from '../services/api.service';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+
+// Ensure the auth session is completed properly after redirect
+WebBrowser.maybeCompleteAuthSession();
+
+// Express API service removed (migrating to Supabase)
 
 // Import default preferences
 import defaultPreferences from '../data/defaults.json';
@@ -273,17 +279,93 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [currentStats]);
 
   // ==========================================================================
-  // Google Sign-In Configuration
+  // Google Sign-In Configuration (Expo Go Compatible)
   // ==========================================================================
 
-  useEffect(() => {
-    // Configure Google Sign-In
-    // NOTE: Removed native GoogleSignin config for Expo Go compatibility
+  // Google Sign-In Configuration (Expo Go Compatible via expo-auth-session)
+  // Uses the web client ID for Expo Go (auth.expo.io proxy) and falls back
+  // to platform-specific IDs for standalone/development builds.
+  // ==========================================================================
+
+  // Variables for OAuth flow
+  const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+  const expoOwner = Constants.expoConfig?.owner || 'zer0_echo';
+  const expoSlug = Constants.expoConfig?.slug || 'para';
+
+  const completeGoogleSignIn = useCallback(async (tokens: { idToken?: string; accessToken?: string }): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (!tokens.idToken && !tokens.accessToken) {
+        throw new Error('Google Sign-In did not return an ID token or access token.');
+      }
+
+      console.log('[AuthContext] Creating Firebase credential...');
+      
+      // Firebase requires at least idToken for Google auth
+      if (!tokens.idToken) {
+        console.warn('[AuthContext] No ID token, only access token. Attempting credential creation...');
+      }
+
+      const credential = GoogleAuthProvider.credential(
+        tokens.idToken ?? null,
+        tokens.accessToken ?? null
+      );
+
+      console.log('[AuthContext] Firebase credential created. Signing in...');
+      const authResult = await signInWithCredential(auth, credential);
+      
+      console.log('[AuthContext] Firebase auth successful, uid:', authResult.user.uid);
+      console.log('[AuthContext] User email:', authResult.user.email);
+      
+      // Auto-create user profile in Firestore using Google profile data
+      if (authResult.user) {
+        try {
+          const userDocRef = doc(firestore, USERS_COLLECTION, authResult.user.uid);
+          const userDoc = await getDoc(userDocRef);
+          
+          // Only create if profile doesn't exist yet (new user)
+          if (!userDoc.exists()) {
+            console.log('[AuthContext] Creating initial user profile for new user...');
+            const now = serverTimestamp();
+            
+            const newProfile: Partial<UserProfile> = {
+              uid: authResult.user.uid,
+              email: authResult.user.email,
+              displayName: authResult.user.displayName,
+              photoURL: authResult.user.photoURL,
+              createdAt: now as any,
+              updatedAt: now as any,
+              hasFilledDetails: false,
+              hasCompletedOnboarding: false,
+            };
+            
+            await setDoc(userDocRef, newProfile);
+            console.log('[AuthContext] ✅ Initial user profile created successfully');
+          } else {
+            console.log('[AuthContext] User profile already exists, skipping creation');
+          }
+        } catch (profileErr) {
+          console.warn('[AuthContext] Could not auto-create user profile:', profileErr);
+          // Don't fail auth if profile creation fails - user is authenticated
+        }
+      }
+    } catch (err: any) {
+      console.error('[AuthContext] Firebase Google Sign-In error:', {
+        message: err.message,
+        code: err.code,
+        fullError: err,
+      });
+      setError(err.message || 'Failed to sign in with Google. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   // ==========================================================================
   // Firestore User Profile Helpers
-  // ==========================================================================
+  // ===========================================================================
 
   /**
    * Fetch user profile from Firestore
@@ -339,28 +421,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('[AuthContext] Profile fetched:', profile ? `hasCompletedOnboarding=${profile.hasCompletedOnboarding}` : 'null (new user)');
         setUserProfile(profile);
         
-        // Wire up API service with Firebase auth token for production backend
-        apiService.setTokenGetter(async () => {
-          try {
-            return await authUser.getIdToken();
-          } catch (tokenError) {
-            console.warn('[AuthContext] Failed to get auth token:', tokenError);
-            return null;
-          }
-        });
-        console.log('[AuthContext] ✅ API Service token getter configured');
-        
-        // Background health check - wake up the server (non-blocking)
-        // This helps with Render cold start by initiating a request early
-        apiService.isServerReady().then((isReady) => {
-          if (isReady) {
-            console.log('[AuthContext] ✅ Backend server is ready');
-          } else {
-            console.log('[AuthContext] ⚠️ Backend server not ready (may be cold starting)');
-          }
-        }).catch(() => {
-          console.log('[AuthContext] ⚠️ Backend health check failed (offline mode available)');
-        });
+        // Background health check - removed since Supabase doesn't have Render cold starts
         
         // Initialize and fetch user preferences (savedTrips)
         try {
@@ -427,24 +488,100 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // ==========================================================================
 
   /**
-   * Sign in with Google
-   * Returns true if sign-in was successful, false otherwise
+   * Sign in with Google - Manual OAuth flow with WebBrowser
+   * Opens browser to Google OAuth login, captures redirect with tokens
    */
   const signInWithGoogle = useCallback(async (): Promise<boolean> => {
     try {
       setError(null);
+
+      if (!process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) {
+        console.error('[AuthContext] Google Web Client ID not configured');
+        setError('Google Sign-In is not configured. Contact support.');
+        return false;
+      }
+
       setIsLoading(true);
+      console.log('[AuthContext] Starting manual OAuth flow...');
+
+      // Build the redirect URI
+      const redirectUri = isExpoGo
+        ? `https://auth.expo.io/@${expoOwner}/${expoSlug}`
+        : AuthSession.makeRedirectUri({ scheme: 'para', path: 'oauthredirect' });
+
+      console.log('[AuthContext] Using redirect URI:', redirectUri);
+
+      // Build Google OAuth URL with token response type
+      const params = {
+        client_id: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+        redirect_uri: redirectUri,
+        response_type: 'token id_token',
+        scope: 'openid profile email',
+        prompt: 'consent',
+      };
+
+      const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(params).toString()}`;
       
-      // Native Google SignIn is currently unsupported in Expo Go.
-      throw new Error('Google Sign-In is not currently supported in this Expo Go environment.');
+      console.log('[AuthContext] Opening browser for OAuth...');
+      const result = await WebBrowser.openAuthSessionAsync(googleAuthUrl, redirectUri);
+
+      console.log('[AuthContext] Browser result type:', result.type);
+
+      if (result.type === 'success' && result.url) {
+        console.log('[AuthContext] Auth success, parsing tokens from redirect...');
+        
+        try {
+          // Parse the redirect URL to extract tokens from the fragment
+          const url = new URL(result.url);
+          const fragment = url.hash.substring(1); // Remove leading #
+          const params = new URLSearchParams(fragment);
+          
+          const idToken = params.get('id_token');
+          const accessToken = params.get('access_token');
+          
+          console.log('[AuthContext] Token extraction result:', {
+            hasIdToken: !!idToken,
+            hasAccessToken: !!accessToken,
+            idTokenLength: idToken?.length || 0,
+            accessTokenLength: accessToken?.length || 0,
+          });
+
+          if (!idToken && !accessToken) {
+            console.error('[AuthContext] No tokens in URL fragment. URL:', result.url);
+            setError('No authentication tokens returned. Please try again.');
+            setIsLoading(false);
+            return false;
+          }
+
+          console.log('[AuthContext] Completing sign-in with tokens...');
+          await completeGoogleSignIn({ 
+            idToken: idToken || undefined, 
+            accessToken: accessToken || undefined 
+          });
+          return true;
+        } catch (parseErr: any) {
+          console.error('[AuthContext] Error parsing redirect URL:', parseErr);
+          setError('Failed to parse authentication response');
+          setIsLoading(false);
+          return false;
+        }
+      } else if (result.type === 'cancel') {
+        console.log('[AuthContext] User cancelled authentication');
+        setIsLoading(false);
+        return false;
+      } else {
+        console.log('[AuthContext] Auth dismissed or error');
+        setError('Authentication was cancelled. Please try again.');
+        setIsLoading(false);
+        return false;
+      }
     } catch (err: any) {
-      console.error('[AuthContext] Google Sign-In error:', err);
-      setError(err.message || 'Failed to sign in with Google');
-      return false;
-    } finally {
+      console.error('[AuthContext] OAuth error:', err.message, err);
+      setError(err.message || 'Failed to start Google Sign-In');
       setIsLoading(false);
+      return false;
     }
-  }, []);
+  }, [isExpoGo, expoOwner, expoSlug]);
 
   /**
    * Create user profile in Firestore

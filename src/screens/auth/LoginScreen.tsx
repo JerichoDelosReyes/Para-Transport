@@ -134,6 +134,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     }
   };
 
+  /**
+   * Handle Sign Up button press
+   * Navigate to sign up screen (currently same as sign in for simplicity)
+   */
+  const handleSignUp = async () => {
+    // For now, use the same Google Sign-In flow for sign up
+    // Users will go through Google OAuth which creates an account if new
+    await handleGoogleSignIn();
+  };
+
   const isButtonLoading = isLoading || localLoading;
 
   return (
@@ -185,6 +195,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
                   <Text style={styles.googleButtonText}>Sign in with Google</Text>
                 </>
               )}
+            </Pressable>
+
+            {/* Sign Up Divider */}
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>New to Para?</Text>
+              <View style={styles.divider} />
+            </View>
+
+            {/* Sign Up Button */}
+            <Pressable
+              style={[
+                styles.signUpButton,
+                isButtonLoading && styles.signUpButtonDisabled,
+              ]}
+              onPress={handleSignUp}
+              disabled={isButtonLoading}
+            >
+              <Text style={styles.signUpButtonText}>Create Account</Text>
             </Pressable>
 
             {/* Footer */}
@@ -299,6 +328,43 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: COLORS.textDark900,
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.borderLight300,
+  },
+  dividerText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: COLORS.textDark500,
+    paddingHorizontal: 12,
+  },
+  signUpButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.paraBrand,
+    borderRadius: 24,
+    height: 52,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  signUpButtonDisabled: {
+    opacity: 0.7,
+  },
+  signUpButtonText: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.buttonTextDark,
   },
   footer: {
     marginTop: 24,
