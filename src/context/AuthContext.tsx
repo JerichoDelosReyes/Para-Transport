@@ -126,8 +126,6 @@ export interface AuthState {
 export interface AuthContextValue extends AuthState {
   /** Sign in with Google */
   signInWithGoogle: () => Promise<boolean>;
-  /** Bypass authentication for testing */
-  bypassAuth: () => Promise<void>;
   /** Sign out current user */
   signOut: () => Promise<void>;
   /** Clear current error */
@@ -507,19 +505,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('[AuthContext] Starting manual OAuth flow...');
 
       // Build the redirect URI
-      const redirectUri = isExpoGo
+      const isIOSStandalone = Platform.OS === 'ios' && !isExpoGo;
+      let clientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+      
+      let redirectUri = isExpoGo
         ? `https://auth.expo.io/@${expoOwner}/${expoSlug}`
         : AuthSession.makeRedirectUri({ scheme: 'para', path: 'oauthredirect' });
 
+      // Use iOS Client ID and Reverse Scheme for native standalone builds
+      if (isIOSStandalone && process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID) {
+        clientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+        const reverseClientId = clientId.split('.').reverse().join('.');
+        
+        redirectUri = AuthSession.makeRedirectUri({ 
+          scheme: reverseClientId, 
+          path: 'oauthredirect' 
+        });
+      }
+
+      console.log('[AuthContext] Using Client ID:', clientId);
       console.log('[AuthContext] Using redirect URI:', redirectUri);
 
-      // Build Google OAuth URL with ID token only (simpler, no offline)
+      // Build Google OAuth URL with token response type
       const params = {
-        client_id: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+        client_id: clientId,
         redirect_uri: redirectUri,
-        response_type: 'id_token',
+        response_type: 'token id_token',
         scope: 'openid profile email',
-        nonce: 'para_app_nonce',
+        prompt: 'consent',
       };
 
       const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(params).toString()}`;
@@ -655,44 +668,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const profile = await fetchUserProfile(user.uid);
     setUserProfile(profile);
   }, [user, fetchUserProfile]);
-
-  /**
-   * Bypass Authentication (For Testing Only)
-   */
-  const bypassAuth = useCallback(async (): Promise<void> => {
-    try {
-      setIsLoading(true);
-      
-      const testEmail = 'test@para.local';
-      
-      // Simulate fake user
-      const fakeUser = {
-        uid: 'test-bypass-user-id',
-        email: testEmail,
-        displayName: 'Test User',
-      } as AuthUser;
-      
-      const fakeProfile: UserProfile = {
-        uid: 'test-bypass-user-id',
-        email: testEmail,
-        displayName: 'Test User',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        hasFilledDetails: true,
-        hasCompletedOnboarding: true,
-      };
-
-      setUser(fakeUser);
-      setUserProfile(fakeProfile);
-
-      console.log('[AuthContext] Auth bypassed successfully');
-    } catch (err: any) {
-      console.error('[AuthContext] bypassAuth error:', err);
-      setError('Test bypass failed');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
   /**
    * Sign out current user
@@ -1114,7 +1089,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     error,
     // Actions
     signInWithGoogle,
-    bypassAuth,
     signOut,
     clearError,
     createUserProfile,
@@ -1145,7 +1119,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoading,
     error,
     signInWithGoogle,
-    bypassAuth,
     signOut,
     clearError,
     createUserProfile,
