@@ -10,8 +10,8 @@
     },
     "version": "1.0.0",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.para.zexen.app.dev",
+      "supportsTablet": false,
+      "bundleIdentifier": "com.para.zexen1.app.dev",
       "appleTeamId": "74YXGF3C23",
       "googleServicesFile": "./GoogleService-Info.plist"
     },
