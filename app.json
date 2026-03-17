@@ -2,6 +2,7 @@
   "expo": {
     "name": "Para",
     "slug": "para",
+    "scheme": "para",
     "icon": "./assets/logo/appicon.png",
     "splash": {
       "image": "./assets/logo/splashscreen.png",
@@ -17,7 +18,8 @@
     },
     "plugins": [
       "expo-dev-client",
-      "expo-location"
+      "expo-location",
+      "expo-web-browser"
     ],
     "android": {
       "permissions": [

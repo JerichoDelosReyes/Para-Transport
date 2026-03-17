@@ -2,21 +2,19 @@
  * Services Index
  * 
  * Central export for all application services.
- * Import from here: `import { apiService, searchRoutesFromApi } from '@/services'`
+ * Import from here: `import { searchRoutes } from '@/services'`
  * 
  * @module services/index
  */
 
 // =============================================================================
-// API Service (Production Backend)
+// API Service (Production Backend) - REMOVED (Migrated to Supabase)
 // =============================================================================
-export { apiService, ApiServiceError } from './api.service';
 
 // =============================================================================
 // Route Search
 // =============================================================================
 export { 
-  searchRoutesFromApi, 
   checkApiHealth,
   searchRoutes,
   geocodeLocation,

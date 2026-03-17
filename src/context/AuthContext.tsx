@@ -14,8 +14,15 @@ import { Timestamp as FirebaseFirestoreTypesTimestamp, doc, getDoc, setDoc, coll
 
 import { auth, firestore } from '../config/firebase';
 
-// Import API service for production backend integration
-import { apiService } from '../services/api.service';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+
+// Ensure the auth session is completed properly after redirect
+WebBrowser.maybeCompleteAuthSession();
+
+// Express API service removed (migrating to Supabase)
 
 // Import default preferences
 import defaultPreferences from '../data/defaults.json';
@@ -273,13 +280,65 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [currentStats]);
 
   // ==========================================================================
-  // Google Sign-In Configuration
+  // Google Sign-In Configuration (Expo Go Compatible)
   // ==========================================================================
 
+  // Google Sign-In Configuration (Expo Go Compatible via expo-auth-session)
+  // Uses the web client ID for Expo Go (auth.expo.io proxy) and falls back
+  // to platform-specific IDs for standalone/development builds.
+  // ==========================================================================
+
+  const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+  const googleRedirectUri = isExpoGo
+    ? AuthSession.getRedirectUrl()
+    : AuthSession.makeRedirectUri({
+        scheme: 'para',
+        path: 'oauthredirect',
+      });
+
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    // Web client ID — used by Expo Go via auth.expo.io proxy.
+    // Get this from: Firebase Console → Authentication → Sign-in method → Google
+    // → "Web SDK configuration" → Web client ID.
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    // Platform-specific IDs for standalone / development builds (optional).
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || undefined,
+    // Fallback: ensures the library picks up the web ID on native platforms
+    // when no platform-specific ID is provided.
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    // Expo Go must use the Expo-managed HTTPS callback, not the native scheme.
+    redirectUri: googleRedirectUri,
+    // On Expo Go, request the ID token directly using the web client.
+    responseType: isExpoGo ? AuthSession.ResponseType.IdToken : undefined,
+  });
+
   useEffect(() => {
-    // Configure Google Sign-In
-    // NOTE: Removed native GoogleSignin config for Expo Go compatibility
-  }, []);
+    const handleGoogleResponse = async () => {
+      if (response?.type === 'success') {
+        setIsLoading(true);
+        setError(null);
+        try {
+          const { id_token } = response.params;
+          const credential = GoogleAuthProvider.credential(id_token);
+          await signInWithCredential(auth, credential);
+        } catch (err: any) {
+          console.error('[AuthContext] Firebase Google Sign-In error:', err);
+          setError(err.message || 'Failed to sign in with Google');
+        } finally {
+          setIsLoading(false);
+        }
+      } else if (response?.type === 'error') {
+        console.warn('[AuthContext] Google Sign-In failed', response.error);
+        setIsLoading(false);
+      } else if (response?.type === 'cancel') {
+        console.warn('[AuthContext] Google Sign-In was cancelled');
+        setIsLoading(false);
+      }
+    };
+    
+    handleGoogleResponse();
+  }, [response]);
 
   // ==========================================================================
   // Firestore User Profile Helpers
@@ -339,28 +398,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('[AuthContext] Profile fetched:', profile ? `hasCompletedOnboarding=${profile.hasCompletedOnboarding}` : 'null (new user)');
         setUserProfile(profile);
         
-        // Wire up API service with Firebase auth token for production backend
-        apiService.setTokenGetter(async () => {
-          try {
-            return await authUser.getIdToken();
-          } catch (tokenError) {
-            console.warn('[AuthContext] Failed to get auth token:', tokenError);
-            return null;
-          }
-        });
-        console.log('[AuthContext] ✅ API Service token getter configured');
-        
-        // Background health check - wake up the server (non-blocking)
-        // This helps with Render cold start by initiating a request early
-        apiService.isServerReady().then((isReady) => {
-          if (isReady) {
-            console.log('[AuthContext] ✅ Backend server is ready');
-          } else {
-            console.log('[AuthContext] ⚠️ Backend server not ready (may be cold starting)');
-          }
-        }).catch(() => {
-          console.log('[AuthContext] ⚠️ Backend health check failed (offline mode available)');
-        });
+        // Background health check - removed since Supabase doesn't have Render cold starts
         
         // Initialize and fetch user preferences (savedTrips)
         try {
@@ -428,23 +466,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   /**
    * Sign in with Google
-   * Returns true if sign-in was successful, false otherwise
+   * Inits the AuthSession prompt. Result is handled asynchronously in useEffect.
+   * Returns true to indicate the prompt started (it doesn't mean sign-in finished yet).
    */
   const signInWithGoogle = useCallback(async (): Promise<boolean> => {
     try {
       setError(null);
-      setIsLoading(true);
-      
-      // Native Google SignIn is currently unsupported in Expo Go.
-      throw new Error('Google Sign-In is not currently supported in this Expo Go environment.');
+
+      if (!process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) {
+        const msg =
+          'Google Sign-In is not configured. Set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID in your .env file.\n' +
+          'Get it from: Firebase Console → Authentication → Sign-in method → Google → Web client ID.';
+        console.error('[AuthContext]', msg);
+        setError('Google Sign-In is not configured. Contact support.');
+        return false;
+      }
+
+      if (!request) {
+        throw new Error('Google Sign-In request is not ready yet. Please try again.');
+      }
+
+      await promptAsync();
+      return true;
     } catch (err: any) {
-      console.error('[AuthContext] Google Sign-In error:', err);
-      setError(err.message || 'Failed to sign in with Google');
+      console.error('[AuthContext] Google Sign-In prompt error:', err);
+      setError(err.message || 'Failed to start Google Sign-In');
       return false;
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+  }, [request, promptAsync]);
 
   /**
    * Create user profile in Firestore
