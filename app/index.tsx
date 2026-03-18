@@ -76,7 +76,6 @@ export default function WelcomeScreen() {
         </View>
 
         <View style={styles.heroZone}>
-          <View style={styles.halo} />
           <JeepIllustration width="108%" height="108%" />
         </View>
       </View>
@@ -93,7 +92,6 @@ export default function WelcomeScreen() {
           activeOpacity={0.9}
         >
           <Text style={styles.primaryButtonText}>Get Started</Text>
-          <Ionicons name="arrow-forward" size={16} color={COLORS.navy} style={styles.primaryArrow} />
         </TouchableOpacity>
       </View>
 
