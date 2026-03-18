@@ -114,14 +114,14 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.appleSocial} activeOpacity={0.9}>
-                <Ionicons name="logo-apple" size={16} color="#FFFFFF" style={{ marginRight: 5 }} />
-                <Text style={styles.appleSocialText}>Apple</Text>
-              </TouchableOpacity>
-
               <TouchableOpacity style={styles.lightSocial} activeOpacity={0.9}>
                 <Text style={styles.googleMark}>G</Text>
                 <Text style={styles.lightSocialText}>Google</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.appleSocial} activeOpacity={0.9}>
+                <Ionicons name="logo-apple" size={16} color="#FFFFFF" style={{ marginRight: 5 }} />
+                <Text style={styles.appleSocialText}>Apple</Text>
               </TouchableOpacity>
             </View>
 
