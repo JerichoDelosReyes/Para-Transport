@@ -9,7 +9,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { User as FirebaseAuthTypesUser, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { User as FirebaseAuthTypesUser, GoogleAuthProvider, signInWithCredential, signInAnonymously } from 'firebase/auth';
 import { Timestamp as FirebaseFirestoreTypesTimestamp, doc, getDoc, setDoc, collection, getDocs, query, orderBy, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 
 import { auth, firestore } from '../config/firebase';
@@ -170,6 +170,8 @@ export interface AuthContextValue extends AuthState {
   unlockedAchievements: AchievementType[];
   /** Convenience: current stats (computed) */
   currentStats: UserStats | null;
+  /** Test bypass - skip authentication for testing */
+  bypassAuth: () => Promise<void>;
 }
 
 // =============================================================================
@@ -700,6 +702,57 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   /**
+   * Test bypass - skip authentication for testing
+   * Creates or signs in with a test user account
+   */
+  const bypassAuth = useCallback(async (): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log('[AuthContext] Starting test bypass (no auth)...');
+
+      // Create fake user object without calling Firebase
+      const fakeUid = 'test-user-' + Date.now();
+      const fakeUser = {
+        uid: fakeUid,
+        email: null,
+        displayName: 'Test User',
+        photoURL: null,
+        emailVerified: false,
+        isAnonymous: true,
+        metadata: {} as any,
+        providerData: [],
+        delete: async () => {},
+        getIdToken: async () => 'fake-token',
+        getIdTokenResult: async () => ({ token: 'fake-token' } as any),
+        reload: async () => {},
+        toJSON: () => ({}),
+      } as any;
+
+      // Set the fake user and profile without Firebase calls
+      setUser(fakeUser);
+      setUserProfile({
+        uid: fakeUid,
+        email: null,
+        displayName: 'Test User',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        hasFilledDetails: true,
+        hasCompletedOnboarding: true, // Skip all onboarding screens
+      });
+
+      console.log('[AuthContext] ✅ Test bypass successful - authenticated as test user');
+    } catch (err: any) {
+      console.error('[AuthContext] Test bypass error:', err);
+      setError(err.message || 'Test bypass failed');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  /**
    * Mark onboarding as complete
    * Called when user presses the arrow on Success screen to go to main app
    */
@@ -1114,6 +1167,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     updatePhotoURL,
     unlockedAchievements,
     currentStats,
+    // Test bypass
+    bypassAuth,
   }), [
     user,
     userProfile,
@@ -1140,6 +1195,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     updatePhotoURL,
     unlockedAchievements,
     currentStats,
+    bypassAuth,
   ]);
 
   return (
