@@ -1,6 +1,6 @@
 # Security Policy
 
-**Version 0.1.0 (Beta)**
+**Version 1.0.0**
 
 ---
 
@@ -10,8 +10,8 @@ The following table indicates which versions of Para Mobile currently receive se
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | Yes       |
-| < 0.1.0 | No        |
+| 1.x.x   | Yes       |
+| < 1.0.0 | No        |
 
 ---
 
