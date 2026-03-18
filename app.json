@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Para",
+    "slug": "para",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "para",
+    "icon": "./assets/logo/appicon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/logo/splashscreen.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/logo/appicon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/logo/appicon.png"
+    },
+    "plugins": [
+      "expo-image"
+    ]
+  }
+}

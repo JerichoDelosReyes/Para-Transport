@@ -1,0 +1,22 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "nativewind-env.d.ts",
+    "declarations.d.ts"
+  ],
+  "exclude": [
+    "claude-skills/**",
+    "reference/**",
+    "node_modules/**"
+  ]
+}
