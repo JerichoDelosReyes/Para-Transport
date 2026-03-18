@@ -123,11 +123,6 @@ export default function LoginScreen() {
                 <Text style={styles.googleMark}>G</Text>
                 <Text style={styles.lightSocialText}>Google</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity style={styles.lightSocial} activeOpacity={0.9}>
-                <Ionicons name="logo-facebook" size={16} color="#1877F2" style={{ marginRight: 4 }} />
-                <Text style={styles.lightSocialText}>Facebook</Text>
-              </TouchableOpacity>
             </View>
 
             <TouchableOpacity style={styles.createAccountButton} onPress={() => router.push('/register')} activeOpacity={0.9}>
