@@ -244,6 +244,7 @@ const styles = StyleSheet.create({
     fontSize: 34,
     fontWeight: '700',
     color: COLORS.navy,
+    marginTop: -12,
   },
   sheetSubtitle: {
     marginTop: 12,
