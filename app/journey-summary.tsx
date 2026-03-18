@@ -119,6 +119,22 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
+  primaryText: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '700',
+    color: '#0A1628',
+  },
+  secondaryButton: {
+    height: 56,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DFDFDF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
   secondaryText: {
     fontFamily: 'Inter',
     fontSize: TYPOGRAPHY.body,

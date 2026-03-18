@@ -1,4 +1,5 @@
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, Alert, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
@@ -6,7 +7,21 @@ import { ROUTES } from '../../constants/routes';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 
 export default function SavedScreen() {
-  const savedRoutes = ROUTES.slice(0, 3);
+  const [savedRoutes, setSavedRoutes] = useState(ROUTES.slice(0, 3));
+  const [selectedRoute, setSelectedRoute] = useState<any>(null);
+  const [isModalVisible, setModalVisible] = useState(false);
+
+  const confirmRemove = (id: number) => {
+    Alert.alert('Remove Saved Route', 'Are you sure you want to remove this route?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => setSavedRoutes(savedRoutes.filter(r => r.id !== id)) }
+    ]);
+  };
+
+  const openModal = (route: any) => {
+    setSelectedRoute(route);
+    setModalVisible(true);
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -26,23 +41,49 @@ export default function SavedScreen() {
           <View key={route.id} style={styles.card}>
             <View style={styles.cardTop}>
               <Text style={styles.routeName}>{route.name}</Text>
-              <Ionicons name="heart" size={18} color={COLORS.primary} />
+              <TouchableOpacity onPress={() => confirmRemove(route.id)}>
+                <Ionicons name="heart" size={18} color={COLORS.primary} />
+              </TouchableOpacity>
             </View>
-            <Text style={styles.legSummary}>{route.legs.map((leg) => leg.mode).join(' • ')}</Text>
+            <Text style={styles.legSummary}>{route.legs.map((leg: any) => leg.mode).join(' • ')}</Text>
             <View style={styles.cardBottom}>
               <Text style={styles.fare}>₱{route.total_fare.toFixed(2)}</Text>
-              <TouchableOpacity style={styles.ghostButton} activeOpacity={0.9}>
+              <TouchableOpacity style={styles.ghostButton} activeOpacity={0.9} onPress={() => openModal(route)}>
                 <Text style={styles.ghostButtonText}>View</Text>
               </TouchableOpacity>
             </View>
           </View>
         ))}
       </ScrollView>
+
+      <Modal visible={isModalVisible} animationType="slide" transparent>
+        <View style={styles.modalBg}>
+          <View style={styles.modalContent}>
+            {selectedRoute && (
+              <>
+                <Text style={styles.modalTitle}>{selectedRoute.name}</Text>
+                <Text style={styles.modalText}>Fare: ₱{selectedRoute.total_fare.toFixed(2)}</Text>
+                <Text style={styles.modalText}>Time: {selectedRoute.estimated_minutes} mins</Text>
+                <Text style={styles.modalText}>Distance: {selectedRoute.total_km} km</Text>
+                <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+                  <Text style={styles.closeButtonText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 10 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
+  modalText: { fontSize: 16, marginBottom: 5 },
+  closeButton: { marginTop: 20, padding: 10, backgroundColor: COLORS.navy, borderRadius: 5, alignItems: 'center' },
+  closeButtonText: { color: '#fff', fontWeight: 'bold' },
   screen: {
     flex: 1,
     backgroundColor: COLORS.primary,

@@ -1,12 +1,14 @@
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import MapView from 'react-native-maps';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 
 const TRAFFIC = [
-  { road: 'Aguinaldo Highway', status: 'Light' as const },
-  { road: 'Daang Hari', status: 'Moderate' as const },
-  { road: 'Molino Boulevard', status: 'Heavy' as const },
+  { road: 'Bacoor Boulevard', status: 'Heavy' as const },
+  { road: 'Imus Crossing', status: 'Moderate' as const },
+  { road: 'Dasmariñas Crossing', status: 'Light' as const },
 ];
 
 function trafficPill(status: 'Light' | 'Moderate' | 'Heavy') {
@@ -20,6 +22,32 @@ function trafficPill(status: 'Light' | 'Moderate' | 'Heavy') {
 }
 
 export default function HomeScreen() {
+  const [selectedMode, setSelectedMode] = useState('Jeepney');
+  const [distance, setDistance] = useState('');
+
+  const MODES = ['Jeepney', 'Tricycle', 'UV Express', 'Bus', 'LRT'];
+
+  const getEstimatedFare = () => {
+    if (selectedMode === 'LRT') return '₱12.00 - ₱35.00';
+    if (selectedMode === 'Tricycle') return '₱15.00 fixed (local area)';
+
+    const dist = parseFloat(distance) || 0;
+    
+    if (selectedMode === 'Jeepney') {
+      if (dist <= 4) return '₱13.00';
+      return `₱${(13 + (dist - 4) * 1.8).toFixed(2)}`;
+    }
+    if (selectedMode === 'UV Express') {
+      if (dist <= 5) return '₱35.00';
+      return `₱${(35 + (dist - 5) * 2.2).toFixed(2)}`;
+    }
+    if (selectedMode === 'Bus') {
+      if (dist <= 5) return '₱13.00';
+      return `₱${(13 + (dist - 5) * 1.85).toFixed(2)}`;
+    }
+    return '₱0.00';
+  };
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
@@ -42,9 +70,21 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.card}>
-          <View style={styles.mapMock}>
-            <Ionicons name="map-outline" size={70} color="rgba(10,22,40,0.22)" />
-            <Ionicons name="location" size={34} color={COLORS.navy} style={styles.pin} />
+          <View style={styles.mapContainer}>
+            <MapView
+              style={styles.map}
+              initialRegion={{
+                latitude: 14.4296,
+                longitude: 120.9367,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+              }}
+              showsUserLocation={true}
+              pitchEnabled={false}
+              scrollEnabled={false}
+              zoomEnabled={false}
+              rotateEnabled={false}
+            />
           </View>
         </View>
 
@@ -68,8 +108,34 @@ export default function HomeScreen() {
 
         <Text style={styles.displayHeading}>FARE CALCULATOR</Text>
         <View style={styles.card}>
-          <Text style={styles.fareCaption}>Minimum Fare Amount</Text>
-          <Text style={styles.fareValue}>₱13.00</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScroll}>
+            {MODES.map(mode => (
+              <TouchableOpacity
+                key={mode}
+                style={[styles.modePill, selectedMode === mode && styles.modePillActive]}
+                onPress={() => setSelectedMode(mode)}
+              >
+                <Text style={[styles.modePillText, selectedMode === mode && styles.modePillTextActive]}>{mode}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <View style={styles.fareDisplayContainer}>
+            <Text style={styles.fareCaption}>Estimated Fare</Text>
+            <Text style={styles.fareValue} numberOfLines={1} adjustsFontSizeToFit>{getEstimatedFare()}</Text>
+          </View>
+
+          <View style={styles.distanceInputContainer}>
+            <Text style={styles.inputLabel}>Enter distance (km)</Text>
+            <TextInput
+              style={styles.distanceInput}
+              keyboardType="numeric"
+              placeholder="0"
+              placeholderTextColor={COLORS.textMuted}
+              value={distance}
+              onChangeText={setDistance}
+            />
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -153,15 +219,13 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.06)',
     padding: SPACING.cardPadding,
   },
-  mapMock: {
+  mapContainer: {
     height: 180,
     borderRadius: 12,
-    backgroundColor: '#F2EEDC',
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  pin: {
-    position: 'absolute',
+  map: {
+    ...StyleSheet.absoluteFillObject,
   },
   cardList: {
     gap: SPACING.cardGap,
@@ -206,5 +270,53 @@ const styles = StyleSheet.create({
     fontFamily: 'Cubao',
     fontSize: 56,
     color: COLORS.navy,
+  },
+  modeScroll: {
+    gap: 8,
+  },
+  modePill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: COLORS.navy,
+    marginRight: 8,
+  },
+  modePillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  modePillText: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: COLORS.navy,
+  },
+  modePillTextActive: {
+    color: COLORS.navy,
+  },
+  fareDisplayContainer: {
+    marginVertical: 16,
+  },
+  distanceInputContainer: {
+    marginTop: 4,
+  },
+  inputLabel: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.textLabel,
+    marginBottom: 8,
+  },
+  distanceInput: {
+    height: 48,
+    backgroundColor: '#F5F6F8',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.body,
+    color: COLORS.textStrong,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
   },
 });

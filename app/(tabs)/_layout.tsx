@@ -10,22 +10,22 @@ export default function TabLayout() {
         headerShown: false,
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabLabel,
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: 'rgba(255,255,255,0.5)',
+        tabBarActiveTintColor: '#F5C518',
+        tabBarInactiveTintColor: 'rgba(0,0,0,0.35)',
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="planner"
         options={{
           title: 'Search',
-          tabBarIcon: ({ color }) => <Ionicons name="search" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="search-outline" size={24} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -48,15 +48,18 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: COLORS.navy,
-    borderTopWidth: 0,
+    backgroundColor: COLORS.background,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+    borderTopWidth: 1,
+    elevation: 0,
+    shadowOpacity: 0,
     height: 84,
     paddingBottom: 18,
     paddingTop: 8,
   },
   tabLabel: {
     fontFamily: 'Inter',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
 });
