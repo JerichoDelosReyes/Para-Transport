@@ -80,7 +80,7 @@ export default function WelcomeScreen() {
         </View>
       </View>
 
-      <View style={[styles.bottomSheet, { paddingBottom: 34 }]}>
+      <View style={[styles.bottomSheet, { paddingBottom: Math.max(insets.bottom + 12, 34) }]}>
         <Text style={styles.sheetTitle}>Welcome to Para!</Text>
         <Text style={styles.sheetSubtitle}>
           Your smart transit companion. Plan optimal routes and navigate the city with ease.
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     marginTop: -60,
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 36,
+    paddingTop: 20,
     paddingBottom: 18,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
@@ -244,7 +244,6 @@ const styles = StyleSheet.create({
     fontSize: 34,
     fontWeight: '700',
     color: COLORS.navy,
-    marginTop: -12,
   },
   sheetSubtitle: {
     marginTop: 12,
@@ -267,6 +266,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 10,
     elevation: 6,
+    marginBottom: 20,
   },
   primaryButtonText: {
     fontFamily: 'Inter',
