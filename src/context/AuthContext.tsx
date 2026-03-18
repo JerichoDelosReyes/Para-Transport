@@ -17,6 +17,7 @@ import { auth, firestore } from '../config/firebase';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 
 // Ensure the auth session is completed properly after redirect
 WebBrowser.maybeCompleteAuthSession();
