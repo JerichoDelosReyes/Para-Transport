@@ -2,6 +2,7 @@ import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 're
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useNavigation } from 'expo-router';
+import { StackActions } from '@react-navigation/native';
 import { useStore } from '../../store/useStore';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 
@@ -119,7 +120,7 @@ export default function ProfileScreen() {
             onPress={() => {
               const parent = navigation.getParent();
               if (parent) {
-                parent.reset({ index: 0, routes: [{ name: 'index' }] });
+                parent.dispatch(StackActions.replace('index'));
               } else {
                 router.replace('/');
               }
