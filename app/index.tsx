@@ -80,7 +80,7 @@ export default function WelcomeScreen() {
         </View>
       </View>
 
-      <View style={[styles.bottomSheet, { paddingBottom: Math.max(insets.bottom + 12, 34) }]}>
+      <View style={[styles.bottomSheet, { paddingBottom: 34 }]}>
         <Text style={styles.sheetTitle}>Welcome to Para!</Text>
         <Text style={styles.sheetSubtitle}>
           Your smart transit companion. Plan optimal routes and navigate the city with ease.
