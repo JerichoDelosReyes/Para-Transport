@@ -1,7 +1,7 @@
 import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useStore } from '../../store/useStore';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 
@@ -20,6 +20,7 @@ function getInitials(name: string) {
 }
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const user = useStore((state) => state.user);
 
   return (
@@ -114,7 +115,12 @@ export default function ProfileScreen() {
           <TouchableOpacity 
             style={[styles.settingRow, styles.rowDivider]} 
             activeOpacity={0.7}
-            onPress={() => router.replace('/')}
+            onPress={() => {
+              if (router.canDismiss()) {
+                router.dismissAll();
+              }
+              router.replace('/');
+            }}
           >
             <Text style={[styles.settingLabel, { color: '#ff4444' }]}>Log out</Text>
             <Ionicons name="log-out-outline" size={20} color="#ff4444" />
