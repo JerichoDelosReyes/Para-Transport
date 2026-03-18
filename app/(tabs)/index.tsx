@@ -32,6 +32,14 @@ type MapCoordinate = {
   longitude: number;
 };
 
+type PlaceSuggestion = {
+  id: string;
+  title: string;
+  subtitle: string;
+  latitude: number;
+  longitude: number;
+};
+
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
 
@@ -42,6 +50,8 @@ export default function HomeScreen() {
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
+  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
@@ -126,6 +136,81 @@ export default function HomeScreen() {
   }, [isSearchActive]);
 
   const closeSearch = () => setIsSearchActive(false);
+
+  const selectSuggestion = (suggestion: PlaceSuggestion) => {
+    setDestinationQuery(suggestion.title);
+    setPlaceSuggestions([]);
+  };
+
+  useEffect(() => {
+    const query = destinationQuery.trim();
+    if (!isSearchActive || query.length < 2) {
+      setPlaceSuggestions([]);
+      setIsFetchingSuggestions(false);
+      return;
+    }
+
+    let cancelled = false;
+    const debounceTimer = setTimeout(async () => {
+      setIsFetchingSuggestions(true);
+      try {
+        const params = new URLSearchParams({
+          q: `${query}, Cavite, Philippines`,
+          format: 'json',
+          limit: '5',
+          countrycodes: 'ph',
+          addressdetails: '0',
+        });
+
+        const response = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
+          headers: {
+            'Accept-Language': 'en',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Suggestion fetch failed (${response.status})`);
+        }
+
+        const results = await response.json();
+        if (cancelled) {
+          return;
+        }
+
+        const mapped: PlaceSuggestion[] = (Array.isArray(results) ? results : [])
+          .map((item: any, idx: number) => {
+            const displayName = String(item.display_name || '').trim();
+            const parts = displayName.split(',').map((p) => p.trim()).filter(Boolean);
+            const title = parts[0] || query;
+            const subtitle = parts.slice(1).join(', ') || 'Cavite, Philippines';
+            return {
+              id: String(item.place_id || `${displayName}-${idx}`),
+              title,
+              subtitle,
+              latitude: parseFloat(item.lat),
+              longitude: parseFloat(item.lon),
+            };
+          })
+          .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
+
+        setPlaceSuggestions(mapped);
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('[HomeScreen] Suggestion search failed:', error);
+          setPlaceSuggestions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsFetchingSuggestions(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(debounceTimer);
+    };
+  }, [destinationQuery, isSearchActive]);
 
   useEffect(() => {
     let locationSubscription: Location.LocationSubscription | null = null;
@@ -248,6 +333,7 @@ export default function HomeScreen() {
       });
 
       setIsSearchActive(false);
+      setPlaceSuggestions([]);
       Keyboard.dismiss();
     } catch (error) {
       console.warn('[HomeScreen] Route search failed:', error);
@@ -304,12 +390,12 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* T4xx Jeepney Route Overlays */}
+        {/* Route Overlays */}
         {showRoutes && selectedMode === 'Jeepney' && jeepneyRoutes.map((route) => {
-          const isSelected = selectedRoute === route.properties.routeCode;
+          const isSelected = selectedRoute === route.properties.code;
           return (
             <Polyline
-              key={route.properties.routeCode + (route.properties.osmId || '')}
+              key={route.properties.code}
               coordinates={route.coordinates}
               strokeColor={isSelected ? '#E8A020' : '#2196F3'}
               strokeWidth={isSelected ? 5 : 3}
@@ -318,11 +404,44 @@ export default function HomeScreen() {
               lineDashPattern={isSelected ? undefined : [1]}
               tappable
               onPress={() => {
-                setSelectedRoute(isSelected ? null : route.properties.routeCode);
+                setSelectedRoute(isSelected ? null : route.properties.code);
               }}
             />
           );
         })}
+
+        {/* Boarding guide markers along the selected route */}
+        {showRoutes && selectedMode === 'Jeepney' && selectedRoute && (() => {
+          const route = jeepneyRoutes.find(r => r.properties.code === selectedRoute);
+          if (!route) return null;
+          return route.stops.map((stop, idx) => {
+            const isTerminal = stop.type === 'terminal';
+            return (
+              <Marker
+                key={`stop-${selectedRoute}-${idx}`}
+                coordinate={stop.coordinate}
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={false}
+              >
+                <View style={isTerminal ? styles.terminalMarker : styles.stopMarker}>
+                  <Ionicons
+                    name={isTerminal ? 'bus' : 'ellipse'}
+                    size={isTerminal ? 16 : 8}
+                    color="#FFFFFF"
+                  />
+                </View>
+                <Callout tooltip>
+                  <View style={styles.stopCallout}>
+                    <Text style={styles.stopCalloutLabel}>{stop.label}</Text>
+                    <Text style={styles.stopCalloutType}>
+                      {isTerminal ? '🚏 Terminal' : '📍 Boarding Point'}
+                    </Text>
+                  </View>
+                </Callout>
+              </Marker>
+            );
+          });
+        })()}
       </MapView>
 
       {/* Dim map when search is active */}
@@ -379,7 +498,9 @@ export default function HomeScreen() {
                       placeholder="Where to go?" 
                       placeholderTextColor={COLORS.textMuted} 
                       value={destinationQuery}
-                      onChangeText={setDestinationQuery}
+                      onChangeText={(text) => {
+                        setDestinationQuery(text);
+                      }}
                       autoFocus={isSearchActive}
                       returnKeyType="search"
                       onSubmitEditing={handleRouteSearch}
@@ -398,6 +519,36 @@ export default function HomeScreen() {
                     )}
                   </TouchableOpacity>
                 </View>
+
+                {(destinationQuery.trim().length >= 2 || isFetchingSuggestions) && (
+                  <View style={styles.suggestionCard}>
+                    {isFetchingSuggestions ? (
+                      <View style={styles.suggestionLoadingRow}>
+                        <ActivityIndicator size="small" color="#E8A020" />
+                        <Text style={styles.suggestionLoadingText}>Looking for places...</Text>
+                      </View>
+                    ) : placeSuggestions.length > 0 ? (
+                      placeSuggestions.map((suggestion) => (
+                        <TouchableOpacity
+                          key={suggestion.id}
+                          style={styles.suggestionRow}
+                          activeOpacity={0.8}
+                          onPress={() => selectSuggestion(suggestion)}
+                        >
+                          <View style={styles.suggestionIconWrap}>
+                            <Ionicons name="location" size={15} color="#E8A020" />
+                          </View>
+                          <View style={styles.suggestionTextWrap}>
+                            <Text style={styles.suggestionTitle} numberOfLines={1}>{suggestion.title}</Text>
+                            <Text style={styles.suggestionSubtitle} numberOfLines={1}>{suggestion.subtitle}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      <Text style={styles.suggestionEmptyText}>No recommendations yet. Try a more specific place.</Text>
+                    )}
+                  </View>
+                )}
               </Animated.View>
             </View>
           </Animated.View>
@@ -427,30 +578,28 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Selected Jeepney Route Info */}
+        {/* Selected Route Info */}
         {selectedRoute && (() => {
-          const route = jeepneyRoutes.find(r => r.properties.routeCode === selectedRoute);
+          const route = jeepneyRoutes.find(r => r.properties.code === selectedRoute);
           if (!route) return null;
           return (
             <View style={styles.routeInfoCard}>
               <View style={styles.routeInfoHeader}>
                 <View style={styles.routeCodeBadge}>
-                  <Text style={styles.routeCodeText}>{route.properties.routeCode}</Text>
+                  <Text style={styles.routeCodeText}>{route.properties.code}</Text>
                 </View>
                 <TouchableOpacity onPress={() => setSelectedRoute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.routeInfoTitle}>{route.properties.description}</Text>
-              {route.properties.routeDescription ? (
-                <Text style={styles.routeInfoDesc} numberOfLines={3}>{route.properties.routeDescription}</Text>
+              <Text style={styles.routeInfoTitle}>{route.properties.name}</Text>
+              {route.properties.description ? (
+                <Text style={styles.routeInfoDesc} numberOfLines={3}>{route.properties.description}</Text>
               ) : null}
               <View style={styles.routeInfoMeta}>
-                {route.properties.distanceKm && (
-                  <Text style={styles.routeInfoMetaText}>
-                    <Ionicons name="resize" size={12} color={COLORS.textMuted} /> {route.properties.distanceKm} km
-                  </Text>
-                )}
+                <Text style={styles.routeInfoMetaText}>
+                  <Ionicons name="cash" size={12} color={COLORS.textMuted} /> ₱{route.properties.fare}
+                </Text>
                 {route.properties.operator ? (
                   <Text style={styles.routeInfoMetaText} numberOfLines={1}>
                     <Ionicons name="bus" size={12} color={COLORS.textMuted} /> {route.properties.operator}
@@ -588,6 +737,65 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: TYPOGRAPHY.label,
     color: COLORS.navy,
+  },
+  suggestionCard: {
+    marginTop: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    overflow: 'hidden',
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(10,22,40,0.06)',
+  },
+  suggestionIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(232,160,32,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  suggestionTextWrap: {
+    flex: 1,
+  },
+  suggestionTitle: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  suggestionSubtitle: {
+    marginTop: 1,
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  suggestionLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  suggestionLoadingText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  suggestionEmptyText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.textMuted,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
   dashLine: {
     height: 1,
@@ -820,5 +1028,61 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.caption,
     color: COLORS.textMuted,
     flexShrink: 1,
+  },
+  terminalMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E8A020',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
+  },
+  stopMarker: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#2196F3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
+  },
+  stopCallout: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+  },
+  stopCalloutLabel: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  stopCalloutType: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
 });
