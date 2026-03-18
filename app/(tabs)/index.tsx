@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Animated, PanResponder, Dimensions, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Animated, PanResponder, Dimensions, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { UrlTile } from 'react-native-maps';
+import MapView, { UrlTile, Marker, Polyline, Callout } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
+import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
+import { useJeepneyRoutes } from '../../hooks/useJeepneyRoutes';
 
 const { height, width } = Dimensions.get('window');
 
@@ -22,6 +24,16 @@ function trafficPill(status: 'Light' | 'Moderate' | 'Heavy') {
 }
 
 const MODES = ['Jeepney', 'Tricycle', 'UV Express', 'Bus', 'LRT'];
+const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
+const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
+
+type MapCoordinate = {
+  latitude: number;
+  longitude: number;
+};
+
+const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
+  coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
 
 export default function HomeScreen() {
   const [selectedMode, setSelectedMode] = useState('Jeepney');
@@ -29,6 +41,16 @@ export default function HomeScreen() {
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
+  const [destinationQuery, setDestinationQuery] = useState('');
+  const [isRouting, setIsRouting] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
+  const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
+  const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
+  const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
+  const [showRoutes, setShowRoutes] = useState(true);
+  const { routes: jeepneyRoutes } = useJeepneyRoutes();
+  const mapRef = useRef<MapView | null>(null);
 
   // Bottom Sheet Animation state
   const sheetHeight = height * 0.5; // max height of bottom sheet
@@ -105,9 +127,140 @@ export default function HomeScreen() {
 
   const closeSearch = () => setIsSearchActive(false);
 
+  useEffect(() => {
+    let locationSubscription: Location.LocationSubscription | null = null;
+
+    const startLocationTracking = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          return;
+        }
+
+        const initial = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+        setCurrentLocation({
+          latitude: initial.coords.latitude,
+          longitude: initial.coords.longitude,
+        });
+
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            distanceInterval: 10,
+            timeInterval: 4000,
+          },
+          (position) => {
+            setCurrentLocation({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            });
+          }
+        );
+      } catch (error) {
+        console.warn('[HomeScreen] Location tracking failed:', error);
+      }
+    };
+
+    startLocationTracking();
+
+    return () => {
+      locationSubscription?.remove();
+    };
+  }, []);
+
+  const handleRouteSearch = async () => {
+    const query = destinationQuery.trim();
+    if (!query) {
+      Alert.alert('Destination Required', 'Type where you want to go first.');
+      return;
+    }
+
+    if (!currentLocation) {
+      Alert.alert('GPS Not Ready', 'Waiting for your current location. Please try again in a few seconds.');
+      return;
+    }
+
+    setIsRouting(true);
+    try {
+      const geocodeParams = new URLSearchParams({
+        q: `${query}, Cavite, Philippines`,
+        format: 'json',
+        limit: '1',
+        countrycodes: 'ph',
+      });
+
+      const geocodeResponse = await fetch(`${GEOCODING_BASE_URL}/search?${geocodeParams.toString()}`, {
+        headers: {
+          'Accept-Language': 'en',
+        },
+      });
+
+      if (!geocodeResponse.ok) {
+        throw new Error(`Geocoding failed (${geocodeResponse.status})`);
+      }
+
+      const geocodeResults = await geocodeResponse.json();
+      if (!Array.isArray(geocodeResults) || geocodeResults.length === 0) {
+        Alert.alert('Location Not Found', 'Try a more specific destination name.');
+        return;
+      }
+
+      const destination = geocodeResults[0];
+      const destinationPoint: MapCoordinate = {
+        latitude: parseFloat(destination.lat),
+        longitude: parseFloat(destination.lon),
+      };
+      setDestinationLocation(destinationPoint);
+
+      const startLng = currentLocation.longitude;
+      const startLat = currentLocation.latitude;
+      const destLng = destinationPoint.longitude;
+      const destLat = destinationPoint.latitude;
+
+      const routeResponse = await fetch(
+        `${ROUTING_BASE_URL}/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`
+      );
+
+      if (!routeResponse.ok) {
+        throw new Error(`Routing failed (${routeResponse.status})`);
+      }
+
+      const routeResult = await routeResponse.json();
+      const bestRoute = routeResult?.routes?.[0];
+      if (!bestRoute?.geometry?.coordinates) {
+        Alert.alert('Route Not Found', 'No drivable route found for this destination.');
+        return;
+      }
+
+      const mappedCoordinates = toMapCoordinates(bestRoute.geometry.coordinates);
+      setRouteCoordinates(mappedCoordinates);
+      setRouteSummary({
+        distanceKm: bestRoute.distance / 1000,
+        durationMin: bestRoute.duration / 60,
+      });
+
+      mapRef.current?.fitToCoordinates(mappedCoordinates, {
+        edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
+        animated: true,
+      });
+
+      setIsSearchActive(false);
+      Keyboard.dismiss();
+    } catch (error) {
+      console.warn('[HomeScreen] Route search failed:', error);
+      Alert.alert('Search Failed', 'Unable to fetch route right now. Please try again.');
+    } finally {
+      setIsRouting(false);
+    }
+  };
+
   return (
     <View style={styles.screen}>
       <MapView
+        ref={mapRef}
         style={StyleSheet.absoluteFillObject}
         initialRegion={{
           latitude: 14.4296,
@@ -132,6 +285,44 @@ export default function HomeScreen() {
           zIndex={1}
           shouldReplaceMapContent={true}
         />
+
+        {destinationLocation && (
+          <Marker
+            coordinate={destinationLocation}
+            title="Destination"
+            description={destinationQuery}
+          />
+        )}
+
+        {routeCoordinates.length > 1 && (
+          <Polyline
+            coordinates={routeCoordinates}
+            strokeColor="#E8A020"
+            strokeWidth={5}
+            lineCap="round"
+            lineJoin="round"
+          />
+        )}
+
+        {/* T4xx Jeepney Route Overlays */}
+        {showRoutes && selectedMode === 'Jeepney' && jeepneyRoutes.map((route) => {
+          const isSelected = selectedRoute === route.properties.routeCode;
+          return (
+            <Polyline
+              key={route.properties.routeCode + (route.properties.osmId || '')}
+              coordinates={route.coordinates}
+              strokeColor={isSelected ? '#E8A020' : '#2196F3'}
+              strokeWidth={isSelected ? 5 : 3}
+              lineCap="round"
+              lineJoin="round"
+              lineDashPattern={isSelected ? undefined : [1]}
+              tappable
+              onPress={() => {
+                setSelectedRoute(isSelected ? null : route.properties.routeCode);
+              }}
+            />
+          );
+        })}
       </MapView>
 
       {/* Dim map when search is active */}
@@ -166,7 +357,7 @@ export default function HomeScreen() {
                      <Text style={[styles.searchInputText, { color: COLORS.navy }]}>My Location</Text>
                    ) : (
                      <Text style={[styles.searchInputText, { color: COLORS.textMuted }]} onPress={() => setIsSearchActive(true)}>
-                       Going Somewhere?
+                       {destinationQuery || 'Going Somewhere?'}
                      </Text>
                    )}
                 </View>
@@ -187,9 +378,25 @@ export default function HomeScreen() {
                       style={styles.activeSearchInput} 
                       placeholder="Where to go?" 
                       placeholderTextColor={COLORS.textMuted} 
+                      value={destinationQuery}
+                      onChangeText={setDestinationQuery}
                       autoFocus={isSearchActive}
+                      returnKeyType="search"
+                      onSubmitEditing={handleRouteSearch}
                     />
                   </View>
+                  <TouchableOpacity
+                    style={[styles.routeButton, isRouting && styles.routeButtonDisabled]}
+                    activeOpacity={0.9}
+                    onPress={handleRouteSearch}
+                    disabled={isRouting}
+                  >
+                    {isRouting ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="navigate" size={18} color="#FFFFFF" />
+                    )}
+                  </TouchableOpacity>
                 </View>
               </Animated.View>
             </View>
@@ -210,6 +417,49 @@ export default function HomeScreen() {
             ))}
           </ScrollView>
         </View>
+
+        {routeSummary && (
+          <View style={styles.routeSummaryCard}>
+            <Text style={styles.routeSummaryTitle}>Route Ready</Text>
+            <Text style={styles.routeSummaryValue}>
+              {routeSummary.distanceKm.toFixed(1)} km • {Math.ceil(routeSummary.durationMin)} min
+            </Text>
+          </View>
+        )}
+
+        {/* Selected Jeepney Route Info */}
+        {selectedRoute && (() => {
+          const route = jeepneyRoutes.find(r => r.properties.routeCode === selectedRoute);
+          if (!route) return null;
+          return (
+            <View style={styles.routeInfoCard}>
+              <View style={styles.routeInfoHeader}>
+                <View style={styles.routeCodeBadge}>
+                  <Text style={styles.routeCodeText}>{route.properties.routeCode}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setSelectedRoute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.routeInfoTitle}>{route.properties.description}</Text>
+              {route.properties.routeDescription ? (
+                <Text style={styles.routeInfoDesc} numberOfLines={3}>{route.properties.routeDescription}</Text>
+              ) : null}
+              <View style={styles.routeInfoMeta}>
+                {route.properties.distanceKm && (
+                  <Text style={styles.routeInfoMetaText}>
+                    <Ionicons name="resize" size={12} color={COLORS.textMuted} /> {route.properties.distanceKm} km
+                  </Text>
+                )}
+                {route.properties.operator ? (
+                  <Text style={styles.routeInfoMetaText} numberOfLines={1}>
+                    <Ionicons name="bus" size={12} color={COLORS.textMuted} /> {route.properties.operator}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          );
+        })()}
       </SafeAreaView>
 
       {/* Draggable Bottom Sheet */}
@@ -345,6 +595,22 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     marginLeft: 30,
   },
+  routeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E8A020',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  routeButtonDisabled: {
+    opacity: 0.7,
+  },
   iconButton: {
     width: 44,
     height: 44,
@@ -363,6 +629,29 @@ const styles = StyleSheet.create({
   quickActionsContainer: {
     marginTop: 16,
     marginHorizontal: SPACING.screenX,
+  },
+  routeSummaryCard: {
+    marginTop: 6,
+    marginHorizontal: SPACING.screenX,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  routeSummaryTitle: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  routeSummaryValue: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.navy,
+    marginTop: 2,
   },
   modeScroll: {
     paddingBottom: 10,
@@ -472,5 +761,64 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: TYPOGRAPHY.caption,
     fontWeight: '700',
-  }
+  },
+  routeInfoCard: {
+    position: 'absolute',
+    bottom: 120,
+    left: SPACING.screenX,
+    right: SPACING.screenX,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.06)',
+  },
+  routeInfoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  routeCodeBadge: {
+    backgroundColor: '#2196F3',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  routeCodeText: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.caption,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  routeInfoTitle: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '700',
+    color: COLORS.navy,
+    marginBottom: 4,
+  },
+  routeInfoDesc: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  routeInfoMeta: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  routeInfoMetaText: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    flexShrink: 1,
+  },
 });
