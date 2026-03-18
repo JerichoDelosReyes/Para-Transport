@@ -44,6 +44,7 @@ import { HStack } from '../../../components/ui/hstack';
 
 // Custom Components
 import { LocationPermissionModal } from '../../components/map/LocationPermissionModal';
+import { GEOCODING_CONFIG } from '../../config/constants';
 
 // =============================================================================
 // Constants
@@ -69,14 +70,14 @@ const COLORS = {
  * Nominatim (OSM) geocoding configuration
  */
 const NOMINATIM_CONFIG = {
-  baseUrl: 'https://nominatim.openstreetmap.org',
+  baseUrl: GEOCODING_CONFIG.BASE_URL,
   // Bounding box for Philippines (focus search results)
-  viewbox: '116.0,4.5,127.0,21.5',
+  viewbox: GEOCODING_CONFIG.VIEWBOX,
   // Center on Cavite area for better local results
-  countryCode: 'ph',
+  countryCode: GEOCODING_CONFIG.COUNTRY_CODE,
   debounceMs: 300,
-  minQueryLength: 2,
-  maxResults: 10,
+  minQueryLength: GEOCODING_CONFIG.MIN_QUERY_LENGTH,
+  maxResults: GEOCODING_CONFIG.MAX_RESULTS,
 } as const;
 
 // =============================================================================

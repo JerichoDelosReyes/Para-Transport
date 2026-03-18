@@ -38,7 +38,7 @@ import {
 import routesData from '../data/routes.json';
 
 // Import config
-import { API_CONFIG, DEFAULT_FARE_RATES } from '../config/constants';
+import { API_CONFIG, DEFAULT_FARE_RATES, GEOCODING_CONFIG } from '../config/constants';
 
 // =============================================================================
 // Configuration
@@ -54,11 +54,6 @@ export const IMUS_CENTER: GeoJSONCoordinate = [120.9367, 14.4296];
  * Uses the value from spatialFilter for consistency
  */
 const BUFFER_DISTANCE = SPATIAL_BUFFER_DISTANCE;
-
-/**
- * Nominatim (OSM) geocoding base URL
- */
-const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
 
 /**
  * Request timeout in milliseconds
@@ -426,7 +421,13 @@ export const geocodeLocation = async (
   // Try Nominatim geocoding for unknown locations
   try {
     const searchQuery = encodeURIComponent(query + ', Cavite, Philippines');
-    const url = NOMINATIM_URL + '/search?q=' + searchQuery + '&format=json&limit=1&countrycodes=ph';
+    const url =
+      GEOCODING_CONFIG.BASE_URL +
+      GEOCODING_CONFIG.SEARCH_PATH +
+      '?q=' +
+      searchQuery +
+      '&format=json&limit=1&countrycodes=' +
+      GEOCODING_CONFIG.COUNTRY_CODE;
 
     const response = await fetchWithTimeout(url, {
       method: 'GET',
@@ -704,7 +705,14 @@ export const reverseGeocode = async (
   
   // Try Nominatim
   try {
-    const url = NOMINATIM_URL + '/reverse?lat=' + coordinate[1] + '&lon=' + coordinate[0] + '&format=json';
+    const url =
+      GEOCODING_CONFIG.BASE_URL +
+      GEOCODING_CONFIG.REVERSE_PATH +
+      '?lat=' +
+      coordinate[1] +
+      '&lon=' +
+      coordinate[0] +
+      '&format=json';
 
     const response = await fetchWithTimeout(url, {
       method: 'GET',

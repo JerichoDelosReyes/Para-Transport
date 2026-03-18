@@ -23,18 +23,7 @@ import {
   getSegmentColor,
   TransferRoute,
 } from '../../types/route';
-
-/**
- * OpenStreetMap tile URL template
- * Uses standard OSM tile servers with subdomains for load balancing
- */
-const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-/**
- * Alternative OSM tile URL with subdomain support (fallback)
- * Note: Standard OSM tiles don't use subdomains anymore, but this is kept for reference
- */
-// const OSM_TILE_URL_WITH_SUBDOMAIN = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+import { MAP_CONFIG } from '../../config/constants';
 
 /**
  * Props for MapContainer component
@@ -300,7 +289,7 @@ export const MapContainer = forwardRef<MapContainerRef, MapContainerProps>(
         >
           {/* OpenStreetMap Tile Layer */}
           <UrlTile
-            urlTemplate={OSM_TILE_URL}
+            urlTemplate={MAP_CONFIG.OSM_TILE_URL}
             maximumZ={19}
             minimumZ={1}
             flipY={false}
@@ -394,7 +383,7 @@ export const MapContainer = forwardRef<MapContainerRef, MapContainerProps>(
 
         {/* OSM Attribution (Required by OpenStreetMap license) */}
         <View style={styles.attribution}>
-          <Text style={styles.attributionText}>© OpenStreetMap contributors</Text>
+          <Text style={styles.attributionText}>{MAP_CONFIG.OSM_ATTRIBUTION}</Text>
         </View>
       </View>
     );

@@ -98,6 +98,34 @@ export const API_CONFIG = {
   RETRY_DELAY: 1000,
 } as const;
 
+/**
+ * Map tile configuration
+ * Use EXPO_PUBLIC_OSM_TILE_URL to switch providers (MapTiler/Stadia/OpenMapTiles)
+ */
+export const MAP_CONFIG = {
+  OSM_TILE_URL:
+    process.env.EXPO_PUBLIC_OSM_TILE_URL ||
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  OSM_ATTRIBUTION: '© OpenStreetMap contributors',
+} as const;
+
+/**
+ * Geocoding configuration
+ * Use EXPO_PUBLIC_GEOCODING_BASE_URL to point to your backend geocoding proxy.
+ */
+export const GEOCODING_CONFIG = {
+  BASE_URL:
+    process.env.EXPO_PUBLIC_GEOCODING_BASE_URL ||
+    'https://nominatim.openstreetmap.org',
+  SEARCH_PATH: '/search',
+  REVERSE_PATH: '/reverse',
+  COUNTRY_CODE: 'ph',
+  VIEWBOX: '116.0,4.5,127.0,21.5',
+  MIN_QUERY_LENGTH: 2,
+  MAX_RESULTS: 10,
+  ACCEPT_LANGUAGE: 'en',
+} as const;
+
 // =============================================================================
 // Fare Configuration (Fetched defaults - backend is source of truth)
 // =============================================================================

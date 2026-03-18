@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import MapView from 'react-native-maps';
+import MapView, { UrlTile } from 'react-native-maps';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { MAP_CONFIG } from '../../constants/map';
 
 const TRAFFIC = [
   { road: 'Bacoor Boulevard', status: 'Heavy' as const },
@@ -84,7 +85,20 @@ export default function HomeScreen() {
               scrollEnabled={false}
               zoomEnabled={false}
               rotateEnabled={false}
-            />
+            >
+              <UrlTile
+                urlTemplate={MAP_CONFIG.OSM_TILE_URL}
+                maximumZ={19}
+                minimumZ={1}
+                flipY={false}
+                zIndex={1}
+                shouldReplaceMapContent={true}
+              />
+            </MapView>
+
+            <View style={styles.attribution}>
+              <Text style={styles.attributionText}>{MAP_CONFIG.OSM_ATTRIBUTION}</Text>
+            </View>
           </View>
         </View>
 
@@ -226,6 +240,20 @@ const styles = StyleSheet.create({
   },
   map: {
     ...StyleSheet.absoluteFillObject,
+  },
+  attribution: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    borderRadius: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  attributionText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    color: 'rgba(0,0,0,0.62)',
   },
   cardList: {
     gap: SPACING.cardGap,
