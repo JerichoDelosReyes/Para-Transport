@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 
@@ -84,14 +84,15 @@ export default function LoginScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.label}>Email / username</Text>
+            <Text style={styles.label}>Email</Text>
             <TextInput
               value={email}
               onChangeText={setEmail}
               style={styles.input}
-              placeholder="someone@gmail.com | username01"
+              placeholder="someone@gmail.com"
               placeholderTextColor={COLORS.textMuted}
               autoCapitalize="none"
+              keyboardType="email-address"
             />
 
             <Text style={[styles.label, styles.labelTop]}>Password</Text>
@@ -115,7 +116,7 @@ export default function LoginScreen() {
 
             <View style={styles.socialRow}>
               <TouchableOpacity style={styles.lightSocial} activeOpacity={0.9}>
-                <Text style={styles.googleMark}>G</Text>
+                <FontAwesome5 name="google" size={15} color="#4285F4" style={{ marginRight: 7 }} />
                 <Text style={styles.lightSocialText}>Google</Text>
               </TouchableOpacity>
 
@@ -125,12 +126,8 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.createAccountButton} onPress={() => router.push('/register')} activeOpacity={0.9}>
-              <Text style={styles.createAccountText}>Create account</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.linkWrap} onPress={() => router.replace('/(tabs)')}>
-              <Text style={styles.linkText}>Bypass Login</Text>
+            <TouchableOpacity style={styles.linkWrap} onPress={() => router.push('/register')} activeOpacity={0.8}>
+              <Text style={styles.linkText}>Create account</Text>
             </TouchableOpacity>
 
             <Text style={styles.footerText}>Privacy Policy. Terms of Service</Text>
@@ -149,8 +146,8 @@ const styles = StyleSheet.create({
   headerZone: {
     backgroundColor: COLORS.primary,
     minHeight: 290,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    borderBottomLeftRadius: 34,
+    borderBottomRightRadius: 34,
     overflow: 'hidden',
   },
   headerDoodle: {
@@ -290,37 +287,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.navy,
   },
-  googleMark: {
-    fontFamily: 'Inter',
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#4285F4',
-    marginRight: 4,
-  },
-  createAccountButton: {
-    marginTop: 12,
-    height: 54,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1.5,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  createAccountText: {
-    fontFamily: 'Inter',
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.navy,
-  },
   linkWrap: {
     marginTop: 14,
     alignItems: 'center',
   },
   linkText: {
     fontFamily: 'Inter',
-    fontSize: 14,
-    color: COLORS.textMuted,
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.navy,
     textDecorationLine: 'underline',
   },
   footerText: {

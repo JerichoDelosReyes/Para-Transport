@@ -1,11 +1,11 @@
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, PanResponder } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 type Doodle = {
   id: number;
@@ -37,6 +37,50 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const insets = useSafeAreaInsets();
+  const sheetTranslateY = useRef(new Animated.Value(0)).current;
+
+  const resetSheetPosition = () => {
+    Animated.spring(sheetTranslateY, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 0,
+    }).start();
+  };
+
+  const dismissSheet = () => {
+    Animated.timing(sheetTranslateY, {
+      toValue: 420,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowAuthPopup(false);
+      sheetTranslateY.setValue(0);
+    });
+  };
+
+  const sheetPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          gestureState.dy > 1 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 0.5,
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          gestureState.dy > 1 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 0.5,
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dy > 0) {
+            sheetTranslateY.setValue(gestureState.dy);
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dy > 40 || gestureState.vy > 0.45) {
+            dismissSheet();
+            return;
+          }
+          resetSheetPosition();
+        },
+        onPanResponderTerminate: resetSheetPosition,
+      }),
+    [sheetTranslateY]
+  );
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -95,15 +139,26 @@ export default function WelcomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <Modal transparent visible={showAuthPopup} animationType="fade" onRequestClose={() => setShowAuthPopup(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.handle} />
-            <TouchableOpacity style={styles.closeButton} onPress={() => setShowAuthPopup(false)} activeOpacity={0.8}>
-              <Ionicons name="close" size={18} color={COLORS.textMuted} />
-            </TouchableOpacity>
+      <Modal
+        transparent
+        visible={showAuthPopup}
+        animationType="fade"
+        onRequestClose={() => setShowAuthPopup(false)}
+      >
+        <View style={styles.modalOverlay} {...sheetPanResponder.panHandlers}>
+          <TouchableOpacity
+            style={styles.modalScrimTapZone}
+            activeOpacity={1}
+            onPress={() => setShowAuthPopup(false)}
+          />
 
-            <Text style={styles.modalTitle}>Login or sign up</Text>
+          <Animated.View
+            style={[styles.modalSheet, { transform: [{ translateY: sheetTranslateY }] }]}
+            {...sheetPanResponder.panHandlers}
+          >
+            <View style={styles.handle} />
+
+            <Text style={styles.modalTitle}>Login or Sign up</Text>
             <Text style={styles.modalSubtitle}>
               Choose your preferred method to continue to Para.
             </Text>
@@ -132,7 +187,7 @@ export default function WelcomeScreen() {
 
             <View style={styles.socialRow}>
               <TouchableOpacity style={styles.googleButton} activeOpacity={0.9}>
-                <Text style={styles.googleMark}>G</Text>
+                <FontAwesome5 name="google" size={15} color="#4285F4" style={{ marginRight: 8 }} />
                 <Text style={styles.socialLabel}>Google</Text>
               </TouchableOpacity>
 
@@ -156,7 +211,7 @@ export default function WelcomeScreen() {
             >
               <Text style={styles.guestLink}>Continue as guest</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -282,6 +337,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'flex-end',
   },
+  modalScrimTapZone: {
+    flex: 1,
+  },
   modalSheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 28,
@@ -302,16 +360,7 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 999,
     backgroundColor: COLORS.primary,
-    marginBottom: 8,
-  },
-  closeButton: {
-    alignSelf: 'flex-end',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#F3F3F3',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 10,
   },
   modalTitle: {
     marginTop: 2,
@@ -395,13 +444,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
-  },
-  googleMark: {
-    fontFamily: 'Inter',
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#4285F4',
-    marginRight: 6,
   },
   modalFooterText: {
     marginTop: 12,
