@@ -13,7 +13,14 @@ import RouteListPanel from '../../components/RouteListPanel';
 
 const { height, width } = Dimensions.get('window');
 
-const MODES = ['Jeepney', 'Tricycle', 'UV Express', 'Bus', 'LRT'];
+const MODES = ['All', 'Jeepney', 'Bus', 'UV Express'];
+
+// Map pill labels to Overpass route types
+const MODE_TO_ROUTE_TYPE: Record<string, string> = {
+  'Jeepney': 'jeepney',
+  'Bus': 'bus',
+  'UV Express': 'share_taxi',
+};
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
 
@@ -34,7 +41,7 @@ const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
 
 export default function HomeScreen() {
-  const [selectedMode, setSelectedMode] = useState('Jeepney');
+  const [selectedMode, setSelectedMode] = useState('All');
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isMapInteracted, setIsMapInteracted] = useState(false);
@@ -53,7 +60,6 @@ export default function HomeScreen() {
   const { routes: transitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
   const [selectedTransitRoute, setSelectedTransitRoute] = useState<any>(null);
   const [showTransitLayer, setShowTransitLayer] = useState(true);
-  const [nearestStop, setNearestStop] = useState<any>(null);
   const mapRef = useRef<MapView | null>(null);
 
   // Search Expand Animation
@@ -105,48 +111,17 @@ export default function HomeScreen() {
     }
   }, []);
 
-  // Find the nearest stop to the user's current location
-  const handleFindNearestStop = useCallback(() => {
-    if (!currentLocation) {
-      Alert.alert('GPS Not Ready', 'Waiting for your current location.');
-      return;
-    }
-    if (transitStops.length === 0) {
-      Alert.alert('No Stops', 'No transit stops loaded yet.');
-      return;
-    }
-
-    let closest: any = null;
-    let closestDist = Infinity;
-    for (const stop of transitStops) {
-      const dlat = stop.coordinate.latitude - currentLocation.latitude;
-      const dlng = stop.coordinate.longitude - currentLocation.longitude;
-      const dist = dlat * dlat + dlng * dlng;
-      if (dist < closestDist) {
-        closestDist = dist;
-        closest = stop;
-      }
-    }
-
-    if (closest) {
-      setNearestStop(closest);
-      mapRef.current?.animateToRegion({
-        latitude: closest.coordinate.latitude,
-        longitude: closest.coordinate.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }, 600);
-    }
-  }, [currentLocation, transitStops]);
-
-  // Visible routes: if a route is selected show only that, otherwise show all
+  // Visible routes: filter by selected mode, then by selected individual route
   const visibleTransitRoutes = useMemo(() => {
     if (!showTransitLayer) return [];
     if (selectedTransitRoute) return [selectedTransitRoute];
-    return transitRoutes;
-  }, [showTransitLayer, selectedTransitRoute, transitRoutes]);
+    if (selectedMode === 'All') return transitRoutes;
+    const routeType = MODE_TO_ROUTE_TYPE[selectedMode];
+    if (!routeType) return transitRoutes;
+    return transitRoutes.filter((r: any) => r.type === routeType);
+  }, [showTransitLayer, selectedTransitRoute, transitRoutes, selectedMode]);
 
-  // Visible stops: show stops for selected route or all stops
+  // Visible stops: filter by mode when no individual route is selected
   const visibleTransitStops = useMemo(() => {
     if (!showTransitLayer) return [];
     if (selectedTransitRoute?.stops?.length > 0) return selectedTransitRoute.stops;
@@ -449,10 +424,7 @@ export default function HomeScreen() {
             tracksViewChanges={false}
             anchor={{ x: 0.5, y: 0.5 }}
           >
-            <View style={[
-              styles.transitStopMarker,
-              nearestStop?.id === stop.id && styles.nearestStopMarker,
-            ]}>
+            <View style={styles.transitStopMarker}>
               <Ionicons name="ellipse" size={6} color="#FFFFFF" />
             </View>
             <Callout tooltip>
@@ -610,17 +582,6 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
 
-          {showTransitLayer && (
-            <TouchableOpacity
-              style={styles.nearestStopBtn}
-              onPress={handleFindNearestStop}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="navigate" size={14} color={COLORS.navy} />
-              <Text style={styles.nearestStopBtnText}>Nearest Stop</Text>
-            </TouchableOpacity>
-          )}
-
           {transitLoading && showTransitLayer && (
             <ActivityIndicator size="small" color="#E8A020" style={{ marginLeft: 8 }} />
           )}
@@ -632,18 +593,6 @@ export default function HomeScreen() {
             <Text style={styles.transitErrorText}>Transit: {transitError}</Text>
             <TouchableOpacity onPress={refreshTransit}>
               <Text style={styles.transitRetryText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {nearestStop && showTransitLayer && (
-          <View style={styles.nearestStopCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="location" size={16} color="#E8A020" />
-              <Text style={styles.nearestStopName}>{nearestStop.name}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setNearestStop(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
             </TouchableOpacity>
           </View>
         )}
@@ -1135,13 +1084,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
   },
-  nearestStopMarker: {
-    backgroundColor: '#E8A020',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 3,
-  },
   transitControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1175,28 +1117,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.navy,
   },
-  nearestStopBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(10,22,40,0.08)',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  nearestStopBtnText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.navy,
-  },
   transitErrorCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1221,29 +1141,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#E53935',
-  },
-  nearestStopCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    marginHorizontal: SPACING.screenX,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(232,160,32,0.3)',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  nearestStopName: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.navy,
   },
 });

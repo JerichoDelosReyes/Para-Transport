@@ -1,6 +1,6 @@
 /**
  * RouteListPanel — A draggable bottom sheet that lists all transit routes
- * grouped by type (Bus, Jeepney, UV Express, Ferry).
+ * grouped by type (Bus, Jeepney, UV Express).
  * Tapping a route calls onSelectRoute to highlight and pan on the map.
  */
 import React, { useRef, useMemo } from 'react';
@@ -22,12 +22,11 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const COLLAPSED_HEIGHT = 120;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.55;
 
-const TYPE_ORDER = ['bus', 'jeepney', 'share_taxi', 'ferry'];
+const TYPE_ORDER = ['bus', 'jeepney', 'share_taxi'];
 const TYPE_ICONS = {
   bus: 'bus',
   jeepney: 'car',
   share_taxi: 'car-sport',
-  ferry: 'boat',
 };
 
 export default function RouteListPanel({ routes, selectedRouteId, onSelectRoute }) {

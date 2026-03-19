@@ -32,7 +32,7 @@ function buildRoutesQuery() {
   relation["route"="bus"](${CAVITE_BBOX});
   relation["route"="jeepney"](${CAVITE_BBOX});
   relation["route"="share_taxi"](${CAVITE_BBOX});
-  relation["route"="ferry"](${CAVITE_BBOX});
+
 );
 out geom;`;
 }

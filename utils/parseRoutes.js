@@ -12,17 +12,15 @@
 
 // Color coding per route type
 export const ROUTE_COLORS = {
-  bus: '#E53935',       // red
+  bus: '#1E88E5',       // blue
   jeepney: '#F9A825',   // yellow
-  share_taxi: '#43A047', // green
-  ferry: '#1E88E5',     // blue
+  share_taxi: '#E53935', // red
 };
 
 export const ROUTE_LABELS = {
   bus: 'Bus',
   jeepney: 'Jeepney',
   share_taxi: 'UV Express',
-  ferry: 'Ferry',
 };
 
 // Clip bounds: Bacoor, Imus, Dasmariñas area with a small padding
@@ -99,8 +97,18 @@ export function parseRouteElements(elements) {
     if (el.type !== 'relation') continue;
 
     const tags = el.tags || {};
-    const routeType = tags.route;
+    let routeType = tags.route;
     if (!routeType || !ROUTE_COLORS[routeType]) continue;
+
+    // Reclassify: In the Philippines, jeepneys are often tagged as route=bus
+    // but have network containing "PUJ" or name containing "Jeepney"/"PUJ"
+    if (routeType === 'bus') {
+      const name = (tags.name || '').toLowerCase();
+      const network = (tags.network || '').toLowerCase();
+      if (network.includes('puj') || name.includes('jeepney') || name.includes('puj')) {
+        routeType = 'jeepney';
+      }
+    }
 
     const members = el.members || [];
 
