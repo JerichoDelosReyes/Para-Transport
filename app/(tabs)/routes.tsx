@@ -2,9 +2,11 @@ import { useState, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useTransitData } from '../../hooks/useTransitData';
+import { useStore } from '../../store/useStore';
 import { ROUTE_COLORS, ROUTE_LABELS } from '../../utils/parseRoutes';
 
 const FILTER_MODES = ['All', 'Jeepney', 'Bus', 'UV Express'] as const;
@@ -23,10 +25,12 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 export default function RoutesScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPadding = 60 + 36 + insets.bottom + 16;
   const [activeTab, setActiveTab] = useState<'transit' | 'history'>('transit');
   const [selectedMode, setSelectedMode] = useState<(typeof FILTER_MODES)[number]>('All');
+  const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
 
   const { routes: transitRoutes, loading } = useTransitData();
 
@@ -53,6 +57,11 @@ export default function RoutesScreen() {
   }, [filteredRoutes]);
 
   const totalTransitCount = filteredRoutes.length;
+
+  const handleTransitRoutePress = (route: any) => {
+    setSelectedTransitRoute(route);
+    router.push('/(tabs)');
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -122,9 +131,11 @@ export default function RoutesScreen() {
                       </Text>
                     </View>
                     {group.map((route) => (
-                      <View
+                      <TouchableOpacity
                         key={route.id}
                         style={styles.routeCard}
+                        activeOpacity={0.85}
+                        onPress={() => handleTransitRoutePress(route)}
                       >
                         <View style={[styles.routeIcon, { backgroundColor: route.color + '20' }]}>
                           <Ionicons name={TYPE_ICONS[route.type] as any} size={18} color={route.color} />
@@ -145,7 +156,7 @@ export default function RoutesScreen() {
                           ) : null}
                         </View>
                         <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-                      </View>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 );

@@ -12,8 +12,10 @@ interface User {
 interface StoreState {
   user: User;
   insightDismissed: boolean;
+  selectedTransitRoute: any | null;
   dismissInsight: () => void;
   addPoints: (points: number) => void;
+  setSelectedTransitRoute: (route: any | null) => void;
 }
 
 export const useStore = create<StoreState>((set) => ({
@@ -26,6 +28,8 @@ export const useStore = create<StoreState>((set) => ({
     total_fare_spent: 580,
   },
   insightDismissed: false,
+  selectedTransitRoute: null,
   dismissInsight: () => set({ insightDismissed: true }),
   addPoints: (points) => set((state) => ({ user: { ...state.user, points: state.user.points + points } })),
+  setSelectedTransitRoute: (route) => set({ selectedTransitRoute: route }),
 }));

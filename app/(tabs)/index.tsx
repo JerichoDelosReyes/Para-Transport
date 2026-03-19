@@ -9,6 +9,7 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 import { ProfileButton } from '../../components/ProfileButton';
+import { useStore } from '../../store/useStore';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
@@ -16,6 +17,20 @@ const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
 type MapCoordinate = {
   latitude: number;
   longitude: number;
+};
+
+type MapRegion = {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+};
+
+const INITIAL_REGION: MapRegion = {
+  latitude: 14.4296,
+  longitude: 120.9367,
+  latitudeDelta: 0.05,
+  longitudeDelta: 0.05,
 };
 
 type PlaceSuggestion = {
@@ -29,7 +44,8 @@ type PlaceSuggestion = {
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
 
-export default function HomeScreen() {  const [isSearchActive, setIsSearchActive] = useState(false);
+export default function HomeScreen() {
+  const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
@@ -43,31 +59,44 @@ export default function HomeScreen() {  const [isSearchActive, setIsSearchActive
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
   const [showRoutes, setShowRoutes] = useState(true);
   const [matchedCommute, setMatchedCommute] = useState<any>(null); // from useCommuteRoutes
-  const { routes: commuteRoutes } = useCommuteRoutes();  const mapRef = useRef<MapView | null>(null);
+  const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
+  const { routes: commuteRoutes } = useCommuteRoutes();
+  const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
+  const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
+  const mapRef = useRef<MapView | null>(null);
 
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-  const handleZoomIn = async () => {
-    const camera = await mapRef.current?.getCamera();
-    if (camera) {
-      camera.zoom = (camera.zoom || 15) + 1;
-      mapRef.current?.animateCamera(camera, { duration: 300 });
-    }
+  const handleZoomIn = () => {
+    const next: MapRegion = {
+      ...mapRegion,
+      latitudeDelta: clamp(mapRegion.latitudeDelta * 0.7, 0.0025, 0.4),
+      longitudeDelta: clamp(mapRegion.longitudeDelta * 0.7, 0.0025, 0.4),
+    };
+    setMapRegion(next);
+    mapRef.current?.animateToRegion(next, 250);
   };
 
-  const handleZoomOut = async () => {
-    const camera = await mapRef.current?.getCamera();
-    if (camera) {
-      camera.zoom = (camera.zoom || 15) - 1;
-      mapRef.current?.animateCamera(camera, { duration: 300 });
-    }
+  const handleZoomOut = () => {
+    const next: MapRegion = {
+      ...mapRegion,
+      latitudeDelta: clamp(mapRegion.latitudeDelta / 0.7, 0.0025, 0.4),
+      longitudeDelta: clamp(mapRegion.longitudeDelta / 0.7, 0.0025, 0.4),
+    };
+    setMapRegion(next);
+    mapRef.current?.animateToRegion(next, 250);
   };
 
   const handleLocateUser = () => {
     if (currentLocation) {
-      mapRef.current?.animateCamera({
-        center: currentLocation,
-        zoom: 16,
-      }, { duration: 500 });
+      const next: MapRegion = {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      setMapRegion(next);
+      mapRef.current?.animateToRegion(next, 500);
     } else {
       Alert.alert('Location Not Found', 'We are still getting your current location.');
     }
@@ -229,6 +258,22 @@ export default function HomeScreen() {  const [isSearchActive, setIsSearchActive
     };
   }, []);
 
+  useEffect(() => {
+    if (!selectedTransitRoute?.segments?.length) return;
+
+    const allCoords = selectedTransitRoute.segments.flat();
+    if (allCoords.length > 1) {
+      setRouteCoordinates([]);
+      setDestinationLocation(null);
+      setRouteSummary(null);
+
+      mapRef.current?.fitToCoordinates(allCoords, {
+        edgePadding: { top: 140, right: 40, bottom: 220, left: 40 },
+        animated: true,
+      });
+    }
+  }, [selectedTransitRoute]);
+
   const handleRouteSearch = async () => {
     Keyboard.dismiss();
     const dest = destinationQuery.trim().toLowerCase();
@@ -339,16 +384,12 @@ export default function HomeScreen() {  const [isSearchActive, setIsSearchActive
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
         mapType="none"
-        initialRegion={{
-          latitude: 14.4296,
-          longitude: 120.9367,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
+        initialRegion={INITIAL_REGION}
         showsUserLocation={true}
         showsMyLocationButton={false}
         showsCompass={false}
         onMapReady={() => setIsMapLoaded(true)}
+        onRegionChangeComplete={(region) => setMapRegion(region)}
         onTouchStart={() => setIsMapInteracted(true)}
         pitchEnabled={false}
         rotateEnabled={false}
@@ -383,6 +424,17 @@ export default function HomeScreen() {  const [isSearchActive, setIsSearchActive
             lineJoin="round"
           />
         )}
+
+        {selectedTransitRoute?.segments?.map((seg: any[], idx: number) => (
+          <Polyline
+            key={`selected-transit-${selectedTransitRoute.id}-${idx}`}
+            coordinates={seg}
+            strokeColor={selectedTransitRoute.color || '#1E88E5'}
+            strokeWidth={5}
+            lineCap="round"
+            lineJoin="round"
+          />
+        ))}
 
       </MapView>
 
@@ -560,6 +612,27 @@ export default function HomeScreen() {  const [isSearchActive, setIsSearchActive
             </View>
           </View>
         )}
+
+        {selectedTransitRoute ? (
+          <View style={styles.transitRouteCard}>
+            <View style={styles.transitRouteHeader}>
+              <View style={[styles.transitTypeBadge, { backgroundColor: selectedTransitRoute.color || '#1E88E5' }]}>
+                <Text style={styles.transitTypeBadgeText}>{selectedTransitRoute.label || 'Transit'}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedTransitRoute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={22} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.transitRouteTitle} numberOfLines={1}>
+              {selectedTransitRoute.ref ? `[${selectedTransitRoute.ref}] ` : ''}{selectedTransitRoute.name}
+            </Text>
+            {(selectedTransitRoute.from || selectedTransitRoute.to) ? (
+              <Text style={styles.transitRouteMeta} numberOfLines={1}>
+                {selectedTransitRoute.from}{selectedTransitRoute.from && selectedTransitRoute.to ? ' -> ' : ''}{selectedTransitRoute.to}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
       </SafeAreaView>
 
     </View>
@@ -985,6 +1058,49 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.caption,
     color: COLORS.textMuted,
     flexShrink: 1,
+  },
+  transitRouteCard: {
+    marginTop: 12,
+    marginHorizontal: SPACING.screenX,
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  transitRouteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  transitTypeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.pill,
+  },
+  transitTypeBadgeText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  transitRouteTitle: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  transitRouteMeta: {
+    marginTop: 4,
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.textMuted,
   },
   terminalMarker: {
     width: 32,
