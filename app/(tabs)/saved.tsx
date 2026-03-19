@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, Alert, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
 import { ROUTES } from '../../constants/routes';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 
 export default function SavedScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = 60 + 36 + insets.bottom + 16;
   const [savedRoutes, setSavedRoutes] = useState(ROUTES.slice(0, 3));
   const [selectedRoute, setSelectedRoute] = useState<any>(null);
   const [isModalVisible, setModalVisible] = useState(false);
@@ -29,7 +31,7 @@ export default function SavedScreen() {
         <Text style={styles.headerTitle}>SAVED</Text>
       </View>
 
-      <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
         {savedRoutes.length === 0 && (
           <View style={styles.emptyState}>
             <JeepIllustration width={220} height={150} />

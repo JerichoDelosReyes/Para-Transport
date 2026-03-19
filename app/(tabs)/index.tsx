@@ -11,18 +11,6 @@ import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 
 const { height, width } = Dimensions.get('window');
 
-const TRAFFIC = [
-  { road: 'Bacoor Boulevard', status: 'Heavy' as const },
-  { road: 'Imus Crossing', status: 'Moderate' as const },
-  { road: 'Dasmariñas Crossing', status: 'Light' as const },
-];
-
-function trafficPill(status: 'Light' | 'Moderate' | 'Heavy') {
-  if (status === 'Light') return { backgroundColor: COLORS.successBg, color: COLORS.successText };
-  if (status === 'Moderate') return { backgroundColor: COLORS.moderateBg, color: COLORS.moderateText };
-  return { backgroundColor: COLORS.heavyBg, color: COLORS.heavyText };
-}
-
 const MODES = ['Jeepney', 'Tricycle', 'UV Express', 'Bus', 'LRT'];
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
@@ -48,7 +36,6 @@ export default function HomeScreen() {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isMapInteracted, setIsMapInteracted] = useState(false);
-  const [isSheetExpanded, setIsSheetExpanded] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
   const [originQuery, setOriginQuery] = useState('');
   const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
@@ -63,47 +50,9 @@ export default function HomeScreen() {
   const { routes: commuteRoutes } = useCommuteRoutes();
   const mapRef = useRef<MapView | null>(null);
 
-  // Bottom Sheet Animation state
-  const sheetHeight = height * 0.5; // max height of bottom sheet
-  const minHeight = 100; // min peek height to show "LIVE TRAFFIC"
-  const slideAnim = useRef(new Animated.Value(sheetHeight - minHeight)).current;
-
   // Search Expand Animation
   const searchHeightAnim = useRef(new Animated.Value(48)).current;
   const searchOpacityAnim = useRef(new Animated.Value(0)).current;
-
-  const toggleSheet = (expand = true) => {
-    setIsSheetExpanded(expand);
-    Animated.spring(slideAnim, {
-      toValue: expand ? 0 : sheetHeight - minHeight,
-      useNativeDriver: true,
-      tension: 60,
-      friction: 10,
-    }).start();
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dy) > 5;
-      },
-      onPanResponderMove: (e, gestureState) => {
-        const newVal = isSheetExpanded ? gestureState.dy : sheetHeight - minHeight + gestureState.dy;
-        if (newVal > 0 && newVal < sheetHeight - minHeight + 50) {
-          slideAnim.setValue(newVal);
-        }
-      },
-      onPanResponderRelease: (e, gestureState) => {
-        if (gestureState.dy > 50) {
-          toggleSheet(false);
-        } else if (gestureState.dy < -50) {
-          toggleSheet(true);
-        } else {
-          toggleSheet(isSheetExpanded);
-        }
-      },
-    })
-  ).current;
 
   useEffect(() => {
     if (isSearchActive) {
@@ -585,59 +534,6 @@ export default function HomeScreen() {
           </View>
         )}
       </SafeAreaView>
-
-      {/* Draggable Bottom Sheet */}
-      <Animated.View
-        style={[
-          styles.bottomSheet,
-          {
-            height: sheetHeight,
-            transform: [
-              {
-                translateY: slideAnim.interpolate({
-                  inputRange: [0, sheetHeight - minHeight],
-                  outputRange: [0, sheetHeight - minHeight],
-                  extrapolate: 'clamp',
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <TouchableOpacity 
-          activeOpacity={0.9} 
-          onPress={() => toggleSheet(!isSheetExpanded)}
-          style={styles.sheetHeaderWrapper}
-        >
-          <View {...panResponder.panHandlers} style={styles.dragHandleContainer}>
-            <View style={styles.dragHandle} />
-            <Text style={styles.sheetHeaderTitle}>LIVE TRAFFIC</Text>
-          </View>
-        </TouchableOpacity>
-
-        <ScrollView 
-          showsVerticalScrollIndicator={false} 
-          contentContainerStyle={styles.sheetContent}
-          bounces={false}
-        >
-          <View style={styles.cardList}>
-            {TRAFFIC.map((item) => {
-              const pill = trafficPill(item.status);
-              return (
-                <View key={item.road} style={styles.trafficCard}>
-                  <View style={styles.trafficLeft}>
-                    <Ionicons name="ellipse" size={8} color="rgba(10,22,40,0.28)" />
-                    <Text style={styles.trafficRoad}>{item.road}</Text>
-                  </View>
-                  <View style={[styles.statusPill, { backgroundColor: pill.backgroundColor }]}>
-                    <Text style={[styles.statusText, { color: pill.color }]}>{item.status}</Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </Animated.View>
     </View>
   );
 }

@@ -1,137 +1,202 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, View, Text, Animated } from 'react-native';
+import { StyleSheet, View, Text, Animated, Dimensions, Platform, TouchableWithoutFeedback, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/theme';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
-function FloatingHomeButton({ focused }: { focused: boolean }) {
-  const scaleAnim = useRef(new Animated.Value(focused ? 1 : 0)).current;
+const { width } = Dimensions.get('window');
+
+function TabBarBackground() {
+  const insets = useSafeAreaInsets();
+  const height = 63 + insets.bottom;
+  const cx = width / 2;
+  const notchWidth = 86;
+  const depth = 20;
+
+  const path = `
+    M 0,0 
+    L ${cx - notchWidth/2},0
+    C ${cx - notchWidth/3},0 ${cx - notchWidth/4},${depth} ${cx},${depth}
+    C ${cx + notchWidth/4},${depth} ${cx + notchWidth/3},0 ${cx + notchWidth/2},0
+    L ${width},0
+    L ${width},${height}
+    L 0,${height}
+    Z
+  `;
+
+  return (
+    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height, backgroundColor: 'transparent', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 4 }}>
+      <Svg width={width} height={height}>
+        <Path d={path} fill="#FFFFFF" />
+      </Svg>
+    </View>
+  );
+}
+
+function LiquidGlassHomeButton({ focused, onPress }: { focused: boolean, onPress: () => void }) {
+  const idleAnim = useRef(new Animated.Value(0)).current;
+  const pressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: focused ? 1 : 0,
-      useNativeDriver: false,
-      tension: 50,
-      friction: 7,
+    Animated.loop(
+      Animated.timing(idleAnim, {
+        toValue: 1,
+        duration: 3000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [idleAnim]);
+
+  const handlePressIn = () => {
+    Animated.spring(pressAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 40,
+      friction: 5,
     }).start();
-  }, [focused, scaleAnim]);
+  };
 
-  const translateY = scaleAnim.interpolate({
+  const handlePressOut = () => {
+    Animated.spring(pressAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 40,
+      friction: 5,
+    }).start();
+    onPress();
+  };
+
+  const scaleIdle1 = idleAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -24] // move up when active
+    outputRange: [1, 1.3]
+  });
+  const opacityIdle1 = idleAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.6, 0.2, 0]
   });
 
-  const bgInterpolate = scaleAnim.interpolate({
+  const scaleIdle2 = idleAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#E8A020', '#E8A020']
+    outputRange: [0.8, 1.6]
+  });
+  const opacityIdle2 = idleAnim.interpolate({
+    inputRange: [0, 0.3, 0.7, 1],
+    outputRange: [0, 0.5, 0.1, 0]
   });
 
-  const iconColorInterpolate = scaleAnim.interpolate({
+  const buttonScale = pressAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['rgba(0,0,0,0.35)', COLORS.navy]
-  });
-
-  const buttonSize = scaleAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [32, 56]
-  });
-
-  const innerRadius = scaleAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [16, 28]
-  });
-
-  const wrapSize = scaleAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [32, 68]
-  });
-
-  const wrapRadius = scaleAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [16, 34]
-  });
-
-  const wrapBgInterpolate = scaleAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['transparent', '#FFFFFF']
+    outputRange: [1, 0.9]
   });
 
   return (
-    <Animated.View style={[styles.tabContentContainer, { transform: [{ translateY }] }]}>
-      <Animated.View style={[styles.floatingButtonWrap, { backgroundColor: wrapBgInterpolate, width: wrapSize, height: wrapSize, borderRadius: wrapRadius }]}>
-        <Animated.View style={[
-          styles.floatingButton,
-          { 
-            backgroundColor: bgInterpolate,
-            width: buttonSize,
-            height: buttonSize,
-            borderRadius: innerRadius,
-            elevation: focused ? 5 : 0,
-            shadowOpacity: focused ? 0.15 : 0,
-          }
-        ]}>
-          <Animated.View>
-            {/* React Native Animated doesn't directly interpolate color for vector icons out of the box cleanly, 
-                so we use focused state for color generally, but the bounce animation looks great */}
-            <Ionicons name={focused ? 'home' : 'home-outline'} size={focused ? 28 : 24} color={focused ? COLORS.navy : '#FFFFFF'} />
-          </Animated.View>
-        </Animated.View>
+    <TouchableWithoutFeedback onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View style={[styles.homeButtonContainer, { transform: [{ scale: buttonScale }] }]}>
+        <Animated.View style={[styles.liquidRing, { transform: [{ scale: scaleIdle1 }], opacity: opacityIdle1 }]} />
+        <Animated.View style={[styles.liquidRing, { transform: [{ scale: scaleIdle2 }], opacity: opacityIdle2 }]} />
+        
+        <View style={styles.homeButtonBase}>
+          <Ionicons name={focused ? 'home' : 'home-outline'} size={28} color="#FFFFFF" />
+        </View>
       </Animated.View>
-      <Animated.Text style={[
-        styles.homeLabel, 
-        { 
-          color: focused ? '#E8A020' : 'rgba(0,0,0,0.35)',
-          opacity: 1, // Keep text shown based on image requirement
-          transform: [
-            {
-              translateY: scaleAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [4, 18] // push text further down when icon floats up so it sits properly beneath it
-              })
+    </TouchableWithoutFeedback>
+  );
+}
+
+function CustomTabBar({ state, descriptors, navigation }: any) {
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom;
+
+  return (
+    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+      {/* Cutout Background */}
+      <TabBarBackground />
+      
+      <View style={[styles.customTabBarContainer, { height: 60, paddingBottom: 6, marginBottom: bottomInset }]}>
+        {state.routes.map((route: any, index: number) => {
+          const { options } = descriptors[route.key];
+          const label =
+            options.tabBarLabel !== undefined
+              ? options.tabBarLabel
+              : options.title !== undefined
+              ? options.title
+              : route.name;
+
+          const isFocused = state.index === index;
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
             }
-          ]
-        }
-      ]}>
-        Home
-      </Animated.Text>
-    </Animated.View>
+          };
+
+          if (route.name === 'index') {
+            return (
+              <View key={route.key} style={styles.centerTabWrapper}>
+                <View style={{ height: 24, marginBottom: 4 }} />
+                <Text style={[styles.tabLabel, { color: isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
+                  Home
+                </Text>
+                <View style={[styles.homeButtonWrapper, { bottom: 28 }]}>
+                   <LiquidGlassHomeButton focused={isFocused} onPress={onPress} />
+                </View>
+              </View>
+            );
+          }
+
+          let iconName = '';
+          if (route.name === 'saved') iconName = isFocused ? 'bookmark' : 'bookmark-outline';
+          if (route.name === 'profile') iconName = isFocused ? 'person' : 'person-outline';
+
+          return (
+            <TouchableWithoutFeedback key={route.key} onPress={onPress}>
+              <View style={styles.tabItem}>
+                <Ionicons name={iconName as any} size={24} color={isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 4 }} />
+                <Text style={[styles.tabLabel, { color: isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
+                  {label as string}
+                </Text>
+              </View>
+            </TouchableWithoutFeedback>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
 export default function TabLayout() {
   return (
     <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarShowLabel: true,
-        tabBarActiveTintColor: '#E8A020',
-        tabBarInactiveTintColor: 'rgba(0,0,0,0.35)',
-        tabBarLabelStyle: styles.tabLabel,
       }}
     >
       <Tabs.Screen
         name="saved"
         options={{
           title: 'Saved',
-          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'bookmark' : 'bookmark-outline'} size={24} color={color} />,
         }}
       />
-      
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarLabel: () => null,
-          tabBarIcon: ({ focused }) => <FloatingHomeButton focused={focused} />,
         }}
       />
-      
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />,
         }}
       />
     </Tabs>
@@ -139,46 +204,60 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: '#FFFFFF',
-    borderTopColor: 'rgba(0,0,0,0.08)',
-    borderTopWidth: 1,
-    elevation: 0,
-    shadowOpacity: 0,
-    height: 84,
-    paddingBottom: 18,
-    paddingTop: 8,
+  customTabBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 28,
+    backgroundColor: 'transparent',
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+  },
+  centerTabWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+  },
+  homeButtonWrapper: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homeButtonContainer: {
+    width: 62,
+    height: 62,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liquidRing: {
+    position: 'absolute',
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#F5CC84',
+  },
+  homeButtonBase: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#E8A020',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#E8A020',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 8,
+    overflow: 'hidden',
   },
   tabLabel: {
     fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '600',
-  },
-  homeLabel: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 0,
-    textAlign: 'center',
-    position: 'absolute',
-    bottom: -6, // anchor bottom relative to floating wrapper
-    width: '100%',
-  },
-  tabContentContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 70, // gives enough room to bounce up and down
-    width: 80, // lock width so text doesn't wrap
-  },
-  floatingButtonWrap: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  floatingButton: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
   },
 });

@@ -1,5 +1,5 @@
 import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useNavigation } from 'expo-router';
 import { StackActions } from '@react-navigation/native';
@@ -21,6 +21,9 @@ function getInitials(name: string) {
 }
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
+  // Nav bar height (60) + floating circle overhang (~36) + extra breathing room (16)
+  const bottomPadding = 60 + 36 + insets.bottom + 16;
   const router = useRouter();
   const navigation = useNavigation();
   const user = useStore((state) => state.user);
@@ -33,7 +36,7 @@ export default function ProfileScreen() {
 
       <ScrollView 
         style={{ flex: 1, backgroundColor: COLORS.background }} 
-        contentContainerStyle={styles.content} 
+        contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} 
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.card, styles.identityCard]}>
