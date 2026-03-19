@@ -34,7 +34,9 @@
     "web": {
       "favicon": "./assets/logo/appicon.png"
     },
-    "plugins": [],
+    "plugins": [
+      "@react-native-google-signin/google-signin"
+    ],
     "extra": {
       "eas": {
         "projectId": "74b7647d-22db-4ce9-8579-4fcc01cdd341"
