@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useJeepneyRoutes } from '../../hooks/useJeepneyRoutes';
+import { logError, logTrace } from '../../utils/telemetry';
 
 const { height, width } = Dimensions.get('window');
 
@@ -84,6 +85,13 @@ export default function HomeScreen() {
   const { routes: jeepneyRoutes } = useJeepneyRoutes();
   const mapRef = useRef<MapView | null>(null);
 
+  useEffect(() => {
+    logTrace('HomeScreen', 'screen-mounted');
+    return () => {
+      logTrace('HomeScreen', 'screen-unmounted');
+    };
+  }, []);
+
   const localLocations = React.useMemo<LocalLocation[]>(() => {
     const byName = new Map<string, LocalLocation>();
 
@@ -152,6 +160,7 @@ export default function HomeScreen() {
   const searchOpacityAnim = useRef(new Animated.Value(0)).current;
 
   const toggleSheet = (expand = true) => {
+    logTrace('HomeScreen', 'bottom-sheet-toggle', { expand });
     setIsSheetExpanded(expand);
     Animated.spring(slideAnim, {
       toValue: expand ? 0 : sheetHeight - minHeight,
@@ -217,7 +226,23 @@ export default function HomeScreen() {
 
   const closeSearch = () => setIsSearchActive(false);
 
+  useEffect(() => {
+    logTrace('HomeScreen', 'state-change', {
+      isSearchActive,
+      isRouting,
+      suggestions: placeSuggestions.length,
+      routeCoordinates: routeCoordinates.length,
+      selectedRoute,
+      selectedMode,
+    });
+  }, [isSearchActive, isRouting, placeSuggestions.length, routeCoordinates.length, selectedRoute, selectedMode]);
+
   const selectSuggestion = (suggestion: PlaceSuggestion) => {
+    logTrace('HomeScreen', 'suggestion-selected', {
+      title: suggestion.title,
+      latitude: suggestion.latitude,
+      longitude: suggestion.longitude,
+    });
     setDestinationQuery(suggestion.title);
     setPlaceSuggestions([]);
   };
@@ -238,6 +263,10 @@ export default function HomeScreen() {
       console.log(
         `Available Locations for ${query} {\n${localMatches.map((loc) => `  ${loc.title}`).join('\n')}\n}`
       );
+      logTrace('HomeScreen', 'suggestions-local-matches', {
+        query,
+        count: localMatches.length,
+      });
 
       if (localMatches.length >= 6) {
         setPlaceSuggestions(localMatches);
@@ -247,6 +276,7 @@ export default function HomeScreen() {
 
       setIsFetchingSuggestions(true);
       try {
+        logTrace('HomeScreen', 'suggestions-remote-request-start', { query });
         const params = new URLSearchParams({
           q: `${query}, Cavite, Philippines`,
           format: 'json',
@@ -269,6 +299,10 @@ export default function HomeScreen() {
         }
 
         const results = await response.json();
+        logTrace('HomeScreen', 'suggestions-remote-request-success', {
+          query,
+          resultCount: Array.isArray(results) ? results.length : 0,
+        });
         if (cancelled) {
           return;
         }
@@ -305,7 +339,7 @@ export default function HomeScreen() {
         setPlaceSuggestions([...mergedMap.values()].slice(0, 8));
       } catch (error) {
         if (!cancelled) {
-          console.warn('[HomeScreen] Suggestion search failed:', error);
+          logError('HomeScreen', 'suggestions-remote-request-failed', error, { query });
           setPlaceSuggestions(localMatches);
         }
       } finally {
@@ -328,14 +362,20 @@ export default function HomeScreen() {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
+          logTrace('HomeScreen', 'location-permission-denied');
           return;
         }
+        logTrace('HomeScreen', 'location-permission-granted');
 
         const initial = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
 
         setCurrentLocation({
+          latitude: initial.coords.latitude,
+          longitude: initial.coords.longitude,
+        });
+        logTrace('HomeScreen', 'location-initial-fix', {
           latitude: initial.coords.latitude,
           longitude: initial.coords.longitude,
         });
@@ -351,10 +391,14 @@ export default function HomeScreen() {
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
             });
+            logTrace('HomeScreen', 'location-watch-update', {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            });
           }
         );
       } catch (error) {
-        console.warn('[HomeScreen] Location tracking failed:', error);
+        logError('HomeScreen', 'location-tracking-failed', error);
       }
     };
 
@@ -367,13 +411,16 @@ export default function HomeScreen() {
 
   const handleRouteSearch = async () => {
     const query = destinationQuery.trim();
+    logTrace('HomeScreen', 'route-search-pressed', { query });
     if (!query) {
       Alert.alert('Destination Required', 'Type where you want to go first.');
+      logTrace('HomeScreen', 'route-search-blocked-empty-query');
       return;
     }
 
     if (!currentLocation) {
       Alert.alert('GPS Not Ready', 'Waiting for your current location. Please try again in a few seconds.');
+      logTrace('HomeScreen', 'route-search-blocked-no-gps');
       return;
     }
 
@@ -384,15 +431,23 @@ export default function HomeScreen() {
       console.log(
         `Available Locations for ${query} {\n${localMatches.map((loc) => `  ${loc.title}`).join('\n')}\n}`
       );
+      logTrace('HomeScreen', 'route-search-local-matches', {
+        query,
+        count: localMatches.length,
+      });
 
       let destinationPoint: MapCoordinate | null = null;
 
       if (localMatches.length > 0) {
+        logTrace('HomeScreen', 'route-search-using-local-destination', {
+          title: localMatches[0].title,
+        });
         destinationPoint = {
           latitude: localMatches[0].latitude,
           longitude: localMatches[0].longitude,
         };
       } else {
+        logTrace('HomeScreen', 'route-search-remote-geocode-start', { query });
         const geocodeParams = new URLSearchParams({
           q: `${query}, Cavite, Philippines`,
           format: 'json',
@@ -414,8 +469,13 @@ export default function HomeScreen() {
         }
 
         const geocodeResults = await geocodeResponse.json();
+        logTrace('HomeScreen', 'route-search-remote-geocode-success', {
+          query,
+          resultCount: Array.isArray(geocodeResults) ? geocodeResults.length : 0,
+        });
         if (!Array.isArray(geocodeResults) || geocodeResults.length === 0) {
           Alert.alert('Location Not Found', 'Try a more specific destination name in Cavite.');
+          logTrace('HomeScreen', 'route-search-no-geocode-results', { query });
           return;
         }
 
@@ -436,6 +496,10 @@ export default function HomeScreen() {
       }
 
       setDestinationLocation(destinationPoint);
+      logTrace('HomeScreen', 'destination-point-resolved', {
+        latitude: destinationPoint.latitude,
+        longitude: destinationPoint.longitude,
+      });
 
       const startLng = currentLocation.longitude;
       const startLat = currentLocation.latitude;
@@ -447,6 +511,7 @@ export default function HomeScreen() {
       }
 
       if (haversineKm(currentLocation, destinationPoint) < 0.05) {
+        logTrace('HomeScreen', 'route-search-short-circuit-nearby-destination');
         setRouteCoordinates([currentLocation, destinationPoint]);
         setRouteSummary({
           distanceKm: 0.05,
@@ -460,11 +525,20 @@ export default function HomeScreen() {
         `${ROUTING_BASE_URL}/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`
       );
 
+      logTrace('HomeScreen', 'route-search-osrm-response', {
+        status: routeResponse.status,
+      });
+
       if (!routeResponse.ok) {
         if (routeResponse.status === 400) {
           const fallbackDistanceKm = haversineKm(currentLocation, destinationPoint);
           const fallbackDurationMin = Math.max(2, Math.round((fallbackDistanceKm / 20) * 60));
           const fallbackCoordinates = [currentLocation, destinationPoint];
+
+          logTrace('HomeScreen', 'route-search-osrm-fallback-direct-line', {
+            fallbackDistanceKm,
+            fallbackDurationMin,
+          });
 
           setRouteCoordinates(fallbackCoordinates);
           setRouteSummary({
@@ -491,6 +565,7 @@ export default function HomeScreen() {
       const bestRoute = routeResult?.routes?.[0];
       if (!bestRoute?.geometry?.coordinates) {
         Alert.alert('Route Not Found', 'No drivable route found for this destination.');
+        logTrace('HomeScreen', 'route-search-osrm-no-geometry');
         return;
       }
 
@@ -499,6 +574,11 @@ export default function HomeScreen() {
       setRouteSummary({
         distanceKm: bestRoute.distance / 1000,
         durationMin: bestRoute.duration / 60,
+      });
+      logTrace('HomeScreen', 'route-search-success', {
+        distanceKm: bestRoute.distance / 1000,
+        durationMin: bestRoute.duration / 60,
+        coordinateCount: mappedCoordinates.length,
       });
 
       mapRef.current?.fitToCoordinates(mappedCoordinates, {
@@ -510,7 +590,9 @@ export default function HomeScreen() {
       setPlaceSuggestions([]);
       Keyboard.dismiss();
     } catch (error) {
-      console.warn('[HomeScreen] Route search failed:', error);
+      logError('HomeScreen', 'route-search-failed', error, {
+        query,
+      });
       Alert.alert('Search Failed', 'Unable to fetch route right now. Please try again.');
     } finally {
       setIsRouting(false);
@@ -529,8 +611,14 @@ export default function HomeScreen() {
           longitudeDelta: 0.05,
         }}
         showsUserLocation={true}
-        onMapReady={() => setIsMapLoaded(true)}
-        onTouchStart={() => setIsMapInteracted(true)}
+        onMapReady={() => {
+          setIsMapLoaded(true);
+          logTrace('HomeScreen', 'map-ready');
+        }}
+        onTouchStart={() => {
+          setIsMapInteracted(true);
+          logTrace('HomeScreen', 'map-touch-start');
+        }}
         pitchEnabled={false}
         rotateEnabled={false}
         minZoomLevel={10}
@@ -640,7 +728,10 @@ export default function HomeScreen() {
             <View style={styles.searchContainer}>
               <View style={styles.searchBarRow}>
                 {isSearchActive ? (
-                   <TouchableOpacity onPress={closeSearch} style={{ marginRight: 8 }}>
+                   <TouchableOpacity onPress={() => {
+                     logTrace('HomeScreen', 'button-press-back-search');
+                     closeSearch();
+                   }} style={{ marginRight: 8 }}>
                      <Ionicons name="arrow-back" size={20} color={COLORS.navy} />
                    </TouchableOpacity>
                 ) : null}
@@ -649,7 +740,10 @@ export default function HomeScreen() {
                    {isSearchActive ? (
                      <Text style={[styles.searchInputText, { color: COLORS.navy }]}>My Location</Text>
                    ) : (
-                     <Text style={[styles.searchInputText, { color: COLORS.textMuted }]} onPress={() => setIsSearchActive(true)}>
+                     <Text style={[styles.searchInputText, { color: COLORS.textMuted }]} onPress={() => {
+                       logTrace('HomeScreen', 'button-press-open-search');
+                       setIsSearchActive(true);
+                     }}>
                        {destinationQuery || 'Going Somewhere?'}
                      </Text>
                    )}
@@ -735,7 +829,10 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={mode}
                 style={[styles.modePill, selectedMode === mode && styles.modePillActive]}
-                onPress={() => setSelectedMode(mode)}
+                onPress={() => {
+                  logTrace('HomeScreen', 'button-press-mode', { mode });
+                  setSelectedMode(mode);
+                }}
               >
                 <Text style={[styles.modePillText, selectedMode === mode && styles.modePillTextActive]}>{mode}</Text>
               </TouchableOpacity>

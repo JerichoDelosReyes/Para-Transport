@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import transitData from '../data/transit.routes.generated.json';
+import { logError, logTrace } from '../utils/telemetry';
 
 export type RouteCoord = {
   latitude: number;
@@ -37,6 +38,7 @@ export function useJeepneyRoutes() {
 
   useEffect(() => {
     try {
+      logTrace('useJeepneyRoutes', 'load-start');
       const data = transitData as any;
       const codeCounts = new Map<string, number>();
       const parsed: JeepneyRoute[] = (data.routes || [])
@@ -85,11 +87,15 @@ export function useJeepneyRoutes() {
             stops,
           };
         });
+      logTrace('useJeepneyRoutes', 'load-success', {
+        routeCount: parsed.length,
+      });
       setRoutes(parsed);
     } catch (err) {
-      console.warn('[useJeepneyRoutes] Failed to load route data:', err);
+      logError('useJeepneyRoutes', 'load-failed', err);
     } finally {
       setLoading(false);
+      logTrace('useJeepneyRoutes', 'load-finished');
     }
   }, []);
 
