@@ -379,7 +379,7 @@ export default function HomeScreen() {
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Floating Top Header */}
-        <BlurView intensity={80} tint="light" style={[styles.header, isSearchActive && { zIndex: 10 }]}>
+        <View style={[styles.header, isSearchActive && { zIndex: 10 }]}>
           <View style={styles.headerTopRow}>
             <Text style={styles.headerTitle}>HI, JERICHO!</Text>
             <ProfileButton />
@@ -409,11 +409,6 @@ export default function HomeScreen() {
                      </Text>
                    )}
                 </View>
-                {!isSearchActive && (
-                  <TouchableOpacity style={styles.iconButton} activeOpacity={0.85}>
-                    <Ionicons name="options-outline" size={20} color={COLORS.navy} />
-                  </TouchableOpacity>
-                )}
               </View>
 
               {/* Expanded search fields */}
@@ -481,7 +476,7 @@ export default function HomeScreen() {
               </Animated.View>
             </View>
           </Animated.View>
-        </BlurView>
+        </View>
 
         {/* Floating Quick Actions */}
         <View style={styles.quickActionsContainer}>
@@ -565,9 +560,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     overflow: 'hidden',
-    backgroundColor: 'rgba(245, 240, 232, 0.85)',
+    backgroundColor: '#F5C518',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.4)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 8,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -578,10 +578,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: 'Cubao',
     fontSize: TYPOGRAPHY.screenTitle,
-    color: '#E8A020',
-    textShadowColor: 'rgba(0,0,0,0.1)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    color: '#0A1628',
   },
   searchContainer: {
     width: '100%',
