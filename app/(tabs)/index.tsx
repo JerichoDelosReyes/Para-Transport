@@ -7,7 +7,7 @@ import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
-import { useJeepneyRoutes } from '../../hooks/useJeepneyRoutes';
+import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 
 const { height, width } = Dimensions.get('window');
 
@@ -50,6 +50,7 @@ export default function HomeScreen() {
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
+  const [originQuery, setOriginQuery] = useState('');
   const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
@@ -57,9 +58,9 @@ export default function HomeScreen() {
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
-  const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
   const [showRoutes, setShowRoutes] = useState(true);
-  const { routes: jeepneyRoutes } = useJeepneyRoutes();
+  const [matchedCommute, setMatchedCommute] = useState<any>(null); // from useCommuteRoutes
+  const { routes: commuteRoutes } = useCommuteRoutes();
   const mapRef = useRef<MapView | null>(null);
 
   // Bottom Sheet Animation state
@@ -257,8 +258,11 @@ export default function HomeScreen() {
   }, []);
 
   const handleRouteSearch = async () => {
-    const query = destinationQuery.trim();
-    if (!query) {
+    Keyboard.dismiss();
+    const dest = destinationQuery.trim().toLowerCase();
+    const orig = originQuery.trim().toLowerCase() || 'buendia';
+    
+    if (!dest) {
       Alert.alert('Destination Required', 'Type where you want to go first.');
       return;
     }
@@ -270,8 +274,22 @@ export default function HomeScreen() {
 
     setIsRouting(true);
     try {
+      // Match with commuteData
+      const matches = commuteRoutes.filter(r => r.destination.toLowerCase().includes(dest));
+      let bestMatch = matches.find(r => r.origin.toLowerCase().includes(orig));
+      if (!bestMatch && matches.length > 0) {
+          bestMatch = matches[0]; // fallback
+      }
+
+      if (bestMatch) {
+         setMatchedCommute(bestMatch);
+      } else {
+         setMatchedCommute(null);
+         Alert.alert('Route Not Found', 'Sorry, the commute guide data does not fully answer the question for this route.');
+      }
+
       const geocodeParams = new URLSearchParams({
-        q: `${query}, Cavite, Philippines`,
+        q: `${destinationQuery}, Cavite, Philippines`,
         format: 'json',
         limit: '1',
         countrycodes: 'ph',
@@ -393,59 +411,6 @@ export default function HomeScreen() {
             lineJoin="round"
           />
         )}
-
-        {/* Route Overlays */}
-        {showRoutes && selectedMode === 'Jeepney' && jeepneyRoutes.map((route) => {
-          const isSelected = selectedRoute === route.properties.code;
-          return (
-            <Polyline
-              key={route.properties.code}
-              coordinates={route.coordinates}
-              strokeColor={isSelected ? '#E8A020' : '#2196F3'}
-              strokeWidth={isSelected ? 5 : 3}
-              lineCap="round"
-              lineJoin="round"
-              lineDashPattern={isSelected ? undefined : [1]}
-              tappable
-              onPress={() => {
-                setSelectedRoute(isSelected ? null : route.properties.code);
-              }}
-            />
-          );
-        })}
-
-        {/* Boarding guide markers along the selected route */}
-        {showRoutes && selectedMode === 'Jeepney' && selectedRoute && (() => {
-          const route = jeepneyRoutes.find(r => r.properties.code === selectedRoute);
-          if (!route) return null;
-          return route.stops.map((stop, idx) => {
-            const isTerminal = stop.type === 'terminal';
-            return (
-              <Marker
-                key={`stop-${selectedRoute}-${idx}`}
-                coordinate={stop.coordinate}
-                anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={false}
-              >
-                <View style={isTerminal ? styles.terminalMarker : styles.stopMarker}>
-                  <Ionicons
-                    name={isTerminal ? 'bus' : 'ellipse'}
-                    size={isTerminal ? 16 : 8}
-                    color="#FFFFFF"
-                  />
-                </View>
-                <Callout tooltip>
-                  <View style={styles.stopCallout}>
-                    <Text style={styles.stopCalloutLabel}>{stop.label}</Text>
-                    <Text style={styles.stopCalloutType}>
-                      {isTerminal ? '🚏 Terminal' : '📍 Boarding Point'}
-                    </Text>
-                  </View>
-                </Callout>
-              </Marker>
-            );
-          });
-        })()}
       </MapView>
 
       {/* Dim map when search is active */}
@@ -477,10 +442,17 @@ export default function HomeScreen() {
                 <View style={[styles.searchBarWrapper, isSearchActive && { elevation: 0, shadowOpacity: 0 }]}>
                    <Ionicons name="search" size={18} color={COLORS.textMuted} />
                    {isSearchActive ? (
-                     <Text style={[styles.searchInputText, { color: COLORS.navy }]}>My Location</Text>
+                     <TextInput
+                       style={styles.activeSearchInput}
+                       placeholder="My Location"
+                       placeholderTextColor={COLORS.textMuted}
+                       value={originQuery}
+                       onChangeText={setOriginQuery}
+                       returnKeyType="next"
+                     />
                    ) : (
                      <Text style={[styles.searchInputText, { color: COLORS.textMuted }]} onPress={() => setIsSearchActive(true)}>
-                       {destinationQuery || 'Going Somewhere?'}
+                       {destinationQuery ? `${originQuery || 'My Location'} to ${destinationQuery}` : 'Going Somewhere?'}
                      </Text>
                    )}
                 </View>
@@ -582,37 +554,36 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Selected Route Info */}
-        {selectedRoute && (() => {
-          const route = jeepneyRoutes.find(r => r.properties.code === selectedRoute);
-          if (!route) return null;
-          return (
-            <View style={styles.routeInfoCard}>
-              <View style={styles.routeInfoHeader}>
-                <View style={styles.routeCodeBadge}>
-                  <Text style={styles.routeCodeText}>{route.properties.code}</Text>
-                </View>
-                <TouchableOpacity onPress={() => setSelectedRoute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
-                </TouchableOpacity>
+        {/* Matched Commute Route Info */}
+        {matchedCommute && (
+          <View style={styles.routeInfoCard}>
+            <View style={styles.routeInfoHeader}>
+              <View style={styles.routeCodeBadge}>
+                <Text style={styles.routeCodeText}>{matchedCommute.transport}</Text>
               </View>
-              <Text style={styles.routeInfoTitle}>{route.properties.name}</Text>
-              {route.properties.description ? (
-                <Text style={styles.routeInfoDesc} numberOfLines={3}>{route.properties.description}</Text>
-              ) : null}
-              <View style={styles.routeInfoMeta}>
-                <Text style={styles.routeInfoMetaText}>
-                  <Ionicons name="cash" size={12} color={COLORS.textMuted} /> ₱{route.properties.fare}
-                </Text>
-                {route.properties.operator ? (
-                  <Text style={styles.routeInfoMetaText} numberOfLines={1}>
-                    <Ionicons name="bus" size={12} color={COLORS.textMuted} /> {route.properties.operator}
-                  </Text>
-                ) : null}
-              </View>
+              <TouchableOpacity onPress={() => setMatchedCommute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
+              </TouchableOpacity>
             </View>
-          );
-        })()}
+            <Text style={styles.routeInfoTitle}>
+              {matchedCommute.origin} to {matchedCommute.destination}
+            </Text>
+            {matchedCommute.schedule ? (
+              <Text style={styles.routeInfoDesc}>Schedule: {matchedCommute.schedule}</Text>
+            ) : null}
+            {matchedCommute.notes ? (
+              <Text style={styles.routeInfoDesc}>Notes: {matchedCommute.notes}</Text>
+            ) : null}
+            <View style={styles.routeInfoMeta}>
+              <Text style={styles.routeInfoMetaText}>
+                <Ionicons name="cash" size={12} color={COLORS.textMuted} /> {matchedCommute.fare || 'Unknown fare'}
+              </Text>
+              <Text style={styles.routeInfoMetaText} numberOfLines={1}>
+                <Ionicons name="bus" size={12} color={COLORS.textMuted} /> {matchedCommute.transport}
+              </Text>
+            </View>
+          </View>
+        )}
       </SafeAreaView>
 
       {/* Draggable Bottom Sheet */}
