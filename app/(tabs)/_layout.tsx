@@ -5,8 +5,16 @@ import { COLORS } from '../../constants/theme';
 import { useEffect, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import { useStore } from '../../store/useStore';
 
 const { width } = Dimensions.get('window');
+
+function getInitials(name: string) {
+  if (!name) return 'PR';
+  const parts = name.split(' ');
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return name.substring(0, 2).toUpperCase();
+}
 
 function TabBarBackground() {
   const insets = useSafeAreaInsets();
@@ -105,6 +113,7 @@ function LiquidGlassHomeButton({ focused, onPress }: { focused: boolean, onPress
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
+  const user = useStore((state) => state.user);
 
   return (
     <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
@@ -149,9 +158,25 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             );
           }
 
+          if (route.name === 'profile') {
+            return (
+              <TouchableWithoutFeedback key={route.key} onPress={onPress}>
+                <View style={styles.tabItem}>
+                  <View style={[styles.avatarIcon, isFocused && styles.avatarFocused]}>
+                    <Text style={[styles.avatarInitials, isFocused && styles.avatarInitialsFocused]}>
+                      {getInitials(user?.name || '')}
+                    </Text>
+                  </View>
+                  <Text style={[styles.tabLabel, { color: isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
+                    {label as string}
+                  </Text>
+                </View>
+              </TouchableWithoutFeedback>
+            );
+          }
+
           let iconName = '';
           if (route.name === 'saved') iconName = isFocused ? 'bookmark' : 'bookmark-outline';
-          if (route.name === 'profile') iconName = isFocused ? 'person' : 'person-outline';
 
           return (
             <TouchableWithoutFeedback key={route.key} onPress={onPress}>
@@ -248,5 +273,26 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '600',
+  },
+  avatarIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  avatarFocused: {
+    backgroundColor: '#E8A020',
+  },
+  avatarInitials: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(0,0,0,0.5)',
+  },
+  avatarInitialsFocused: {
+    color: '#FFFFFF',
   },
 });
