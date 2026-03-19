@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     marginTop: -60,
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 36,
+    paddingTop: 20,
     paddingBottom: 18,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
@@ -266,6 +266,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 10,
     elevation: 6,
+    marginBottom: 20,
   },
   primaryButtonText: {
     fontFamily: 'Inter',

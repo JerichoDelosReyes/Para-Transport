@@ -1,6 +1,8 @@
 import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useNavigation } from 'expo-router';
+import { StackActions } from '@react-navigation/native';
 import { useStore } from '../../store/useStore';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 
@@ -19,6 +21,8 @@ function getInitials(name: string) {
 }
 
 export default function ProfileScreen() {
+  const router = useRouter();
+  const navigation = useNavigation();
   const user = useStore((state) => state.user);
 
   return (
@@ -109,6 +113,21 @@ export default function ProfileScreen() {
           <TouchableOpacity style={[styles.settingRow, styles.rowDivider]} activeOpacity={0.7}>
             <Text style={styles.settingLabel}>About Para</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.settingRow, styles.rowDivider]} 
+            activeOpacity={0.7}
+            onPress={() => {
+              const parent = navigation.getParent();
+              if (parent) {
+                parent.dispatch(StackActions.replace('index'));
+              } else {
+                router.replace('/');
+              }
+            }}
+          >
+            <Text style={[styles.settingLabel, { color: '#ff4444' }]}>Log out</Text>
+            <Ionicons name="log-out-outline" size={20} color="#ff4444" />
           </TouchableOpacity>
         </View>
       </ScrollView>
