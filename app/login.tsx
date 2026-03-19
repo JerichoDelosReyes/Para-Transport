@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -8,7 +8,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -16,9 +15,6 @@ import { useRouter } from 'expo-router';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import { auth } from '../config/firebaseConfig';
-import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 
 type HeaderDoodle = {
   id: number;
@@ -44,56 +40,6 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-
-  useEffect(() => {
-    GoogleSignin.configure({
-      webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '', // Used for Firebase compatibility backend checking (Even on iOS)
-      iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '', 
-      offlineAccess: true,
-    });
-  }, []);
-
-  const onGoogleButtonPress = async () => {
-    try {
-      setIsGoogleLoading(true);
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      
-      const userInfo = await GoogleSignin.signIn();
-      const idToken = userInfo.data?.idToken;
-
-      if (!idToken) {
-        throw new Error('No ID token found');
-      }
-
-      // Create a Google credential with the token
-      const googleCredential = GoogleAuthProvider.credential(idToken);
-
-      // Sign-in the user with the credential inside Firebase
-      const userCredential = await signInWithCredential(auth, googleCredential);
-      
-      if (userCredential.user) {
-        // Success! Go to app.
-        router.replace('/(tabs)');
-      }
-
-    } catch (error: any) {
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        // user cancelled the login flow
-      } else if (error.code === statusCodes.IN_PROGRESS) {
-        // operation (e.g. sign in) is in progress already
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        // play services not available or outdated
-        Alert.alert("Error", "Google Play Services not available");
-      } else {
-        // some other error happened
-        Alert.alert("Sign In Error", error.message || "An unexpected error occurred");
-        console.log("Google Signin Error: ", error);
-      }
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
 
   return (
     <View style={styles.screen}>
@@ -170,9 +116,9 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.lightSocial} activeOpacity={0.9} onPress={onGoogleButtonPress} disabled={isGoogleLoading}>
+              <TouchableOpacity style={styles.lightSocial} activeOpacity={0.9}>
                 <FontAwesome5 name="google" size={15} color="#4285F4" style={{ marginRight: 7 }} />
-                <Text style={styles.lightSocialText}>{isGoogleLoading ? 'Connecting...' : 'Google'}</Text>
+                <Text style={styles.lightSocialText}>Google</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.appleSocial} activeOpacity={0.9}>
