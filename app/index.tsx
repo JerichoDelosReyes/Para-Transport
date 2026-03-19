@@ -1,5 +1,5 @@
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SafeAreaView, View, Text, TouchableOpacity, StyleSheet, Modal, Animated, PanResponder } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, PanResponder } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
@@ -83,7 +83,7 @@ export default function WelcomeScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={['top']}>
       <StatusBar style="dark" />
 
       <View style={styles.canvas}>

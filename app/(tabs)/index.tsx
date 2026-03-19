@@ -348,6 +348,7 @@ export default function HomeScreen() {
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
+        mapType="none"
         initialRegion={{
           latitude: 14.4296,
           longitude: 120.9367,
@@ -355,6 +356,8 @@ export default function HomeScreen() {
           longitudeDelta: 0.05,
         }}
         showsUserLocation={true}
+        showsMyLocationButton={false}
+        showsCompass={false}
         onMapReady={() => setIsMapLoaded(true)}
         onTouchStart={() => setIsMapInteracted(true)}
         pitchEnabled={false}
@@ -377,6 +380,7 @@ export default function HomeScreen() {
             coordinate={destinationLocation}
             title="Destination"
             description={destinationQuery}
+            tracksViewChanges={false}
           />
         )}
 
