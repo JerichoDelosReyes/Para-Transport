@@ -83,8 +83,8 @@ export default function WelcomeScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <StatusBar style="dark" />
+    <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: 0 }]}>
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
 
       <View style={styles.canvas}>
         {DOODLES.map((doodle) => (
@@ -215,7 +215,7 @@ export default function WelcomeScreen() {
         </View>
       </Modal>
 
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -3,14 +3,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
@@ -36,12 +36,13 @@ const HEADER_DOODLES: HeaderDoodle[] = [
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.primary} />
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
 
       <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.headerZone}>
@@ -61,7 +62,7 @@ export default function RegisterScreen() {
             </View>
           ))}
 
-          <SafeAreaView edges={['top']} style={styles.headerSafeContent}>
+          <View style={[styles.headerSafeContent, { paddingTop: insets.top }]}>
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
               <Ionicons name="chevron-back" size={20} color={COLORS.navy} />
             </TouchableOpacity>
@@ -71,7 +72,7 @@ export default function RegisterScreen() {
               <Text style={styles.title}>REGISTER</Text>
               <Text style={styles.headerCopy}>Sama ka sa Para community.</Text>
             </View>
-          </SafeAreaView>
+          </View>
         </View>
 
         <View style={styles.formArea}>

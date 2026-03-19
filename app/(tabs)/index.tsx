@@ -363,15 +363,7 @@ export default function HomeScreen() {
         maxZoomLevel={18}
         liteMode={Platform.OS === 'android' && !isMapInteracted}
       >
-        <UrlTile
-          urlTemplate={MAP_CONFIG.OSM_TILE_URL}
-          maximumZ={19}
-          minimumZ={1}
-          flipY={false}
-          zIndex={1}
-          shouldReplaceMapContent={true}
-        />
-
+        {/* Native map rendering without UrlTile makes it significantly faster */}
         {destinationLocation && (
           <Marker
             coordinate={destinationLocation}

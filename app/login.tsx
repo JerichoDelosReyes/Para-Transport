@@ -3,14 +3,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
@@ -36,13 +36,14 @@ const HEADER_DOODLES: HeaderDoodle[] = [
 
 export default function LoginScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.primary} />
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
 
       <KeyboardAvoidingView
         style={styles.screen}
@@ -65,7 +66,7 @@ export default function LoginScreen() {
             </View>
           ))}
 
-          <SafeAreaView edges={['top']} style={styles.headerSafeContent}>
+          <View style={[styles.headerSafeContent, { paddingTop: insets.top }]}>
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
               <Ionicons name="chevron-back" size={20} color={COLORS.navy} />
             </TouchableOpacity>
@@ -75,12 +76,12 @@ export default function LoginScreen() {
               <Text style={styles.title}>LOG IN</Text>
               <Text style={styles.headerCopy}>Tuloy na, tara na sa byahe.</Text>
             </View>
-          </SafeAreaView>
+          </View>
         </View>
 
         <View style={styles.formArea}>
           <ScrollView
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
