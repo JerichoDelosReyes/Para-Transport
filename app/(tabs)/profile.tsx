@@ -152,7 +152,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Cubao',
     fontSize: TYPOGRAPHY.screenTitle,
     color: COLORS.navy,
-    marginBottom: 10,
   },
   content: {
     paddingHorizontal: SPACING.screenX,
