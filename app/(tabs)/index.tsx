@@ -1,35 +1,42 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Animated, PanResponder, Dimensions, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert, ScrollView, PanResponder, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { UrlTile, Marker, Polyline, Callout } from 'react-native-maps';
+import MapView, { UrlTile, Marker, Polyline } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
+import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 import { useJeepneyRoutes } from '../../hooks/useJeepneyRoutes';
+import { useTransitData } from '../../hooks/useTransitData';
+import { useRouteSuggestions, sortSuggestions, RouteSuggestion, SortMode } from '../../hooks/useRouteSuggestions';
+import { haversineDistance } from '../../utils/geoUtils';
+import { ProfileButton } from '../../components/ProfileButton';
+import { useStore } from '../../store/useStore';
 
-const { height, width } = Dimensions.get('window');
-
-const TRAFFIC = [
-  { road: 'Bacoor Boulevard', status: 'Heavy' as const },
-  { road: 'Imus Crossing', status: 'Moderate' as const },
-  { road: 'Dasmariñas Crossing', status: 'Light' as const },
-];
-
-function trafficPill(status: 'Light' | 'Moderate' | 'Heavy') {
-  if (status === 'Light') return { backgroundColor: COLORS.successBg, color: COLORS.successText };
-  if (status === 'Moderate') return { backgroundColor: COLORS.moderateBg, color: COLORS.moderateText };
-  return { backgroundColor: COLORS.heavyBg, color: COLORS.heavyText };
-}
-
-const MODES = ['Jeepney', 'Tricycle', 'UV Express', 'Bus', 'LRT'];
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
+const WALKING_ROUTE_URL = 'https://router.project-osrm.org/route/v1/foot';
+const WALK_ROUTE_COLOR = '#3AA0E6';
 
 type MapCoordinate = {
   latitude: number;
   longitude: number;
+};
+
+type MapRegion = {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+};
+
+const INITIAL_REGION: MapRegion = {
+  latitude: 14.4296,
+  longitude: 120.9367,
+  latitudeDelta: 0.05,
+  longitudeDelta: 0.05,
 };
 
 type PlaceSuggestion = {
@@ -43,13 +50,90 @@ type PlaceSuggestion = {
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
 
+const MIN_WALK_DISTANCE_M = 30;
+
+async function fetchWalkingRoute(from: MapCoordinate, to: MapCoordinate): Promise<MapCoordinate[]> {
+  try {
+    const res = await fetch(
+      `${WALKING_ROUTE_URL}/${from.longitude},${from.latitude};${to.longitude},${to.latitude}?overview=full&geometries=geojson`
+    );
+    const data = await res.json();
+    const coords = data?.routes?.[0]?.geometry?.coordinates;
+    if (coords?.length) return toMapCoordinates(coords);
+  } catch {}
+  return [from, to];
+}
+
+const interpolatePoint = (a: MapCoordinate, b: MapCoordinate, t: number): MapCoordinate => ({
+  latitude: a.latitude + (b.latitude - a.latitude) * t,
+  longitude: a.longitude + (b.longitude - a.longitude) * t,
+});
+
+const buildDashedSegments = (
+  coordinates: MapCoordinate[],
+  dashMeters = 22,
+  gapMeters = 16
+): MapCoordinate[][] => {
+  if (coordinates.length < 2) return [];
+
+  const dashed: MapCoordinate[][] = [];
+  let drawing = true;
+  let remaining = dashMeters;
+  let currentDash: MapCoordinate[] | null = null;
+
+  for (let i = 1; i < coordinates.length; i++) {
+    const start = coordinates[i - 1];
+    const end = coordinates[i];
+    const segmentLength = haversineDistance(start, end);
+    if (segmentLength <= 0) continue;
+
+    let travelled = 0;
+
+    while (travelled < segmentLength) {
+      const chunk = Math.min(remaining, segmentLength - travelled);
+      const t0 = travelled / segmentLength;
+      const t1 = (travelled + chunk) / segmentLength;
+      const p0 = interpolatePoint(start, end, t0);
+      const p1 = interpolatePoint(start, end, t1);
+
+      if (drawing) {
+        if (!currentDash) currentDash = [p0];
+        const last = currentDash[currentDash.length - 1];
+        if (last.latitude !== p0.latitude || last.longitude !== p0.longitude) {
+          currentDash.push(p0);
+        }
+        currentDash.push(p1);
+      }
+
+      travelled += chunk;
+      remaining -= chunk;
+
+      if (remaining <= 0.0001) {
+        if (drawing && currentDash && currentDash.length > 1) {
+          dashed.push(currentDash);
+          currentDash = null;
+        }
+        drawing = !drawing;
+        remaining = drawing ? dashMeters : gapMeters;
+      }
+    }
+  }
+
+  if (drawing && currentDash && currentDash.length > 1) {
+    dashed.push(currentDash);
+  }
+
+  return dashed;
+};
+
+type WalkingPath = { coordinates: MapCoordinate[]; color: string; midpoint: MapCoordinate; dashSegments: MapCoordinate[][] };
+
 export default function HomeScreen() {
-  const [selectedMode, setSelectedMode] = useState('Jeepney');
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isMapInteracted, setIsMapInteracted] = useState(false);
-  const [isSheetExpanded, setIsSheetExpanded] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
+  const [originQuery, setOriginQuery] = useState('');
   const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
@@ -57,52 +141,98 @@ export default function HomeScreen() {
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
-  const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
-  const [showRoutes, setShowRoutes] = useState(true);
-  const { routes: jeepneyRoutes } = useJeepneyRoutes();
+  const [matchedCommute, setMatchedCommute] = useState<any>(null); // from useCommuteRoutes
+  const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
+  const [routeSuggestions, setRouteSuggestions] = useState<RouteSuggestion[]>([]);
+  const [sortMode, setSortMode] = useState<SortMode>('easiest');
+  const [selectedSuggestion, setSelectedSuggestion] = useState<RouteSuggestion | null>(null);
+  const [walkingPaths, setWalkingPaths] = useState<WalkingPath[]>([]);
+  const { routes: commuteRoutes } = useCommuteRoutes();
+  const { routes: localRoutes } = useJeepneyRoutes();
+  const { routes: transitRoutes, stops: transitStops } = useTransitData();
+  const { computeSuggestions } = useRouteSuggestions();
+  const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
+  const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
   const mapRef = useRef<MapView | null>(null);
 
-  // Bottom Sheet Animation state
-  const sheetHeight = height * 0.5; // max height of bottom sheet
-  const minHeight = 100; // min peek height to show "LIVE TRAFFIC"
-  const slideAnim = useRef(new Animated.Value(sheetHeight - minHeight)).current;
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+  const handleZoomIn = () => {
+    const next: MapRegion = {
+      ...mapRegion,
+      latitudeDelta: clamp(mapRegion.latitudeDelta * 0.7, 0.0025, 0.4),
+      longitudeDelta: clamp(mapRegion.longitudeDelta * 0.7, 0.0025, 0.4),
+    };
+    setMapRegion(next);
+    mapRef.current?.animateToRegion(next, 250);
+  };
+
+  const handleZoomOut = () => {
+    const next: MapRegion = {
+      ...mapRegion,
+      latitudeDelta: clamp(mapRegion.latitudeDelta / 0.7, 0.0025, 0.4),
+      longitudeDelta: clamp(mapRegion.longitudeDelta / 0.7, 0.0025, 0.4),
+    };
+    setMapRegion(next);
+    mapRef.current?.animateToRegion(next, 250);
+  };
+
+  const handleLocateUser = () => {
+    if (currentLocation) {
+      const next: MapRegion = {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      setMapRegion(next);
+      mapRef.current?.animateToRegion(next, 500);
+    } else {
+      Alert.alert('Location Not Found', 'We are still getting your current location.');
+    }
+  };
+
+  // Draggable commute panel
+  const screenHeight = Dimensions.get('window').height;
+  const PANEL_SNAP_TOP = -(screenHeight * 0.22);
+  const PANEL_SNAP_BOTTOM = 0;
+  const panelTranslateY = useRef(new Animated.Value(PANEL_SNAP_BOTTOM)).current;
+  const panelLastY = useRef(PANEL_SNAP_BOTTOM);
+  const panelPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
+      onPanResponderGrant: () => {
+        panelTranslateY.setOffset(panelLastY.current);
+        panelTranslateY.setValue(0);
+      },
+      onPanResponderMove: Animated.event([null, { dy: panelTranslateY }], { useNativeDriver: false }),
+      onPanResponderRelease: (_, g) => {
+        panelTranslateY.flattenOffset();
+        const raw = panelLastY.current + g.dy;
+        const clamped = Math.min(PANEL_SNAP_BOTTOM, Math.max(PANEL_SNAP_TOP, raw));
+        const snapTo = clamped < (PANEL_SNAP_TOP + PANEL_SNAP_BOTTOM) / 2 ? PANEL_SNAP_TOP : PANEL_SNAP_BOTTOM;
+        panelLastY.current = snapTo;
+        Animated.spring(panelTranslateY, {
+          toValue: snapTo,
+          useNativeDriver: false,
+          tension: 80,
+          friction: 12,
+        }).start();
+      },
+    })
+  ).current;
+
+  useEffect(() => {
+    if (routeSuggestions.length > 0) {
+      panelLastY.current = PANEL_SNAP_BOTTOM;
+      panelTranslateY.setValue(PANEL_SNAP_BOTTOM);
+    }
+  }, [routeSuggestions.length, PANEL_SNAP_BOTTOM, panelTranslateY]);
 
   // Search Expand Animation
   const searchHeightAnim = useRef(new Animated.Value(48)).current;
   const searchOpacityAnim = useRef(new Animated.Value(0)).current;
-
-  const toggleSheet = (expand = true) => {
-    setIsSheetExpanded(expand);
-    Animated.spring(slideAnim, {
-      toValue: expand ? 0 : sheetHeight - minHeight,
-      useNativeDriver: true,
-      tension: 60,
-      friction: 10,
-    }).start();
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dy) > 5;
-      },
-      onPanResponderMove: (e, gestureState) => {
-        const newVal = isSheetExpanded ? gestureState.dy : sheetHeight - minHeight + gestureState.dy;
-        if (newVal > 0 && newVal < sheetHeight - minHeight + 50) {
-          slideAnim.setValue(newVal);
-        }
-      },
-      onPanResponderRelease: (e, gestureState) => {
-        if (gestureState.dy > 50) {
-          toggleSheet(false);
-        } else if (gestureState.dy < -50) {
-          toggleSheet(true);
-        } else {
-          toggleSheet(isSheetExpanded);
-        }
-      },
-    })
-  ).current;
 
   useEffect(() => {
     if (isSearchActive) {
@@ -256,9 +386,34 @@ export default function HomeScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!selectedTransitRoute?.segments?.length) return;
+
+    const allCoords = selectedTransitRoute.segments.flat();
+    if (allCoords.length > 1) {
+      setRouteCoordinates([]);
+      setDestinationLocation(null);
+      setRouteSummary(null);
+
+      mapRef.current?.fitToCoordinates(allCoords, {
+        edgePadding: { top: 140, right: 40, bottom: 220, left: 40 },
+        animated: true,
+      });
+    }
+  }, [selectedTransitRoute]);
+
+  useEffect(() => {
+    if (routeSuggestions.length > 0) {
+      setRouteSuggestions((prev) => sortSuggestions([...prev], sortMode));
+    }
+  }, [sortMode]);
+
   const handleRouteSearch = async () => {
-    const query = destinationQuery.trim();
-    if (!query) {
+    Keyboard.dismiss();
+    const dest = destinationQuery.trim().toLowerCase();
+    const orig = originQuery.trim().toLowerCase() || 'buendia';
+    
+    if (!dest) {
       Alert.alert('Destination Required', 'Type where you want to go first.');
       return;
     }
@@ -268,10 +423,29 @@ export default function HomeScreen() {
       return;
     }
 
+    setSelectedTransitRoute(null);
+    setSelectedSuggestion(null);
+    setWalkingPaths([]);
+    setRouteSuggestions([]);
+    setMatchedCommute(null);
+    setRouteSummary(null);
+    setRouteCoordinates([]);
+
     setIsRouting(true);
     try {
+      // Match with commuteData
+      const matches = commuteRoutes.filter(r => r.destination.toLowerCase().includes(dest));
+      let bestMatch = matches.find(r => r.origin.toLowerCase().includes(orig));
+      if (!bestMatch && matches.length > 0) {
+          bestMatch = matches[0]; // fallback
+      }
+
+      if (bestMatch) {
+         setMatchedCommute(bestMatch);
+      }
+
       const geocodeParams = new URLSearchParams({
-        q: `${query}, Cavite, Philippines`,
+        q: `${destinationQuery}, Cavite, Philippines`,
         format: 'json',
         limit: '1',
         countrycodes: 'ph',
@@ -300,37 +474,21 @@ export default function HomeScreen() {
       };
       setDestinationLocation(destinationPoint);
 
-      const startLng = currentLocation.longitude;
-      const startLat = currentLocation.latitude;
-      const destLng = destinationPoint.longitude;
-      const destLat = destinationPoint.latitude;
-
-      const routeResponse = await fetch(
-        `${ROUTING_BASE_URL}/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`
-      );
-
-      if (!routeResponse.ok) {
-        throw new Error(`Routing failed (${routeResponse.status})`);
-      }
-
-      const routeResult = await routeResponse.json();
-      const bestRoute = routeResult?.routes?.[0];
-      if (!bestRoute?.geometry?.coordinates) {
-        Alert.alert('Route Not Found', 'No drivable route found for this destination.');
-        return;
-      }
-
-      const mappedCoordinates = toMapCoordinates(bestRoute.geometry.coordinates);
-      setRouteCoordinates(mappedCoordinates);
-      setRouteSummary({
-        distanceKm: bestRoute.distance / 1000,
-        durationMin: bestRoute.duration / 60,
-      });
-
-      mapRef.current?.fitToCoordinates(mappedCoordinates, {
+      mapRef.current?.fitToCoordinates([currentLocation, destinationPoint], {
         edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
         animated: true,
       });
+
+      // Compute transit suggestions
+      const suggestions = computeSuggestions(currentLocation, destinationPoint);
+      const sortedSuggestions = sortSuggestions(suggestions, sortMode);
+      setRouteSuggestions(sortedSuggestions);
+
+      if (sortedSuggestions.length > 0) {
+        await handleSelectSuggestion(sortedSuggestions[0], destinationPoint);
+      } else {
+        Alert.alert('No Transit Route Found', 'No transit route is available yet for this destination.');
+      }
 
       setIsSearchActive(false);
       setPlaceSuggestions([]);
@@ -343,20 +501,160 @@ export default function HomeScreen() {
     }
   };
 
+  const handleMapLongPress = async (e: any) => {
+    if (isSearchActive || isRouting) return;
+
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    const pinLocation: MapCoordinate = { latitude, longitude };
+
+    setSelectedTransitRoute(null);
+    setSelectedSuggestion(null);
+    setWalkingPaths([]);
+    setRouteSuggestions([]);
+    setMatchedCommute(null);
+    setRouteSummary(null);
+    setRouteCoordinates([]);
+
+    setDestinationLocation(pinLocation);
+    setDestinationQuery('Dropped Pin');
+    setIsRouting(true);
+
+    try {
+      // Reverse geocode to get a name for the pin
+      const reverseParams = new URLSearchParams({
+        lat: String(latitude),
+        lon: String(longitude),
+        format: 'json',
+        zoom: '16',
+      });
+
+      const reverseResp = await fetch(`${GEOCODING_BASE_URL}/reverse?${reverseParams.toString()}`, {
+        headers: { 'Accept-Language': 'en' },
+      });
+
+      if (reverseResp.ok) {
+        const reverseData = await reverseResp.json();
+        const displayName = String(reverseData?.display_name || '').trim();
+        if (displayName) {
+          const parts = displayName.split(',').map((p: string) => p.trim()).filter(Boolean);
+          setDestinationQuery(parts.slice(0, 2).join(', ') || 'Dropped Pin');
+        }
+      }
+
+      if (!currentLocation) {
+        Alert.alert('GPS Not Ready', 'Waiting for your current location.');
+        return;
+      }
+
+      mapRef.current?.fitToCoordinates([currentLocation, pinLocation], {
+        edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
+        animated: true,
+      });
+
+      // Compute transit suggestions
+      const suggestions = computeSuggestions(currentLocation, pinLocation);
+      const sortedSuggestions = sortSuggestions(suggestions, sortMode);
+      setRouteSuggestions(sortedSuggestions);
+
+      if (sortedSuggestions.length > 0) {
+        await handleSelectSuggestion(sortedSuggestions[0], pinLocation);
+      } else {
+        Alert.alert('No Transit Route Found', 'No transit route is available yet for this pin.');
+      }
+    } catch (error) {
+      console.warn('[HomeScreen] Pin route failed:', error);
+    } finally {
+      setIsRouting(false);
+    }
+  };
+
+  const handleSelectSuggestion = async (suggestion: RouteSuggestion, destinationOverride?: MapCoordinate) => {
+    setSelectedSuggestion(suggestion);
+    setMatchedCommute(suggestion.commuteGuideMatch || null);
+    setRouteSummary({
+      distanceKm: suggestion.totalDistanceKm,
+      durationMin: suggestion.estimatedMinutes,
+    });
+    setWalkingPaths([]);
+
+    // Gather all path coordinates to fit map
+    const allCoords = suggestion.legs.flatMap((leg) => leg.pathCoordinates);
+    if (allCoords.length > 1) {
+      mapRef.current?.fitToCoordinates(allCoords, {
+        edgePadding: { top: 140, right: 40, bottom: 280, left: 40 },
+        animated: true,
+      });
+    }
+
+    // Build walking segments and fetch road-following paths
+    const segments: { from: MapCoordinate; to: MapCoordinate; color: string }[] = [];
+
+    // Walk to first board stop
+    if (currentLocation) {
+      const board = suggestion.legs[0].boardStop.coordinate;
+      if (haversineDistance(currentLocation, board) >= MIN_WALK_DISTANCE_M) {
+        segments.push({ from: currentLocation, to: board, color: suggestion.legs[0].route.color });
+      }
+    }
+
+    // Walk between transfer legs
+    for (let i = 0; i < suggestion.legs.length - 1; i++) {
+      const alight = suggestion.legs[i].alightStop.coordinate;
+      const nextBoard = suggestion.legs[i + 1].boardStop.coordinate;
+      if (haversineDistance(alight, nextBoard) >= MIN_WALK_DISTANCE_M) {
+        segments.push({ from: alight, to: nextBoard, color: suggestion.legs[i + 1].route.color });
+      }
+    }
+
+    // Walk from last alight to destination
+    const activeDestination = destinationOverride || destinationLocation;
+    if (activeDestination) {
+      const lastLeg = suggestion.legs[suggestion.legs.length - 1];
+      const alight = lastLeg.alightStop.coordinate;
+      if (haversineDistance(alight, activeDestination) >= MIN_WALK_DISTANCE_M) {
+        segments.push({ from: alight, to: activeDestination, color: lastLeg.route.color });
+      }
+    }
+
+    // Fetch all walking routes in parallel
+    const paths = await Promise.all(
+      segments.map(async (seg) => {
+        const coords = await fetchWalkingRoute(seg.from, seg.to);
+        const mid = coords[Math.floor(coords.length / 2)];
+        return {
+          coordinates: coords,
+          color: WALK_ROUTE_COLOR,
+          midpoint: mid,
+          dashSegments: buildDashedSegments(coords),
+        };
+      })
+    );
+    setWalkingPaths(paths);
+  };
+
+  const getModeIcon = (type: string): keyof typeof Ionicons.glyphMap => {
+    switch (type) {
+      case 'jeepney': return 'car';
+      case 'bus': return 'bus';
+      case 'share_taxi': return 'car-sport';
+      default: return 'bus';
+    }
+  };
+
   return (
     <View style={styles.screen}>
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        initialRegion={{
-          latitude: 14.4296,
-          longitude: 120.9367,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
+        mapType="none"
+        initialRegion={INITIAL_REGION}
         showsUserLocation={true}
+        showsMyLocationButton={false}
+        showsCompass={false}
         onMapReady={() => setIsMapLoaded(true)}
+        onRegionChangeComplete={(region) => setMapRegion(region)}
         onTouchStart={() => setIsMapInteracted(true)}
+        onLongPress={handleMapLongPress}
         pitchEnabled={false}
         rotateEnabled={false}
         minZoomLevel={10}
@@ -377,72 +675,141 @@ export default function HomeScreen() {
             coordinate={destinationLocation}
             title="Destination"
             description={destinationQuery}
+            tracksViewChanges={false}
+            draggable
+            onDragEnd={(e) => handleMapLongPress(e)}
           />
         )}
 
-        {routeCoordinates.length > 1 && (
+        {selectedTransitRoute?.segments?.map((seg: any[], idx: number) =>
+          Array.isArray(seg) && seg.length > 1 ? (
           <Polyline
-            coordinates={routeCoordinates}
-            strokeColor="#E8A020"
+            key={`selected-transit-${selectedTransitRoute.id}-${idx}`}
+            coordinates={seg}
+            strokeColor={selectedTransitRoute.color || '#1E88E5'}
             strokeWidth={5}
             lineCap="round"
             lineJoin="round"
           />
+          ) : null
         )}
 
-        {/* Route Overlays */}
-        {showRoutes && selectedMode === 'Jeepney' && jeepneyRoutes.map((route) => {
-          const isSelected = selectedRoute === route.properties.code;
-          return (
-            <Polyline
-              key={route.properties.code}
-              coordinates={route.coordinates}
-              strokeColor={isSelected ? '#E8A020' : '#2196F3'}
-              strokeWidth={isSelected ? 5 : 3}
-              lineCap="round"
-              lineJoin="round"
-              lineDashPattern={isSelected ? undefined : [1]}
-              tappable
-              onPress={() => {
-                setSelectedRoute(isSelected ? null : route.properties.code);
-              }}
+        {/* Selected suggestion leg paths */}
+        {selectedSuggestion?.legs.map((leg, idx) => {
+          const coords = leg.pathCoordinates;
+          // If we have valid coordinates, render them
+          if (coords && Array.isArray(coords)) {
+            // If we only have 1 coordinate, draw a line from board to alight
+            if (coords.length < 2) {
+              return (
+                <Polyline
+                  key={`suggestion-leg-${idx}`}
+                  coordinates={[leg.boardStop.coordinate, leg.alightStop.coordinate]}
+                  strokeColor={leg.route.color}
+                  strokeWidth={5}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              );
+            }
+            // Otherwise render the full path
+            return (
+              <Polyline
+                key={`suggestion-leg-${idx}`}
+                coordinates={coords}
+                strokeColor={leg.route.color}
+                strokeWidth={5}
+                lineCap="round"
+                lineJoin="round"
+              />
+            );
+          }
+          return null;
+        })}
+
+        {/* Selected suggestion stop markers */}
+        {selectedSuggestion?.legs.map((leg, idx) => (
+          <React.Fragment key={`suggestion-stops-${idx}`}>
+            <Marker
+              coordinate={leg.boardStop.coordinate}
+              title={`Board: ${leg.boardStop.name}`}
+              description={leg.route.label}
+              tracksViewChanges={false}
+              pinColor="green"
             />
+            <Marker
+              coordinate={leg.alightStop.coordinate}
+              title={`Alight: ${leg.alightStop.name}`}
+              description={leg.route.label}
+              tracksViewChanges={false}
+              pinColor="red"
+            />
+          </React.Fragment>
+        ))}
+
+        {/* Road-following dashed walking lines */}
+        {walkingPaths.map((wp, idx) => {
+          const dashSegments = Array.isArray(wp.dashSegments)
+            ? wp.dashSegments
+            : buildDashedSegments(wp.coordinates || []);
+
+          return (
+            <React.Fragment key={`walk-path-${idx}`}>
+              <Polyline
+                coordinates={wp.coordinates}
+                strokeColor="rgba(130, 140, 150, 0.45)"
+                strokeWidth={2}
+                lineCap="round"
+                lineJoin="round"
+              />
+              {dashSegments.map((dashCoordinates, dashIdx) => (
+                <Polyline
+                  key={`walk-path-${idx}-dash-${dashIdx}`}
+                  coordinates={dashCoordinates}
+                  strokeColor={wp.color}
+                  strokeWidth={5}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              ))}
+            </React.Fragment>
           );
         })}
 
-        {/* Boarding guide markers along the selected route */}
-        {showRoutes && selectedMode === 'Jeepney' && selectedRoute && (() => {
-          const route = jeepneyRoutes.find(r => r.properties.code === selectedRoute);
-          if (!route) return null;
-          return route.stops.map((stop, idx) => {
-            const isTerminal = stop.type === 'terminal';
-            return (
-              <Marker
-                key={`stop-${selectedRoute}-${idx}`}
-                coordinate={stop.coordinate}
-                anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={false}
-              >
-                <View style={isTerminal ? styles.terminalMarker : styles.stopMarker}>
-                  <Ionicons
-                    name={isTerminal ? 'bus' : 'ellipse'}
-                    size={isTerminal ? 16 : 8}
-                    color="#FFFFFF"
-                  />
-                </View>
-                <Callout tooltip>
-                  <View style={styles.stopCallout}>
-                    <Text style={styles.stopCalloutLabel}>{stop.label}</Text>
-                    <Text style={styles.stopCalloutType}>
-                      {isTerminal ? '🚏 Terminal' : '📍 Boarding Point'}
-                    </Text>
-                  </View>
-                </Callout>
-              </Marker>
-            );
-          });
-        })()}
+        {/* Walking person icon markers at midpoints */}
+        {walkingPaths.map((wp, idx) => (
+          <Marker
+            key={`walk-icon-${idx}`}
+            coordinate={wp.midpoint}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+          >
+            <View style={[styles.walkIconBubble, { borderColor: wp.color }]}>
+              <Ionicons name="walk" size={14} color={wp.color} />
+            </View>
+          </Marker>
+        ))}
+
       </MapView>
+
+      {/* Map Controls */}
+      <View style={styles.mapControls}>
+        <BlurView intensity={35} tint="light" style={styles.locateGlassWrap}>
+          <TouchableOpacity style={styles.locateButton} onPress={handleLocateUser} activeOpacity={0.8}>
+            <Ionicons name="locate" size={21} color={COLORS.navy} />
+          </TouchableOpacity>
+        </BlurView>
+
+        <BlurView intensity={35} tint="light" style={styles.zoomGlassWrap}>
+          <TouchableOpacity style={[styles.zoomButton, styles.zoomButtonTop]} onPress={handleZoomIn} activeOpacity={0.8}>
+            <Ionicons name="add" size={20} color={COLORS.navy} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.zoomButton} onPress={handleZoomOut} activeOpacity={0.8}>
+            <Ionicons name="remove" size={20} color={COLORS.navy} />
+          </TouchableOpacity>
+        </BlurView>
+      </View>
+
 
       {/* Dim map when search is active */}
       {isSearchActive && (
@@ -460,8 +827,11 @@ export default function HomeScreen() {
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Floating Top Header */}
-        <BlurView intensity={80} tint="light" style={[styles.header, isSearchActive && { zIndex: 10 }]}>
-          <Text style={styles.headerTitle}>HI, JERICHO!</Text>
+        <View style={[styles.header, isSearchActive && { zIndex: 10 }]}>
+          <View style={styles.headerTopRow}>
+            <Text style={styles.headerTitle}>HI, JERICHO!</Text>
+            <ProfileButton />
+          </View>
           <Animated.View style={{ height: searchHeightAnim, overflow: 'hidden' }}>
             <View style={styles.searchContainer}>
               <View style={styles.searchBarRow}>
@@ -473,18 +843,20 @@ export default function HomeScreen() {
                 <View style={[styles.searchBarWrapper, isSearchActive && { elevation: 0, shadowOpacity: 0 }]}>
                    <Ionicons name="search" size={18} color={COLORS.textMuted} />
                    {isSearchActive ? (
-                     <Text style={[styles.searchInputText, { color: COLORS.navy }]}>My Location</Text>
+                     <TextInput
+                       style={styles.activeSearchInput}
+                       placeholder="My Location"
+                       placeholderTextColor={COLORS.textMuted}
+                       value={originQuery}
+                       onChangeText={setOriginQuery}
+                       returnKeyType="next"
+                     />
                    ) : (
                      <Text style={[styles.searchInputText, { color: COLORS.textMuted }]} onPress={() => setIsSearchActive(true)}>
-                       {destinationQuery || 'Going Somewhere?'}
+                       {destinationQuery ? `${originQuery || 'My Location'} to ${destinationQuery}` : 'Going Somewhere?'}
                      </Text>
                    )}
                 </View>
-                {!isSearchActive && (
-                  <TouchableOpacity style={styles.iconButton} activeOpacity={0.85}>
-                    <Ionicons name="options-outline" size={20} color={COLORS.navy} />
-                  </TouchableOpacity>
-                )}
               </View>
 
               {/* Expanded search fields */}
@@ -552,22 +924,8 @@ export default function HomeScreen() {
               </Animated.View>
             </View>
           </Animated.View>
-        </BlurView>
-
-        {/* Floating Quick Actions */}
-        <View style={styles.quickActionsContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScroll}>
-            {MODES.map(mode => (
-              <TouchableOpacity
-                key={mode}
-                style={[styles.modePill, selectedMode === mode && styles.modePillActive]}
-                onPress={() => setSelectedMode(mode)}
-              >
-                <Text style={[styles.modePillText, selectedMode === mode && styles.modePillTextActive]}>{mode}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
         </View>
+
 
         {routeSummary && (
           <View style={styles.routeSummaryCard}>
@@ -578,91 +936,163 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Selected Route Info */}
-        {selectedRoute && (() => {
-          const route = jeepneyRoutes.find(r => r.properties.code === selectedRoute);
-          if (!route) return null;
-          return (
-            <View style={styles.routeInfoCard}>
-              <View style={styles.routeInfoHeader}>
-                <View style={styles.routeCodeBadge}>
-                  <Text style={styles.routeCodeText}>{route.properties.code}</Text>
-                </View>
-                <TouchableOpacity onPress={() => setSelectedRoute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.routeInfoTitle}>{route.properties.name}</Text>
-              {route.properties.description ? (
-                <Text style={styles.routeInfoDesc} numberOfLines={3}>{route.properties.description}</Text>
-              ) : null}
-              <View style={styles.routeInfoMeta}>
-                <Text style={styles.routeInfoMetaText}>
-                  <Ionicons name="cash" size={12} color={COLORS.textMuted} /> ₱{route.properties.fare}
-                </Text>
-                {route.properties.operator ? (
-                  <Text style={styles.routeInfoMetaText} numberOfLines={1}>
-                    <Ionicons name="bus" size={12} color={COLORS.textMuted} /> {route.properties.operator}
-                  </Text>
-                ) : null}
-              </View>
+        {/* ── Commute Options Draggable Panel ── */}
+        {routeSuggestions.length > 0 && (
+          <Animated.View
+            style={[
+              styles.suggestionsContainer,
+              { transform: [{ translateY: panelTranslateY }] },
+            ]}
+          >
+            <View {...panelPanResponder.panHandlers} style={styles.dragHandleArea}>
+              <View style={styles.panelDragHandle} />
             </View>
-          );
-        })()}
+
+            <View style={styles.suggestionsHeaderRow}>
+              <Text style={styles.suggestionsTitle}>Commute Options</Text>
+            </View>
+
+            <View style={styles.sortPillRow}>
+              {(['easiest', 'fastest', 'cheapest'] as SortMode[]).map((mode) => (
+                <TouchableOpacity
+                  key={mode}
+                  style={[styles.sortPill, sortMode === mode && styles.sortPillActive]}
+                  onPress={() => {
+                    setSortMode(mode);
+                    setRouteSuggestions((prev) => sortSuggestions(prev, mode));
+                  }}
+                >
+                  <Text style={[styles.sortPillText, sortMode === mode && styles.sortPillTextActive]}>
+                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <ScrollView style={styles.suggestionScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+              {routeSuggestions.map((s, idx) => (
+                <TouchableOpacity
+                  key={s.id}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.suggestionCardItem,
+                    selectedSuggestion?.id === s.id && styles.suggestionCardItemSelected,
+                  ]}
+                  onPress={() => handleSelectSuggestion(s)}
+                >
+                  <View style={styles.suggestionCardTop}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name={getModeIcon(s.legs[0].route.type)} size={18} color={s.legs[0].route.color} />
+                      <Text style={{ fontWeight: '700', color: COLORS.navy, fontSize: 14 }}>
+                        {s.legs.map((l) => l.route.ref || l.route.name).join(' → ')}
+                      </Text>
+                    </View>
+                    {s.legs.length > 1 && (
+                      <View style={styles.transferBadge}>
+                        <Text style={styles.transferBadgeText}>{s.legs.length - 1}x transfer</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Legs detail */}
+                  {s.legs.map((leg, li) => (
+                    <View key={li} style={styles.legSummaryRow}>
+                      <View style={[styles.legChip, { backgroundColor: leg.route.color + '22' }]}>
+                        <Ionicons name={getModeIcon(leg.route.type)} size={12} color={leg.route.color} />
+                        <Text style={[styles.legChipText, { color: leg.route.color }]}>
+                          {leg.route.ref || leg.route.name}
+                        </Text>
+                      </View>
+                      <View style={styles.stopsDetail}>
+                        <View style={styles.stopDetailRow}>
+                          <View style={[styles.stopDot, { backgroundColor: leg.route.color }]} />
+                          <Text style={styles.stopDetailText} numberOfLines={1}>{leg.boardStop.name}</Text>
+                        </View>
+                        <View style={styles.stopDetailRow}>
+                          <View style={[styles.stopDot, { backgroundColor: leg.route.color, opacity: 0.5 }]} />
+                          <Text style={styles.stopDetailText} numberOfLines={1}>{leg.alightStop.name}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.legFareText}>₱{leg.fare}</Text>
+                    </View>
+                  ))}
+
+                  <View style={styles.suggestionTotalsRow}>
+                    <Text style={styles.suggestionTotalItem}>₱{s.totalFare}</Text>
+                    <Text style={styles.suggestionTotalItem}>{s.totalDistanceKm.toFixed(1)} km</Text>
+                    <Text style={styles.suggestionTotalItem}>~{Math.ceil(s.estimatedMinutes)} min</Text>
+                  </View>
+
+                  {s.commuteGuideMatch && (
+                    <View style={styles.commuteGuideNote}>
+                      <Ionicons name="book" size={12} color={COLORS.primary} />
+                      <Text style={styles.commuteGuideNoteText}>
+                        Matches commute guide: {s.commuteGuideMatch.transport}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+              {routeSuggestions.length === 0 && (
+                <Text style={styles.noSuggestionsText}>No transit options found for this route.</Text>
+              )}
+            </ScrollView>
+          </Animated.View>
+        )}
+
+        {/* Matched Commute Route Info */}
+        {matchedCommute && (
+          <View style={styles.routeInfoCard}>
+            <View style={styles.routeInfoHeader}>
+              <View style={styles.routeCodeBadge}>
+                <Text style={styles.routeCodeText}>{matchedCommute.transport}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setMatchedCommute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.routeInfoTitle}>
+              {matchedCommute.origin} to {matchedCommute.destination}
+            </Text>
+            {matchedCommute.schedule ? (
+              <Text style={styles.routeInfoDesc}>Schedule: {matchedCommute.schedule}</Text>
+            ) : null}
+            {matchedCommute.notes ? (
+              <Text style={styles.routeInfoDesc}>Notes: {matchedCommute.notes}</Text>
+            ) : null}
+            <View style={styles.routeInfoMeta}>
+              <Text style={styles.routeInfoMetaText}>
+                <Ionicons name="cash" size={12} color={COLORS.textMuted} /> {matchedCommute.fare || 'Unknown fare'}
+              </Text>
+              <Text style={styles.routeInfoMetaText} numberOfLines={1}>
+                <Ionicons name="bus" size={12} color={COLORS.textMuted} /> {matchedCommute.transport}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {selectedTransitRoute ? (
+          <View style={styles.transitRouteCard}>
+            <View style={styles.transitRouteHeader}>
+              <View style={[styles.transitTypeBadge, { backgroundColor: selectedTransitRoute.color || '#1E88E5' }]}>
+                <Text style={styles.transitTypeBadgeText}>{selectedTransitRoute.label || 'Transit'}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedTransitRoute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={22} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.transitRouteTitle} numberOfLines={1}>
+              {selectedTransitRoute.ref ? `[${selectedTransitRoute.ref}] ` : ''}{selectedTransitRoute.name}
+            </Text>
+            {(selectedTransitRoute.from || selectedTransitRoute.to) ? (
+              <Text style={styles.transitRouteMeta} numberOfLines={1}>
+                {selectedTransitRoute.from}{selectedTransitRoute.from && selectedTransitRoute.to ? ' -> ' : ''}{selectedTransitRoute.to}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
       </SafeAreaView>
 
-      {/* Draggable Bottom Sheet */}
-      <Animated.View
-        style={[
-          styles.bottomSheet,
-          {
-            height: sheetHeight,
-            transform: [
-              {
-                translateY: slideAnim.interpolate({
-                  inputRange: [0, sheetHeight - minHeight],
-                  outputRange: [0, sheetHeight - minHeight],
-                  extrapolate: 'clamp',
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <TouchableOpacity 
-          activeOpacity={0.9} 
-          onPress={() => toggleSheet(!isSheetExpanded)}
-          style={styles.sheetHeaderWrapper}
-        >
-          <View {...panResponder.panHandlers} style={styles.dragHandleContainer}>
-            <View style={styles.dragHandle} />
-            <Text style={styles.sheetHeaderTitle}>LIVE TRAFFIC</Text>
-          </View>
-        </TouchableOpacity>
-
-        <ScrollView 
-          showsVerticalScrollIndicator={false} 
-          contentContainerStyle={styles.sheetContent}
-          bounces={false}
-        >
-          <View style={styles.cardList}>
-            {TRAFFIC.map((item) => {
-              const pill = trafficPill(item.status);
-              return (
-                <View key={item.road} style={styles.trafficCard}>
-                  <View style={styles.trafficLeft}>
-                    <Ionicons name="ellipse" size={8} color="rgba(10,22,40,0.28)" />
-                    <Text style={styles.trafficRoad}>{item.road}</Text>
-                  </View>
-                  <View style={[styles.statusPill, { backgroundColor: pill.backgroundColor }]}>
-                    <Text style={[styles.statusText, { color: pill.color }]}>{item.status}</Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </Animated.View>
     </View>
   );
 }
@@ -677,6 +1107,57 @@ const styles = StyleSheet.create({
     pointerEvents: 'box-none',
     zIndex: 2,
   },
+
+  mapControls: {
+    position: 'absolute',
+    right: 16,
+    bottom: 118,
+    zIndex: 10,
+    alignItems: 'flex-end',
+  },
+  locateGlassWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.65)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 6,
+    marginBottom: 12,
+  },
+  locateButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  zoomGlassWrap: {
+    width: 48,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.65)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  zoomButton: {
+    width: 48,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  zoomButtonTop: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(10,22,40,0.12)',
+  },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
@@ -690,18 +1171,25 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     overflow: 'hidden',
-    backgroundColor: 'rgba(245, 240, 232, 0.85)',
+    backgroundColor: '#F5C518',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.4)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
   },
   headerTitle: {
     fontFamily: 'Cubao',
     fontSize: TYPOGRAPHY.screenTitle,
-    color: '#E8A020',
-    marginBottom: 10,
-    textShadowColor: 'rgba(0,0,0,0.1)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    color: '#0A1628',
   },
   searchContainer: {
     width: '100%',
@@ -1029,6 +1517,49 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     flexShrink: 1,
   },
+  transitRouteCard: {
+    marginTop: 12,
+    marginHorizontal: SPACING.screenX,
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  transitRouteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  transitTypeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.pill,
+  },
+  transitTypeBadgeText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  transitRouteTitle: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  transitRouteMeta: {
+    marginTop: 4,
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
   terminalMarker: {
     width: 32,
     height: 32,
@@ -1084,5 +1615,276 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 2,
+  },
+  // Transit layer styles
+  transitStopMarker: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#1E88E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  transitControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginHorizontal: SPACING.screenX,
+    gap: 8,
+  },
+  transitToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  transitToggleActive: {
+    backgroundColor: '#0A1628',
+    borderColor: '#0A1628',
+  },
+  transitToggleText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  transitErrorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginHorizontal: SPACING.screenX,
+    backgroundColor: 'rgba(229,57,53,0.08)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(229,57,53,0.2)',
+  },
+  transitErrorText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: '#E53935',
+    flex: 1,
+  },
+  transitRetryText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#E53935',
+  },
+  walkIconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
+  },
+  // ── Commute Options Panel ──
+  suggestionsContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 24,
+    maxHeight: '40%',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -3 },
+    elevation: 10,
+  },
+  dragHandleArea: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  panelDragHandle: {
+    width: 36,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#D0D5DD',
+  },
+  suggestionsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 4,
+  },
+  suggestionsTitle: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.navy,
+  },
+  sortPillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  sortPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#F2F4F7',
+  },
+  sortPillActive: {
+    backgroundColor: COLORS.navy,
+  },
+  sortPillText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  sortPillTextActive: {
+    color: '#FFFFFF',
+  },
+  suggestionScroll: {
+    paddingHorizontal: 16,
+  },
+  suggestionCardItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  suggestionCardItemSelected: {
+    borderColor: COLORS.navy,
+    backgroundColor: '#EEF2FF',
+  },
+  suggestionCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  transferBadge: {
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  transferBadgeText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#E65100',
+  },
+  suggestionWalk: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  legSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  legChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  legChipText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  stopsDetail: {
+    flex: 1,
+    gap: 2,
+  },
+  stopDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  stopDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  stopDetailText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  legFareText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  suggestionTotalsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  suggestionTotalItem: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  commuteGuideNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  commuteGuideNoteText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  noSuggestionsText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    paddingVertical: 24,
   },
 });
