@@ -158,16 +158,13 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             );
           }
 
-          if (route.name === 'profile') {
+          if (route.name === 'history') {
+            const isHistoryFocused = isFocused;
             return (
               <TouchableWithoutFeedback key={route.key} onPress={onPress}>
                 <View style={styles.tabItem}>
-                  <View style={[styles.avatarIcon, isFocused && styles.avatarFocused]}>
-                    <Text style={[styles.avatarInitials, isFocused && styles.avatarInitialsFocused]}>
-                      {getInitials(user?.name || '')}
-                    </Text>
-                  </View>
-                  <Text style={[styles.tabLabel, { color: isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
+                  <Ionicons name={isHistoryFocused ? 'time' : 'time-outline'} size={24} color={isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 4 }} />
+                  <Text style={[styles.tabLabel, { color: isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
                     {label as string}
                   </Text>
                 </View>
@@ -215,9 +212,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="history"
         options={{
-          title: 'Profile',
+          title: 'History',
         }}
       />
     </Tabs>

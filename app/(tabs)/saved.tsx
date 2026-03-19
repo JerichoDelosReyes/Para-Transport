@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
 import { ROUTES } from '../../constants/routes';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { ProfileButton } from '../../components/ProfileButton';
 
 export default function SavedScreen() {
   const insets = useSafeAreaInsets();
@@ -29,6 +30,7 @@ export default function SavedScreen() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>SAVED</Text>
+        <ProfileButton />
       </View>
 
       <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
@@ -93,10 +95,13 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 10,
-    paddingBottom: 16,
+    paddingVertical: 14,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 64,
   },
   headerTitle: {
     fontFamily: 'Cubao',

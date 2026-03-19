@@ -2,9 +2,9 @@ import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 're
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useNavigation } from 'expo-router';
-import { StackActions } from '@react-navigation/native';
-import { useStore } from '../../store/useStore';
-import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { CommonActions, StackActions } from '@react-navigation/native';
+import { useStore } from '../store/useStore';
+import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 
 const MOCK_BADGES = [
   { id: '1', name: 'First Ride', emoji: '🎉', earned: true },
@@ -31,6 +31,11 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <View style={styles.backButtonCircle}>
+            <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
+          </View>
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>PROFILE</Text>
       </View>
 
@@ -121,12 +126,12 @@ export default function ProfileScreen() {
             style={[styles.settingRow, styles.rowDivider]} 
             activeOpacity={0.7}
             onPress={() => {
-              const parent = navigation.getParent();
-              if (parent) {
-                parent.dispatch(StackActions.replace('index'));
-              } else {
-                router.replace('/');
-              }
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: 'index' }],
+                })
+              );
             }}
           >
             <Text style={[styles.settingLabel, { color: '#ff4444' }]}>Log out</Text>
@@ -146,10 +151,31 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 10,
-    paddingBottom: 16,
+    paddingVertical: 14,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    height: 64,
+  },
+  backButton: {
+    position: 'absolute',
+    left: SPACING.screenX,
+    height: '100%',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    marginLeft: -8, // to offset padding for visual alignment
+  },
+  backButtonCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: 2, // gently optical center chevron
   },
   headerTitle: {
     fontFamily: 'Cubao',

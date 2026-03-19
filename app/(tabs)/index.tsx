@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
+import { ProfileButton } from '../../components/ProfileButton';
 
 const { height, width } = Dimensions.get('window');
 
@@ -379,7 +380,10 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Floating Top Header */}
         <BlurView intensity={80} tint="light" style={[styles.header, isSearchActive && { zIndex: 10 }]}>
-          <Text style={styles.headerTitle}>HI, JERICHO!</Text>
+          <View style={styles.headerTopRow}>
+            <Text style={styles.headerTitle}>HI, JERICHO!</Text>
+            <ProfileButton />
+          </View>
           <Animated.View style={{ height: searchHeightAnim, overflow: 'hidden' }}>
             <View style={styles.searchContainer}>
               <View style={styles.searchBarRow}>
@@ -565,11 +569,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.4)',
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   headerTitle: {
     fontFamily: 'Cubao',
     fontSize: TYPOGRAPHY.screenTitle,
     color: '#E8A020',
-    marginBottom: 10,
     textShadowColor: 'rgba(0,0,0,0.1)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
