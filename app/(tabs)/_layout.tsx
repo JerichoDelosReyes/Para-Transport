@@ -158,12 +158,12 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             );
           }
 
-          if (route.name === 'history') {
+          if (route.name === 'routes') {
             const isHistoryFocused = isFocused;
             return (
               <TouchableWithoutFeedback key={route.key} onPress={onPress}>
                 <View style={styles.tabItem}>
-                  <Ionicons name={isHistoryFocused ? 'time' : 'time-outline'} size={24} color={isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 4 }} />
+                  <Ionicons name={isHistoryFocused ? 'map' : 'map-outline'} size={24} color={isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 4 }} />
                   <Text style={[styles.tabLabel, { color: isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
                     {label as string}
                   </Text>

@@ -9,19 +9,9 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 import { ProfileButton } from '../../components/ProfileButton';
-import { useTransitData } from '../../hooks/useTransitData';
-import RouteListPanel from '../../components/RouteListPanel';
 
 const { height, width } = Dimensions.get('window');
 
-const MODES = ['All', 'Jeepney', 'Bus', 'UV Express'];
-
-// Map pill labels to Overpass route types
-const MODE_TO_ROUTE_TYPE: Record<string, string> = {
-  'Jeepney': 'jeepney',
-  'Bus': 'bus',
-  'UV Express': 'share_taxi',
-};
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
 
@@ -41,9 +31,7 @@ type PlaceSuggestion = {
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
 
-export default function HomeScreen() {
-  const [selectedMode, setSelectedMode] = useState('All');
-  const [isSearchActive, setIsSearchActive] = useState(false);
+export default function HomeScreen() {  const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
@@ -57,11 +45,35 @@ export default function HomeScreen() {
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
   const [showRoutes, setShowRoutes] = useState(true);
   const [matchedCommute, setMatchedCommute] = useState<any>(null); // from useCommuteRoutes
-  const { routes: commuteRoutes } = useCommuteRoutes();
-  const { routes: transitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
-  const [selectedTransitRoute, setSelectedTransitRoute] = useState<any>(null);
-  const [showTransitLayer, setShowTransitLayer] = useState(true);
-  const mapRef = useRef<MapView | null>(null);
+  const { routes: commuteRoutes } = useCommuteRoutes();  const mapRef = useRef<MapView | null>(null);
+
+
+  const handleZoomIn = async () => {
+    const camera = await mapRef.current?.getCamera();
+    if (camera) {
+      camera.zoom = (camera.zoom || 15) + 1;
+      mapRef.current?.animateCamera(camera, { duration: 300 });
+    }
+  };
+
+  const handleZoomOut = async () => {
+    const camera = await mapRef.current?.getCamera();
+    if (camera) {
+      camera.zoom = (camera.zoom || 15) - 1;
+      mapRef.current?.animateCamera(camera, { duration: 300 });
+    }
+  };
+
+  const handleLocateUser = () => {
+    if (currentLocation) {
+      mapRef.current?.animateCamera({
+        center: currentLocation,
+        zoom: 16,
+      }, { duration: 500 });
+    } else {
+      Alert.alert('Location Not Found', 'We are still getting your current location.');
+    }
+  };
 
   // Search Expand Animation
   const searchHeightAnim = useRef(new Animated.Value(48)).current;
@@ -99,35 +111,6 @@ export default function HomeScreen() {
   }, [isSearchActive]);
 
   const closeSearch = () => setIsSearchActive(false);
-
-  // Handle selecting a transit route from the panel
-  const handleSelectTransitRoute = useCallback((route: any) => {
-    setSelectedTransitRoute((prev: any) => prev?.id === route.id ? null : route);
-    const allCoords = (route.segments || []).flat();
-    if (allCoords.length > 0) {
-      mapRef.current?.fitToCoordinates(allCoords, {
-        edgePadding: { top: 120, right: 40, bottom: 200, left: 40 },
-        animated: true,
-      });
-    }
-  }, []);
-
-  // Visible routes: filter by selected mode, then by selected individual route
-  const visibleTransitRoutes = useMemo(() => {
-    if (!showTransitLayer) return [];
-    if (selectedTransitRoute) return [selectedTransitRoute];
-    if (selectedMode === 'All') return transitRoutes;
-    const routeType = MODE_TO_ROUTE_TYPE[selectedMode];
-    if (!routeType) return transitRoutes;
-    return transitRoutes.filter((r: any) => r.type === routeType);
-  }, [showTransitLayer, selectedTransitRoute, transitRoutes, selectedMode]);
-
-  // Visible stops: filter by mode when no individual route is selected
-  const visibleTransitStops = useMemo(() => {
-    if (!showTransitLayer) return [];
-    if (selectedTransitRoute?.stops?.length > 0) return selectedTransitRoute.stops;
-    return transitStops;
-  }, [showTransitLayer, selectedTransitRoute, transitStops]);
 
   const selectSuggestion = (suggestion: PlaceSuggestion) => {
     setDestinationQuery(suggestion.title);
@@ -403,40 +386,21 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* Transit route polylines — each route has multiple segments to avoid off-road straight lines */}
-        {visibleTransitRoutes.map((route: any) =>
-          (route.segments || []).map((seg: any[], segIdx: number) => (
-            <Polyline
-              key={`transit-${route.id}-${segIdx}`}
-              coordinates={seg}
-              strokeColor={selectedTransitRoute?.id === route.id ? route.color : route.color + '99'}
-              strokeWidth={selectedTransitRoute?.id === route.id ? 4 : 2}
-              lineCap="butt"
-              lineJoin="miter"
-            />
-          ))
-        )}
-
-        {/* Transit stop markers */}
-        {visibleTransitStops.map((stop: any) => (
-          <Marker
-            key={`transit-stop-${stop.id}`}
-            coordinate={stop.coordinate}
-            tracksViewChanges={false}
-            anchor={{ x: 0.5, y: 0.5 }}
-          >
-            <View style={styles.transitStopMarker}>
-              <Ionicons name="ellipse" size={6} color="#FFFFFF" />
-            </View>
-            <Callout tooltip>
-              <View style={styles.stopCallout}>
-                <Text style={styles.stopCalloutLabel}>{stop.name}</Text>
-                {stop.operator ? <Text style={styles.stopCalloutType}>{stop.operator}</Text> : null}
-              </View>
-            </Callout>
-          </Marker>
-        ))}
       </MapView>
+
+      {/* Map Controls */}
+      <View style={styles.mapControls}>
+        <TouchableOpacity style={styles.mapControlButton} onPress={handleLocateUser}>
+          <Ionicons name="location-outline" size={24} color={COLORS.navy} />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.mapControlButton, { marginTop: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]} onPress={handleZoomIn}>
+          <Ionicons name="add" size={24} color={COLORS.navy} />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.mapControlButton, { borderTopLeftRadius: 0, borderTopRightRadius: 0 }]} onPress={handleZoomOut}>
+          <Ionicons name="remove" size={24} color={COLORS.navy} />
+        </TouchableOpacity>
+      </View>
+
 
       {/* Dim map when search is active */}
       {isSearchActive && (
@@ -553,48 +517,6 @@ export default function HomeScreen() {
           </Animated.View>
         </View>
 
-        {/* Floating Quick Actions */}
-        <View style={styles.quickActionsContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScroll}>
-            {MODES.map(mode => (
-              <TouchableOpacity
-                key={mode}
-                style={[styles.modePill, selectedMode === mode && styles.modePillActive]}
-                onPress={() => setSelectedMode(mode)}
-              >
-                <Text style={[styles.modePillText, selectedMode === mode && styles.modePillTextActive]}>{mode}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Transit layer controls */}
-        <View style={styles.transitControlsRow}>
-          <TouchableOpacity
-            style={[styles.transitToggle, showTransitLayer && styles.transitToggleActive]}
-            onPress={() => setShowTransitLayer(prev => !prev)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="git-branch" size={16} color={showTransitLayer ? '#FFFFFF' : COLORS.navy} />
-            <Text style={[styles.transitToggleText, showTransitLayer && { color: '#FFFFFF' }]}>
-              Transit
-            </Text>
-          </TouchableOpacity>
-
-          {transitLoading && showTransitLayer && (
-            <ActivityIndicator size="small" color="#E8A020" style={{ marginLeft: 8 }} />
-          )}
-        </View>
-
-        {transitError && showTransitLayer && (
-          <View style={styles.transitErrorCard}>
-            <Ionicons name="warning" size={16} color="#E53935" />
-            <Text style={styles.transitErrorText}>Transit: {transitError}</Text>
-            <TouchableOpacity onPress={refreshTransit}>
-              <Text style={styles.transitRetryText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {routeSummary && (
           <View style={styles.routeSummaryCard}>
@@ -637,14 +559,6 @@ export default function HomeScreen() {
         )}
       </SafeAreaView>
 
-      {/* Transit route list panel */}
-      {showTransitLayer && !transitLoading && transitRoutes.length > 0 && (
-        <RouteListPanel
-          routes={transitRoutes}
-          selectedRouteId={selectedTransitRoute?.id}
-          onSelectRoute={handleSelectTransitRoute}
-        />
-      )}
     </View>
   );
 }
@@ -658,6 +572,27 @@ const styles = StyleSheet.create({
     flex: 1,
     pointerEvents: 'box-none',
     zIndex: 2,
+  },
+
+  mapControls: {
+    position: 'absolute',
+    right: 16,
+    bottom: 110,
+    zIndex: 10,
+    alignItems: 'center',
+  },
+  mapControlButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
