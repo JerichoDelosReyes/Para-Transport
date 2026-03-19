@@ -1,7 +1,78 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View, Text, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/theme';
+import { useEffect, useRef } from 'react';
+
+function FloatingHomeButton({ focused }: { focused: boolean }) {
+  const scaleAnim = useRef(new Animated.Value(focused ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(scaleAnim, {
+      toValue: focused ? 1 : 0,
+      useNativeDriver: false,
+      tension: 50,
+      friction: 7,
+    }).start();
+  }, [focused, scaleAnim]);
+
+  const translateY = scaleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -24] // move up when active
+  });
+
+  const bgInterpolate = scaleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', '#E8A020']
+  });
+
+  const iconColorInterpolate = scaleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(0,0,0,0.35)', COLORS.navy]
+  });
+
+  const wrapBgInterpolate = scaleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', '#FFFFFF']
+  });
+
+  return (
+    <Animated.View style={[styles.tabContentContainer, { transform: [{ translateY }] }]}>
+      <Animated.View style={[styles.floatingButtonWrap, { backgroundColor: wrapBgInterpolate }]}>
+        <Animated.View style={[
+          styles.floatingButton,
+          { 
+            backgroundColor: bgInterpolate,
+            elevation: focused ? 5 : 0,
+            shadowOpacity: focused ? 0.15 : 0,
+          }
+        ]}>
+          <Animated.View>
+            {/* React Native Animated doesn't directly interpolate color for vector icons out of the box cleanly, 
+                so we use focused state for color generally, but the bounce animation looks great */}
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={focused ? 28 : 24} color={focused ? COLORS.navy : 'rgba(0,0,0,0.35)'} />
+          </Animated.View>
+        </Animated.View>
+      </Animated.View>
+      <Animated.Text style={[
+        styles.homeLabel, 
+        { 
+          color: focused ? '#E8A020' : 'rgba(0,0,0,0.35)',
+          opacity: scaleAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [1, 0] // Hide label completely when floating up
+          }),
+          height: scaleAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [14, 0] // Hide label space when floating up
+          })
+        }
+      ]}>
+        Home
+      </Animated.Text>
+    </Animated.View>
+  );
+}
 
 export default function TabLayout() {
   return (
@@ -9,37 +80,34 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarActiveTintColor: '#F5C518',
+        tabBarShowLabel: true,
+        tabBarActiveTintColor: '#E8A020',
         tabBarInactiveTintColor: 'rgba(0,0,0,0.35)',
+        tabBarLabelStyle: styles.tabLabel,
       }}
     >
+      <Tabs.Screen
+        name="saved"
+        options={{
+          title: 'Saved',
+          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'bookmark' : 'bookmark-outline'} size={24} color={color} />,
+        }}
+      />
+      
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={24} color={color} />,
+          tabBarLabel: () => null,
+          tabBarIcon: ({ focused }) => <FloatingHomeButton focused={focused} />,
         }}
       />
-      <Tabs.Screen
-        name="planner"
-        options={{
-          title: 'Search',
-          tabBarIcon: ({ color }) => <Ionicons name="search-outline" size={24} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="fare"
-        options={{
-          title: 'Saved',
-          tabBarIcon: ({ color }) => <Ionicons name="bookmark-outline" size={24} color={color} />,
-        }}
-      />
+      
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />,
         }}
       />
     </Tabs>
@@ -61,5 +129,34 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '600',
+  },
+  homeLabel: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  tabContentContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 70, // gives enough room to bounce up and down
+  },
+  floatingButtonWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+  },
+  floatingButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
   },
 });

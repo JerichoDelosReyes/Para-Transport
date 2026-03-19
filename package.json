@@ -31,7 +31,7 @@
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-web-browser": "~15.0.10",
-    "firebase": "^12.10.0",
+    "firebase": "^10.5.0",
     "framer-motion": "^12.38.0",
     "nativewind": "^4.2.3",
     "react": "19.1.0",
