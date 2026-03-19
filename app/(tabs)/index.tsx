@@ -96,8 +96,9 @@ export default function HomeScreen() {
   // Handle selecting a transit route from the panel
   const handleSelectTransitRoute = useCallback((route: any) => {
     setSelectedTransitRoute((prev: any) => prev?.id === route.id ? null : route);
-    if (route.coordinates?.length > 0) {
-      mapRef.current?.fitToCoordinates(route.coordinates, {
+    const allCoords = (route.segments || []).flat();
+    if (allCoords.length > 0) {
+      mapRef.current?.fitToCoordinates(allCoords, {
         edgePadding: { top: 120, right: 40, bottom: 200, left: 40 },
         animated: true,
       });
@@ -426,17 +427,19 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* Transit route polylines */}
-        {visibleTransitRoutes.map((route: any) => (
-          <Polyline
-            key={`transit-route-${route.id}`}
-            coordinates={route.coordinates}
-            strokeColor={selectedTransitRoute?.id === route.id ? route.color : route.color + 'AA'}
-            strokeWidth={selectedTransitRoute?.id === route.id ? 5 : 3}
-            lineCap="round"
-            lineJoin="round"
-          />
-        ))}
+        {/* Transit route polylines — each route has multiple segments to avoid off-road straight lines */}
+        {visibleTransitRoutes.map((route: any) =>
+          (route.segments || []).map((seg: any[], segIdx: number) => (
+            <Polyline
+              key={`transit-${route.id}-${segIdx}`}
+              coordinates={seg}
+              strokeColor={selectedTransitRoute?.id === route.id ? route.color : route.color + '99'}
+              strokeWidth={selectedTransitRoute?.id === route.id ? 4 : 2}
+              lineCap="butt"
+              lineJoin="miter"
+            />
+          ))
+        )}
 
         {/* Transit stop markers */}
         {visibleTransitStops.map((stop: any) => (

@@ -5,7 +5,7 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const CACHE_KEY = 'PARA_TRANSIT_CACHE_v2';
+const CACHE_KEY = 'PARA_TRANSIT_CACHE_v3';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
