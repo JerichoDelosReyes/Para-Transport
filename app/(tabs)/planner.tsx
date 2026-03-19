@@ -6,9 +6,9 @@ import * as Location from 'expo-location';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep.svg';
 import {
   getTransitPlaceSuggestions,
-  PlannedRouteOption,
   searchTransitRoutes,
-} from '../../services/transitSearch';
+} from '../../services';
+import type { PlannedLeg, PlannedRouteOption } from '../../services';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 
 export default function PlannerScreen() {
@@ -141,7 +141,7 @@ export default function PlannerScreen() {
 
           {origin.length > 0 && originSuggestions.length > 0 && !submitted && (
             <View style={styles.suggestionsBox}>
-              {originSuggestions.slice(0, 3).map((s, i) => (
+              {originSuggestions.slice(0, 3).map((s: string, i: number) => (
                 <TouchableOpacity key={i} onPress={() => { setOrigin(s); }} style={styles.suggestionItem}>
                   <Text>{s}</Text>
                 </TouchableOpacity>
@@ -180,7 +180,7 @@ export default function PlannerScreen() {
           </View>
           {destination.length > 0 && destinationSuggestions.length > 0 && !submitted && (
             <View style={styles.suggestionsBox}>
-              {destinationSuggestions.slice(0, 3).map((s, i) => (
+              {destinationSuggestions.slice(0, 3).map((s: string, i: number) => (
                 <TouchableOpacity key={i} onPress={() => { setDestination(s); }} style={styles.suggestionItem}>
                   <Text>{s}</Text>
                 </TouchableOpacity>
@@ -255,7 +255,7 @@ export default function PlannerScreen() {
                     }}
                   >
                     <View style={styles.tagRow}>
-                      {route.summaryTags.map((tag) => (
+                      {route.summaryTags.map((tag: string) => (
                         <Text key={`${route.id}-${tag}`} style={styles.summaryTag}>{tag}</Text>
                       ))}
                     </View>
@@ -294,14 +294,14 @@ export default function PlannerScreen() {
                 ) : null}
 
                 <Text style={styles.modalSubtitle}>Legs:</Text>
-                {selectedRoute.legs.map((leg, i) => (
+                {selectedRoute.legs.map((leg: PlannedLeg, i: number) => (
                   <Text key={`${leg.routeId}-${i}`} style={styles.modalText}>
                     {i + 1}. {leg.signboard}: {leg.boardAt} to {leg.alightAt} ({leg.distanceKm.toFixed(1)} km, {leg.estimatedMinutes} min, ₱{leg.fare})
                   </Text>
                 ))}
 
                 <Text style={styles.modalSubtitle}>Directions:</Text>
-                {selectedRoute.directions.map((instruction, i) => (
+                {selectedRoute.directions.map((instruction: string, i: number) => (
                   <Text key={i} style={styles.modalText}>- {instruction}</Text>
                 ))}
                 <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
