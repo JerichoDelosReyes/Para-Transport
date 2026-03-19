@@ -12,14 +12,13 @@ function TabBarBackground() {
   const insets = useSafeAreaInsets();
   const height = 63 + insets.bottom;
   const cx = width / 2;
-  const notchWidth = 86;
-  const depth = 20;
 
+  // A smooth continuous notch for the button to sit in
   const path = `
     M 0,0 
-    L ${cx - notchWidth/2},0
-    C ${cx - notchWidth/3},0 ${cx - notchWidth/4},${depth} ${cx},${depth}
-    C ${cx + notchWidth/4},${depth} ${cx + notchWidth/3},0 ${cx + notchWidth/2},0
+    L ${cx - 45},0
+    C ${cx - 32},0 ${cx - 34},36 ${cx},36
+    C ${cx + 34},36 ${cx + 32},0 ${cx + 45},0
     L ${width},0
     L ${width},${height}
     L 0,${height}
@@ -95,9 +94,6 @@ function LiquidGlassHomeButton({ focused, onPress }: { focused: boolean, onPress
   return (
     <TouchableWithoutFeedback onPressIn={handlePressIn} onPressOut={handlePressOut}>
       <Animated.View style={[styles.homeButtonContainer, { transform: [{ scale: buttonScale }] }]}>
-        <Animated.View style={[styles.liquidRing, { transform: [{ scale: scaleIdle1 }], opacity: opacityIdle1 }]} />
-        <Animated.View style={[styles.liquidRing, { transform: [{ scale: scaleIdle2 }], opacity: opacityIdle2 }]} />
-        
         <View style={styles.homeButtonBase}>
           <Ionicons name={focused ? 'home' : 'home-outline'} size={28} color="#FFFFFF" />
         </View>
@@ -146,7 +142,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
                 <Text style={[styles.tabLabel, { color: isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
                   Home
                 </Text>
-                <View style={[styles.homeButtonWrapper, { bottom: 28 }]}>
+                <View style={[styles.homeButtonWrapper, { bottom: 25 }]}>
                    <LiquidGlassHomeButton focused={isFocused} onPress={onPress} />
                 </View>
               </View>
@@ -233,13 +229,6 @@ const styles = StyleSheet.create({
     height: 62,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  liquidRing: {
-    position: 'absolute',
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#F5CC84',
   },
   homeButtonBase: {
     width: 58,
