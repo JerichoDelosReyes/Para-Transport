@@ -33,22 +33,22 @@ function FloatingHomeButton({ focused }: { focused: boolean }) {
 
   const buttonSize = scaleAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [42, 56]
+    outputRange: [32, 56]
   });
 
   const innerRadius = scaleAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [21, 28]
+    outputRange: [16, 28]
   });
 
   const wrapSize = scaleAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [42, 68]
+    outputRange: [32, 68]
   });
 
   const wrapRadius = scaleAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [21, 34]
+    outputRange: [16, 34]
   });
 
   const wrapBgInterpolate = scaleAnim.interpolate({
@@ -81,14 +81,15 @@ function FloatingHomeButton({ focused }: { focused: boolean }) {
         styles.homeLabel, 
         { 
           color: focused ? '#E8A020' : 'rgba(0,0,0,0.35)',
-          opacity: scaleAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [1, 0] // Hide label completely when floating up
-          }),
-          height: scaleAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [14, 0] // Hide label space when floating up
-          })
+          opacity: 1, // Keep text shown based on image requirement
+          transform: [
+            {
+              translateY: scaleAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [4, 18] // push text further down when icon floats up so it sits properly beneath it
+              })
+            }
+          ]
         }
       ]}>
         Home
@@ -157,8 +158,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '600',
-    marginTop: 4,
+    marginTop: 0,
     textAlign: 'center',
+    position: 'absolute',
+    bottom: -6, // anchor bottom relative to floating wrapper
   },
   tabContentContainer: {
     alignItems: 'center',
