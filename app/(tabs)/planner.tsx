@@ -1,9 +1,14 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep.svg';
-import { ROUTES } from '../../constants/routes';
+import {
+  getTransitPlaceSuggestions,
+  PlannedRouteOption,
+  searchTransitRoutes,
+} from '../../services/transitSearch';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 
 export default function PlannerScreen() {
@@ -11,37 +16,88 @@ export default function PlannerScreen() {
   const [destination, setDestination] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
-  const [selectedRoute, setSelectedRoute] = useState<any>(null);
+
+  const [selectedRoute, setSelectedRoute] = useState<PlannedRouteOption | null>(null);
   const [isModalVisible, setModalVisible] = useState(false);
+  const [results, setResults] = useState<PlannedRouteOption[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resolvedLocations, setResolvedLocations] = useState<{ origin: string; destination: string } | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
-  // Suggestions for autocomplete functionality
-  const originSuggestions = ROUTES.map(r => r.legs[0].from).filter((v, i, a) => a.indexOf(v) === i && v.toLowerCase().includes(origin.toLowerCase())).filter(Boolean);
-  const destSuggestions = ROUTES.map(r => r.legs[r.legs.length-1].to).filter((v, i, a) => a.indexOf(v) === i && v.toLowerCase().includes(destination.toLowerCase())).filter(Boolean);
+  useEffect(() => {
+    let mounted = true;
 
-  const canSearch = origin.trim().length > 0 && destination.trim().length > 0;
+    const requestLocation = async () => {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== 'granted') {
+          return;
+        }
 
-  const handleSearch = () => {
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+        if (!mounted) {
+          return;
+        }
+
+        setCurrentLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      } catch (error) {
+        console.warn('[PlannerScreen] Location permission or lookup failed:', error);
+      }
+    };
+
+    requestLocation();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const originSuggestions = useMemo(
+    () => getTransitPlaceSuggestions(origin, 4),
+    [origin]
+  );
+
+  const destinationSuggestions = useMemo(
+    () => getTransitPlaceSuggestions(destination, 4),
+    [destination]
+  );
+
+  const canSearch = destination.trim().length > 1 && (origin.trim().length > 0 || Boolean(currentLocation));
+
+  const handleSearch = async () => {
     if (!canSearch) return;
+
     setSubmitted(true);
     setIsLoading(true);
-    setTimeout(() => {
+    setErrorMessage(null);
+
+    try {
+      const searchResult = await searchTransitRoutes({
+        originQuery: origin,
+        destinationQuery: destination,
+        currentLocation,
+      });
+
+      setResults(searchResult.options);
+      setResolvedLocations({
+        origin: searchResult.origin.label,
+        destination: searchResult.destination.label,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Route search failed.';
+      setResults([]);
+      setResolvedLocations(null);
+      setErrorMessage(message);
+    } finally {
       setIsLoading(false);
-    }, 1500); // Shimmer wait
+    }
   };
-
-  const results = useMemo(() => {
-    if (!submitted) return [];
-    
-    const o = origin.trim().toLowerCase();
-    const d = destination.trim().toLowerCase();
-
-    return ROUTES.filter((route) => {
-      const matchO = o.length === 0 || route.name.toLowerCase().includes(o) || route.legs[0].from.toLowerCase().includes(o);
-      const matchD = d.length === 0 || route.name.toLowerCase().includes(d) || route.legs[route.legs.length-1].to.toLowerCase().includes(d);
-      return matchO && matchD;
-    });
-  }, [origin, destination, submitted]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -56,15 +112,37 @@ export default function PlannerScreen() {
             <TextInput
               style={styles.input}
               value={origin}
-              onChangeText={(text) => { setOrigin(text); setSubmitted(false); }}
-              placeholder="Where are you now?"
+              onChangeText={(text) => {
+                setOrigin(text);
+                setSubmitted(false);
+                setErrorMessage(null);
+              }}
+              placeholder={currentLocation ? 'Where are you now? (optional)' : 'Where are you now?'}
               placeholderTextColor={COLORS.textMuted}
             />
           </View>
-          {origin.length > 0 && origin.length < 5 && originSuggestions.length > 0 && !submitted && (
+
+          <TouchableOpacity
+            style={[styles.locationHint, !currentLocation && styles.locationHintDisabled]}
+            onPress={() => {
+              if (currentLocation) {
+                setOrigin('Current Location');
+                setSubmitted(false);
+                setErrorMessage(null);
+              }
+            }}
+            disabled={!currentLocation}
+          >
+            <Ionicons name="locate" size={14} color={currentLocation ? COLORS.navy : COLORS.textMuted} />
+            <Text style={[styles.locationHintText, !currentLocation && styles.locationHintTextDisabled]}>
+              {currentLocation ? 'Use Current Location as Origin' : 'Enable location to use current position'}
+            </Text>
+          </TouchableOpacity>
+
+          {origin.length > 0 && originSuggestions.length > 0 && !submitted && (
             <View style={styles.suggestionsBox}>
-              {originSuggestions.slice(0,3).map((s,i) => (
-                <TouchableOpacity key={i} onPress={() => {setOrigin(s);}} style={styles.suggestionItem}>
+              {originSuggestions.slice(0, 3).map((s, i) => (
+                <TouchableOpacity key={i} onPress={() => { setOrigin(s); }} style={styles.suggestionItem}>
                   <Text>{s}</Text>
                 </TouchableOpacity>
               ))}
@@ -91,15 +169,19 @@ export default function PlannerScreen() {
             <TextInput
               style={styles.input}
               value={destination}
-              onChangeText={(text) => { setDestination(text); setSubmitted(false); }}
+              onChangeText={(text) => {
+                setDestination(text);
+                setSubmitted(false);
+                setErrorMessage(null);
+              }}
               placeholder="Where are you going?"
               placeholderTextColor={COLORS.textMuted}
             />
           </View>
-          {destination.length > 0 && destination.length < 5 && destSuggestions.length > 0 && !submitted && (
+          {destination.length > 0 && destinationSuggestions.length > 0 && !submitted && (
             <View style={styles.suggestionsBox}>
-              {destSuggestions.slice(0,3).map((s,i) => (
-                <TouchableOpacity key={i} onPress={() => {setDestination(s);}} style={styles.suggestionItem}>
+              {destinationSuggestions.slice(0, 3).map((s, i) => (
+                <TouchableOpacity key={i} onPress={() => { setDestination(s); }} style={styles.suggestionItem}>
                   <Text>{s}</Text>
                 </TouchableOpacity>
               ))}
@@ -107,12 +189,16 @@ export default function PlannerScreen() {
           )}
 
           <TouchableOpacity 
-            style={[styles.searchButton, !canSearch && { opacity: 0.5 }]} 
+            style={[styles.searchButton, (!canSearch || isLoading) && { opacity: 0.5 }]} 
             onPress={handleSearch} 
             activeOpacity={0.9}
-            disabled={!canSearch}
+            disabled={!canSearch || isLoading}
           >
-            <Text style={styles.searchButtonText}>SEARCH</Text>
+            {isLoading ? (
+              <ActivityIndicator size="small" color={COLORS.navy} />
+            ) : (
+              <Text style={styles.searchButtonText}>SEARCH</Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -128,6 +214,12 @@ export default function PlannerScreen() {
           <View style={styles.resultsWrap}>
             <Text style={styles.sectionHeading}>ROUTE RESULTS</Text>
 
+            {resolvedLocations && (
+              <Text style={styles.resolvedLabel}>
+                {resolvedLocations.origin} to {resolvedLocations.destination}
+              </Text>
+            )}
+
             {isLoading ? (
               <View style={styles.skeletonContainer}>
                  {[1,2,3].map((s) => (
@@ -137,27 +229,51 @@ export default function PlannerScreen() {
                     </View>
                  ))}
               </View>
+            ) : errorMessage ? (
+              <View style={styles.resultCard}>
+                <Text style={styles.resultTitle}>Search error</Text>
+                <Text style={styles.resultMeta}>{errorMessage}</Text>
+              </View>
             ) : results.length === 0 ? (
               <View style={styles.resultCard}>
                 <Text style={styles.resultTitle}>No routes found</Text>
                 <Text style={styles.resultMeta}>Try nearby landmarks or shorter city names.</Text>
               </View>
             ) : (
-              results.map((route: any) => (
-                <TouchableOpacity key={route.id} style={styles.resultCard} onPress={() => {
-                  setSelectedRoute(route);
-                  setModalVisible(true);
-                }}>
-                  <Text style={styles.resultTitle}>{route.name}</Text>
-                  <Text style={styles.resultMeta}>
-                    {route.legs.map((leg: any) => leg.mode).join(' • ')}
-                  </Text>
-                  <View style={styles.resultFooter}>
-                    <Text style={styles.resultBadge}>₱{route.total_fare.toFixed(2)}</Text>
-                    <Text style={styles.resultTime}>{route.estimated_minutes} min</Text>
-                  </View>
-                </TouchableOpacity>
-              ))
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.horizontalDrawer}
+              >
+                {results.map((route, idx) => (
+                  <TouchableOpacity
+                    key={route.id}
+                    style={[styles.resultCard, styles.drawerCard, idx === 0 && styles.recommendedCard]}
+                    onPress={() => {
+                      setSelectedRoute(route);
+                      setModalVisible(true);
+                    }}
+                  >
+                    <View style={styles.tagRow}>
+                      {route.summaryTags.map((tag) => (
+                        <Text key={`${route.id}-${tag}`} style={styles.summaryTag}>{tag}</Text>
+                      ))}
+                    </View>
+
+                    <Text style={styles.resultTitle}>{route.title}</Text>
+                    <Text style={styles.resultMeta}>{route.subtitle}</Text>
+
+                    <View style={styles.resultFooter}>
+                      <Text style={styles.resultBadge}>₱{route.totalFare.toFixed(2)}</Text>
+                      <Text style={styles.resultTime}>{route.estimatedMinutes} min</Text>
+                    </View>
+
+                    <Text style={styles.routeMiniMeta}>
+                      {route.totalDistanceKm.toFixed(1)} km • {route.transferCount} transfer{route.transferCount === 1 ? '' : 's'} • {route.walkingMeters} m walk
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             )}
           </View>
         )}
@@ -168,13 +284,25 @@ export default function PlannerScreen() {
           <View style={styles.modalContent}>
             {selectedRoute && (
               <>
-                <Text style={styles.modalTitle}>{selectedRoute.name}</Text>
-                <Text style={styles.modalText}>Fare: ₱{selectedRoute.total_fare.toFixed(2)}</Text>
-                <Text style={styles.modalText}>Time: {selectedRoute.estimated_minutes} mins</Text>
-                <Text style={styles.modalText}>Distance: {selectedRoute.total_km} km</Text>
+                <Text style={styles.modalTitle}>{selectedRoute.title}</Text>
+                <Text style={styles.modalText}>Fare: ₱{selectedRoute.totalFare.toFixed(2)}</Text>
+                <Text style={styles.modalText}>Time: {selectedRoute.estimatedMinutes} mins</Text>
+                <Text style={styles.modalText}>Distance: {selectedRoute.totalDistanceKm.toFixed(1)} km</Text>
+                <Text style={styles.modalText}>Walking: {selectedRoute.walkingMeters} m</Text>
+                {selectedRoute.transferDescription ? (
+                  <Text style={styles.modalText}>Transfer: {selectedRoute.transferDescription}</Text>
+                ) : null}
+
+                <Text style={styles.modalSubtitle}>Legs:</Text>
+                {selectedRoute.legs.map((leg, i) => (
+                  <Text key={`${leg.routeId}-${i}`} style={styles.modalText}>
+                    {i + 1}. {leg.signboard}: {leg.boardAt} to {leg.alightAt} ({leg.distanceKm.toFixed(1)} km, {leg.estimatedMinutes} min, ₱{leg.fare})
+                  </Text>
+                ))}
+
                 <Text style={styles.modalSubtitle}>Directions:</Text>
-                {selectedRoute.legs.map((leg: any, i: number) => (
-                  <Text key={i} style={styles.modalText}>- {leg.instructions}</Text>
+                {selectedRoute.directions.map((instruction, i) => (
+                  <Text key={i} style={styles.modalText}>- {instruction}</Text>
                 ))}
                 <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
                   <Text style={styles.closeButtonText}>Close Route</Text>
@@ -190,11 +318,36 @@ export default function PlannerScreen() {
 }
 
 const styles = StyleSheet.create({
+  locationHint: {
+    marginTop: 8,
+    marginHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  locationHintDisabled: {
+    opacity: 0.65,
+  },
+  locationHintText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.navy,
+  },
+  locationHintTextDisabled: {
+    color: COLORS.textMuted,
+  },
   suggestionsBox: { backgroundColor: '#fff', marginHorizontal: 10, borderRadius: 5, padding: 5, marginTop: 5 },
   suggestionItem: { padding: 8, borderBottomWidth: 1, borderBottomColor: '#eee' },
   skeletonContainer: { gap: 10 },
   skeletonCard: { backgroundColor: '#f0f0f0', padding: 20, borderRadius: 10, flexDirection: 'row', alignItems: 'center' },
   skeletonText: { marginLeft: 10, color: '#aaa' },
+  resolvedLabel: {
+    marginTop: -2,
+    marginBottom: 2,
+    fontFamily: 'Inter',
+    color: COLORS.textMuted,
+    fontSize: TYPOGRAPHY.label,
+  },
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 10 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
@@ -298,10 +451,36 @@ const styles = StyleSheet.create({
   resultsWrap: {
     gap: SPACING.cardGap,
   },
+  horizontalDrawer: {
+    gap: 12,
+    paddingRight: 8,
+  },
   sectionHeading: {
     fontFamily: 'Cubao',
     fontSize: 24,
     color: COLORS.navy,
+  },
+  drawerCard: {
+    width: 280,
+  },
+  recommendedCard: {
+    borderColor: '#E8A020',
+    borderWidth: 2,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  summaryTag: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: COLORS.navy,
+    backgroundColor: '#FFF5CC',
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   resultCard: {
     borderRadius: RADIUS.card,
@@ -342,5 +521,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: TYPOGRAPHY.label,
     color: COLORS.textLabel,
+  },
+  routeMiniMeta: {
+    marginTop: 10,
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.textMuted,
   },
 });

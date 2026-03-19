@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import routeData from '../data/routes.json';
+import transitData from '../data/transit.routes.generated.json';
 
 export type RouteCoord = {
   latitude: number;
@@ -20,6 +20,9 @@ export type RouteProperties = {
   fare: number;
   status: string;
   operator: string;
+  signboard: string;
+  direction: 'forward' | 'reverse';
+  sourceFile: string;
 };
 
 export type JeepneyRoute = {
@@ -34,30 +37,36 @@ export function useJeepneyRoutes() {
 
   useEffect(() => {
     try {
-      const data = routeData as any;
+      const data = transitData as any;
       const parsed: JeepneyRoute[] = (data.routes || [])
-        .filter((r: any) => r.status === 'active' && r.path?.length >= 2)
+        .filter((r: any) => r?.geometry?.type === 'LineString' && r?.geometry?.coordinates?.length >= 2)
         .map((r: any) => {
-          const coordinates: RouteCoord[] = r.path.map(([lng, lat]: [number, number]) => ({
+          const coordinates: RouteCoord[] = r.geometry.coordinates.map(([lng, lat]: [number, number]) => ({
             latitude: lat,
             longitude: lng,
           }));
 
           const stops: StopPoint[] = (r.stops || []).map((s: any, idx: number) => ({
-            coordinate: { latitude: s.lat, longitude: s.lng },
-            type: idx === 0 || idx === (r.stops.length - 1) ? 'terminal' as const : 'stop' as const,
-            label: s.name,
+            coordinate: {
+              latitude: s.coordinate[1],
+              longitude: s.coordinate[0],
+            },
+            type: s.type === 'terminal' ? 'terminal' as const : 'stop' as const,
+            label: s.name || `Stop ${idx + 1}`,
           }));
 
           return {
             properties: {
-              code: r.code,
-              name: r.name,
-              description: r.description,
-              type: r.type,
-              fare: r.fare,
-              status: r.status,
-              operator: r.operator || '',
+              code: r.routeId,
+              name: r.routeName,
+              description: `${r.routeName} (${r.direction})`,
+              type: r.vehicleType,
+              fare: 13,
+              status: 'active',
+              operator: '',
+              signboard: r.signboard,
+              direction: r.direction,
+              sourceFile: r.sourceFile,
             },
             coordinates,
             stops,

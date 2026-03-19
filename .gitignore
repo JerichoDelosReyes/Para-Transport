@@ -40,3 +40,7 @@ yarn-error.*
 /ios
 /android
 .env
+
+
+# Document Changelogs
+docs/*.txt
