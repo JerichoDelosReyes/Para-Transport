@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Animated, PanResponder, Dimensions, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,10 +9,19 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 import { ProfileButton } from '../../components/ProfileButton';
+import { useTransitData } from '../../hooks/useTransitData';
+import RouteListPanel from '../../components/RouteListPanel';
 
 const { height, width } = Dimensions.get('window');
 
-const MODES = ['Jeepney', 'Tricycle', 'UV Express', 'Bus', 'LRT'];
+const MODES = ['All', 'Jeepney', 'Bus', 'UV Express'];
+
+// Map pill labels to Overpass route types
+const MODE_TO_ROUTE_TYPE: Record<string, string> = {
+  'Jeepney': 'jeepney',
+  'Bus': 'bus',
+  'UV Express': 'share_taxi',
+};
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
 
@@ -33,7 +42,7 @@ const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
 
 export default function HomeScreen() {
-  const [selectedMode, setSelectedMode] = useState('Jeepney');
+  const [selectedMode, setSelectedMode] = useState('All');
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isMapInteracted, setIsMapInteracted] = useState(false);
@@ -49,6 +58,9 @@ export default function HomeScreen() {
   const [showRoutes, setShowRoutes] = useState(true);
   const [matchedCommute, setMatchedCommute] = useState<any>(null); // from useCommuteRoutes
   const { routes: commuteRoutes } = useCommuteRoutes();
+  const { routes: transitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
+  const [selectedTransitRoute, setSelectedTransitRoute] = useState<any>(null);
+  const [showTransitLayer, setShowTransitLayer] = useState(true);
   const mapRef = useRef<MapView | null>(null);
 
   // Search Expand Animation
@@ -87,6 +99,35 @@ export default function HomeScreen() {
   }, [isSearchActive]);
 
   const closeSearch = () => setIsSearchActive(false);
+
+  // Handle selecting a transit route from the panel
+  const handleSelectTransitRoute = useCallback((route: any) => {
+    setSelectedTransitRoute((prev: any) => prev?.id === route.id ? null : route);
+    const allCoords = (route.segments || []).flat();
+    if (allCoords.length > 0) {
+      mapRef.current?.fitToCoordinates(allCoords, {
+        edgePadding: { top: 120, right: 40, bottom: 200, left: 40 },
+        animated: true,
+      });
+    }
+  }, []);
+
+  // Visible routes: filter by selected mode, then by selected individual route
+  const visibleTransitRoutes = useMemo(() => {
+    if (!showTransitLayer) return [];
+    if (selectedTransitRoute) return [selectedTransitRoute];
+    if (selectedMode === 'All') return transitRoutes;
+    const routeType = MODE_TO_ROUTE_TYPE[selectedMode];
+    if (!routeType) return transitRoutes;
+    return transitRoutes.filter((r: any) => r.type === routeType);
+  }, [showTransitLayer, selectedTransitRoute, transitRoutes, selectedMode]);
+
+  // Visible stops: filter by mode when no individual route is selected
+  const visibleTransitStops = useMemo(() => {
+    if (!showTransitLayer) return [];
+    if (selectedTransitRoute?.stops?.length > 0) return selectedTransitRoute.stops;
+    return transitStops;
+  }, [showTransitLayer, selectedTransitRoute, transitStops]);
 
   const selectSuggestion = (suggestion: PlaceSuggestion) => {
     setDestinationQuery(suggestion.title);
@@ -361,6 +402,40 @@ export default function HomeScreen() {
             lineJoin="round"
           />
         )}
+
+        {/* Transit route polylines — each route has multiple segments to avoid off-road straight lines */}
+        {visibleTransitRoutes.map((route: any) =>
+          (route.segments || []).map((seg: any[], segIdx: number) => (
+            <Polyline
+              key={`transit-${route.id}-${segIdx}`}
+              coordinates={seg}
+              strokeColor={selectedTransitRoute?.id === route.id ? route.color : route.color + '99'}
+              strokeWidth={selectedTransitRoute?.id === route.id ? 4 : 2}
+              lineCap="butt"
+              lineJoin="miter"
+            />
+          ))
+        )}
+
+        {/* Transit stop markers */}
+        {visibleTransitStops.map((stop: any) => (
+          <Marker
+            key={`transit-stop-${stop.id}`}
+            coordinate={stop.coordinate}
+            tracksViewChanges={false}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={styles.transitStopMarker}>
+              <Ionicons name="ellipse" size={6} color="#FFFFFF" />
+            </View>
+            <Callout tooltip>
+              <View style={styles.stopCallout}>
+                <Text style={styles.stopCalloutLabel}>{stop.name}</Text>
+                {stop.operator ? <Text style={styles.stopCalloutType}>{stop.operator}</Text> : null}
+              </View>
+            </Callout>
+          </Marker>
+        ))}
       </MapView>
 
       {/* Dim map when search is active */}
@@ -493,6 +568,34 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
+        {/* Transit layer controls */}
+        <View style={styles.transitControlsRow}>
+          <TouchableOpacity
+            style={[styles.transitToggle, showTransitLayer && styles.transitToggleActive]}
+            onPress={() => setShowTransitLayer(prev => !prev)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="git-branch" size={16} color={showTransitLayer ? '#FFFFFF' : COLORS.navy} />
+            <Text style={[styles.transitToggleText, showTransitLayer && { color: '#FFFFFF' }]}>
+              Transit
+            </Text>
+          </TouchableOpacity>
+
+          {transitLoading && showTransitLayer && (
+            <ActivityIndicator size="small" color="#E8A020" style={{ marginLeft: 8 }} />
+          )}
+        </View>
+
+        {transitError && showTransitLayer && (
+          <View style={styles.transitErrorCard}>
+            <Ionicons name="warning" size={16} color="#E53935" />
+            <Text style={styles.transitErrorText}>Transit: {transitError}</Text>
+            <TouchableOpacity onPress={refreshTransit}>
+              <Text style={styles.transitRetryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {routeSummary && (
           <View style={styles.routeSummaryCard}>
             <Text style={styles.routeSummaryTitle}>Route Ready</Text>
@@ -533,6 +636,15 @@ export default function HomeScreen() {
           </View>
         )}
       </SafeAreaView>
+
+      {/* Transit route list panel */}
+      {showTransitLayer && !transitLoading && transitRoutes.length > 0 && (
+        <RouteListPanel
+          routes={transitRoutes}
+          selectedRouteId={selectedTransitRoute?.id}
+          onSelectRoute={handleSelectTransitRoute}
+        />
+      )}
     </View>
   );
 }
@@ -961,5 +1073,79 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 2,
+  },
+  // Transit layer styles
+  transitStopMarker: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#1E88E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  transitControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginHorizontal: SPACING.screenX,
+    gap: 8,
+  },
+  transitToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  transitToggleActive: {
+    backgroundColor: '#0A1628',
+    borderColor: '#0A1628',
+  },
+  transitToggleText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  transitErrorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginHorizontal: SPACING.screenX,
+    backgroundColor: 'rgba(229,57,53,0.08)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(229,57,53,0.2)',
+  },
+  transitErrorText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: '#E53935',
+    flex: 1,
+  },
+  transitRetryText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#E53935',
   },
 });
