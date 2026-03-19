@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
+import GoogleIcon from '../assets/icons/GoogleIcon.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 
 type HeaderDoodle = {
@@ -117,7 +118,7 @@ export default function LoginScreen() {
 
             <View style={styles.socialRow}>
               <TouchableOpacity style={styles.lightSocial} activeOpacity={0.9}>
-                <FontAwesome5 name="google" size={15} color="#4285F4" style={{ marginRight: 7 }} />
+                <GoogleIcon width={18} height={18} style={{ marginRight: 7 }} />
                 <Text style={styles.lightSocialText}>Google</Text>
               </TouchableOpacity>
 

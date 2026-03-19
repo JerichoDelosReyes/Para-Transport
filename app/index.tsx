@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep.svg';
+import GoogleIcon from '../assets/icons/GoogleIcon.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { useMemo, useRef, useState } from 'react';
 
@@ -187,7 +188,7 @@ export default function WelcomeScreen() {
 
             <View style={styles.socialRow}>
               <TouchableOpacity style={styles.googleButton} activeOpacity={0.9}>
-                <FontAwesome5 name="google" size={15} color="#4285F4" style={{ marginRight: 8 }} />
+                <GoogleIcon width={18} height={18} style={{ marginRight: 8 }} />
                 <Text style={styles.socialLabel}>Google</Text>
               </TouchableOpacity>
 
