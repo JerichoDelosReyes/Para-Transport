@@ -40,8 +40,30 @@ type PlaceSuggestion = {
   longitude: number;
 };
 
+type LocalLocation = {
+  id: string;
+  title: string;
+  subtitle: string;
+  latitude: number;
+  longitude: number;
+};
+
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
+
+function normalizeQuery(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function haversineKm(a: MapCoordinate, b: MapCoordinate): number {
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLng = toRad(b.longitude - a.longitude);
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
 
 export default function HomeScreen() {
   const [selectedMode, setSelectedMode] = useState('Jeepney');
@@ -61,6 +83,64 @@ export default function HomeScreen() {
   const [showRoutes, setShowRoutes] = useState(true);
   const { routes: jeepneyRoutes } = useJeepneyRoutes();
   const mapRef = useRef<MapView | null>(null);
+
+  const localLocations = React.useMemo<LocalLocation[]>(() => {
+    const byName = new Map<string, LocalLocation>();
+
+    for (const route of jeepneyRoutes) {
+      for (const stop of route.stops) {
+        const title = stop.label?.trim();
+        if (!title || /^stop candidate/i.test(title)) {
+          continue;
+        }
+
+        const key = normalizeQuery(title);
+        if (!key) {
+          continue;
+        }
+
+        if (!byName.has(key)) {
+          byName.set(key, {
+            id: `local-${key}`,
+            title,
+            subtitle: 'Cavite, Philippines',
+            latitude: stop.coordinate.latitude,
+            longitude: stop.coordinate.longitude,
+          });
+        }
+      }
+    }
+
+    return [...byName.values()].sort((a, b) => a.title.localeCompare(b.title, 'en'));
+  }, [jeepneyRoutes]);
+
+  const getLocalMatches = React.useCallback((query: string, limit = 8): LocalLocation[] => {
+    const q = normalizeQuery(query);
+    if (!q) {
+      return localLocations.slice(0, limit);
+    }
+
+    const exact = localLocations.filter((item) => normalizeQuery(item.title) === q);
+    const startsWith = localLocations.filter((item) => normalizeQuery(item.title).startsWith(q));
+    const includes = localLocations.filter((item) => normalizeQuery(item.title).includes(q));
+
+    const merged = [...exact, ...startsWith, ...includes];
+    const seen = new Set<string>();
+    const result: LocalLocation[] = [];
+
+    for (const item of merged) {
+      if (seen.has(item.id)) {
+        continue;
+      }
+      seen.add(item.id);
+      result.push(item);
+      if (result.length >= limit) {
+        break;
+      }
+    }
+
+    return result;
+  }, [localLocations]);
 
   // Bottom Sheet Animation state
   const sheetHeight = height * 0.5; // max height of bottom sheet
@@ -152,6 +232,19 @@ export default function HomeScreen() {
 
     let cancelled = false;
     const debounceTimer = setTimeout(async () => {
+      const localMatches = getLocalMatches(query, 6);
+
+      console.log(`User Search: ${query}`);
+      console.log(
+        `Available Locations for ${query} {\n${localMatches.map((loc) => `  ${loc.title}`).join('\n')}\n}`
+      );
+
+      if (localMatches.length >= 6) {
+        setPlaceSuggestions(localMatches);
+        setIsFetchingSuggestions(false);
+        return;
+      }
+
       setIsFetchingSuggestions(true);
       try {
         const params = new URLSearchParams({
@@ -159,12 +252,15 @@ export default function HomeScreen() {
           format: 'json',
           limit: '5',
           countrycodes: 'ph',
+          viewbox: '120.78,14.52,121.06,14.20',
+          bounded: '1',
           addressdetails: '0',
         });
 
         const response = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
           headers: {
             'Accept-Language': 'en',
+            'User-Agent': 'Para-Transport-iOS/1.0',
           },
         });
 
@@ -193,11 +289,24 @@ export default function HomeScreen() {
           })
           .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
 
-        setPlaceSuggestions(mapped);
+        const mergedMap = new Map<string, PlaceSuggestion>();
+
+        for (const local of localMatches) {
+          mergedMap.set(`local:${normalizeQuery(local.title)}`, local);
+        }
+
+        for (const item of mapped) {
+          const key = `remote:${normalizeQuery(item.title)}:${Math.round(item.latitude * 10000)}:${Math.round(item.longitude * 10000)}`;
+          if (!mergedMap.has(key)) {
+            mergedMap.set(key, item);
+          }
+        }
+
+        setPlaceSuggestions([...mergedMap.values()].slice(0, 8));
       } catch (error) {
         if (!cancelled) {
           console.warn('[HomeScreen] Suggestion search failed:', error);
-          setPlaceSuggestions([]);
+          setPlaceSuggestions(localMatches);
         }
       } finally {
         if (!cancelled) {
@@ -270,34 +379,62 @@ export default function HomeScreen() {
 
     setIsRouting(true);
     try {
-      const geocodeParams = new URLSearchParams({
-        q: `${query}, Cavite, Philippines`,
-        format: 'json',
-        limit: '1',
-        countrycodes: 'ph',
-      });
+      const localMatches = getLocalMatches(query, 6);
+      console.log(`User Search: ${query}`);
+      console.log(
+        `Available Locations for ${query} {\n${localMatches.map((loc) => `  ${loc.title}`).join('\n')}\n}`
+      );
 
-      const geocodeResponse = await fetch(`${GEOCODING_BASE_URL}/search?${geocodeParams.toString()}`, {
-        headers: {
-          'Accept-Language': 'en',
-        },
-      });
+      let destinationPoint: MapCoordinate | null = null;
 
-      if (!geocodeResponse.ok) {
-        throw new Error(`Geocoding failed (${geocodeResponse.status})`);
+      if (localMatches.length > 0) {
+        destinationPoint = {
+          latitude: localMatches[0].latitude,
+          longitude: localMatches[0].longitude,
+        };
+      } else {
+        const geocodeParams = new URLSearchParams({
+          q: `${query}, Cavite, Philippines`,
+          format: 'json',
+          limit: '3',
+          countrycodes: 'ph',
+          viewbox: '120.78,14.52,121.06,14.20',
+          bounded: '1',
+        });
+
+        const geocodeResponse = await fetch(`${GEOCODING_BASE_URL}/search?${geocodeParams.toString()}`, {
+          headers: {
+            'Accept-Language': 'en',
+            'User-Agent': 'Para-Transport-iOS/1.0',
+          },
+        });
+
+        if (!geocodeResponse.ok) {
+          throw new Error(`Geocoding failed (${geocodeResponse.status})`);
+        }
+
+        const geocodeResults = await geocodeResponse.json();
+        if (!Array.isArray(geocodeResults) || geocodeResults.length === 0) {
+          Alert.alert('Location Not Found', 'Try a more specific destination name in Cavite.');
+          return;
+        }
+
+        const destination = geocodeResults[0];
+        const latitude = parseFloat(destination.lat);
+        const longitude = parseFloat(destination.lon);
+
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+          destinationPoint = {
+            latitude,
+            longitude,
+          };
+        }
       }
 
-      const geocodeResults = await geocodeResponse.json();
-      if (!Array.isArray(geocodeResults) || geocodeResults.length === 0) {
-        Alert.alert('Location Not Found', 'Try a more specific destination name.');
-        return;
+      if (!destinationPoint || !Number.isFinite(destinationPoint.latitude) || !Number.isFinite(destinationPoint.longitude)) {
+        throw new Error('Destination coordinates are invalid');
       }
 
-      const destination = geocodeResults[0];
-      const destinationPoint: MapCoordinate = {
-        latitude: parseFloat(destination.lat),
-        longitude: parseFloat(destination.lon),
-      };
       setDestinationLocation(destinationPoint);
 
       const startLng = currentLocation.longitude;
@@ -305,11 +442,48 @@ export default function HomeScreen() {
       const destLng = destinationPoint.longitude;
       const destLat = destinationPoint.latitude;
 
+      if ([startLng, startLat, destLng, destLat].some((value) => !Number.isFinite(value))) {
+        throw new Error('Invalid routing coordinates');
+      }
+
+      if (haversineKm(currentLocation, destinationPoint) < 0.05) {
+        setRouteCoordinates([currentLocation, destinationPoint]);
+        setRouteSummary({
+          distanceKm: 0.05,
+          durationMin: 1,
+        });
+        Alert.alert('You are already near this destination.');
+        return;
+      }
+
       const routeResponse = await fetch(
         `${ROUTING_BASE_URL}/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`
       );
 
       if (!routeResponse.ok) {
+        if (routeResponse.status === 400) {
+          const fallbackDistanceKm = haversineKm(currentLocation, destinationPoint);
+          const fallbackDurationMin = Math.max(2, Math.round((fallbackDistanceKm / 20) * 60));
+          const fallbackCoordinates = [currentLocation, destinationPoint];
+
+          setRouteCoordinates(fallbackCoordinates);
+          setRouteSummary({
+            distanceKm: fallbackDistanceKm,
+            durationMin: fallbackDurationMin,
+          });
+
+          mapRef.current?.fitToCoordinates(fallbackCoordinates, {
+            edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
+            animated: true,
+          });
+
+          Alert.alert('Route Fallback', 'No drivable OSRM path found. Showing direct path to destination.');
+          setIsSearchActive(false);
+          setPlaceSuggestions([]);
+          Keyboard.dismiss();
+          return;
+        }
+
         throw new Error(`Routing failed (${routeResponse.status})`);
       }
 

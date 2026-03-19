@@ -85,6 +85,28 @@ function normalizeBaseCode(raw) {
   return slugify(raw).replace(/-(IN|OUT)$/i, '');
 }
 
+function resolveUniqueBaseCode(baseCode, fileName, usedBaseCodes, collisionCounts) {
+  if (!usedBaseCodes.has(baseCode)) {
+    usedBaseCodes.add(baseCode);
+    return baseCode;
+  }
+
+  const fileSuffix = slugify(fileName.replace(/\.gpx$/i, '')) || 'ALT';
+  const collisionBase = `${baseCode}-${fileSuffix}`;
+  const nextCount = (collisionCounts.get(collisionBase) || 0) + 1;
+  collisionCounts.set(collisionBase, nextCount);
+
+  let candidate = nextCount === 1 ? collisionBase : `${collisionBase}-${nextCount}`;
+  while (usedBaseCodes.has(candidate)) {
+    const bump = (collisionCounts.get(collisionBase) || 0) + 1;
+    collisionCounts.set(collisionBase, bump);
+    candidate = `${collisionBase}-${bump}`;
+  }
+
+  usedBaseCodes.add(candidate);
+  return candidate;
+}
+
 function parseEndpoints(description, metadataName, fileBaseName) {
   const fromDesc = normalizeName(description || '');
   const fromName = normalizeName(metadataName || '');
@@ -287,6 +309,8 @@ function generateTransitRoutes() {
   }
 
   const routes = [];
+  const usedBaseCodes = new Set();
+  const collisionCounts = new Map();
 
   for (const fileName of files) {
     const fullPath = path.join(DATA_DIR, fileName);
@@ -295,13 +319,15 @@ function generateTransitRoutes() {
     const coordinates = extractTrackCoordinates(gpx, fileName);
 
     const { start, end } = parseEndpoints(metadataDescription, metadataName, fileName);
-    const baseCode = normalizeBaseCode(
+    const rawBaseCode = normalizeBaseCode(
       metadataName || metadataDescription || fileName.replace(/\.gpx$/i, '')
     );
 
-    if (!baseCode) {
+    if (!rawBaseCode) {
       throw new Error(`${fileName}: failed to derive base route code`);
     }
+
+    const baseCode = resolveUniqueBaseCode(rawBaseCode, fileName, usedBaseCodes, collisionCounts);
 
     const forwardRouteId = `${baseCode}-OUT`;
     const reverseRouteId = `${baseCode}-IN`;

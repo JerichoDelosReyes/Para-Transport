@@ -7,7 +7,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "generate:transit": "node scripts/generateTransitData.js"
+    "generate:transit": "node scripts/generateTransitData.js",
+    "smoke:transit": "npx --yes tsx scripts/smokeTransitSearch.ts"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

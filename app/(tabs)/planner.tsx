@@ -3,12 +3,18 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep.svg';
 import {
   getTransitPlaceSuggestions,
   searchTransitRoutes,
-} from '../../services';
-import type { PlannedLeg, PlannedRouteOption } from '../../services';
+} from '../../services/transitSearch';
+import type {
+  PlannedLeg,
+  PlannedRouteOption,
+  RouteMapMarker,
+  RouteMapSegment,
+} from '../../services/transitSearch';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 
 export default function PlannerScreen() {
@@ -23,6 +29,51 @@ export default function PlannerScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resolvedLocations, setResolvedLocations] = useState<{ origin: string; destination: string } | null>(null);
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isDirectionsExpanded, setIsDirectionsExpanded] = useState(true);
+
+  const selectedRouteRegion = useMemo(() => {
+    if (!selectedRoute) {
+      return {
+        latitude: 14.4296,
+        longitude: 120.9367,
+        latitudeDelta: 0.08,
+        longitudeDelta: 0.08,
+      };
+    }
+
+    const points = [
+      ...selectedRoute.mapSegments.flatMap((segment: RouteMapSegment) => segment.coordinates),
+      ...selectedRoute.mapMarkers.map((marker: RouteMapMarker) => marker.coordinate),
+    ];
+
+    if (!points.length) {
+      return {
+        latitude: 14.4296,
+        longitude: 120.9367,
+        latitudeDelta: 0.08,
+        longitudeDelta: 0.08,
+      };
+    }
+
+    let minLat = Number.POSITIVE_INFINITY;
+    let maxLat = Number.NEGATIVE_INFINITY;
+    let minLng = Number.POSITIVE_INFINITY;
+    let maxLng = Number.NEGATIVE_INFINITY;
+
+    for (const [lng, lat] of points) {
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
+    }
+
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max(0.02, (maxLat - minLat) * 1.4),
+      longitudeDelta: Math.max(0.02, (maxLng - minLng) * 1.4),
+    };
+  }, [selectedRoute]);
 
   useEffect(() => {
     let mounted = true;
@@ -251,6 +302,7 @@ export default function PlannerScreen() {
                     style={[styles.resultCard, styles.drawerCard, idx === 0 && styles.recommendedCard]}
                     onPress={() => {
                       setSelectedRoute(route);
+                      setIsDirectionsExpanded(true);
                       setModalVisible(true);
                     }}
                   >
@@ -283,7 +335,11 @@ export default function PlannerScreen() {
         <View style={styles.modalBg}>
           <View style={styles.modalContent}>
             {selectedRoute && (
-              <>
+              <ScrollView
+                style={styles.modalScroll}
+                contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
                 <Text style={styles.modalTitle}>{selectedRoute.title}</Text>
                 <Text style={styles.modalText}>Fare: ₱{selectedRoute.totalFare.toFixed(2)}</Text>
                 <Text style={styles.modalText}>Time: {selectedRoute.estimatedMinutes} mins</Text>
@@ -293,6 +349,46 @@ export default function PlannerScreen() {
                   <Text style={styles.modalText}>Transfer: {selectedRoute.transferDescription}</Text>
                 ) : null}
 
+                <View style={styles.mapWrap}>
+                  <MapView
+                    style={styles.map}
+                    initialRegion={selectedRouteRegion}
+                    region={selectedRouteRegion}
+                    rotateEnabled={false}
+                    pitchEnabled={false}
+                  >
+                    {selectedRoute.mapSegments.map((segment: RouteMapSegment, segIndex: number) => {
+                      const colors = ['#E8A020', '#2F80ED', '#27AE60', '#EB5757', '#9B51E0'];
+                      return (
+                        <Polyline
+                          key={`${segment.routeId}-${segIndex}`}
+                          coordinates={segment.coordinates.map(([lng, lat]: [number, number]) => ({ latitude: lat, longitude: lng }))}
+                          strokeColor={colors[segIndex % colors.length]}
+                          strokeWidth={5}
+                        />
+                      );
+                    })}
+
+                    {selectedRoute.mapMarkers.map((marker: RouteMapMarker) => {
+                      const color =
+                        marker.kind === 'board'
+                          ? '#2F80ED'
+                          : marker.kind === 'transfer'
+                            ? '#F2994A'
+                            : '#27AE60';
+
+                      return (
+                        <Marker
+                          key={marker.id}
+                          coordinate={{ latitude: marker.coordinate[1], longitude: marker.coordinate[0] }}
+                          title={marker.label}
+                          pinColor={color}
+                        />
+                      );
+                    })}
+                  </MapView>
+                </View>
+
                 <Text style={styles.modalSubtitle}>Legs:</Text>
                 {selectedRoute.legs.map((leg: PlannedLeg, i: number) => (
                   <Text key={`${leg.routeId}-${i}`} style={styles.modalText}>
@@ -300,14 +396,26 @@ export default function PlannerScreen() {
                   </Text>
                 ))}
 
-                <Text style={styles.modalSubtitle}>Directions:</Text>
-                {selectedRoute.directions.map((instruction: string, i: number) => (
+                <TouchableOpacity
+                  style={styles.stepHeader}
+                  onPress={() => setIsDirectionsExpanded((value) => !value)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.modalSubtitle}>Directions</Text>
+                  <Ionicons
+                    name={isDirectionsExpanded ? 'chevron-up' : 'chevron-down'}
+                    size={18}
+                    color={COLORS.navy}
+                  />
+                </TouchableOpacity>
+
+                {isDirectionsExpanded && selectedRoute.directions.map((instruction: string, i: number) => (
                   <Text key={i} style={styles.modalText}>- {instruction}</Text>
                 ))}
                 <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
                   <Text style={styles.closeButtonText}>Close Route</Text>
                 </TouchableOpacity>
-              </>
+              </ScrollView>
             )}
           </View>
         </View>
@@ -349,10 +457,29 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.label,
   },
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 10 },
+  modalContent: { backgroundColor: '#fff', borderRadius: 10, maxHeight: '86%' },
+  modalScroll: { width: '100%' },
+  modalScrollContent: { padding: 20, paddingBottom: 24 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
   modalSubtitle: { fontSize: 16, fontWeight: 'bold', marginTop: 15, marginBottom: 5 },
   modalText: { fontSize: 14, marginBottom: 5 },
+  mapWrap: {
+    marginTop: 12,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#D9D9D9',
+  },
+  map: {
+    width: '100%',
+    height: 220,
+  },
+  stepHeader: {
+    marginTop: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   closeButton: { marginTop: 20, padding: 10, backgroundColor: COLORS.navy, borderRadius: 5, alignItems: 'center' },
   closeButtonText: { color: '#fff', fontWeight: 'bold' },
   screen: {

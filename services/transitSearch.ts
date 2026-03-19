@@ -29,7 +29,10 @@ type TransitRoute = {
   stops: TransitStop[];
 };
 
-type RouteStopIndex = TransitStop & { pointIndex: number };
+type RouteStopIndex = TransitStop & {
+  pointIndex: number;
+  nodeId: string;
+};
 
 type IndexedRoute = {
   route: TransitRoute;
@@ -37,13 +40,13 @@ type IndexedRoute = {
   indexedStops: RouteStopIndex[];
 };
 
-type GraphNodeType = 'terminal' | 'stop' | 'intersection';
+type NodeKind = 'terminal' | 'stop' | 'intersection' | 'virtual';
 
 type GraphNode = {
   id: string;
-  type: GraphNodeType;
-  coordinate: GeoJSONCoordinate;
+  kind: NodeKind;
   label: string;
+  coordinate: GeoJSONCoordinate;
   routeId?: string;
   pointIndex?: number;
 };
@@ -55,24 +58,68 @@ type GraphEdge = {
   fromNodeId: string;
   toNodeId: string;
   mode: GraphEdgeMode;
+  routeId?: string;
   distanceKm: number;
   etaMinutes: number;
   fare: number;
-  routeId?: string;
+  geometry?: GeoJSONCoordinate[];
   description: string;
 };
 
 type IntersectionNode = {
   id: string;
-  coordinate: GeoJSONCoordinate;
   routeAId: string;
   routeAIndex: number;
   routeBId: string;
   routeBIndex: number;
+  coordinateA: GeoJSONCoordinate;
+  coordinateB: GeoJSONCoordinate;
   nearestStopA: RouteStopIndex;
   nearestStopB: RouteStopIndex;
   walkMeters: number;
   label: string;
+};
+
+type BaseGraph = {
+  nodes: Map<string, GraphNode>;
+  edges: GraphEdge[];
+  adjacency: Map<string, GraphEdge[]>;
+};
+
+type Profile = 'recommended' | 'fastest' | 'cheapest' | 'leastWalk' | 'fewestTransfers';
+
+type ProfileWeights = {
+  eta: number;
+  walkPerMeter: number;
+  transfer: number;
+  fare: number;
+};
+
+type AStarState = {
+  key: string;
+  nodeId: string;
+  currentRouteId: string | null;
+  g: number;
+  f: number;
+  transfers: number;
+  etaMinutes: number;
+  walkMeters: number;
+  fare: number;
+  parentKey: string | null;
+  viaEdgeId: string | null;
+};
+
+export type RouteMapSegment = {
+  routeId: string;
+  signboard: string;
+  coordinates: GeoJSONCoordinate[];
+};
+
+export type RouteMapMarker = {
+  id: string;
+  label: string;
+  coordinate: GeoJSONCoordinate;
+  kind: 'board' | 'alight' | 'transfer';
 };
 
 export type PlannedLeg = {
@@ -101,6 +148,8 @@ export type PlannedRouteOption = {
   legs: PlannedLeg[];
   transferDescription?: string;
   directions: string[];
+  mapSegments: RouteMapSegment[];
+  mapMarkers: RouteMapMarker[];
 };
 
 export type TransitSearchResult = {
@@ -119,16 +168,49 @@ const ROUTES: TransitRoute[] = ((transitData as any)?.routes ?? []) as TransitRo
 const NOMINATIM_BASE_URL =
   process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 
-const ORIGIN_MATCH_BUFFER_KM = 0.6;
-const DEST_MATCH_BUFFER_KM = 0.6;
+const ORIGIN_MATCH_BUFFER_KM = 0.75;
+const DEST_MATCH_BUFFER_KM = 0.75;
 const INTERSECTION_MAX_GAP_KM = 0.09;
-const TRANSFER_WALK_MAX_KM = 0.2;
+const TRANSFER_WALK_MAX_KM = 0.22;
 
 const BASE_FARE = 13;
 const BASE_DISTANCE_KM = 4;
 const ADDITIONAL_PER_KM = 1.8;
 const AVERAGE_SPEED_KMPH = 18;
 const WALKING_SPEED_M_PER_MIN = 78;
+
+const PROFILE_WEIGHTS: Record<Profile, ProfileWeights> = {
+  recommended: {
+    eta: 1.45,
+    walkPerMeter: 0.02,
+    transfer: 210,
+    fare: 1.2,
+  },
+  fastest: {
+    eta: 2.2,
+    walkPerMeter: 0.03,
+    transfer: 95,
+    fare: 0.4,
+  },
+  cheapest: {
+    eta: 0.9,
+    walkPerMeter: 0.008,
+    transfer: 75,
+    fare: 3.0,
+  },
+  leastWalk: {
+    eta: 1.15,
+    walkPerMeter: 0.07,
+    transfer: 70,
+    fare: 0.8,
+  },
+  fewestTransfers: {
+    eta: 1.2,
+    walkPerMeter: 0.015,
+    transfer: 340,
+    fare: 0.9,
+  },
+};
 
 function toRad(value: number): number {
   return (value * Math.PI) / 180;
@@ -143,6 +225,22 @@ function haversineKm(a: GeoJSONCoordinate, b: GeoJSONCoordinate): number {
     Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLng / 2) ** 2;
 
   return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function normalize(input: string): string {
+  return input.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function toTitleCase(value: string): string {
+  return value
+    .split(' ')
+    .map((token) => {
+      if (/^[a-z0-9]{1,3}$/i.test(token) && token === token.toLowerCase()) {
+        return token.toUpperCase();
+      }
+      return token.charAt(0).toUpperCase() + token.slice(1);
+    })
+    .join(' ');
 }
 
 function estimateMinutes(distanceKm: number): number {
@@ -160,20 +258,8 @@ function calculateFare(distanceKm: number): number {
   return Math.ceil(BASE_FARE + (distanceKm - BASE_DISTANCE_KM) * ADDITIONAL_PER_KM);
 }
 
-function normalize(input: string): string {
-  return input.trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-function toTitleCase(value: string): string {
-  return value
-    .split(' ')
-    .map((token) => {
-      if (/^[a-z0-9]{1,3}$/i.test(token) && token === token.toLowerCase()) {
-        return token.toUpperCase();
-      }
-      return token.charAt(0).toUpperCase() + token.slice(1);
-    })
-    .join(' ');
+function estimateRideCost(distanceKm: number): number {
+  return Math.max(1, distanceKm * 2.4);
 }
 
 function nearestPointIndex(
@@ -194,33 +280,19 @@ function nearestPointIndex(
   return { index: bestIndex, distanceKm: bestDistance };
 }
 
-function segmentDistanceKm(cumulative: number[], fromIndex: number, toIndex: number): number {
-  const a = cumulative[Math.max(0, fromIndex)] || 0;
-  const b = cumulative[Math.max(0, toIndex)] || 0;
-  return Math.max(0, b - a);
-}
-
 function computeCumulativeDistance(points: GeoJSONCoordinate[]): number[] {
   const cumulative: number[] = [0];
   for (let i = 1; i < points.length; i += 1) {
-    const prev = points[i - 1];
-    const curr = points[i];
-    cumulative.push(cumulative[i - 1] + haversineKm(prev, curr));
+    cumulative.push(cumulative[i - 1] + haversineKm(points[i - 1], points[i]));
   }
   return cumulative;
 }
 
-function nearestIndexedStop(indexedStops: RouteStopIndex[], pointIndex: number): RouteStopIndex {
-  if (!indexedStops.length) {
-    return {
-      stopId: 'virtual-stop',
-      name: 'Unnamed stop',
-      type: 'stop',
-      coordinate: [0, 0],
-      pointIndex,
-    };
-  }
+function segmentDistanceKm(cumulative: number[], fromIndex: number, toIndex: number): number {
+  return Math.max(0, (cumulative[toIndex] || 0) - (cumulative[fromIndex] || 0));
+}
 
+function nearestIndexedStop(indexedStops: RouteStopIndex[], pointIndex: number): RouteStopIndex {
   let best = indexedStops[0];
   let bestGap = Number.POSITIVE_INFINITY;
 
@@ -237,18 +309,18 @@ function nearestIndexedStop(indexedStops: RouteStopIndex[], pointIndex: number):
 
 function buildIndexedRoutes(routes: TransitRoute[]): IndexedRoute[] {
   return routes.map((route) => {
-    const coords = route.geometry.coordinates;
-    const cumulativeKmByPoint = computeCumulativeDistance(coords);
+    const cumulativeKmByPoint = computeCumulativeDistance(route.geometry.coordinates);
 
-    const indexedStops = route.stops.map((stop) => {
-      const nearest = nearestPointIndex(coords, stop.coordinate);
-      return {
-        ...stop,
-        pointIndex: nearest.index,
-      };
-    });
-
-    indexedStops.sort((a, b) => a.pointIndex - b.pointIndex);
+    const indexedStops = route.stops
+      .map((stop) => {
+        const nearest = nearestPointIndex(route.geometry.coordinates, stop.coordinate);
+        return {
+          ...stop,
+          pointIndex: nearest.index,
+          nodeId: `stop:${route.routeId}:${stop.stopId}`,
+        };
+      })
+      .sort((a, b) => a.pointIndex - b.pointIndex);
 
     return {
       route,
@@ -258,8 +330,8 @@ function buildIndexedRoutes(routes: TransitRoute[]): IndexedRoute[] {
   });
 }
 
-function bucketKey(latBucket: number, lngBucket: number): string {
-  return `${latBucket}:${lngBucket}`;
+function cellKey(a: number, b: number): string {
+  return `${a}:${b}`;
 }
 
 function detectIntersections(indexedRoutes: IndexedRoute[]): IntersectionNode[] {
@@ -277,12 +349,12 @@ function detectIntersections(indexedRoutes: IndexedRoute[]): IntersectionNode[] 
 
       for (let bIndex = 0; bIndex < pointsB.length; bIndex += 1) {
         const point = pointsB[bIndex];
-        const latBucket = Math.floor(point[1] / cellSizeDeg);
-        const lngBucket = Math.floor(point[0] / cellSizeDeg);
-        const key = bucketKey(latBucket, lngBucket);
-        const existing = bucket.get(key) || [];
-        existing.push({ index: bIndex, point });
-        bucket.set(key, existing);
+        const latCell = Math.floor(point[1] / cellSizeDeg);
+        const lngCell = Math.floor(point[0] / cellSizeDeg);
+        const key = cellKey(latCell, lngCell);
+        const list = bucket.get(key) || [];
+        list.push({ index: bIndex, point });
+        bucket.set(key, list);
       }
 
       let bestGap = Number.POSITIVE_INFINITY;
@@ -290,17 +362,17 @@ function detectIntersections(indexedRoutes: IndexedRoute[]): IntersectionNode[] 
       let bestBIndex = -1;
 
       for (let aIndex = 0; aIndex < pointsA.length; aIndex += 1) {
-        const aPoint = pointsA[aIndex];
-        const latBucket = Math.floor(aPoint[1] / cellSizeDeg);
-        const lngBucket = Math.floor(aPoint[0] / cellSizeDeg);
+        const pointA = pointsA[aIndex];
+        const latCell = Math.floor(pointA[1] / cellSizeDeg);
+        const lngCell = Math.floor(pointA[0] / cellSizeDeg);
 
         for (let y = -1; y <= 1; y += 1) {
           for (let x = -1; x <= 1; x += 1) {
-            const key = bucketKey(latBucket + y, lngBucket + x);
+            const key = cellKey(latCell + y, lngCell + x);
             const candidates = bucket.get(key) || [];
 
             for (const candidate of candidates) {
-              const gap = haversineKm(aPoint, candidate.point);
+              const gap = haversineKm(pointA, candidate.point);
               if (gap < bestGap) {
                 bestGap = gap;
                 bestAIndex = aIndex;
@@ -311,11 +383,7 @@ function detectIntersections(indexedRoutes: IndexedRoute[]): IntersectionNode[] 
         }
       }
 
-      if (
-        bestAIndex < 0 ||
-        bestBIndex < 0 ||
-        bestGap > INTERSECTION_MAX_GAP_KM
-      ) {
+      if (bestAIndex < 0 || bestBIndex < 0 || bestGap > INTERSECTION_MAX_GAP_KM) {
         continue;
       }
 
@@ -327,20 +395,16 @@ function detectIntersections(indexedRoutes: IndexedRoute[]): IntersectionNode[] 
         continue;
       }
 
-      const coordinate: GeoJSONCoordinate = [
-        (pointsA[bestAIndex][0] + pointsB[bestBIndex][0]) / 2,
-        (pointsA[bestAIndex][1] + pointsB[bestBIndex][1]) / 2,
-      ];
-
       const label = `${nearestStopA.name} / ${nearestStopB.name}`;
 
       intersections.push({
-        id: `ix-${routeA.route.routeId}-${bestAIndex}-${routeB.route.routeId}-${bestBIndex}`,
-        coordinate,
+        id: `ix:${routeA.route.routeId}:${bestAIndex}:${routeB.route.routeId}:${bestBIndex}`,
         routeAId: routeA.route.routeId,
         routeAIndex: bestAIndex,
         routeBId: routeB.route.routeId,
         routeBIndex: bestBIndex,
+        coordinateA: pointsA[bestAIndex],
+        coordinateB: pointsB[bestBIndex],
         nearestStopA,
         nearestStopB,
         walkMeters,
@@ -352,74 +416,98 @@ function detectIntersections(indexedRoutes: IndexedRoute[]): IntersectionNode[] 
   return intersections;
 }
 
-function buildRouteGraph(
-  indexedRoutes: IndexedRoute[],
-  intersections: IntersectionNode[]
-): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const nodes: GraphNode[] = [];
+function buildBaseGraph(indexedRoutes: IndexedRoute[], intersections: IntersectionNode[]): BaseGraph {
+  const nodes = new Map<string, GraphNode>();
   const edges: GraphEdge[] = [];
-  const nodeMap = new Map<string, GraphNode>();
 
-  function upsertNode(node: GraphNode): GraphNode {
-    const existing = nodeMap.get(node.id);
-    if (existing) {
-      return existing;
+  function addNode(node: GraphNode): void {
+    if (!nodes.has(node.id)) {
+      nodes.set(node.id, node);
     }
-    nodeMap.set(node.id, node);
-    nodes.push(node);
-    return node;
   }
 
-  const intersectionsByRoute = new Map<string, IntersectionNode[]>();
+  for (const indexedRoute of indexedRoutes) {
+    for (const stop of indexedRoute.indexedStops) {
+      addNode({
+        id: stop.nodeId,
+        kind: stop.type,
+        label: stop.name,
+        coordinate: stop.coordinate,
+        routeId: indexedRoute.route.routeId,
+        pointIndex: stop.pointIndex,
+      });
+    }
+  }
+
+  const intersectionAnchorByRoute = new Map<string, Array<{ pointIndex: number; nodeId: string; label: string }>>();
+
   for (const intersection of intersections) {
-    const first = intersectionsByRoute.get(intersection.routeAId) || [];
-    first.push(intersection);
-    intersectionsByRoute.set(intersection.routeAId, first);
+    const nodeAId = `${intersection.id}:A`;
+    const nodeBId = `${intersection.id}:B`;
 
-    const second = intersectionsByRoute.get(intersection.routeBId) || [];
-    second.push(intersection);
-    intersectionsByRoute.set(intersection.routeBId, second);
+    addNode({
+      id: nodeAId,
+      kind: 'intersection',
+      label: `${intersection.label} (Route A)`,
+      coordinate: intersection.coordinateA,
+      routeId: intersection.routeAId,
+      pointIndex: intersection.routeAIndex,
+    });
 
-    upsertNode({
-      id: intersection.id,
-      type: 'intersection',
-      coordinate: intersection.coordinate,
-      label: intersection.label,
+    addNode({
+      id: nodeBId,
+      kind: 'intersection',
+      label: `${intersection.label} (Route B)`,
+      coordinate: intersection.coordinateB,
+      routeId: intersection.routeBId,
+      pointIndex: intersection.routeBIndex,
+    });
+
+    const listA = intersectionAnchorByRoute.get(intersection.routeAId) || [];
+    listA.push({ pointIndex: intersection.routeAIndex, nodeId: nodeAId, label: intersection.label });
+    intersectionAnchorByRoute.set(intersection.routeAId, listA);
+
+    const listB = intersectionAnchorByRoute.get(intersection.routeBId) || [];
+    listB.push({ pointIndex: intersection.routeBIndex, nodeId: nodeBId, label: intersection.label });
+    intersectionAnchorByRoute.set(intersection.routeBId, listB);
+
+    const walkDistanceKm = intersection.walkMeters / 1000;
+    const walkEta = walkingMinutes(intersection.walkMeters);
+
+    edges.push({
+      id: `walk:${nodeAId}:${nodeBId}`,
+      fromNodeId: nodeAId,
+      toNodeId: nodeBId,
+      mode: 'walk',
+      distanceKm: walkDistanceKm,
+      etaMinutes: walkEta,
+      fare: 0,
+      description: `Transfer walk at ${intersection.label}`,
+    });
+
+    edges.push({
+      id: `walk:${nodeBId}:${nodeAId}`,
+      fromNodeId: nodeBId,
+      toNodeId: nodeAId,
+      mode: 'walk',
+      distanceKm: walkDistanceKm,
+      etaMinutes: walkEta,
+      fare: 0,
+      description: `Transfer walk at ${intersection.label}`,
     });
   }
 
   for (const indexedRoute of indexedRoutes) {
-    const { route, cumulativeKmByPoint, indexedStops } = indexedRoute;
+    const routeId = indexedRoute.route.routeId;
 
-    const stopNodes = indexedStops.map((stop) =>
-      upsertNode({
-        id: `stop-${route.routeId}-${stop.stopId}`,
-        type: stop.type,
-        coordinate: stop.coordinate,
-        label: stop.name,
-        routeId: route.routeId,
-        pointIndex: stop.pointIndex,
-      })
-    );
-
-    const anchors: Array<{ nodeId: string; pointIndex: number; label: string }> = stopNodes.map((n) => ({
-      nodeId: n.id,
-      pointIndex: n.pointIndex || 0,
-      label: n.label,
+    const anchors = indexedRoute.indexedStops.map((stop) => ({
+      pointIndex: stop.pointIndex,
+      nodeId: stop.nodeId,
+      label: stop.name,
     }));
 
-    const routeIntersections = intersectionsByRoute.get(route.routeId) || [];
-    for (const intersection of routeIntersections) {
-      const pointIndex =
-        intersection.routeAId === route.routeId
-          ? intersection.routeAIndex
-          : intersection.routeBIndex;
-
-      anchors.push({
-        nodeId: intersection.id,
-        pointIndex,
-        label: intersection.label,
-      });
+    for (const anchor of intersectionAnchorByRoute.get(routeId) || []) {
+      anchors.push(anchor);
     }
 
     anchors.sort((a, b) => a.pointIndex - b.pointIndex);
@@ -432,45 +520,41 @@ function buildRouteGraph(
         continue;
       }
 
-      const distanceKm = segmentDistanceKm(cumulativeKmByPoint, from.pointIndex, to.pointIndex);
+      const distanceKm = segmentDistanceKm(indexedRoute.cumulativeKmByPoint, from.pointIndex, to.pointIndex);
       if (distanceKm <= 0) {
         continue;
       }
 
+      const geometry = indexedRoute.route.geometry.coordinates.slice(from.pointIndex, to.pointIndex + 1);
+
       edges.push({
-        id: `ride-${route.routeId}-${from.pointIndex}-${to.pointIndex}`,
+        id: `ride:${routeId}:${from.pointIndex}:${to.pointIndex}`,
         fromNodeId: from.nodeId,
         toNodeId: to.nodeId,
         mode: 'ride',
+        routeId,
         distanceKm,
         etaMinutes: estimateMinutes(distanceKm),
-        fare: calculateFare(distanceKm),
-        routeId: route.routeId,
-        description: `${route.signboard}: ${from.label} to ${to.label}`,
+        fare: 0,
+        geometry,
+        description: `${indexedRoute.route.signboard}: ${from.label} to ${to.label}`,
       });
     }
   }
 
-  for (const intersection of intersections) {
-    const walkDistanceKm = intersection.walkMeters / 1000;
-    edges.push({
-      id: `walk-${intersection.id}`,
-      fromNodeId: intersection.id,
-      toNodeId: intersection.id,
-      mode: 'walk',
-      distanceKm: walkDistanceKm,
-      etaMinutes: walkingMinutes(intersection.walkMeters),
-      fare: 0,
-      description: `Walk ${intersection.walkMeters} m at ${intersection.label}`,
-    });
+  const adjacency = new Map<string, GraphEdge[]>();
+  for (const edge of edges) {
+    const list = adjacency.get(edge.fromNodeId) || [];
+    list.push(edge);
+    adjacency.set(edge.fromNodeId, list);
   }
 
-  return { nodes, edges };
+  return { nodes, edges, adjacency };
 }
 
 const INDEXED_ROUTES = buildIndexedRoutes(ROUTES);
 const INTERSECTIONS = detectIntersections(INDEXED_ROUTES);
-const ROUTE_GRAPH = buildRouteGraph(INDEXED_ROUTES, INTERSECTIONS);
+const BASE_GRAPH = buildBaseGraph(INDEXED_ROUTES, INTERSECTIONS);
 
 function buildKnownPlaces(): Array<{ name: string; coordinate: GeoJSONCoordinate }> {
   const places = new Map<string, GeoJSONCoordinate>();
@@ -588,195 +672,424 @@ export async function resolveLocation(
   return geocodeWithNominatim(query);
 }
 
-type AccessProbe = {
-  indexedRoute: IndexedRoute;
-  pointIndex: number;
-  pointDistanceKm: number;
-  nearestStop: RouteStopIndex;
+type AccessCandidate = {
+  nodeId: string;
+  routeId: string;
+  label: string;
+  coordinate: GeoJSONCoordinate;
+  distanceKm: number;
 };
 
-function findRouteAccess(point: GeoJSONCoordinate, bufferKm: number): AccessProbe[] {
-  const probes = INDEXED_ROUTES.map((indexedRoute) => {
-    const nearest = nearestPointIndex(indexedRoute.route.geometry.coordinates, point);
-    return {
-      indexedRoute,
-      pointIndex: nearest.index,
-      pointDistanceKm: nearest.distanceKm,
-      nearestStop: nearestIndexedStop(indexedRoute.indexedStops, nearest.index),
+function findAccessCandidates(point: GeoJSONCoordinate, bufferKm: number): AccessCandidate[] {
+  const candidates: AccessCandidate[] = [];
+
+  for (const indexedRoute of INDEXED_ROUTES) {
+    const byDistance = [...indexedRoute.indexedStops]
+      .map((stop) => ({
+        nodeId: stop.nodeId,
+        routeId: indexedRoute.route.routeId,
+        label: stop.name,
+        coordinate: stop.coordinate,
+        distanceKm: haversineKm(stop.coordinate, point),
+      }))
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, 3);
+
+    for (const item of byDistance) {
+      if (item.distanceKm <= bufferKm) {
+        candidates.push(item);
+      }
+    }
+  }
+
+  if (!candidates.length) {
+    const fallback = INDEXED_ROUTES.flatMap((indexedRoute) =>
+      indexedRoute.indexedStops.map((stop) => ({
+        nodeId: stop.nodeId,
+        routeId: indexedRoute.route.routeId,
+        label: stop.name,
+        coordinate: stop.coordinate,
+        distanceKm: haversineKm(stop.coordinate, point),
+      }))
+    )
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, 5);
+
+    return fallback;
+  }
+
+  return candidates.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 12);
+}
+
+function profileHeuristic(profile: Profile, distanceKm: number): number {
+  const weights = PROFILE_WEIGHTS[profile];
+  const eta = (distanceKm / AVERAGE_SPEED_KMPH) * 60;
+  const walkMeters = distanceKm * 1000;
+  const fare = estimateRideCost(distanceKm);
+  return eta * weights.eta + walkMeters * weights.walkPerMeter + fare * weights.fare;
+}
+
+function profileStepCost(
+  profile: Profile,
+  edge: GraphEdge,
+  transferInc: number,
+  fareInc: number
+): number {
+  const weights = PROFILE_WEIGHTS[profile];
+  const walkMeters = edge.mode === 'walk' ? edge.distanceKm * 1000 : 0;
+
+  return (
+    edge.etaMinutes * weights.eta +
+    walkMeters * weights.walkPerMeter +
+    transferInc * weights.transfer +
+    fareInc * weights.fare
+  );
+}
+
+function popLowest(open: AStarState[]): AStarState {
+  open.sort((a, b) => a.f - b.f);
+  return open.shift() as AStarState;
+}
+
+function buildStateKey(nodeId: string, currentRouteId: string | null): string {
+  return `${nodeId}|${currentRouteId || 'none'}`;
+}
+
+function runAStar(
+  profile: Profile,
+  graph: BaseGraph,
+  startNodeId: string,
+  endNodeId: string,
+  endCoordinate: GeoJSONCoordinate
+): GraphEdge[] | null {
+  const startKey = buildStateKey(startNodeId, null);
+
+  const startState: AStarState = {
+    key: startKey,
+    nodeId: startNodeId,
+    currentRouteId: null,
+    g: 0,
+    f: 0,
+    transfers: 0,
+    etaMinutes: 0,
+    walkMeters: 0,
+    fare: 0,
+    parentKey: null,
+    viaEdgeId: null,
+  };
+
+  const open: AStarState[] = [startState];
+  const bestG = new Map<string, number>([[startKey, 0]]);
+  const states = new Map<string, AStarState>([[startKey, startState]]);
+
+  while (open.length) {
+    const current = popLowest(open);
+
+    if (current.nodeId === endNodeId) {
+      const edgeById = new Map(graph.edges.map((edge) => [edge.id, edge]));
+      const pathEdges: GraphEdge[] = [];
+      let cursor: AStarState | undefined = current;
+
+      while (cursor && cursor.parentKey) {
+        if (cursor.viaEdgeId) {
+          const edge = edgeById.get(cursor.viaEdgeId);
+          if (edge) {
+            pathEdges.unshift(edge);
+          }
+        }
+        cursor = states.get(cursor.parentKey);
+      }
+
+      return pathEdges;
+    }
+
+    const neighbors = graph.adjacency.get(current.nodeId) || [];
+
+    for (const edge of neighbors) {
+      const nextRouteId = edge.mode === 'ride' ? edge.routeId || current.currentRouteId : current.currentRouteId;
+      const transferInc =
+        edge.mode === 'ride' &&
+        current.currentRouteId !== null &&
+        edge.routeId !== current.currentRouteId
+          ? 1
+          : 0;
+
+      const transfers = current.transfers + transferInc;
+      const etaMinutes = current.etaMinutes + edge.etaMinutes;
+      const walkMeters = current.walkMeters + Math.round(edge.mode === 'walk' ? edge.distanceKm * 1000 : 0);
+      const fareInc = edge.mode === 'ride' ? estimateRideCost(edge.distanceKm) : 0;
+      const fare = current.fare + fareInc;
+
+      const stepCost = profileStepCost(profile, edge, transferInc, fareInc);
+      const g = current.g + stepCost;
+      const nextNode = graph.nodes.get(edge.toNodeId);
+      const heuristic = nextNode
+        ? profileHeuristic(profile, haversineKm(nextNode.coordinate, endCoordinate))
+        : 0;
+
+      const f = g + heuristic;
+      const key = buildStateKey(edge.toNodeId, nextRouteId || null);
+
+      if (bestG.has(key) && (bestG.get(key) as number) <= g) {
+        continue;
+      }
+
+      bestG.set(key, g);
+
+      const nextState: AStarState = {
+        key,
+        nodeId: edge.toNodeId,
+        currentRouteId: nextRouteId || null,
+        g,
+        f,
+        transfers,
+        etaMinutes,
+        walkMeters,
+        fare,
+        parentKey: current.key,
+        viaEdgeId: edge.id,
+      };
+
+      states.set(key, nextState);
+      open.push(nextState);
+    }
+  }
+
+  return null;
+}
+
+function buildSearchGraph(
+  origin: ResolvedLocation,
+  destination: ResolvedLocation
+): { graph: BaseGraph; startNodeId: string; endNodeId: string } {
+  const stamp = `${Date.now()}:${Math.random()}`;
+  const startNodeId = `virtual:start:${stamp}`;
+  const endNodeId = `virtual:end:${stamp}`;
+
+  const nodes = new Map(BASE_GRAPH.nodes);
+  const edges = [...BASE_GRAPH.edges];
+
+  nodes.set(startNodeId, {
+    id: startNodeId,
+    kind: 'virtual',
+    label: origin.label,
+    coordinate: origin.coordinate,
+  });
+
+  nodes.set(endNodeId, {
+    id: endNodeId,
+    kind: 'virtual',
+    label: destination.label,
+    coordinate: destination.coordinate,
+  });
+
+  const originCandidates = findAccessCandidates(origin.coordinate, ORIGIN_MATCH_BUFFER_KM);
+  for (const candidate of originCandidates) {
+    edges.push({
+      id: `walk:start:${startNodeId}:${candidate.nodeId}`,
+      fromNodeId: startNodeId,
+      toNodeId: candidate.nodeId,
+      mode: 'walk',
+      distanceKm: candidate.distanceKm,
+      etaMinutes: walkingMinutes(Math.round(candidate.distanceKm * 1000)),
+      fare: 0,
+      description: `Walk from origin to ${candidate.label}`,
+    });
+  }
+
+  const destinationCandidates = findAccessCandidates(destination.coordinate, DEST_MATCH_BUFFER_KM);
+  for (const candidate of destinationCandidates) {
+    edges.push({
+      id: `walk:end:${candidate.nodeId}:${endNodeId}`,
+      fromNodeId: candidate.nodeId,
+      toNodeId: endNodeId,
+      mode: 'walk',
+      distanceKm: candidate.distanceKm,
+      etaMinutes: walkingMinutes(Math.round(candidate.distanceKm * 1000)),
+      fare: 0,
+      description: `Walk to destination from ${candidate.label}`,
+    });
+  }
+
+  const adjacency = new Map<string, GraphEdge[]>();
+  for (const edge of edges) {
+    const list = adjacency.get(edge.fromNodeId) || [];
+    list.push(edge);
+    adjacency.set(edge.fromNodeId, list);
+  }
+
+  return {
+    graph: {
+      nodes,
+      edges,
+      adjacency,
+    },
+    startNodeId,
+    endNodeId,
+  };
+}
+
+function routeById(routeId: string): TransitRoute | undefined {
+  return ROUTES.find((route) => route.routeId === routeId);
+}
+
+function mergeGeometries(geometries: GeoJSONCoordinate[][]): GeoJSONCoordinate[] {
+  const merged: GeoJSONCoordinate[] = [];
+
+  for (const geometry of geometries) {
+    for (const coord of geometry) {
+      const prev = merged[merged.length - 1];
+      if (!prev || prev[0] !== coord[0] || prev[1] !== coord[1]) {
+        merged.push(coord);
+      }
+    }
+  }
+
+  return merged;
+}
+
+function pathToOption(
+  idPrefix: string,
+  profile: Profile,
+  pathEdges: GraphEdge[],
+  graph: BaseGraph,
+  destination: ResolvedLocation
+): PlannedRouteOption | null {
+  if (!pathEdges.length) {
+    return null;
+  }
+
+  const legs: PlannedLeg[] = [];
+  const mapSegments: RouteMapSegment[] = [];
+  const mapMarkers: RouteMapMarker[] = [];
+
+  let totalWalkMeters = 0;
+  let transferDescription = '';
+  const directions: string[] = [];
+
+  const rideGroups: Array<{ routeId: string; edges: GraphEdge[] }> = [];
+
+  for (const edge of pathEdges) {
+    if (edge.mode === 'walk') {
+      totalWalkMeters += Math.round(edge.distanceKm * 1000);
+      continue;
+    }
+
+    const last = rideGroups[rideGroups.length - 1];
+    if (last && last.routeId === edge.routeId) {
+      last.edges.push(edge);
+    } else if (edge.routeId) {
+      rideGroups.push({ routeId: edge.routeId, edges: [edge] });
+    }
+  }
+
+  if (!rideGroups.length) {
+    return null;
+  }
+
+  for (let i = 0; i < rideGroups.length; i += 1) {
+    const group = rideGroups[i];
+    const firstEdge = group.edges[0];
+    const lastEdge = group.edges[group.edges.length - 1];
+
+    const route = routeById(group.routeId);
+    if (!route) {
+      continue;
+    }
+
+    const boardNode = graph.nodes.get(firstEdge.fromNodeId);
+    const alightNode = graph.nodes.get(lastEdge.toNodeId);
+    if (!boardNode || !alightNode) {
+      continue;
+    }
+
+    const distanceKm = group.edges.reduce((sum, edge) => sum + edge.distanceKm, 0);
+    const legFare = calculateFare(distanceKm);
+    const legEta = estimateMinutes(distanceKm);
+
+    const leg: PlannedLeg = {
+      routeId: route.routeId,
+      routeName: route.routeName,
+      signboard: route.signboard,
+      boardAt: boardNode.label,
+      alightAt: alightNode.label,
+      distanceKm: Number(distanceKm.toFixed(2)),
+      estimatedMinutes: legEta,
+      fare: legFare,
     };
-  })
-    .filter((probe) => probe.pointDistanceKm <= bufferKm)
-    .sort((a, b) => a.pointDistanceKm - b.pointDistanceKm);
 
-  return probes;
-}
+    legs.push(leg);
 
-function directOptionFromRoute(
-  origin: ResolvedLocation,
-  destination: ResolvedLocation,
-  originAccess: AccessProbe,
-  destinationAccess: AccessProbe
-): PlannedRouteOption | null {
-  if (originAccess.indexedRoute.route.routeId !== destinationAccess.indexedRoute.route.routeId) {
-    return null;
+    const segmentGeometry = mergeGeometries(
+      group.edges
+        .map((edge) => edge.geometry || [])
+        .filter((geometry) => geometry.length > 1)
+    );
+
+    if (segmentGeometry.length > 1) {
+      mapSegments.push({
+        routeId: route.routeId,
+        signboard: route.signboard,
+        coordinates: segmentGeometry,
+      });
+    }
+
+    mapMarkers.push({
+      id: `${idPrefix}:board:${i}`,
+      label: `Board: ${leg.boardAt}`,
+      coordinate: boardNode.coordinate,
+      kind: 'board',
+    });
+
+    mapMarkers.push({
+      id: `${idPrefix}:alight:${i}`,
+      label: i === rideGroups.length - 1 ? `Final Alight: ${leg.alightAt}` : `Alight: ${leg.alightAt}`,
+      coordinate: alightNode.coordinate,
+      kind: i === rideGroups.length - 1 ? 'alight' : 'transfer',
+    });
+
+    directions.push(`Board at ${leg.boardAt} with signboard ${leg.signboard}.`);
+    directions.push(`Alight at ${leg.alightAt} after ${leg.distanceKm.toFixed(1)} km (${leg.estimatedMinutes} min).`);
+
+    if (i < rideGroups.length - 1) {
+      const nextGroup = rideGroups[i + 1];
+      const nextBoardNode = graph.nodes.get(nextGroup.edges[0].fromNodeId);
+      if (nextBoardNode) {
+        const transferMeters = Math.round(haversineKm(alightNode.coordinate, nextBoardNode.coordinate) * 1000);
+        transferDescription = transferDescription || `${transferMeters} m walk transfer`;
+        directions.push(`Transfer near ${alightNode.label} and walk about ${transferMeters} m to ${nextBoardNode.label}.`);
+      }
+    }
   }
 
-  const indexedRoute = originAccess.indexedRoute;
-  const route = indexedRoute.route;
+  const totalDistanceKm = Number(legs.reduce((sum, leg) => sum + leg.distanceKm, 0).toFixed(2));
+  const totalFare = legs.reduce((sum, leg) => sum + leg.fare, 0);
+  const rideEta = legs.reduce((sum, leg) => sum + leg.estimatedMinutes, 0);
+  const totalEta = rideEta + walkingMinutes(totalWalkMeters);
+  const transferCount = Math.max(0, legs.length - 1);
 
-  if (destinationAccess.pointIndex <= originAccess.pointIndex) {
-    return null;
-  }
-
-  const distanceKm = segmentDistanceKm(
-    indexedRoute.cumulativeKmByPoint,
-    originAccess.pointIndex,
-    destinationAccess.pointIndex
-  );
-
-  if (distanceKm <= 0.2) {
-    return null;
-  }
-
-  const walkingMeters = Math.round((originAccess.pointDistanceKm + destinationAccess.pointDistanceKm) * 1000);
-  const leg: PlannedLeg = {
-    routeId: route.routeId,
-    routeName: route.routeName,
-    signboard: route.signboard,
-    boardAt: originAccess.nearestStop.name,
-    alightAt: destinationAccess.nearestStop.name,
-    distanceKm: Number(distanceKm.toFixed(2)),
-    estimatedMinutes: estimateMinutes(distanceKm),
-    fare: calculateFare(distanceKm),
-  };
-
-  const directions = [
-    `Board at ${originAccess.nearestStop.name} using signboard ${route.signboard}.`,
-    `Stay on board for about ${leg.distanceKm.toFixed(1)} km (${leg.estimatedMinutes} min).`,
-    `Alight at ${destinationAccess.nearestStop.name}.`,
-    `Walk to ${destination.label}.`,
-  ];
+  directions.push(`Final stop reached. Walk to ${destination.label}.`);
 
   return {
-    id: `direct-${route.routeId}-${originAccess.pointIndex}-${destinationAccess.pointIndex}`,
-    type: 'direct',
-    transferCount: 0,
-    title: route.routeName,
-    subtitle: `Direct via ${route.signboard}`,
-    totalDistanceKm: leg.distanceKm,
-    totalFare: leg.fare,
-    estimatedMinutes: leg.estimatedMinutes,
-    walkingMeters,
-    score: 0,
-    summaryTags: [],
-    legs: [leg],
-    directions,
-  };
-}
-
-function transferOptionFromIntersection(
-  origin: ResolvedLocation,
-  destination: ResolvedLocation,
-  originAccess: AccessProbe,
-  destinationAccess: AccessProbe,
-  intersection: IntersectionNode
-): PlannedRouteOption | null {
-  const firstRoute = originAccess.indexedRoute.route.routeId;
-  const secondRoute = destinationAccess.indexedRoute.route.routeId;
-
-  const matchesForward =
-    intersection.routeAId === firstRoute &&
-    intersection.routeBId === secondRoute &&
-    originAccess.pointIndex < intersection.routeAIndex &&
-    intersection.routeBIndex < destinationAccess.pointIndex;
-
-  const matchesReverse =
-    intersection.routeBId === firstRoute &&
-    intersection.routeAId === secondRoute &&
-    originAccess.pointIndex < intersection.routeBIndex &&
-    intersection.routeAIndex < destinationAccess.pointIndex;
-
-  if (!matchesForward && !matchesReverse) {
-    return null;
-  }
-
-  const firstIndex = matchesForward ? intersection.routeAIndex : intersection.routeBIndex;
-  const secondIndex = matchesForward ? intersection.routeBIndex : intersection.routeAIndex;
-
-  const firstTransferStop = matchesForward ? intersection.nearestStopA : intersection.nearestStopB;
-  const secondTransferStop = matchesForward ? intersection.nearestStopB : intersection.nearestStopA;
-
-  const leg1Distance = segmentDistanceKm(
-    originAccess.indexedRoute.cumulativeKmByPoint,
-    originAccess.pointIndex,
-    firstIndex
-  );
-  const leg2Distance = segmentDistanceKm(
-    destinationAccess.indexedRoute.cumulativeKmByPoint,
-    secondIndex,
-    destinationAccess.pointIndex
-  );
-
-  if (leg1Distance <= 0.2 || leg2Distance <= 0.2) {
-    return null;
-  }
-
-  const leg1: PlannedLeg = {
-    routeId: originAccess.indexedRoute.route.routeId,
-    routeName: originAccess.indexedRoute.route.routeName,
-    signboard: originAccess.indexedRoute.route.signboard,
-    boardAt: originAccess.nearestStop.name,
-    alightAt: firstTransferStop.name,
-    distanceKm: Number(leg1Distance.toFixed(2)),
-    estimatedMinutes: estimateMinutes(leg1Distance),
-    fare: calculateFare(leg1Distance),
-  };
-
-  const leg2: PlannedLeg = {
-    routeId: destinationAccess.indexedRoute.route.routeId,
-    routeName: destinationAccess.indexedRoute.route.routeName,
-    signboard: destinationAccess.indexedRoute.route.signboard,
-    boardAt: secondTransferStop.name,
-    alightAt: destinationAccess.nearestStop.name,
-    distanceKm: Number(leg2Distance.toFixed(2)),
-    estimatedMinutes: estimateMinutes(leg2Distance),
-    fare: calculateFare(leg2Distance),
-  };
-
-  const accessWalkMeters = Math.round((originAccess.pointDistanceKm + destinationAccess.pointDistanceKm) * 1000);
-  const transferWalkMeters = intersection.walkMeters;
-  const walkingMeters = accessWalkMeters + transferWalkMeters;
-
-  const totalDistanceKm = Number((leg1.distanceKm + leg2.distanceKm).toFixed(2));
-  const totalFare = leg1.fare + leg2.fare;
-  const totalEta =
-    leg1.estimatedMinutes +
-    leg2.estimatedMinutes +
-    walkingMinutes(transferWalkMeters);
-
-  const directions = [
-    `Board at ${leg1.boardAt} on ${leg1.signboard}.`,
-    `Alight at ${leg1.alightAt}.`,
-    `Transfer at ${intersection.label} and walk about ${transferWalkMeters} m to ${leg2.boardAt}.`,
-    `Board ${leg2.signboard}, then alight at ${leg2.alightAt}.`,
-    `Walk to ${destination.label}.`,
-  ];
-
-  return {
-    id: `transfer-${leg1.routeId}-${leg2.routeId}-${intersection.id}-${originAccess.pointIndex}-${destinationAccess.pointIndex}`,
-    type: 'transfer',
-    transferCount: 1,
-    title: `${leg1.routeName} + ${leg2.routeName}`,
-    subtitle: `Transfer at ${intersection.label}`,
+    id: `${idPrefix}:${profile}:${legs.map((leg) => leg.routeId).join('__')}`,
+    type: transferCount > 0 ? 'transfer' : 'direct',
+    transferCount,
+    title: transferCount > 0 ? legs.map((leg) => leg.routeName).join(' + ') : legs[0].routeName,
+    subtitle:
+      transferCount > 0
+        ? `Transfer route with ${transferCount} transfer${transferCount > 1 ? 's' : ''}`
+        : `Direct via ${legs[0].signboard}`,
     totalDistanceKm,
     totalFare,
     estimatedMinutes: totalEta,
-    walkingMeters,
+    walkingMeters: totalWalkMeters,
     score: 0,
     summaryTags: [],
-    legs: [leg1, leg2],
-    transferDescription: `${transferWalkMeters} m walk at ${intersection.label}`,
+    legs,
+    transferDescription: transferDescription || undefined,
     directions,
+    mapSegments,
+    mapMarkers,
   };
 }
 
@@ -798,6 +1111,7 @@ function rankOptions(options: PlannedRouteOption[]): PlannedRouteOption[] {
   const fastest = [...sorted].sort((a, b) => a.estimatedMinutes - b.estimatedMinutes)[0];
   const cheapest = [...sorted].sort((a, b) => a.totalFare - b.totalFare)[0];
   const leastWalk = [...sorted].sort((a, b) => a.walkingMeters - b.walkingMeters)[0];
+  const fewerTransfers = [...sorted].sort((a, b) => a.transferCount - b.transferCount)[0];
 
   const byId = new Map<string, PlannedRouteOption>();
   for (const option of sorted) {
@@ -824,11 +1138,16 @@ function rankOptions(options: PlannedRouteOption[]): PlannedRouteOption[] {
   }
 
   const leastWalkTag = byId.get(leastWalk.id);
-  if (leastWalkTag && !leastWalkTag.summaryTags.includes('Least Walk')) {
-    leastWalkTag.summaryTags.push('Least Walk');
+  if (leastWalkTag && !leastWalkTag.summaryTags.includes('Least Walking')) {
+    leastWalkTag.summaryTags.push('Least Walking');
   }
 
-  return sorted.map((option) => byId.get(option.id) || option);
+  const fewerTransfersTag = byId.get(fewerTransfers.id);
+  if (fewerTransfersTag && !fewerTransfersTag.summaryTags.includes('Fewer Transfers')) {
+    fewerTransfersTag.summaryTags.push('Fewer Transfers');
+  }
+
+  return sorted.map((item) => byId.get(item.id) || item);
 }
 
 export async function searchTransitRoutes(input: SearchInput): Promise<TransitSearchResult> {
@@ -849,35 +1168,35 @@ export async function searchTransitRoutes(input: SearchInput): Promise<TransitSe
     throw new Error('Destination not found. Please refine your destination input.');
   }
 
-  const originAccess = findRouteAccess(origin.coordinate, ORIGIN_MATCH_BUFFER_KM);
-  const destinationAccess = findRouteAccess(destination.coordinate, DEST_MATCH_BUFFER_KM);
+  const { graph, startNodeId, endNodeId } = buildSearchGraph(origin, destination);
+
+  const profiles: Profile[] = [
+    'recommended',
+    'fastest',
+    'cheapest',
+    'leastWalk',
+    'fewestTransfers',
+  ];
 
   const options: PlannedRouteOption[] = [];
 
-  for (const oa of originAccess.slice(0, 10)) {
-    for (const da of destinationAccess.slice(0, 10)) {
-      const direct = directOptionFromRoute(origin, destination, oa, da);
-      if (direct) {
-        options.push(direct);
-      }
+  for (const profile of profiles) {
+    const pathEdges = runAStar(profile, graph, startNodeId, endNodeId, destination.coordinate);
+    if (!pathEdges || !pathEdges.length) {
+      continue;
     }
-  }
 
-  for (const oa of originAccess.slice(0, 8)) {
-    for (const da of destinationAccess.slice(0, 8)) {
-      for (const intersection of INTERSECTIONS) {
-        const transfer = transferOptionFromIntersection(origin, destination, oa, da, intersection);
-        if (transfer) {
-          options.push(transfer);
-        }
-      }
+    const option = pathToOption(`option-${profile}`, profile, pathEdges, graph, destination);
+    if (option) {
+      options.push(option);
     }
   }
 
   const deduped = new Map<string, PlannedRouteOption>();
   for (const option of options) {
-    if (!deduped.has(option.id)) {
-      deduped.set(option.id, option);
+    const signature = `${option.legs.map((leg) => `${leg.routeId}:${leg.boardAt}:${leg.alightAt}`).join('|')}|${option.transferCount}`;
+    if (!deduped.has(signature)) {
+      deduped.set(signature, option);
     }
   }
 
@@ -892,8 +1211,8 @@ export async function searchTransitRoutes(input: SearchInput): Promise<TransitSe
 
 export function getRouteGraphStats(): { nodeCount: number; edgeCount: number; intersectionCount: number } {
   return {
-    nodeCount: ROUTE_GRAPH.nodes.length,
-    edgeCount: ROUTE_GRAPH.edges.length,
+    nodeCount: BASE_GRAPH.nodes.size,
+    edgeCount: BASE_GRAPH.edges.length,
     intersectionCount: INTERSECTIONS.length,
   };
 }

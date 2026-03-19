@@ -38,9 +38,22 @@ export function useJeepneyRoutes() {
   useEffect(() => {
     try {
       const data = transitData as any;
+      const codeCounts = new Map<string, number>();
       const parsed: JeepneyRoute[] = (data.routes || [])
         .filter((r: any) => r?.geometry?.type === 'LineString' && r?.geometry?.coordinates?.length >= 2)
         .map((r: any) => {
+          const rawCode = String(r.routeId || 'UNKNOWN-ROUTE');
+          const nextCount = (codeCounts.get(rawCode) || 0) + 1;
+          codeCounts.set(rawCode, nextCount);
+
+          const sourceSuffix = String(r.sourceFile || 'source')
+            .replace(/\.gpx$/i, '')
+            .replace(/[^a-z0-9]+/gi, '-')
+            .replace(/^-+|-+$/g, '')
+            .toUpperCase();
+
+          const code = nextCount === 1 ? rawCode : `${rawCode}__${sourceSuffix}__${nextCount}`;
+
           const coordinates: RouteCoord[] = r.geometry.coordinates.map(([lng, lat]: [number, number]) => ({
             latitude: lat,
             longitude: lng,
@@ -57,7 +70,7 @@ export function useJeepneyRoutes() {
 
           return {
             properties: {
-              code: r.routeId,
+              code,
               name: r.routeName,
               description: `${r.routeName} (${r.direction})`,
               type: r.vehicleType,
