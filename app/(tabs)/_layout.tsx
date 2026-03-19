@@ -162,11 +162,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     position: 'absolute',
     bottom: -6, // anchor bottom relative to floating wrapper
+    width: '100%',
   },
   tabContentContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     height: 70, // gives enough room to bounce up and down
+    width: 80, // lock width so text doesn't wrap
   },
   floatingButtonWrap: {
     justifyContent: 'center',
