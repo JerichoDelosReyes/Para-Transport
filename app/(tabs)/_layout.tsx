@@ -23,12 +23,32 @@ function FloatingHomeButton({ focused }: { focused: boolean }) {
 
   const bgInterpolate = scaleAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['transparent', '#E8A020']
+    outputRange: ['#E8A020', '#E8A020']
   });
 
   const iconColorInterpolate = scaleAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['rgba(0,0,0,0.35)', COLORS.navy]
+  });
+
+  const buttonSize = scaleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [42, 56]
+  });
+
+  const innerRadius = scaleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [21, 28]
+  });
+
+  const wrapSize = scaleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [42, 68]
+  });
+
+  const wrapRadius = scaleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [21, 34]
   });
 
   const wrapBgInterpolate = scaleAnim.interpolate({
@@ -38,11 +58,14 @@ function FloatingHomeButton({ focused }: { focused: boolean }) {
 
   return (
     <Animated.View style={[styles.tabContentContainer, { transform: [{ translateY }] }]}>
-      <Animated.View style={[styles.floatingButtonWrap, { backgroundColor: wrapBgInterpolate }]}>
+      <Animated.View style={[styles.floatingButtonWrap, { backgroundColor: wrapBgInterpolate, width: wrapSize, height: wrapSize, borderRadius: wrapRadius }]}>
         <Animated.View style={[
           styles.floatingButton,
           { 
             backgroundColor: bgInterpolate,
+            width: buttonSize,
+            height: buttonSize,
+            borderRadius: innerRadius,
             elevation: focused ? 5 : 0,
             shadowOpacity: focused ? 0.15 : 0,
           }
@@ -50,7 +73,7 @@ function FloatingHomeButton({ focused }: { focused: boolean }) {
           <Animated.View>
             {/* React Native Animated doesn't directly interpolate color for vector icons out of the box cleanly, 
                 so we use focused state for color generally, but the bounce animation looks great */}
-            <Ionicons name={focused ? 'home' : 'home-outline'} size={focused ? 28 : 24} color={focused ? COLORS.navy : 'rgba(0,0,0,0.35)'} />
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={focused ? 28 : 24} color={focused ? COLORS.navy : '#FFFFFF'} />
           </Animated.View>
         </Animated.View>
       </Animated.View>
@@ -145,14 +168,8 @@ const styles = StyleSheet.create({
   floatingButtonWrap: {
     justifyContent: 'center',
     alignItems: 'center',
-    width: 68,
-    height: 68,
-    borderRadius: 34,
   },
   floatingButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
