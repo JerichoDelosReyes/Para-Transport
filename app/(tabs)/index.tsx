@@ -1,16 +1,14 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Animated, PanResponder, Dimensions, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { UrlTile, Marker, Polyline, Callout } from 'react-native-maps';
+import MapView, { UrlTile, Marker, Polyline } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 import { ProfileButton } from '../../components/ProfileButton';
-
-const { height, width } = Dimensions.get('window');
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
@@ -390,15 +388,20 @@ export default function HomeScreen() {  const [isSearchActive, setIsSearchActive
 
       {/* Map Controls */}
       <View style={styles.mapControls}>
-        <TouchableOpacity style={styles.mapControlButton} onPress={handleLocateUser}>
-          <Ionicons name="location-outline" size={24} color={COLORS.navy} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.mapControlButton, { marginTop: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]} onPress={handleZoomIn}>
-          <Ionicons name="add" size={24} color={COLORS.navy} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.mapControlButton, { borderTopLeftRadius: 0, borderTopRightRadius: 0 }]} onPress={handleZoomOut}>
-          <Ionicons name="remove" size={24} color={COLORS.navy} />
-        </TouchableOpacity>
+        <BlurView intensity={35} tint="light" style={styles.locateGlassWrap}>
+          <TouchableOpacity style={styles.locateButton} onPress={handleLocateUser} activeOpacity={0.8}>
+            <Ionicons name="locate" size={21} color={COLORS.navy} />
+          </TouchableOpacity>
+        </BlurView>
+
+        <BlurView intensity={35} tint="light" style={styles.zoomGlassWrap}>
+          <TouchableOpacity style={[styles.zoomButton, styles.zoomButtonTop]} onPress={handleZoomIn} activeOpacity={0.8}>
+            <Ionicons name="add" size={20} color={COLORS.navy} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.zoomButton} onPress={handleZoomOut} activeOpacity={0.8}>
+            <Ionicons name="remove" size={20} color={COLORS.navy} />
+          </TouchableOpacity>
+        </BlurView>
       </View>
 
 
@@ -577,22 +580,52 @@ const styles = StyleSheet.create({
   mapControls: {
     position: 'absolute',
     right: 16,
-    bottom: 110,
+    bottom: 118,
     zIndex: 10,
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
-  mapControlButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+  locateGlassWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.65)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 6,
+    marginBottom: 12,
+  },
+  locateButton: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  zoomGlassWrap: {
+    width: 48,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.65)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  zoomButton: {
+    width: 48,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  zoomButtonTop: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(10,22,40,0.12)',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

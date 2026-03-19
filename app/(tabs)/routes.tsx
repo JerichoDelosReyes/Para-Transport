@@ -1,11 +1,19 @@
 import { useState, useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useTransitData } from '../../hooks/useTransitData';
 import { ROUTE_COLORS, ROUTE_LABELS } from '../../utils/parseRoutes';
+
+const FILTER_MODES = ['All', 'Jeepney', 'Bus', 'UV Express'] as const;
+const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> = {
+  All: null,
+  Jeepney: 'jeepney',
+  Bus: 'bus',
+  'UV Express': 'share_taxi',
+};
 
 const TYPE_ORDER = ['bus', 'jeepney', 'share_taxi'];
 const TYPE_ICONS: Record<string, string> = {
@@ -18,23 +26,33 @@ export default function RoutesScreen() {
   const insets = useSafeAreaInsets();
   const bottomPadding = 60 + 36 + insets.bottom + 16;
   const [activeTab, setActiveTab] = useState<'transit' | 'history'>('transit');
+  const [selectedMode, setSelectedMode] = useState<(typeof FILTER_MODES)[number]>('All');
 
   const { routes: transitRoutes, loading } = useTransitData();
+
+  const filteredRoutes = useMemo(() => {
+    const targetType = MODE_TO_ROUTE_TYPE[selectedMode];
+    if (!targetType) {
+      return transitRoutes as any[];
+    }
+
+    return (transitRoutes as any[]).filter((route) => route.type === targetType);
+  }, [transitRoutes, selectedMode]);
 
   const grouped = useMemo(() => {
     const groups: Record<string, any[]> = {};
     for (const type of TYPE_ORDER) {
       groups[type] = [];
     }
-    for (const route of (transitRoutes as any[])) {
+    for (const route of filteredRoutes) {
       if (groups[route.type]) {
         groups[route.type].push(route);
       }
     }
     return groups;
-  }, [transitRoutes]);
+  }, [filteredRoutes]);
 
-  const totalTransitCount = transitRoutes.length;
+  const totalTransitCount = filteredRoutes.length;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -67,6 +85,21 @@ export default function RoutesScreen() {
           <View>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>TRANSIT ROUTES {totalTransitCount > 0 ? `(${totalTransitCount})` : ''}</Text>
+            </View>
+
+            <View style={styles.quickActionsContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScroll}>
+                {FILTER_MODES.map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[styles.modePill, selectedMode === mode && styles.modePillActive]}
+                    onPress={() => setSelectedMode(mode)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.modePillText, selectedMode === mode && styles.modePillTextActive]}>{mode}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
 
             {loading ? (
@@ -187,6 +220,34 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: COLORS.navy,
     letterSpacing: 0.5,
+  },
+  quickActionsContainer: {
+    marginBottom: 14,
+  },
+  modeScroll: {
+    gap: 8,
+    paddingBottom: 6,
+  },
+  modePill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.12)',
+  },
+  modePillActive: {
+    backgroundColor: '#0A1628',
+    borderColor: '#0A1628',
+  },
+  modePillText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  modePillTextActive: {
+    color: '#FFFFFF',
   },
   group: {
     marginBottom: 20,

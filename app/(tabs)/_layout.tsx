@@ -212,9 +212,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="history"
+        name="routes"
         options={{
-          title: 'History',
+          title: 'Routes',
         }}
       />
     </Tabs>
