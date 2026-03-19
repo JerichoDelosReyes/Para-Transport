@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "lint": "eslint .",
+    "deploy": "firebase deploy"
+  }
+}

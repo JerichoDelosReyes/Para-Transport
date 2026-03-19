@@ -7,8 +7,6 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, Animated, StyleSheet, Easing, Image } from 'react-native';
 import { COLORS } from '../constants/theme';
-import { supabase } from '../config/supabaseClient';
-import { app as firebaseApp, auth } from '../config/firebaseConfig';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -105,30 +103,6 @@ export default function RootLayout() {
   });
 
   const [showAnimatedSplash, setShowAnimatedSplash] = useState(true);
-
-  useEffect(() => {
-    // Quick connection checks
-    const checkConnections = async () => {
-      try {
-        // Firebase Check
-        if (firebaseApp && auth) {
-          console.log('✅ Firebase initialized successfully');
-        } else {
-          console.warn('⚠️ Firebase initialization failed');
-        }
-
-        // Supabase Check
-        const { error: supaError } = await supabase.from('SomeNonExistentTable').select('*').limit(1).catch(() => ({ error: true }));
-        // As long as we get a valid response (even an error about non-existent table, it means network/URL is basically responding or configured)
-        if (supaError || !supaError) {
-           console.log('✅ Supabase initialized successfully');
-        }
-      } catch (err) {
-        console.warn('⚠️ Initialization warning:', err);
-      }
-    };
-    checkConnections();
-  }, []);
 
   useEffect(() => {
     if (loaded || error) {
