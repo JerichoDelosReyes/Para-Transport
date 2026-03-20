@@ -1,4 +1,5 @@
 import transitData from '../data/transit.routes.generated.json';
+import knownLocationCatalog from '../data/known-locations.json';
 import { routeRegistry } from './GraphBuilder';
 import { formatResponsePayload, ResponsePayload } from './PostProcessor';
 import { findOptimalPath } from './RoutingEngine';
@@ -166,6 +167,18 @@ export type SearchInput = {
   originQuery?: string;
   destinationQuery: string;
   currentLocation?: { latitude: number; longitude: number } | null;
+};
+
+type KnownLocationEntry = {
+  title: string;
+  aliases?: string[];
+  coordinate?: [number, number];
+};
+
+type KnownPlace = {
+  name: string;
+  coordinate: GeoJSONCoordinate;
+  aliases: string[];
 };
 
 const ROUTES: TransitRoute[] = ((transitData as any)?.routes ?? []) as TransitRoute[];
@@ -560,8 +573,28 @@ const INDEXED_ROUTES = buildIndexedRoutes(ROUTES);
 const INTERSECTIONS = detectIntersections(INDEXED_ROUTES);
 const BASE_GRAPH = buildBaseGraph(INDEXED_ROUTES, INTERSECTIONS);
 
-function buildKnownPlaces(): Array<{ name: string; coordinate: GeoJSONCoordinate }> {
-  const places = new Map<string, GeoJSONCoordinate>();
+function buildKnownPlaces(): KnownPlace[] {
+  const places = new Map<string, KnownPlace>();
+
+  const catalog = knownLocationCatalog as KnownLocationEntry[];
+  for (const entry of catalog) {
+    const name = normalize(entry.title || '');
+    const lon = Number(entry.coordinate?.[0]);
+    const lat = Number(entry.coordinate?.[1]);
+    if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+      continue;
+    }
+
+    const aliases = (entry.aliases || [])
+      .map((alias) => normalize(alias))
+      .filter(Boolean);
+
+    places.set(name, {
+      name,
+      coordinate: [lon, lat],
+      aliases,
+    });
+  }
 
   for (const route of ROUTES) {
     for (const stop of route.stops) {
@@ -570,13 +603,16 @@ function buildKnownPlaces(): Array<{ name: string; coordinate: GeoJSONCoordinate
       }
       const key = normalize(stop.name);
       if (!places.has(key)) {
-        places.set(key, stop.coordinate);
+        places.set(key, {
+          name: key,
+          coordinate: stop.coordinate,
+          aliases: [],
+        });
       }
     }
   }
 
-  return [...places.entries()]
-    .map(([name, coordinate]) => ({ name, coordinate }))
+  return [...places.values()]
     .sort((a, b) => a.name.localeCompare(b.name, 'en'));
 }
 
@@ -588,7 +624,9 @@ export function getTransitPlaceSuggestions(query: string, limit = 6): string[] {
     return KNOWN_PLACES.slice(0, limit).map((item) => toTitleCase(item.name));
   }
 
-  const candidates = KNOWN_PLACES.filter((item) => item.name.includes(q));
+  const candidates = KNOWN_PLACES.filter(
+    (item) => item.name.includes(q) || item.aliases.some((alias) => alias.includes(q))
+  );
   return candidates.slice(0, limit).map((item) => toTitleCase(item.name));
 }
 
@@ -653,7 +691,9 @@ export async function resolveLocation(
     };
   }
 
-  const exact = KNOWN_PLACES.find((item) => item.name === normalized);
+  const exact = KNOWN_PLACES.find(
+    (item) => item.name === normalized || item.aliases.includes(normalized)
+  );
   if (exact) {
     return {
       label: toTitleCase(exact.name),
@@ -663,7 +703,12 @@ export async function resolveLocation(
   }
 
   const includes = KNOWN_PLACES.find(
-    (item) => item.name.includes(normalized) || normalized.includes(item.name)
+    (item) =>
+      item.name.includes(normalized) ||
+      normalized.includes(item.name) ||
+      item.aliases.some(
+        (alias) => alias.includes(normalized) || normalized.includes(alias)
+      )
   );
   if (includes) {
     return {
