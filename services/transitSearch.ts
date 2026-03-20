@@ -2,7 +2,7 @@ import transitData from '../data/transit.routes.generated.json';
 import { routeRegistry } from './GraphBuilder';
 import { formatResponsePayload, ResponsePayload } from './PostProcessor';
 import { findOptimalPath } from './RoutingEngine';
-import { ensureRoutingRuntimeInitialized } from './RoutingRuntime';
+import { ensureRoutingRuntimeInitialized, getRoutingRuntimeStatus, RoutingRuntimeMode } from './RoutingRuntime';
 
 export type GeoJSONCoordinate = [number, number];
 
@@ -160,6 +160,10 @@ export type TransitSearchResult = {
   origin: ResolvedLocation;
   destination: ResolvedLocation;
   options: PlannedRouteOption[];
+  engine: {
+    mode: RoutingRuntimeMode;
+    fallbackReason?: string;
+  };
 };
 
 export type SearchInput = {
@@ -1288,6 +1292,27 @@ async function searchTransitRoutesLegacy(input: SearchInput): Promise<TransitSea
 
   const { graph, startNodeId, endNodeId } = buildSearchGraph(origin, destination);
 
+  const ranked = buildLegacyRankedOptions(origin, destination, graph, startNodeId, endNodeId);
+
+  return {
+    origin,
+    destination,
+    options: ranked,
+    engine: {
+      mode: 'FALLBACK',
+      fallbackReason: 'Legacy transitSearch route builder',
+    },
+  };
+}
+
+function buildLegacyRankedOptions(
+  origin: ResolvedLocation,
+  destination: ResolvedLocation,
+  graph: BaseGraph,
+  startNodeId: string,
+  endNodeId: string
+): PlannedRouteOption[] {
+
   const profiles: Profile[] = [
     'recommended',
     'fastest',
@@ -1318,13 +1343,7 @@ async function searchTransitRoutesLegacy(input: SearchInput): Promise<TransitSea
     }
   }
 
-  const ranked = rankOptions([...deduped.values()]).slice(0, 8);
-
-  return {
-    origin,
-    destination,
-    options: ranked,
-  };
+  return rankOptions([...deduped.values()]).slice(0, 8);
 }
 
 export async function searchTransitRoutes(input: SearchInput): Promise<TransitSearchResult> {
@@ -1359,14 +1378,47 @@ export async function searchTransitRoutes(input: SearchInput): Promise<TransitSe
       'Fastest_ETA'
     );
 
+    const graphOption = mapPayloadToOption(payload);
+    const { graph, startNodeId, endNodeId } = buildSearchGraph(origin, destination);
+    const legacyRanked = buildLegacyRankedOptions(origin, destination, graph, startNodeId, endNodeId);
+
+    const mergedBySignature = new Map<string, PlannedRouteOption>();
+    const graphSignature = `${graphOption.legs
+      .map((leg) => `${leg.routeId}:${leg.boardAt}:${leg.alightAt}`)
+      .join('|')}|${graphOption.transferCount}`;
+
+    graphOption.summaryTags = [...new Set(['Graph Engine', ...graphOption.summaryTags])];
+    mergedBySignature.set(graphSignature, graphOption);
+
+    for (const option of legacyRanked) {
+      const signature = `${option.legs.map((leg) => `${leg.routeId}:${leg.boardAt}:${leg.alightAt}`).join('|')}|${option.transferCount}`;
+      if (!mergedBySignature.has(signature)) {
+        mergedBySignature.set(signature, option);
+      }
+    }
+
+    const mergedRanked = rankOptions([...mergedBySignature.values()]).slice(0, 8);
+    const status = getRoutingRuntimeStatus();
+
     return {
       origin,
       destination,
-      options: [mapPayloadToOption(payload)],
+      options: mergedRanked,
+      engine: {
+        mode: status.initialized ? 'GRAPH' : 'FALLBACK',
+      },
     };
   } catch (error) {
+    const reason = error instanceof Error ? error.message : 'Unknown graph runtime error';
     console.warn('[transitSearch] Graph pipeline failed; using legacy fallback', error);
-    return searchTransitRoutesLegacy(input);
+    const fallback = await searchTransitRoutesLegacy(input);
+    return {
+      ...fallback,
+      engine: {
+        mode: 'FALLBACK',
+        fallbackReason: reason,
+      },
+    };
   }
 }
 

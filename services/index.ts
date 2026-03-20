@@ -15,4 +15,4 @@ export {
 	calculateTotalFare,
 } from './FareCalculator';
 export { spliceTransitLeg, formatResponsePayload } from './PostProcessor';
-export { ensureRoutingRuntimeInitialized } from './RoutingRuntime';
+export { ensureRoutingRuntimeInitialized, getRoutingRuntimeStatus } from './RoutingRuntime';

@@ -1,4 +1,5 @@
-CREATE OR REPLACE VIEW network_transit_geo AS
+CREATE OR REPLACE VIEW network_transit_geo
+WITH (security_invoker = true) AS
 SELECT
   route_id,
   route_name,
@@ -12,7 +13,8 @@ SELECT
   ST_AsGeoJSON(geometry)::jsonb AS geometry
 FROM network_transit;
 
-CREATE OR REPLACE VIEW transfer_nodes_geo AS
+CREATE OR REPLACE VIEW transfer_nodes_geo
+WITH (security_invoker = true) AS
 SELECT
   node_id,
   intersecting_routes,

@@ -14,6 +14,7 @@ import type {
   PlannedRouteOption,
   RouteMapMarker,
   RouteMapSegment,
+  TransitSearchResult,
 } from '../../services/transitSearch';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 
@@ -28,6 +29,7 @@ export default function PlannerScreen() {
   const [results, setResults] = useState<PlannedRouteOption[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resolvedLocations, setResolvedLocations] = useState<{ origin: string; destination: string } | null>(null);
+  const [engineMeta, setEngineMeta] = useState<TransitSearchResult['engine'] | null>(null);
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isDirectionsExpanded, setIsDirectionsExpanded] = useState(true);
 
@@ -140,10 +142,12 @@ export default function PlannerScreen() {
         origin: searchResult.origin.label,
         destination: searchResult.destination.label,
       });
+      setEngineMeta(searchResult.engine);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Route search failed.';
       setResults([]);
       setResolvedLocations(null);
+      setEngineMeta(null);
       setErrorMessage(message);
     } finally {
       setIsLoading(false);
@@ -269,6 +273,17 @@ export default function PlannerScreen() {
               <Text style={styles.resolvedLabel}>
                 {resolvedLocations.origin} to {resolvedLocations.destination}
               </Text>
+            )}
+
+            {engineMeta && (
+              <View style={styles.engineBadgeRow}>
+                <Text style={[styles.engineBadge, engineMeta.mode === 'GRAPH' ? styles.engineBadgeGraph : styles.engineBadgeFallback]}>
+                  {engineMeta.mode === 'GRAPH' ? 'Graph Engine' : 'Fallback Engine'}
+                </Text>
+                {engineMeta.fallbackReason ? (
+                  <Text style={styles.engineMetaText}>{engineMeta.fallbackReason}</Text>
+                ) : null}
+              </View>
             )}
 
             {isLoading ? (
@@ -455,6 +470,33 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     color: COLORS.textMuted,
     fontSize: TYPOGRAPHY.label,
+  },
+  engineBadgeRow: {
+    marginTop: 4,
+    marginBottom: 4,
+    gap: 6,
+  },
+  engineBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  engineBadgeGraph: {
+    color: '#0D5D2F',
+    backgroundColor: '#D9F7E6',
+  },
+  engineBadgeFallback: {
+    color: '#7A4800',
+    backgroundColor: '#FFEACC',
+  },
+  engineMetaText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: COLORS.textMuted,
   },
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: '#fff', borderRadius: 10, maxHeight: '86%' },
