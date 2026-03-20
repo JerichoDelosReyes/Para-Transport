@@ -12,15 +12,17 @@
 
 // Color coding per route type
 export const ROUTE_COLORS = {
-  bus: '#1E88E5',       // blue
+  bus: '#E53935',       // red
   jeepney: '#F9A825',   // yellow
-  share_taxi: '#E53935', // red
+  share_taxi: '#43A047', // green
+  ferry: '#1E88E5',     // blue
 };
 
 export const ROUTE_LABELS = {
   bus: 'Bus',
   jeepney: 'Jeepney',
   share_taxi: 'UV Express',
+  ferry: 'Ferry',
 };
 
 // Clip bounds: whole Cavite province
@@ -31,8 +33,8 @@ const CLIP_BOUNDS = {
   maxLon: 121.10,
 };
 
-// Simplification tolerance in degrees (~11m at Cavite's latitude)
-const SIMPLIFY_TOLERANCE = 0.0001;
+// Simplification tolerance in degrees (~50m at Cavite's latitude)
+const SIMPLIFY_TOLERANCE = 0.0005;
 
 // Minimum number of points a clipped route must have to be worth showing
 const MIN_CLIPPED_POINTS = 3;
@@ -97,37 +99,29 @@ export function parseRouteElements(elements) {
     if (el.type !== 'relation') continue;
 
     const tags = el.tags || {};
-    let routeType = tags.route;
+    const routeType = tags.route;
     if (!routeType || !ROUTE_COLORS[routeType]) continue;
-
-    // Reclassify: In the Philippines, jeepneys are often tagged as route=bus
-    // but have network containing "PUJ" or name containing "Jeepney"/"PUJ"
-    if (routeType === 'bus') {
-      const name = (tags.name || '').toLowerCase();
-      const network = (tags.network || '').toLowerCase();
-      if (network.includes('puj') || name.includes('jeepney') || name.includes('puj')) {
-        routeType = 'jeepney';
-      }
-    }
 
     const members = el.members || [];
 
-    // Build connected segments from way members (keeps gaps separate)
-    const waySegments = buildSegmentsFromGeomMembers(members);
-    if (waySegments.length === 0) continue;
+    // Build full polyline from way members
+    const fullCoords = buildPolylineFromGeomMembers(members);
+    if (fullCoords.length < 2) continue;
 
-    // Clip each segment to bounds, then simplify individually
-    const segments = [];
-    for (const seg of waySegments) {
-      const clipped = clipPolylineToBounds(seg);
-      for (const c of clipped) {
-        if (c.length >= MIN_CLIPPED_POINTS) {
-          segments.push(simplifyPolyline(c, SIMPLIFY_TOLERANCE));
-        }
-      }
+    // Clip to target area — may produce multiple disconnected segments
+    const clippedSegments = clipPolylineToBounds(fullCoords);
+
+    // Flatten clipped segments into one array (with small gaps accepted)
+    let coordinates = [];
+    for (const seg of clippedSegments) {
+      coordinates.push(...seg);
     }
 
-    if (segments.length === 0) continue;
+    // Skip routes with too little geometry inside the area
+    if (coordinates.length < MIN_CLIPPED_POINTS) continue;
+
+    // Simplify for rendering performance
+    coordinates = simplifyPolyline(coordinates, SIMPLIFY_TOLERANCE);
 
     // Extract stop nodes from members, clipped to bounds
     const routeStops = [];
@@ -154,7 +148,7 @@ export function parseRouteElements(elements) {
       network: tags.network || '',
       color: ROUTE_COLORS[routeType],
       label: ROUTE_LABELS[routeType],
-      segments,
+      coordinates,
       stops: routeStops,
     });
   }
@@ -192,16 +186,12 @@ export function parseStopElements(elements) {
  * Build a polyline from relation members that carry inline geometry
  * (the `out geom` format gives each way member a `geometry` array).
  */
-/**
- * Builds connected polyline segments from way members.
- * Chains consecutive ways that share endpoints into continuous segments.
- * When a gap is found, starts a NEW segment instead of drawing a straight line.
- */
-function buildSegmentsFromGeomMembers(members) {
-  const rawParts = [];
+function buildPolylineFromGeomMembers(members) {
+  const segments = [];
 
   for (const member of members) {
     if (member.type !== 'way') continue;
+    // Only use ways that are part of the route path
     const role = member.role || '';
     if (role && role !== 'forward' && role !== 'backward' && role !== '') continue;
 
@@ -215,36 +205,34 @@ function buildSegmentsFromGeomMembers(members) {
       }
     }
     if (coords.length >= 2) {
-      rawParts.push(coords);
+      segments.push(coords);
     }
   }
 
-  if (rawParts.length === 0) return [];
+  if (segments.length === 0) return [];
 
-  // Chain consecutive ways that connect; break into new segment on gaps
-  const result = [];
-  let current = [...rawParts[0]];
-
-  for (let i = 1; i < rawParts.length; i++) {
-    const seg = rawParts[i];
-    const lastPt = current[current.length - 1];
+  // Chain segments end-to-end
+  const polyline = [...segments[0]];
+  for (let i = 1; i < segments.length; i++) {
+    const seg = segments[i];
+    const lastPt = polyline[polyline.length - 1];
     const segFirst = seg[0];
     const segLast = seg[seg.length - 1];
 
     if (coordsNear(lastPt, segFirst)) {
-      current.push(...seg.slice(1));
+      // Connects forward — skip duplicate junction point
+      polyline.push(...seg.slice(1));
     } else if (coordsNear(lastPt, segLast)) {
+      // Connects reversed
       const reversed = [...seg].reverse();
-      current.push(...reversed.slice(1));
+      polyline.push(...reversed.slice(1));
     } else {
-      // Gap — save current segment, start a new one
-      if (current.length >= 2) result.push(current);
-      current = [...seg];
+      // Gap in data — just append
+      polyline.push(...seg);
     }
   }
-  if (current.length >= 2) result.push(current);
 
-  return result;
+  return polyline;
 }
 
 /**
