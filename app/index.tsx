@@ -1,4 +1,4 @@
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, PanResponder } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -93,7 +93,7 @@ export default function WelcomeScreen() {
   }, [hasHydrated, sessionMode, router]);
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
 
       <View style={styles.canvas}>
@@ -214,7 +214,7 @@ export default function WelcomeScreen() {
         </View>
       </Modal>
 
-    </SafeAreaView>
+    </View>
   );
 }
 
