@@ -56,7 +56,7 @@ export const graphStore = {
 
 let supabaseClientSingleton: SupabaseClient | null = null;
 
-function getSupabaseClient(): SupabaseClient {
+export function getSupabaseClient(): SupabaseClient {
   if (supabaseClientSingleton) {
     return supabaseClientSingleton;
   }
@@ -106,6 +106,15 @@ function normalizeGeoJSONPayload(geometry: unknown): string {
   if (
     geometry &&
     typeof geometry === 'object' &&
+    'type' in geometry &&
+    'coordinates' in geometry
+  ) {
+    return JSON.stringify(geometry);
+  }
+
+  if (
+    geometry &&
+    typeof geometry === 'object' &&
     'geometry' in geometry &&
     typeof (geometry as { geometry?: unknown }).geometry === 'string'
   ) {
@@ -113,6 +122,56 @@ function normalizeGeoJSONPayload(geometry: unknown): string {
   }
 
   throw new Error('Unsupported geometry payload from Supabase.');
+}
+
+async function fetchNetworkTransitRows(supabase: SupabaseClient): Promise<NetworkTransitRow[]> {
+  const viewResult = await supabase
+    .from('network_transit_geo')
+    .select('route_id, route_name, vehicle_type, base_speed_kmh, headway_mins, geometry')
+    .eq('is_active', true);
+
+  if (!viewResult.error && viewResult.data) {
+    return viewResult.data as NetworkTransitRow[];
+  }
+
+  if (viewResult.error) {
+    console.warn('[GraphBuilder] network_transit_geo unavailable, falling back to direct ST_AsGeoJSON select', viewResult.error.message);
+  }
+
+  const fallbackResult = await supabase
+    .from('network_transit')
+    .select('route_id, route_name, vehicle_type, base_speed_kmh, headway_mins, geometry:ST_AsGeoJSON(geometry)')
+    .eq('is_active', true);
+
+  if (fallbackResult.error) {
+    throw new Error(`network_transit query failed: ${fallbackResult.error.message}`);
+  }
+
+  return (fallbackResult.data ?? []) as NetworkTransitRow[];
+}
+
+async function fetchTransferRows(supabase: SupabaseClient): Promise<TransferNodeRow[]> {
+  const viewResult = await supabase
+    .from('transfer_nodes_geo')
+    .select('node_id, intersecting_routes, transfer_type, geometry');
+
+  if (!viewResult.error && viewResult.data) {
+    return viewResult.data as TransferNodeRow[];
+  }
+
+  if (viewResult.error) {
+    console.warn('[GraphBuilder] transfer_nodes_geo unavailable, falling back to direct ST_AsGeoJSON select', viewResult.error.message);
+  }
+
+  const fallbackResult = await supabase
+    .from('transfer_nodes')
+    .select('node_id, intersecting_routes, transfer_type, geometry:ST_AsGeoJSON(geometry)');
+
+  if (fallbackResult.error) {
+    throw new Error(`transfer_nodes query failed: ${fallbackResult.error.message}`);
+  }
+
+  return (fallbackResult.data ?? []) as TransferNodeRow[];
 }
 
 function parseLineStringGeoJSON(geometry: unknown): GraphCoordinate[] {
@@ -166,34 +225,10 @@ export async function initializeGraph(): Promise<typeof graphStore> {
   try {
     const supabase = getSupabaseClient();
 
-    const networkFetch = supabase
-      .from('network_transit')
-      .select(
-        'route_id, route_name, vehicle_type, base_speed_kmh, headway_mins, geometry:ST_AsGeoJSON(geometry)'
-      )
-      .eq('is_active', true);
-
-    const transferFetch = supabase
-      .from('transfer_nodes')
-      .select('node_id, intersecting_routes, transfer_type, geometry:ST_AsGeoJSON(geometry)');
-
-    const [networkResult, transferResult] = await Promise.all([
-      withTimeout(() => networkFetch, 15000, 'network_transit fetch'),
-      withTimeout(() => transferFetch, 15000, 'transfer_nodes fetch'),
+    const [networkRows, transferRows] = await Promise.all([
+      withTimeout(() => fetchNetworkTransitRows(supabase), 15000, 'network_transit fetch'),
+      withTimeout(() => fetchTransferRows(supabase), 15000, 'transfer_nodes fetch'),
     ]);
-
-    if (networkResult.error) {
-      console.error('[GraphBuilder] Failed to fetch active network_transit', networkResult.error);
-      throw new Error(`network_transit query failed: ${networkResult.error.message}`);
-    }
-
-    if (transferResult.error) {
-      console.error('[GraphBuilder] Failed to fetch transfer_nodes', transferResult.error);
-      throw new Error(`transfer_nodes query failed: ${transferResult.error.message}`);
-    }
-
-    const networkRows = (networkResult.data ?? []) as NetworkTransitRow[];
-    const transferRows = (transferResult.data ?? []) as TransferNodeRow[];
 
     if (networkRows.length === 0) {
       console.error('[GraphBuilder] Empty active network_transit result; graph initialization aborted');

@@ -1,4 +1,8 @@
 import transitData from '../data/transit.routes.generated.json';
+import { routeRegistry } from './GraphBuilder';
+import { formatResponsePayload, ResponsePayload } from './PostProcessor';
+import { findOptimalPath } from './RoutingEngine';
+import { ensureRoutingRuntimeInitialized } from './RoutingRuntime';
 
 export type GeoJSONCoordinate = [number, number];
 
@@ -1150,7 +1154,121 @@ function rankOptions(options: PlannedRouteOption[]): PlannedRouteOption[] {
   return sorted.map((item) => byId.get(item.id) || item);
 }
 
-export async function searchTransitRoutes(input: SearchInput): Promise<TransitSearchResult> {
+function distanceFromCoordinates(coordinates: GeoJSONCoordinate[]): number {
+  if (coordinates.length < 2) {
+    return 0;
+  }
+
+  let total = 0;
+  for (let i = 1; i < coordinates.length; i += 1) {
+    total += haversineKm(coordinates[i - 1], coordinates[i]);
+  }
+
+  return total;
+}
+
+function mapPayloadToOption(payload: ResponsePayload): PlannedRouteOption {
+  const transitSteps = payload.path_array.filter((step) => step.type === 'TRANSIT');
+  const walkSteps = payload.path_array.filter((step) => step.type === 'WALK');
+
+  const legs: PlannedLeg[] = transitSteps.map((step, index) => {
+    const route = routeRegistry.get(step.route_id);
+    const start = step.geometry.coordinates[0] || [0, 0];
+    const end = step.geometry.coordinates[step.geometry.coordinates.length - 1] || start;
+
+    return {
+      routeId: step.route_id,
+      routeName: route?.route_name || step.route_id,
+      signboard: route?.route_name || step.instruction,
+      boardAt: `${start[1].toFixed(5)}, ${start[0].toFixed(5)}`,
+      alightAt: `${end[1].toFixed(5)}, ${end[0].toFixed(5)}`,
+      distanceKm: step.distance_km,
+      estimatedMinutes: step.duration_mins,
+      fare: step.fare_cost,
+    };
+  });
+
+  const mapSegments: RouteMapSegment[] = transitSteps.map((step, index) => ({
+    routeId: `${step.route_id}:${index}`,
+    signboard: step.instruction,
+    coordinates: step.geometry.coordinates,
+  }));
+
+  const mapMarkers: RouteMapMarker[] = [];
+  if (transitSteps.length > 0) {
+    const first = transitSteps[0];
+    const boardCoord = first.geometry.coordinates[0];
+    if (boardCoord) {
+      mapMarkers.push({
+        id: 'board-0',
+        label: 'Board here',
+        coordinate: boardCoord,
+        kind: 'board',
+      });
+    }
+
+    for (let i = 0; i < transitSteps.length - 1; i += 1) {
+      const current = transitSteps[i];
+      const transferCoord = current.geometry.coordinates[current.geometry.coordinates.length - 1];
+      if (transferCoord) {
+        mapMarkers.push({
+          id: `transfer-${i}`,
+          label: 'Transfer point',
+          coordinate: transferCoord,
+          kind: 'transfer',
+        });
+      }
+    }
+
+    const last = transitSteps[transitSteps.length - 1];
+    const alightCoord = last.geometry.coordinates[last.geometry.coordinates.length - 1];
+    if (alightCoord) {
+      mapMarkers.push({
+        id: 'alight-final',
+        label: 'Alight here',
+        coordinate: alightCoord,
+        kind: 'alight',
+      });
+    }
+  }
+
+  const walkingMeters = Math.round(
+    walkSteps.reduce((sum, step) => sum + distanceFromCoordinates(step.geometry.coordinates), 0) * 1000
+  );
+
+  const totalDistanceKm = Number(
+    (
+      transitSteps.reduce((sum, step) => sum + step.distance_km, 0) +
+      walkSteps.reduce((sum, step) => sum + distanceFromCoordinates(step.geometry.coordinates), 0)
+    ).toFixed(2)
+  );
+
+  const transferCount = payload.summary.total_transfers;
+  const type: PlannedRouteOption['type'] = transferCount > 0 ? 'transfer' : 'direct';
+
+  const subtitle = `${totalDistanceKm.toFixed(1)} km • ${transferCount} transfer${transferCount === 1 ? '' : 's'} • ${walkingMeters} m walk`;
+
+  return {
+    id: payload.route_id,
+    type,
+    transferCount,
+    title: transferCount > 0 ? 'Optimized Multi-Leg Route' : 'Optimized Direct Route',
+    subtitle,
+    totalDistanceKm,
+    totalFare: payload.summary.total_fare,
+    estimatedMinutes: payload.summary.total_time_mins,
+    walkingMeters,
+    score: transferCount * 10000 + payload.summary.total_time_mins * 100 + walkingMeters,
+    summaryTags: ['Recommended', 'Fastest'],
+    legs,
+    transferDescription: transferCount > 0 ? `${transferCount} transfer point(s)` : undefined,
+    directions: payload.path_array.map((step) => step.instruction),
+    mapSegments,
+    mapMarkers,
+  };
+}
+
+async function searchTransitRoutesLegacy(input: SearchInput): Promise<TransitSearchResult> {
   const originQuery = (input.originQuery || '').trim();
   const destinationQuery = input.destinationQuery.trim();
 
@@ -1207,6 +1325,49 @@ export async function searchTransitRoutes(input: SearchInput): Promise<TransitSe
     destination,
     options: ranked,
   };
+}
+
+export async function searchTransitRoutes(input: SearchInput): Promise<TransitSearchResult> {
+  const originQuery = (input.originQuery || '').trim();
+  const destinationQuery = input.destinationQuery.trim();
+
+  if (!destinationQuery) {
+    throw new Error('Destination is required.');
+  }
+
+  const origin = await resolveLocation(originQuery || 'current location', input.currentLocation);
+  if (!origin) {
+    throw new Error('Origin is required. Enter a place or allow current location.');
+  }
+
+  const destination = await resolveLocation(destinationQuery, input.currentLocation);
+  if (!destination) {
+    throw new Error('Destination not found. Please refine your destination input.');
+  }
+
+  try {
+    await ensureRoutingRuntimeInitialized();
+
+    const rawPath = findOptimalPath(origin.coordinate, destination.coordinate);
+    const payload = formatResponsePayload(
+      {
+        origin: origin.coordinate,
+        destination: destination.coordinate,
+        path_history: rawPath,
+        route_id: `graph-${Date.now()}`,
+      },
+      'Fastest_ETA'
+    );
+
+    return {
+      origin,
+      destination,
+      options: [mapPayloadToOption(payload)],
+    };
+  } catch (error) {
+    console.warn('[transitSearch] Graph pipeline failed; using legacy fallback', error);
+    return searchTransitRoutesLegacy(input);
+  }
 }
 
 export function getRouteGraphStats(): { nodeCount: number; edgeCount: number; intersectionCount: number } {
