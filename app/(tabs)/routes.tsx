@@ -7,7 +7,7 @@ import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useTransitData } from '../../hooks/useTransitData';
 import { useStore } from '../../store/useStore';
-import { ROUTE_COLORS, ROUTE_LABELS } from '../../utils/parseRoutes';
+import { ROUTE_COLORS, ROUTE_LABELS } from '../../services/parseRoutes';
 
 const FILTER_MODES = ['All', 'Jeepney', 'Bus', 'UV Express'] as const;
 const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> = {
