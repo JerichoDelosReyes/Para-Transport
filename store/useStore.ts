@@ -7,6 +7,8 @@ interface User {
   streak_count: number;
   total_km: number;
   total_fare_spent: number;
+  saved_routes?: string[];
+  badges?: string[];
 }
 
 interface StoreState {
@@ -21,12 +23,14 @@ interface StoreState {
 
 export const useStore = create<StoreState>((set) => ({
   user: {
-    name: "Juan",
-    email: "juan@para.ph",
-    points: 120,
-    streak_count: 3,
-    total_km: 24.5,
-    total_fare_spent: 580,
+    name: "Komyuter",
+    email: "guest@para.ph",
+    points: 0,
+    streak_count: 0,
+    total_km: 0,
+    total_fare_spent: 0,
+    saved_routes: [],
+    badges: [],
   },
   insightDismissed: false,
   selectedTransitRoute: null,

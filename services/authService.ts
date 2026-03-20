@@ -54,12 +54,15 @@ export function passwordValidationMessage(password: string): string {
   return '';
 }
 
-export function mapLoginError(code?: string): string {
-  return 'Login failed. Please try again.';
+export function mapLoginError(error?: string): string {
+  if (error && error.toLowerCase().includes('credential')) return 'Invalid email or password.';
+  if (error && error.toLowerCase().includes('email')) return 'Please check your email address.';
+  return error || 'Login failed. Please try again.';
 }
 
-export function mapRegisterError(code?: string): string {
-  return 'Account creation failed. Please try again.';
+export function mapRegisterError(error?: string): string {
+  if (error && error.toLowerCase().includes('already registered')) return 'This email is already registered.';
+  return error || 'Account creation failed. Please try again.';
 }
 
 export async function loginWithEmailPassword(email: string, password: string) {
@@ -84,6 +87,16 @@ export async function registerWithEmailPassword(params: {
         display_name: params.displayName,
       }
     }
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function verifyEmailOtp(email: string, token: string) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'signup',
   });
   if (error) throw error;
   return data;

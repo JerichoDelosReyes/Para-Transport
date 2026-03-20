@@ -200,8 +200,8 @@ export default function WelcomeScreen() {
                   points: 0,
                   streak_count: 0,
                   total_km: 0,
-                  total_fare_spent: 0,
-                });
+                  total_fare_spent: 0,                  saved_routes: [],
+                  badges: [],                });
                 setShowAuthPopup(false);
                 router.replace('/(tabs)');
               }}

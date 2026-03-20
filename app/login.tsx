@@ -8,6 +8,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -15,6 +17,14 @@ import { useRouter } from 'expo-router';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import {
+  loginWithEmailPassword,
+  verifyEmailOtp,
+  isEmailValid,
+  mapLoginError
+} from '../services/authService';
+import { useStore } from '../store/useStore';
+import OtpModal from '../components/OtpModal';
 
 type HeaderDoodle = {
   id: number;
@@ -37,9 +47,85 @@ const HEADER_DOODLES: HeaderDoodle[] = [
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const setUser = useStore((state) => state.setUser);
+  
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  
+  const [isOtpPending, setIsOtpPending] = useState(false);
+  const [otp, setOtp] = useState('');
+
+  const handleLogin = async () => {
+    setErrorMsg('');
+    if (!email.trim() || !password) {
+      setErrorMsg('Please enter both email and password.');
+      return;
+    }
+    if (!isEmailValid(email)) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const data = await loginWithEmailPassword(email, password);
+      // Construct a unified user to save in store
+      setUser({
+        name: data?.user?.user_metadata?.display_name || 'Commuter',
+        email: data?.user?.email || email,
+        points: 0,
+        streak_count: 0,
+        total_km: 0,
+        total_fare_spent: 0,
+        saved_routes: [],
+        badges: []
+      });
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      if (err.message && err.message.toLowerCase().includes('email not confirmed')) {
+         setIsOtpPending(true);
+         setErrorMsg('');
+      } else {
+         setErrorMsg(mapLoginError(err.code || err.message));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    setErrorMsg('');
+    if (!otp.trim()) {
+      setErrorMsg('Please enter the verification code.');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const data = await verifyEmailOtp(email, otp);
+      
+      setUser({
+        name: data?.user?.user_metadata?.display_name || 'Commuter',
+        email: data?.user?.email || email,
+        points: 0,
+        streak_count: 0,
+        total_km: 0,
+        total_fare_spent: 0,
+        saved_routes: [],
+        badges: []
+      });
+      setIsOtpPending(false);
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      const msg = (err.message || '').includes('expired or is invalid') ? 'Invalid OTP' : err.message;
+      setErrorMsg(msg || 'Verification failed. Please check the code.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <View style={styles.screen}>
@@ -111,8 +197,19 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.primaryButton} onPress={() => router.replace('/(tabs)')} activeOpacity={0.9}>
-              <Text style={styles.primaryButtonText}>LOG IN</Text>
+            {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+
+            <TouchableOpacity 
+              style={[styles.primaryButton, isLoading && styles.disabledButton]} 
+              onPress={handleLogin} 
+              activeOpacity={0.9}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>LOG IN</Text>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.linkWrap} onPress={() => router.push('/register')} activeOpacity={0.8}>
@@ -122,6 +219,19 @@ export default function LoginScreen() {
             <Text style={styles.footerText}>Privacy Policy. Terms of Service</Text>
           </ScrollView>
         </View>
+
+        {isOtpPending && (
+          <OtpModal 
+            visible={isOtpPending}
+            email={email}
+            otp={otp}
+            isLoading={isLoading}
+            errorMsg={errorMsg}
+            onOtpChange={setOtp}
+            onVerify={handleVerifyOtp}
+            onClose={() => setIsOtpPending(false)}
+          />
+        )}
       </KeyboardAvoidingView>
     </View>
   );
@@ -192,6 +302,13 @@ const styles = StyleSheet.create({
   labelTop: {
     marginTop: 12,
   },
+  errorText: {
+    fontFamily: 'Inter',
+    color: '#ff4d4d',
+    fontSize: 13,
+    marginTop: 8,
+    marginBottom: -8,
+  },
   input: {
     height: 52,
     borderRadius: 12,
@@ -220,7 +337,7 @@ const styles = StyleSheet.create({
     color: COLORS.navy,
   },
   primaryButton: {
-    marginTop: 16,
+    marginTop: 24,
     height: 56,
     borderRadius: RADIUS.pill,
     backgroundColor: COLORS.primary,
@@ -232,6 +349,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 10,
     elevation: 6,
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
   primaryButtonText: {
     fontFamily: 'Inter',

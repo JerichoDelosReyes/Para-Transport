@@ -65,7 +65,7 @@ export default function HomeScreen() {
   const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
   const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
   const mapRef = useRef<MapView | null>(null);
-  const displayName = (user?.name || 'Komyuter').toUpperCase();
+  const displayName = (user?.name || 'Komyuter').split(' ')[0].toUpperCase();
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
