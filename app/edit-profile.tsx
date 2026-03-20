@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useStore } from '../store/useStore';
@@ -11,6 +11,7 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const user = useStore((state) => state.user);
   const setUser = useStore((state) => state.setUser);
+  const insets = useSafeAreaInsets();
   
   const [name, setName] = useState(user?.name || '');
   const [isSaving, setIsSaving] = useState(false);
@@ -52,31 +53,33 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <View style={styles.backButtonCircle}>
-            <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
-          </View>
-        </TouchableOpacity>
-        
-        <Text style={styles.headerTitle}>Edit Profile</Text>
-        
-        <TouchableOpacity 
-          style={styles.saveButton}
-          onPress={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving ? (
-             <ActivityIndicator size="small" color={COLORS.primary} />
-          ) : (
-             <Text style={styles.saveText}>Save</Text>
-          )}
-        </TouchableOpacity>
+    <View style={styles.screen}>
+      <View style={[styles.topSection, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.back()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <View style={styles.backButtonCircle}>
+              <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
+            </View>
+          </TouchableOpacity>
+          
+          <Text style={styles.headerTitle}>EDIT PROFILE</Text>
+          
+          <TouchableOpacity 
+            style={styles.saveButton}
+            onPress={handleSave}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+               <ActivityIndicator size="small" color={COLORS.navy} />
+            ) : (
+               <Text style={styles.saveText}>Save</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.content}>
@@ -107,7 +110,7 @@ export default function EditProfileScreen() {
           </Text>
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -116,13 +119,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  topSection: {
+    height: 120,
+    backgroundColor: COLORS.primary,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'visible',
+    zIndex: 10,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenX,
-    paddingVertical: 12,
-    backgroundColor: COLORS.background,
+    paddingTop: 10,
   },
   backButton: {
     width: 44,
@@ -137,11 +147,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   headerTitle: {
-    fontFamily: 'SFPro-Bold',
-    fontSize: 20,
-    color: '#1A1A2E',
+    fontFamily: 'Cubao',
+    fontSize: 32,
+    color: '#000000',
   },
   saveButton: {
     width: 44,
@@ -153,7 +168,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontWeight: '700',
     fontSize: 16,
-    color: COLORS.primary,
+    color: '#000000',
   },
   content: {
     padding: SPACING.screenX,

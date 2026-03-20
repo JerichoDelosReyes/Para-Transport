@@ -43,21 +43,23 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <View style={styles.backButtonCircle}>
-            <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
-          </View>
-        </TouchableOpacity>
-        
-        <Text style={styles.headerTitle}>Settings</Text>
-        
-        <View style={{ width: 44 }} />
+    <View style={styles.screen}>
+      <View style={[styles.topSection, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.back()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <View style={styles.backButtonCircle}>
+              <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
+            </View>
+          </TouchableOpacity>
+          
+          <Text style={styles.headerTitle}>SETTINGS</Text>
+          
+          <View style={{ width: 44 }} />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -122,7 +124,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -131,13 +133,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  topSection: {
+    height: 120,
+    backgroundColor: COLORS.primary,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'visible',
+    zIndex: 10,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenX,
-    paddingVertical: 12,
-    backgroundColor: COLORS.background,
+    paddingTop: 10,
   },
   backButton: {
     width: 44,
@@ -152,11 +161,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   headerTitle: {
-    fontFamily: 'SFPro-Bold',
-    fontSize: 20,
-    color: COLORS.navy,
+    fontFamily: 'Cubao',
+    fontSize: TYPOGRAPHY.screenTitle,
+    color: '#000000',
   },
   content: {
     padding: SPACING.screenX,
