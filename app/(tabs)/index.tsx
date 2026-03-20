@@ -69,11 +69,13 @@ export default function HomeScreen() {
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
   const { routes: commuteRoutes } = useCommuteRoutes();
   const { routes: transitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
-  const [showTransitLayer, setShowTransitLayer] = useState(true);
+  const [showTransitLayer, setShowTransitLayer] = useState(false);
   const [nearestStop, setNearestStop] = useState<any>(null);
   const user = useStore((state) => state.user);
   const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
   const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
+  const pendingRouteSearch = useStore((state) => state.pendingRouteSearch);
+  const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const mapRef = useRef<MapView | null>(null);
   const displayName = (user?.name || 'Komyuter').split(' ')[0].toUpperCase();
 
@@ -126,6 +128,8 @@ export default function HomeScreen() {
   // Search Expand Animation
   const searchHeightAnim = useRef(new Animated.Value(48)).current;
   const searchOpacityAnim = useRef(new Animated.Value(0)).current;
+
+  // Search Expand Animation (moved pending search handler below)
 
   useEffect(() => {
     if (isSearchActive) {
@@ -412,9 +416,21 @@ export default function HomeScreen() {
 
   // Find the nearest stop to the user's current location
 
+  const handleClearRoute = useCallback((clearOrigin = true, clearDestination = true) => {
+    if (clearDestination) setDestinationQuery('');
+    if (clearOrigin) setOriginQuery('');
+    setDestinationLocation(null);
+    setRouteCoordinates([]);
+    setRouteSummary(null);
+    setMatchedCommute(null);
+    setPendingRouteSearch(null);
+    setSelectedTransitRoute(null);
+  }, [setPendingRouteSearch, setSelectedTransitRoute]);
+
   const handleSearchSelectRoute = useCallback(async (origin: PlaceResult | null, destination: PlaceResult) => {
     setIsSearchActive(false);
     setDestinationQuery(destination.title);
+    setOriginQuery(origin?.title || '');
     
     const dest = destination.title.trim().toLowerCase();
     const orig = origin?.title.trim().toLowerCase() || 'buendia';
@@ -477,6 +493,85 @@ export default function HomeScreen() {
     }
   }, [currentLocation, commuteRoutes]);
 
+  // Automatically process pending route searches (e.g. from Saved routes page)
+  useEffect(() => {
+    const processPendingSearch = async () => {
+      if (!pendingRouteSearch) return;
+
+      const { origin, destination } = pendingRouteSearch;
+      setIsRouting(true);
+      
+      try {
+        let originPlace: PlaceResult | null = null;
+        
+        // 1. Geocode origin if it's not our current location
+        if (origin && origin.toLowerCase() !== 'current location' && origin.toLowerCase() !== 'your location') {
+          const originQueryText = origin.includes('Philippines') ? origin : `${origin}, Cavite, Philippines`;
+          const originParams = new URLSearchParams({
+            q: originQueryText,
+            format: 'json',
+            limit: '1',
+            countrycodes: 'ph',
+          });
+          const originRes = await fetch(`${GEOCODING_BASE_URL}/search?${originParams.toString()}`);
+          if (!originRes.ok) throw new Error(`Geocoding origin failed`);
+          const originData = await originRes.json();
+          
+          if (originData && originData[0]) {
+            originPlace = {
+              id: originData[0].place_id?.toString() || Math.random().toString(),
+              title: origin,
+              subtitle: originData[0].display_name || '',
+              latitude: parseFloat(originData[0].lat),
+              longitude: parseFloat(originData[0].lon),
+            };
+          }
+        }
+
+        // 2. Geocode destination
+        const destQueryText = destination.includes('Philippines') ? destination : `${destination}, Cavite, Philippines`;
+        const destParams = new URLSearchParams({
+          q: destQueryText,
+          format: 'json',
+          limit: '1',
+          countrycodes: 'ph',
+        });
+        const destRes = await fetch(`${GEOCODING_BASE_URL}/search?${destParams.toString()}`);
+        if (!destRes.ok) throw new Error(`Geocoding destination failed`);
+        const destData = await destRes.json();
+
+        if (!destData || destData.length === 0) {
+          Alert.alert('Route Error', 'Could not locate the destination for this route.');
+          setIsRouting(false);
+          setPendingRouteSearch(null);
+          return;
+        }
+
+        const destPlace: PlaceResult = {
+          id: destData[0].place_id?.toString() || Math.random().toString(),
+          title: destination,
+          subtitle: destData[0].display_name || '',
+          latitude: parseFloat(destData[0].lat),
+          longitude: parseFloat(destData[0].lon),
+        };
+
+        // 3. Call the search hander
+        await handleSearchSelectRoute(originPlace, destPlace);
+        setPendingRouteSearch(null); // Clear after successful processing
+
+      } catch (err) {
+        console.error('Failed to process pending route:', err);
+        Alert.alert('Error', 'Failed to load the saved route location.');
+        setIsRouting(false);
+        setPendingRouteSearch(null);
+      }
+    };
+
+    if (pendingRouteSearch) {
+      processPendingSearch();
+    }
+  }, [pendingRouteSearch, handleSearchSelectRoute]);
+
   const handleFindNearestStop = useCallback(() => {
     if (!currentLocation) {
       Alert.alert('GPS Not Ready', 'Waiting for your current location.');
@@ -515,7 +610,9 @@ export default function HomeScreen() {
   // Visible routes: show selected route if active, otherwise all (if layer is on)
   const visibleTransitRoutes = useMemo(() => {
     if (!showTransitLayer) return [];
-    if (selectedTransitRoute) return [selectedTransitRoute];
+    if (selectedTransitRoute) {
+      return selectedTransitRoute.coordinates ? [selectedTransitRoute] : [];
+    }
     return transitRoutes;
   }, [showTransitLayer, selectedTransitRoute, transitRoutes]);
 
@@ -820,8 +917,15 @@ export default function HomeScreen() {
       <SearchScreen
         visible={isSearchActive}
         currentLocationLabel="Current Location"
-        onClose={() => setIsSearchActive(false)}
+        initialOrigin={pendingRouteSearch ? pendingRouteSearch.origin : originQuery}
+        initialDestination={pendingRouteSearch ? pendingRouteSearch.destination : destinationQuery}
+        onClearRoute={handleClearRoute}
+        onClose={() => {
+          setIsSearchActive(false);
+          setPendingRouteSearch(null); // Clear pending search when closed
+        }}
         onSelectRoute={(origin, dest) => {
+          setPendingRouteSearch(null); // Clear pending search on successful route
           if (!origin && currentLocation) {
             if (
               currentLocation.latitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLatitude ||

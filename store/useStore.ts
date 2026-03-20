@@ -32,6 +32,7 @@ interface StoreState {
   hasHydrated: boolean;
   insightDismissed: boolean;
   selectedTransitRoute: any | null;
+  pendingRouteSearch: { origin: any; destination: any } | null;
   setUser: (user: User) => void;
   beginGuestSession: () => void;
   beginAuthSession: (user: User) => void;
@@ -40,6 +41,7 @@ interface StoreState {
   dismissInsight: () => void;
   addPoints: (points: number) => void;
   setSelectedTransitRoute: (route: any | null) => void;
+  setPendingRouteSearch: (search: { origin: any; destination: any } | null) => void;
   saveRoute: (route: any) => void;
   removeSavedRoute: (routeId: string | number) => void;
 }
@@ -52,6 +54,7 @@ export const useStore = create<StoreState>()(
       hasHydrated: false,
       insightDismissed: false,
       selectedTransitRoute: null,
+      pendingRouteSearch: null,
       setUser: (user) => set({ user }),
       beginGuestSession: () =>
         set({
@@ -73,6 +76,7 @@ export const useStore = create<StoreState>()(
       dismissInsight: () => set({ insightDismissed: true }),
       addPoints: (points) => set((state) => ({ user: { ...state.user, points: state.user.points + points } })),
       setSelectedTransitRoute: (route) => set({ selectedTransitRoute: route }),
+      setPendingRouteSearch: (search) => set({ pendingRouteSearch: search }),
       saveRoute: (route: any) =>
         set((state) => {
           const currentSaved = state.user.saved_routes || [];

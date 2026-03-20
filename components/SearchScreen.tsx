@@ -13,7 +13,7 @@ import {
   StatusBar,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { fuzzyFilter } from '../utils/fuzzySearch';
@@ -34,16 +34,23 @@ export type PlaceResult = {
 type SearchScreenProps = {
   visible: boolean;
   currentLocationLabel?: string;
+  initialOrigin?: string;
+  initialDestination?: string;
   onClose: () => void;
   onSelectRoute: (origin: PlaceResult | null, destination: PlaceResult) => void;
+  onClearRoute?: (clearOrigin?: boolean, clearDestination?: boolean) => void;
 };
 
 export default function SearchScreen({
   visible,
   currentLocationLabel,
+  initialOrigin,
+  initialDestination,
   onClose,
   onSelectRoute,
+  onClearRoute,
 }: SearchScreenProps) {
+  const insets = useSafeAreaInsets();
   const [activeField, setActiveField] = useState<'origin' | 'destination'>('destination');
   const [originText, setOriginText] = useState('');
   const [originPlace, setOriginPlace] = useState<PlaceResult | null>(null);
@@ -54,22 +61,31 @@ export default function SearchScreen({
   const [isFetching, setIsFetching] = useState(false);
 
   const { recents, addRecent } = useRecentSearches();
-  const { saveRoute, user } = useStore();
+  const { saveRoute, removeSavedRoute, user } = useStore();
 
   const originRef = useRef<TextInput>(null);
   const destRef = useRef<TextInput>(null);
 
-  // Reset state when opened
+  // Reset or initialize state when opened
   useEffect(() => {
     if (visible) {
-      setOriginText('');
-      setDestinationText('');
+      if (initialOrigin || initialDestination) {
+        setOriginText(initialOrigin || '');
+        setDestinationText(initialDestination || '');
+        setUsingCurrentLocation(false);
+        setActiveField(!initialDestination ? 'destination' : 'destination');
+        // By setting destination text, it will trigger the search suggestions auto-fetch.
+        setTimeout(() => destRef.current?.focus(), 300);
+      } else {
+        setOriginText('');
+        setDestinationText('');
+        setUsingCurrentLocation(true);
+        setActiveField('destination');
+        setTimeout(() => destRef.current?.focus(), 300);
+      }
       setSuggestions([]);
-      setUsingCurrentLocation(true);
-      setActiveField('destination');
-      setTimeout(() => destRef.current?.focus(), 300);
     }
-  }, [visible]);
+  }, [visible, initialOrigin, initialDestination]);
 
   // Active query text
   const activeQuery = activeField === 'origin' ? originText : destinationText;
@@ -177,6 +193,14 @@ export default function SearchScreen({
 
   
 
+  const isRouteSaved = () => {
+    const org = usingCurrentLocation ? (currentLocationLabel || 'Current Location') : originText;
+    const dst = destinationText;
+    if (!org || !dst) return false;
+    const routeId = `${org} - ${dst}`;
+    return user.saved_routes?.some(r => r.id === routeId) || false;
+  };
+
   const handleFavorite = () => {
     const org = usingCurrentLocation ? (currentLocationLabel || 'Current Location') : originText;
     const dst = destinationText;
@@ -187,15 +211,21 @@ export default function SearchScreen({
     }
 
     const routeId = `${org} - ${dst}`;
-    saveRoute({
-      id: routeId,
-      name: `${org} to ${dst}`,
-      legs: [{ mode: 'Custom Route', from: org, to: dst, fare: 0, km: 0, minutes: 0, instructions: 'Custom saved route' }],
-      total_fare: 0,
-      total_km: 0,
-      estimated_minutes: 0,
-    });
-    Alert.alert('Saved!', 'Route has been saved to your Saved page.');
+    
+    if (isRouteSaved()) {
+      removeSavedRoute(routeId);
+      Alert.alert('Removed', 'Route has been removed from your Saved page.');
+    } else {
+      saveRoute({
+        id: routeId,
+        name: `${org} to ${dst}`,
+        legs: [{ mode: 'Custom Route', from: org, to: dst, fare: 0, km: 0, minutes: 0, instructions: 'Custom saved route' }],
+        total_fare: 0,
+        total_km: 0,
+        estimated_minutes: 0,
+      });
+      Alert.alert('Saved!', 'Route has been saved to your Saved page.');
+    }
   };
 
   const displayOrigin = usingCurrentLocation
@@ -204,8 +234,8 @@ export default function SearchScreen({
 
   return (
     <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>
-      <View style={styles.container}>
-        <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 14) }]}>
+        <View style={styles.safe}>
           {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -213,7 +243,7 @@ export default function SearchScreen({
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { flex: 1 }]}>Your Route</Text>
           <TouchableOpacity onPress={handleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="heart-outline" size={24} color={COLORS.navy} />
+            <Ionicons name={isRouteSaved() ? "heart" : "heart-outline"} size={24} color={isRouteSaved() ? COLORS.primary : COLORS.navy} />
           </TouchableOpacity>
         </View>
 
@@ -252,6 +282,20 @@ export default function SearchScreen({
                 destRef.current?.focus();
               }}
             />
+            {(originText.length > 0 || !usingCurrentLocation) && (
+              <TouchableOpacity
+                onPress={() => {
+                  setOriginText('');
+                  setOriginPlace(null);
+                  setUsingCurrentLocation(true);
+                  if (onClearRoute) onClearRoute(true, false);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ marginRight: 12 }}
+              >
+                <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon!')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="mic" size={20} color={COLORS.textMuted} />
             </TouchableOpacity>
@@ -287,6 +331,18 @@ export default function SearchScreen({
                 }
               }}
             />
+            {destinationText.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  setDestinationText('');
+                  if (onClearRoute) onClearRoute(false, true);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ marginRight: 12 }}
+              >
+                <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon!')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="mic" size={20} color={COLORS.textMuted} />
             </TouchableOpacity>
@@ -395,7 +451,7 @@ export default function SearchScreen({
             )}
           </>
         )}
-      </SafeAreaView>
+      </View>
       </View>
     </Modal>
   );

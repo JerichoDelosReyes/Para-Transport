@@ -2,15 +2,17 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, Alert, Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 
 export default function SavedScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPadding = 60 + 36 + insets.bottom + 16;
-  const { user, removeSavedRoute } = useStore();
+  const { user, removeSavedRoute, setSelectedTransitRoute, setPendingRouteSearch } = useStore();
   const savedRoutes = user?.saved_routes || [];
   const [selectedRoute, setSelectedRoute] = useState<any>(null);
   const [isModalVisible, setModalVisible] = useState(false);
@@ -25,6 +27,20 @@ export default function SavedScreen() {
   const openModal = (route: any) => {
     setSelectedRoute(route);
     setModalVisible(true);
+  };
+
+  const handleViewRoute = () => {
+    if (selectedRoute) {
+      setModalVisible(false);
+      if (selectedRoute.legs && selectedRoute.legs[0]?.mode === 'Custom Route') {
+        const origin = selectedRoute.legs[0].from;
+        const destination = selectedRoute.legs[0].to;
+        setPendingRouteSearch({ origin, destination });
+      } else {
+        setSelectedTransitRoute(selectedRoute);
+      }
+      router.push('/(tabs)');
+    }
   };
 
   return (
@@ -106,8 +122,8 @@ export default function SavedScreen() {
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.primaryButton} onPress={() => setModalVisible(false)} activeOpacity={0.9}>
-                  <Text style={styles.primaryButtonText}>Close</Text>
+                <TouchableOpacity style={styles.primaryButton} onPress={handleViewRoute} activeOpacity={0.9}>
+                  <Text style={styles.primaryButtonText}>View Route</Text>
                 </TouchableOpacity>
               </>
             )}
