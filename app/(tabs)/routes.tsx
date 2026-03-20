@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useState, useMemo, useEffect } from 'react';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, InteractionManager } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -30,7 +30,15 @@ export default function RoutesScreen() {
   const bottomPadding = 60 + 36 + insets.bottom + 16;
   const [activeTab, setActiveTab] = useState<'transit' | 'history'>('transit');
   const [selectedMode, setSelectedMode] = useState<(typeof FILTER_MODES)[number]>('All');
+  const [isReady, setIsReady] = useState(false);
   const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
+
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      setIsReady(true);
+    });
+    return () => task.cancel();
+  }, []);
 
   const { routes: transitRoutes, loading } = useTransitData();
 
@@ -111,8 +119,12 @@ export default function RoutesScreen() {
               </ScrollView>
             </View>
 
-            {loading ? (
-              <ActivityIndicator size="large" color="#E8A020" style={{ marginTop: 40 }} />
+            {(!isReady || loading) ? (
+              <View style={styles.skeletonContainer}>
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <View key={i} style={styles.skeletonCard} />
+                ))}
+              </View>
             ) : totalTransitCount === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No transit routes found.</Text>
@@ -335,5 +347,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.navy,
     marginTop: 20,
+  },
+  skeletonContainer: {
+    paddingTop: 10,
+  },
+  skeletonCard: {
+    height: 70,
+    backgroundColor: '#E2E8F0',
+    borderRadius: RADIUS.card,
+    marginBottom: 10,
+    opacity: 0.6,
   },
 });
