@@ -3,21 +3,22 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, Alert, Pre
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
-import { ROUTES } from '../../constants/routes';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
+import { useStore } from '../../store/useStore';
 
 export default function SavedScreen() {
   const insets = useSafeAreaInsets();
   const bottomPadding = 60 + 36 + insets.bottom + 16;
-  const [savedRoutes, setSavedRoutes] = useState(ROUTES.slice(0, 3));
+  const { user, removeSavedRoute } = useStore();
+  const savedRoutes = user?.saved_routes || [];
   const [selectedRoute, setSelectedRoute] = useState<any>(null);
   const [isModalVisible, setModalVisible] = useState(false);
 
   const confirmRemove = (id: number) => {
     Alert.alert('Remove Saved Route', 'Are you sure you want to remove this route?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => setSavedRoutes(savedRoutes.filter(r => r.id !== id)) }
+      { text: 'Remove', style: 'destructive', onPress: () => removeSavedRoute(id) }
     ]);
   };
 

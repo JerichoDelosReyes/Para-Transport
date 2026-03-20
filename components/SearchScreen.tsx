@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { fuzzyFilter } from '../utils/fuzzySearch';
 import { useRecentSearches, RecentSearch } from '../hooks/useRecentSearches';
+import { useStore } from '../store/useStore';
 
 const GEOCODING_BASE_URL =
   process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
@@ -52,6 +53,7 @@ export default function SearchScreen({
   const [isFetching, setIsFetching] = useState(false);
 
   const { recents, addRecent } = useRecentSearches();
+  const { saveRoute, user } = useStore();
 
   const originRef = useRef<TextInput>(null);
   const destRef = useRef<TextInput>(null);
@@ -173,6 +175,27 @@ export default function SearchScreen({
 
   
 
+  const handleFavorite = () => {
+    const org = usingCurrentLocation ? (currentLocationLabel || 'Current Location') : originText;
+    const dst = destinationText;
+    
+    if (!org || !dst) {
+      Alert.alert('Missing Fields', 'Please enter both origin and destination to save the route.');
+      return;
+    }
+
+    const routeId = `${org} - ${dst}`;
+    saveRoute({
+      id: routeId,
+      name: `${org} to ${dst}`,
+      legs: [{ mode: 'Custom Route', from: org, to: dst, fare: 0, km: 0, minutes: 0, instructions: 'Custom saved route' }],
+      total_fare: 0,
+      total_km: 0,
+      estimated_minutes: 0,
+    });
+    Alert.alert('Saved!', 'Route has been saved to your Saved page.');
+  };
+
   const displayOrigin = usingCurrentLocation
     ? currentLocationLabel || 'Current Location'
     : originText;
@@ -186,7 +209,10 @@ export default function SearchScreen({
           <TouchableOpacity onPress={onClose} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={24} color={COLORS.navy} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Your Route</Text>
+          <Text style={[styles.headerTitle, { flex: 1 }]}>Your Route</Text>
+          <TouchableOpacity onPress={handleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="heart-outline" size={24} color={COLORS.navy} />
+          </TouchableOpacity>
         </View>
 
         {/* Search Fields */}

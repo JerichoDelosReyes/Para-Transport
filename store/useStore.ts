@@ -9,7 +9,7 @@ interface User {
   streak_count: number;
   total_km: number;
   total_fare_spent: number;
-  saved_routes?: string[];
+  saved_routes?: any[];
   badges?: string[];
 }
 
@@ -40,6 +40,8 @@ interface StoreState {
   dismissInsight: () => void;
   addPoints: (points: number) => void;
   setSelectedTransitRoute: (route: any | null) => void;
+  saveRoute: (route: any) => void;
+  removeSavedRoute: (routeId: string | number) => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -71,6 +73,21 @@ export const useStore = create<StoreState>()(
       dismissInsight: () => set({ insightDismissed: true }),
       addPoints: (points) => set((state) => ({ user: { ...state.user, points: state.user.points + points } })),
       setSelectedTransitRoute: (route) => set({ selectedTransitRoute: route }),
+      saveRoute: (route: any) =>
+        set((state) => {
+          const currentSaved = state.user.saved_routes || [];
+          if (!currentSaved.find((r) => r.id === route.id)) {
+            return { user: { ...state.user, saved_routes: [...currentSaved, route] } };
+          }
+          return state;
+        }),
+      removeSavedRoute: (routeId: string | number) =>
+        set((state) => ({
+          user: {
+            ...state.user,
+            saved_routes: (state.user.saved_routes || []).filter((r) => r.id !== routeId),
+          },
+        })),
     }),
     {
       name: 'para-store',
