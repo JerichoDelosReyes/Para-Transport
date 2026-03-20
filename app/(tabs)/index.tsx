@@ -11,6 +11,7 @@ import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 import { useTransitData } from '../../hooks/useTransitData';
 import RouteListPanel from '../../components/RouteListPanel';
 import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
+import { splitRouteSegments } from '../../utils/routeSegments';
 
 const { height, width } = Dimensions.get('window');
 
@@ -165,6 +166,12 @@ export default function HomeScreen() {
     if (selectedTransitRoute?.stops?.length > 0) return selectedTransitRoute.stops;
     return transitStops;
   }, [showTransitLayer, selectedTransitRoute, transitStops]);
+
+  // Split searched route into on-transit (solid) and walking (dashed) segments
+  const routeSegments = useMemo(() => {
+    if (routeCoordinates.length < 2) return [];
+    return splitRouteSegments(routeCoordinates, transitRoutes, 200);
+  }, [routeCoordinates, transitRoutes]);
 
 
 
@@ -325,14 +332,32 @@ export default function HomeScreen() {
           />
         )}
 
-        {routeCoordinates.length > 1 && (
+        {routeSegments.map((seg, idx) => (
           <Polyline
-            coordinates={routeCoordinates}
-            strokeColor="#E8A020"
-            strokeWidth={5}
+            key={`route-seg-${idx}`}
+            coordinates={seg.coordinates}
+            strokeColor={seg.onTransit ? '#E8A020' : '#999999'}
+            strokeWidth={seg.onTransit ? 5 : 3}
             lineCap="round"
             lineJoin="round"
+            lineDashPattern={seg.onTransit ? undefined : [10, 6]}
           />
+        ))}
+
+        {/* Walking indicator markers at transition points */}
+        {routeSegments.map((seg, idx) =>
+          !seg.onTransit && seg.coordinates.length >= 2 ? (
+            <Marker
+              key={`walk-marker-${idx}`}
+              coordinate={seg.coordinates[0]}
+              tracksViewChanges={false}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={styles.walkMarker}>
+                <Ionicons name="walk" size={14} color="#FFFFFF" />
+              </View>
+            </Marker>
+          ) : null
         )}
 
         {/* Transit route polylines (hidden when a search route is active) */}
@@ -1028,5 +1053,20 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
+  },
+  walkMarker: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#666666',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
   },
 });
