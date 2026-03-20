@@ -642,7 +642,10 @@ export default function HomeScreen() {
 
     if (newLat !== region.latitude || newLng !== region.longitude) {
       const fixedRegion = { ...region, latitude: newLat, longitude: newLng };
+      setMapRegion(fixedRegion);
       mapRef.current?.animateToRegion(fixedRegion, 100);
+    } else {
+      setMapRegion(region); // Important: Keep track of panning/zooming so buttons zoom in on the CURRENT view instead of snapping back to the initial coord
     }
   };
 
