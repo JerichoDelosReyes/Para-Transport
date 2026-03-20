@@ -44,7 +44,7 @@ export default function SavedScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>SAVED</Text>
         <ProfileButton />
@@ -130,7 +130,7 @@ export default function SavedScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 

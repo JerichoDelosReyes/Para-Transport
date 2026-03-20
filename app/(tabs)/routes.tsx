@@ -72,7 +72,7 @@ export default function RoutesScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Routes</Text>
         <ProfileButton />
@@ -181,7 +181,7 @@ export default function RoutesScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
