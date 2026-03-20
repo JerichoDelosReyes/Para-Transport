@@ -607,19 +607,19 @@ export default function HomeScreen() {
     }
   }, [currentLocation, transitStops]);
 
-  // Visible routes: show selected route if active, otherwise all (if layer is on)
+  // Visible routes: always show selected route; otherwise show all if transit layer is on
   const visibleTransitRoutes = useMemo(() => {
-    if (!showTransitLayer) return [];
     if (selectedTransitRoute) {
       return selectedTransitRoute.coordinates ? [selectedTransitRoute] : [];
     }
+    if (!showTransitLayer) return [];
     return transitRoutes;
   }, [showTransitLayer, selectedTransitRoute, transitRoutes]);
 
-  // Visible stops: show stops for selected route or all stops
+  // Visible stops: always show stops for selected route; otherwise show all if transit layer is on
   const visibleTransitStops = useMemo(() => {
-    if (!showTransitLayer) return [];
     if (selectedTransitRoute?.stops?.length > 0) return selectedTransitRoute.stops;
+    if (!showTransitLayer) return [];
     return transitStops;
   }, [showTransitLayer, selectedTransitRoute, transitStops]);
 
