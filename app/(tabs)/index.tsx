@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Animated, PanResponder, Dimensions, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, Platform, Keyboard, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { UrlTile, Marker, Polyline, Callout, Region } from 'react-native-maps';
@@ -10,22 +10,14 @@ import { MAP_CONFIG } from '../../constants/map';
 import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 import { useTransitData } from '../../hooks/useTransitData';
 import RouteListPanel from '../../components/RouteListPanel';
+import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
 
 const { height, width } = Dimensions.get('window');
 
 const MODES = ['Jeepney', 'Tricycle', 'UV Express', 'Bus', 'LRT'];
-const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
 
 type MapCoordinate = {
-  latitude: number;
-  longitude: number;
-};
-
-type PlaceSuggestion = {
-  id: string;
-  title: string;
-  subtitle: string;
   latitude: number;
   longitude: number;
 };
@@ -73,8 +65,6 @@ export default function HomeScreen() {
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
   const [originQuery, setOriginQuery] = useState('');
-  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
-  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
@@ -96,42 +86,7 @@ export default function HomeScreen() {
     longitudeDelta: 0.05,
   });
 
-  // Search Expand Animation
-  const searchHeightAnim = useRef(new Animated.Value(48)).current;
-  const searchOpacityAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    if (isSearchActive) {
-      Animated.parallel([
-        Animated.timing(searchHeightAnim, {
-          toValue: 120, // Height for expanded search
-          duration: 300,
-          useNativeDriver: false,
-        }),
-        Animated.timing(searchOpacityAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: false,
-        })
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(searchHeightAnim, {
-          toValue: 48,
-          duration: 300,
-          useNativeDriver: false,
-        }),
-        Animated.timing(searchOpacityAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: false,
-        })
-      ]).start();
-      Keyboard.dismiss();
-    }
-  }, [isSearchActive]);
-
-  const closeSearch = () => setIsSearchActive(false);
 
   // Handle selecting a transit route from the panel
   const handleSelectTransitRoute = useCallback((route: any) => {
@@ -211,80 +166,7 @@ export default function HomeScreen() {
     return transitStops;
   }, [showTransitLayer, selectedTransitRoute, transitStops]);
 
-  const selectSuggestion = (suggestion: PlaceSuggestion) => {
-    setDestinationQuery(suggestion.title);
-    setPlaceSuggestions([]);
-  };
 
-  useEffect(() => {
-    const query = destinationQuery.trim();
-    if (!isSearchActive || query.length < 2) {
-      setPlaceSuggestions([]);
-      setIsFetchingSuggestions(false);
-      return;
-    }
-
-    let cancelled = false;
-    const debounceTimer = setTimeout(async () => {
-      setIsFetchingSuggestions(true);
-      try {
-        const params = new URLSearchParams({
-          q: `${query}, Cavite, Philippines`,
-          format: 'json',
-          limit: '5',
-          countrycodes: 'ph',
-          addressdetails: '0',
-        });
-
-        const response = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
-          headers: {
-            'Accept-Language': 'en',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Suggestion fetch failed (${response.status})`);
-        }
-
-        const results = await response.json();
-        if (cancelled) {
-          return;
-        }
-
-        const mapped: PlaceSuggestion[] = (Array.isArray(results) ? results : [])
-          .map((item: any, idx: number) => {
-            const displayName = String(item.display_name || '').trim();
-            const parts = displayName.split(',').map((p) => p.trim()).filter(Boolean);
-            const title = parts[0] || query;
-            const subtitle = parts.slice(1).join(', ') || 'Cavite, Philippines';
-            return {
-              id: String(item.place_id || `${displayName}-${idx}`),
-              title,
-              subtitle,
-              latitude: parseFloat(item.lat),
-              longitude: parseFloat(item.lon),
-            };
-          })
-          .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
-
-        setPlaceSuggestions(mapped);
-      } catch (error) {
-        if (!cancelled) {
-          console.warn('[HomeScreen] Suggestion search failed:', error);
-          setPlaceSuggestions([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsFetchingSuggestions(false);
-        }
-      }
-    }, 350);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(debounceTimer);
-    };
-  }, [destinationQuery, isSearchActive]);
 
   useEffect(() => {
     let locationSubscription: Location.LocationSubscription | null = null;
@@ -330,79 +212,50 @@ export default function HomeScreen() {
     };
   }, []);
 
-  const handleRouteSearch = async () => {
-    Keyboard.dismiss();
-    const dest = destinationQuery.trim().toLowerCase();
-    const orig = originQuery.trim().toLowerCase() || 'buendia';
-    
-    if (!dest) {
-      Alert.alert('Destination Required', 'Type where you want to go first.');
+  const handleSearchSelectRoute = useCallback(async (origin: PlaceResult | null, destination: PlaceResult) => {
+    setIsSearchActive(false);
+    setDestinationQuery(destination.title);
+
+    const dest = destination.title.trim().toLowerCase();
+    const orig = origin?.title.trim().toLowerCase() || 'buendia';
+
+    // Match commute data
+    const matches = commuteRoutes.filter((r: any) => r.destination.toLowerCase().includes(dest));
+    let bestMatch = matches.find((r: any) => r.origin.toLowerCase().includes(orig));
+    if (!bestMatch && matches.length > 0) bestMatch = matches[0];
+    setMatchedCommute(bestMatch || null);
+
+    const destinationPoint: MapCoordinate = {
+      latitude: destination.latitude,
+      longitude: destination.longitude,
+    };
+    setDestinationLocation(destinationPoint);
+
+    // Determine start point
+    const startPoint = origin
+      ? { latitude: origin.latitude, longitude: origin.longitude }
+      : currentLocation;
+
+    if (!startPoint) {
+      mapRef.current?.animateToRegion({
+        ...destinationPoint,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 600);
       return;
     }
 
-    if (!currentLocation) {
-      Alert.alert('GPS Not Ready', 'Waiting for your current location. Please try again in a few seconds.');
-      return;
+    if (origin) {
+      setOriginQuery(origin.title);
     }
 
     setIsRouting(true);
     try {
-      // Match with commuteData
-      const matches = commuteRoutes.filter(r => r.destination.toLowerCase().includes(dest));
-      let bestMatch = matches.find(r => r.origin.toLowerCase().includes(orig));
-      if (!bestMatch && matches.length > 0) {
-          bestMatch = matches[0]; // fallback
-      }
-
-      if (bestMatch) {
-         setMatchedCommute(bestMatch);
-      } else {
-         setMatchedCommute(null);
-         Alert.alert('Route Not Found', 'Sorry, the commute guide data does not fully answer the question for this route.');
-      }
-
-      const geocodeParams = new URLSearchParams({
-        q: `${destinationQuery}, Cavite, Philippines`,
-        format: 'json',
-        limit: '1',
-        countrycodes: 'ph',
-      });
-
-      const geocodeResponse = await fetch(`${GEOCODING_BASE_URL}/search?${geocodeParams.toString()}`, {
-        headers: {
-          'Accept-Language': 'en',
-        },
-      });
-
-      if (!geocodeResponse.ok) {
-        throw new Error(`Geocoding failed (${geocodeResponse.status})`);
-      }
-
-      const geocodeResults = await geocodeResponse.json();
-      if (!Array.isArray(geocodeResults) || geocodeResults.length === 0) {
-        Alert.alert('Location Not Found', 'Try a more specific destination name.');
-        return;
-      }
-
-      const destination = geocodeResults[0];
-      const destinationPoint: MapCoordinate = {
-        latitude: parseFloat(destination.lat),
-        longitude: parseFloat(destination.lon),
-      };
-      setDestinationLocation(destinationPoint);
-
-      const startLng = currentLocation.longitude;
-      const startLat = currentLocation.latitude;
-      const destLng = destinationPoint.longitude;
-      const destLat = destinationPoint.latitude;
-
       const routeResponse = await fetch(
-        `${ROUTING_BASE_URL}/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`
+        `${ROUTING_BASE_URL}/${startPoint.longitude},${startPoint.latitude};${destinationPoint.longitude},${destinationPoint.latitude}?overview=full&geometries=geojson`
       );
 
-      if (!routeResponse.ok) {
-        throw new Error(`Routing failed (${routeResponse.status})`);
-      }
+      if (!routeResponse.ok) throw new Error(`Routing failed (${routeResponse.status})`);
 
       const routeResult = await routeResponse.json();
       const bestRoute = routeResult?.routes?.[0];
@@ -422,17 +275,13 @@ export default function HomeScreen() {
         edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
         animated: true,
       });
-
-      setIsSearchActive(false);
-      setPlaceSuggestions([]);
-      Keyboard.dismiss();
     } catch (error) {
       console.warn('[HomeScreen] Route search failed:', error);
       Alert.alert('Search Failed', 'Unable to fetch route right now. Please try again.');
     } finally {
       setIsRouting(false);
     }
-  };
+  }, [currentLocation, commuteRoutes]);
 
   return (
     <View style={styles.screen}>
@@ -486,8 +335,8 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* Transit route polylines */}
-        {visibleTransitRoutes.map((route: any) => (
+        {/* Transit route polylines (hidden when a search route is active) */}
+        {!destinationLocation && visibleTransitRoutes.map((route: any) => (
           <Polyline
             key={`transit-route-${route.id}`}
             coordinates={route.coordinates}
@@ -498,8 +347,8 @@ export default function HomeScreen() {
           />
         ))}
 
-        {/* Transit stop markers */}
-        {visibleTransitStops.map((stop: any) => (
+        {/* Transit stop markers (hidden when a search route is active) */}
+        {!destinationLocation && visibleTransitStops.map((stop: any) => (
           <Marker
             key={`transit-stop-${stop.id}`}
             coordinate={stop.coordinate}
@@ -569,13 +418,6 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Dim map when search is active */}
-      {isSearchActive && (
-        <TouchableWithoutFeedback onPress={closeSearch}>
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1, opacity: searchOpacityAnim }]} />
-        </TouchableWithoutFeedback>
-      )}
-
       {/* Map Loading Indicator */}
       {!isMapLoaded && (
         <View style={styles.loadingOverlay}>
@@ -585,105 +427,20 @@ export default function HomeScreen() {
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Floating Top Header */}
-        <BlurView intensity={80} tint="light" style={[styles.header, isSearchActive && { zIndex: 10 }]}>
+        <BlurView intensity={80} tint="light" style={styles.header}>
           <Text style={styles.headerTitle}>HI, JERICHO!</Text>
-          <Animated.View style={{ height: searchHeightAnim, overflow: 'hidden' }}>
-            <View style={styles.searchContainer}>
-              <View style={styles.searchBarRow}>
-                {isSearchActive ? (
-                   <TouchableOpacity onPress={closeSearch} style={{ marginRight: 8 }}>
-                     <Ionicons name="arrow-back" size={20} color={COLORS.navy} />
-                   </TouchableOpacity>
-                ) : null}
-                <View style={[styles.searchBarWrapper, isSearchActive && { elevation: 0, shadowOpacity: 0 }]}>
-                   <Ionicons name="search" size={18} color={COLORS.textMuted} />
-                   {isSearchActive ? (
-                     <TextInput
-                       style={styles.activeSearchInput}
-                       placeholder="My Location"
-                       placeholderTextColor={COLORS.textMuted}
-                       value={originQuery}
-                       onChangeText={setOriginQuery}
-                       returnKeyType="next"
-                     />
-                   ) : (
-                     <Text style={[styles.searchInputText, { color: COLORS.textMuted }]} onPress={() => setIsSearchActive(true)}>
-                       {destinationQuery ? `${originQuery || 'My Location'} to ${destinationQuery}` : 'Going Somewhere?'}
-                     </Text>
-                   )}
-                </View>
-                {!isSearchActive && (
-                  <TouchableOpacity style={styles.iconButton} activeOpacity={0.85}>
-                    <Ionicons name="options-outline" size={20} color={COLORS.navy} />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Expanded search fields */}
-              <Animated.View style={{ opacity: searchOpacityAnim, marginTop: 12 }}>
-                <View style={styles.dashLine} />
-                <View style={styles.searchBarRow}>
-                  <View style={[styles.searchBarWrapper, { elevation: 0, shadowOpacity: 0 }]}>
-                    <Ionicons name="location" size={18} color="#E8A020" />
-                    <TextInput 
-                      style={styles.activeSearchInput} 
-                      placeholder="Where to go?" 
-                      placeholderTextColor={COLORS.textMuted} 
-                      value={destinationQuery}
-                      onChangeText={(text) => {
-                        setDestinationQuery(text);
-                      }}
-                      autoFocus={isSearchActive}
-                      returnKeyType="search"
-                      onSubmitEditing={handleRouteSearch}
-                    />
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.routeButton, isRouting && styles.routeButtonDisabled]}
-                    activeOpacity={0.9}
-                    onPress={handleRouteSearch}
-                    disabled={isRouting}
-                  >
-                    {isRouting ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Ionicons name="navigate" size={18} color="#FFFFFF" />
-                    )}
-                  </TouchableOpacity>
-                </View>
-
-                {(destinationQuery.trim().length >= 2 || isFetchingSuggestions) && (
-                  <View style={styles.suggestionCard}>
-                    {isFetchingSuggestions ? (
-                      <View style={styles.suggestionLoadingRow}>
-                        <ActivityIndicator size="small" color="#E8A020" />
-                        <Text style={styles.suggestionLoadingText}>Looking for places...</Text>
-                      </View>
-                    ) : placeSuggestions.length > 0 ? (
-                      placeSuggestions.map((suggestion) => (
-                        <TouchableOpacity
-                          key={suggestion.id}
-                          style={styles.suggestionRow}
-                          activeOpacity={0.8}
-                          onPress={() => selectSuggestion(suggestion)}
-                        >
-                          <View style={styles.suggestionIconWrap}>
-                            <Ionicons name="location" size={15} color="#E8A020" />
-                          </View>
-                          <View style={styles.suggestionTextWrap}>
-                            <Text style={styles.suggestionTitle} numberOfLines={1}>{suggestion.title}</Text>
-                            <Text style={styles.suggestionSubtitle} numberOfLines={1}>{suggestion.subtitle}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      ))
-                    ) : (
-                      <Text style={styles.suggestionEmptyText}>No recommendations yet. Try a more specific place.</Text>
-                    )}
-                  </View>
-                )}
-              </Animated.View>
-            </View>
-          </Animated.View>
+          <View style={styles.searchContainer}>
+            <TouchableOpacity
+              style={styles.searchBarWrapper}
+              activeOpacity={0.8}
+              onPress={() => setIsSearchActive(true)}
+            >
+              <Ionicons name="search" size={18} color={COLORS.textMuted} />
+              <Text style={styles.searchInputText} numberOfLines={1}>
+                {destinationQuery ? `${originQuery || 'My Location'} → ${destinationQuery}` : 'Going Somewhere?'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </BlurView>
 
         {/* Floating Quick Actions */}
@@ -801,6 +558,14 @@ export default function HomeScreen() {
           onSelectRoute={handleSelectTransitRoute}
         />
       )}
+
+      {/* Full-screen search */}
+      <SearchScreen
+        visible={isSearchActive}
+        currentLocationLabel="Current Location"
+        onClose={() => setIsSearchActive(false)}
+        onSelectRoute={handleSearchSelectRoute}
+      />
     </View>
   );
 }
@@ -844,13 +609,8 @@ const styles = StyleSheet.create({
   searchContainer: {
     width: '100%',
   },
-  searchBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   searchBarWrapper: {
-    flex: 1,
+    width: '100%',
     height: 48,
     backgroundColor: '#FFFFFF',
     borderRadius: RADIUS.pill,
@@ -868,109 +628,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontFamily: 'Inter',
     fontSize: TYPOGRAPHY.label,
-  },
-  activeSearchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.label,
-    color: COLORS.navy,
-  },
-  suggestionCard: {
-    marginTop: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(10,22,40,0.08)',
-    overflow: 'hidden',
-  },
-  suggestionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(10,22,40,0.06)',
-  },
-  suggestionIconWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(232,160,32,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  suggestionTextWrap: {
-    flex: 1,
-  },
-  suggestionTitle: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.navy,
-  },
-  suggestionSubtitle: {
-    marginTop: 1,
-    fontFamily: 'Inter',
-    fontSize: 11,
     color: COLORS.textMuted,
-  },
-  suggestionLoadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  suggestionLoadingText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  suggestionEmptyText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    color: COLORS.textMuted,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  dashLine: {
-    height: 1,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    marginVertical: 6,
-    marginLeft: 30,
-  },
-  routeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#E8A020',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  routeButtonDisabled: {
-    opacity: 0.7,
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(10,22,40,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
   quickActionsContainer: {
     marginTop: 16,
