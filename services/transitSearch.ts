@@ -2,7 +2,7 @@ import transitData from '../data/transit.routes.generated.json';
 import { routeRegistry } from './GraphBuilder';
 import { formatResponsePayload, ResponsePayload } from './PostProcessor';
 import { findOptimalPath } from './RoutingEngine';
-import { ensureRoutingRuntimeInitialized, getRoutingRuntimeStatus, RoutingRuntimeMode } from './RoutingRuntime';
+import { ensureRoutingRuntimeInitialized } from './RoutingRuntime';
 
 export type GeoJSONCoordinate = [number, number];
 
@@ -160,10 +160,6 @@ export type TransitSearchResult = {
   origin: ResolvedLocation;
   destination: ResolvedLocation;
   options: PlannedRouteOption[];
-  engine: {
-    mode: RoutingRuntimeMode;
-    fallbackReason?: string;
-  };
 };
 
 export type SearchInput = {
@@ -1298,10 +1294,6 @@ async function searchTransitRoutesLegacy(input: SearchInput): Promise<TransitSea
     origin,
     destination,
     options: ranked,
-    engine: {
-      mode: 'FALLBACK',
-      fallbackReason: 'Legacy transitSearch route builder',
-    },
   };
 }
 
@@ -1398,27 +1390,15 @@ export async function searchTransitRoutes(input: SearchInput): Promise<TransitSe
     }
 
     const mergedRanked = rankOptions([...mergedBySignature.values()]).slice(0, 8);
-    const status = getRoutingRuntimeStatus();
 
     return {
       origin,
       destination,
       options: mergedRanked,
-      engine: {
-        mode: status.initialized ? 'GRAPH' : 'FALLBACK',
-      },
     };
   } catch (error) {
-    const reason = error instanceof Error ? error.message : 'Unknown graph runtime error';
     console.warn('[transitSearch] Graph pipeline failed; using legacy fallback', error);
-    const fallback = await searchTransitRoutesLegacy(input);
-    return {
-      ...fallback,
-      engine: {
-        mode: 'FALLBACK',
-        fallbackReason: reason,
-      },
-    };
+    return searchTransitRoutesLegacy(input);
   }
 }
 

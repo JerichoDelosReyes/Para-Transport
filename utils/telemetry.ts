@@ -1,56 +1,9 @@
-let sequence = 0;
+type TelemetryContext = Record<string, unknown> | undefined;
 
-function nowIso(): string {
-  return new Date().toISOString();
+export function logTrace(_scope: string, _event: string, _context?: TelemetryContext): void {
+  // Telemetry disabled intentionally.
 }
 
-function safePayload(payload: unknown): string {
-  if (payload === undefined) {
-    return '';
-  }
-
-  try {
-    return JSON.stringify(payload);
-  } catch {
-    return '[unserializable-payload]';
-  }
-}
-
-export function logTrace(scope: string, event: string, payload?: Record<string, unknown>): void {
-  const enabled = typeof __DEV__ !== 'undefined' ? __DEV__ : true;
-  if (!enabled) {
-    return;
-  }
-
-  sequence += 1;
-  const line = `[ParaTrace][${nowIso()}][#${String(sequence).padStart(4, '0')}][${scope}] ${event}`;
-  const body = safePayload(payload);
-
-  if (body) {
-    console.log(`${line} ${body}`);
-    return;
-  }
-
-  console.log(line);
-}
-
-export function logError(scope: string, event: string, error: unknown, payload?: Record<string, unknown>): void {
-  const enabled = typeof __DEV__ !== 'undefined' ? __DEV__ : true;
-  if (!enabled) {
-    return;
-  }
-
-  sequence += 1;
-
-  const normalizedError =
-    error instanceof Error
-      ? {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        }
-      : { message: String(error) };
-
-  const line = `[ParaTrace][${nowIso()}][#${String(sequence).padStart(4, '0')}][${scope}] ${event}`;
-  console.warn(`${line} ${safePayload({ ...payload, error: normalizedError })}`);
+export function logError(_scope: string, _event: string, _error: unknown, _context?: TelemetryContext): void {
+  // Telemetry disabled intentionally.
 }

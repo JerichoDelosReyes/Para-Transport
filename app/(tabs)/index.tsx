@@ -226,9 +226,7 @@ export default function HomeScreen() {
   const mapRef = useRef<MapView | null>(null);
 
   useEffect(() => {
-    logTrace('HomeScreen', 'screen-mounted');
     return () => {
-      logTrace('HomeScreen', 'screen-unmounted');
     };
   }, []);
 

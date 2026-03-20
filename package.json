@@ -8,7 +8,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "generate:transit": "node scripts/generateTransitData.js",
-    "smoke:transit": "npx --yes tsx scripts/smokeTransitSearch.ts"
+    "smoke:transit": "npx --yes tsx scripts/smokeTransitSearch.ts",
+    "verify:routing": "npx --yes tsx scripts/verifyRoutingBackend.ts"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
