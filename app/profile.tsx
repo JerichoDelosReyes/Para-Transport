@@ -130,7 +130,7 @@ export default function ProfileScreen() {
       </View>
 
       {/* Floating Avatar */}
-      <View style={[styles.avatarContainer, { top: insets.top + 100 }]}>
+      <View style={[styles.avatarContainer, { top: insets.top + 70 }]}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{getInitials(user?.name || '')}</Text>
         </View>
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   topSection: {
-    height: 220,
+    height: 190,
     backgroundColor: COLORS.primary,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
