@@ -1,100 +1,32 @@
 /**
- * Hook to fetch, cache, and parse Overpass transit data for Cavite.
+ * Hook to load parsed Overpass transit data for Cavite.
  * Provides routes, stops, loading state, error state, and a refresh function.
  *
- * Fetches routes and stops in parallel via separate optimized queries.
- * Uses 24-hour cache with stale fallback on network errors.
+ * It natively imports the pre-parsed dataset bundling to avoid slow
+ * 60MB raw data downloads over the mobile network on cold starts.
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchTransitRoutes, fetchTransitStops } from '../services/overpassService';
-import {
-  getCachedTransitData,
-  getStaleCachedTransitData,
-  setCachedTransitData,
-} from '../services/cacheService';
-import { parseRouteElements, parseStopElements } from '../utils/parseRoutes';
+import { useState, useCallback } from 'react';
+import bundledTransitData from '../data/parsed_transit_data.json';
 
 export function useTransitData() {
-  const [routes, setRoutes] = useState([]);
-  const [stops, setStops] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [routes, setRoutes] = useState(bundledTransitData?.routes || []);
+  const [stops, setStops] = useState(bundledTransitData?.stops || []);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => { mountedRef.current = false; };
-  }, []);
 
   const load = useCallback(async () => {
+    // Keeping this interface for compatibility with any refresh buttons
+    // The data is statically bundled and parsed, so no external fetch is needed.
     setLoading(true);
     setError(null);
-
     try {
-      // Try fresh cache first
-      const cached = await getCachedTransitData();
-      if (cached?.routeElements && cached?.stopElements) {
-        const parsedRoutes = parseRouteElements(cached.routeElements);
-        const parsedStops = parseStopElements(cached.stopElements);
-        if (mountedRef.current) {
-          setRoutes(parsedRoutes);
-          setStops(parsedStops);
-          setLoading(false);
-        }
-        return;
-      }
-
-      // Fetch routes and stops in parallel
-      const [routeData, stopData] = await Promise.all([
-        fetchTransitRoutes(),
-        fetchTransitStops(),
-      ]);
-
-      // Cache the raw elements
-      await setCachedTransitData({
-        routeElements: routeData.elements,
-        stopElements: stopData.elements,
-      });
-
-      const parsedRoutes = parseRouteElements(routeData.elements);
-      const parsedStops = parseStopElements(stopData.elements);
-
-      if (mountedRef.current) {
-        setRoutes(parsedRoutes);
-        setStops(parsedStops);
-      }
+      setRoutes(bundledTransitData?.routes || []);
+      setStops(bundledTransitData?.stops || []);
     } catch (err) {
-      console.warn('[useTransitData] Fetch failed, trying stale cache:', err.message);
-
-      // Fall back to stale cache
-      try {
-        const stale = await getStaleCachedTransitData();
-        if (stale?.routeElements && stale?.stopElements) {
-          const parsedRoutes = parseRouteElements(stale.routeElements);
-          const parsedStops = parseStopElements(stale.stopElements);
-          if (mountedRef.current) {
-            setRoutes(parsedRoutes);
-            setStops(parsedStops);
-          }
-        } else {
-          if (mountedRef.current) {
-            setError(err.message || 'Failed to load transit data');
-          }
-        }
-      } catch {
-        if (mountedRef.current) {
-          setError(err.message || 'Failed to load transit data');
-        }
-      }
+      setError(err.message);
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
   return { routes, stops, loading, error, refresh: load };
 }
