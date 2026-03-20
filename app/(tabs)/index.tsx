@@ -89,6 +89,12 @@ export default function HomeScreen() {
   const [nearestStop, setNearestStop] = useState<any>(null);
   const mapRef = useRef<MapView | null>(null);
   const lastClampedRegionRef = useRef<Region | null>(null);
+  const currentRegionRef = useRef<Region>({
+    latitude: PH_CENTER_LAT,
+    longitude: PH_CENTER_LNG,
+    latitudeDelta: 0.05,
+    longitudeDelta: 0.05,
+  });
 
   // Search Expand Animation
   const searchHeightAnim = useRef(new Animated.Value(48)).current;
@@ -173,6 +179,7 @@ export default function HomeScreen() {
   }, [currentLocation, transitStops]);
 
   const handleRegionChangeComplete = useCallback((region: Region) => {
+    currentRegionRef.current = region;
     const clampedRegion = clampToPhilippinesRegion(region);
 
     if (regionsAreClose(region, clampedRegion)) {
@@ -514,6 +521,53 @@ export default function HomeScreen() {
           </Marker>
         ))}
       </MapView>
+
+      {/* Map Control Buttons */}
+      <View style={styles.mapControls}>
+        <TouchableOpacity
+          style={[styles.mapControlBtn, { marginBottom: 8 }]}
+          onPress={() => {
+            if (currentLocation) {
+              mapRef.current?.animateToRegion({
+                latitude: currentLocation.latitude,
+                longitude: currentLocation.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+              }, 600);
+            } else {
+              Alert.alert('GPS Not Ready', 'Waiting for your current location.');
+            }
+          }}
+        >
+          <Ionicons name="locate" size={20} color={COLORS.navy} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.mapControlBtn}
+          onPress={() => {
+            const r = currentRegionRef.current;
+            mapRef.current?.animateToRegion({
+              ...r,
+              latitudeDelta: r.latitudeDelta / 2,
+              longitudeDelta: r.longitudeDelta / 2,
+            }, 300);
+          }}
+        >
+          <Ionicons name="add" size={22} color={COLORS.navy} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.mapControlBtn}
+          onPress={() => {
+            const r = currentRegionRef.current;
+            mapRef.current?.animateToRegion({
+              ...r,
+              latitudeDelta: Math.min(r.latitudeDelta * 2, 10),
+              longitudeDelta: Math.min(r.longitudeDelta * 2, 10),
+            }, 300);
+          }}
+        >
+          <Ionicons name="remove" size={22} color={COLORS.navy} />
+        </TouchableOpacity>
+      </View>
 
       {/* Dim map when search is active */}
       {isSearchActive && (
@@ -1295,5 +1349,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.navy,
+  },
+  mapControls: {
+    position: 'absolute',
+    right: 16,
+    bottom: 140,
+    zIndex: 3,
+    alignItems: 'center',
+  },
+  mapControlBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
 });

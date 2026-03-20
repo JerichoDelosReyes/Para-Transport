@@ -16,8 +16,8 @@ const OVERPASS_MIRRORS = [
   'https://overpass.kumi.systems/api/interpreter',
 ];
 
-// Bounding box covering Bacoor, Imus, and Dasmariñas only
-const CAVITE_BBOX = '14.27,120.90,14.48,121.00';
+// Bounding box covering the whole Cavite province
+const CAVITE_BBOX = '14.10,120.56,14.49,121.10';
 
 const FETCH_TIMEOUT_MS = 40000; // 40 seconds
 
@@ -27,7 +27,7 @@ const FETCH_TIMEOUT_MS = 40000; // 40 seconds
  * the expensive `>;out skel qt;` recursive expansion that pulls hundreds of thousands of nodes.
  */
 function buildRoutesQuery() {
-  return `[out:json][timeout:45][maxsize:80000000];
+  return `[out:json][timeout:90][maxsize:150000000];
 (
   relation["route"="bus"](${CAVITE_BBOX});
   relation["route"="jeepney"](${CAVITE_BBOX});
