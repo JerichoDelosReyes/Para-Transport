@@ -1,0 +1,55 @@
+[
+  {
+    "title": "SM Molino",
+    "aliases": ["SM Molino Bacoor", "SM City Molino", "S M Molino"],
+    "subtitle": "Bacoor, Cavite",
+    "weight": 12,
+    "coordinate": [120.9775971, 14.3832246]
+  },
+  {
+    "title": "District",
+    "aliases": ["The District", "District Imus"],
+    "subtitle": "Imus, Cavite",
+    "weight": 11,
+    "coordinate": [120.9405, 14.3963]
+  },
+  {
+    "title": "Baclaran",
+    "aliases": ["LRT Baclaran", "Baclaran Terminal"],
+    "subtitle": "Paranaque",
+    "weight": 11,
+    "coordinate": [120.9994, 14.5351]
+  },
+  {
+    "title": "Manggahan",
+    "aliases": ["Manggahan Bacoor"],
+    "subtitle": "Bacoor, Cavite",
+    "weight": 8,
+    "coordinate": [120.958, 14.401]
+  },
+  {
+    "title": "BDO",
+    "aliases": ["BDO Molino", "Banco de Oro"],
+    "subtitle": "Cavite",
+    "weight": 7
+  },
+  {
+    "title": "DBB1",
+    "aliases": ["DBB 1", "D.B.B.1", "Dasmarinas Bayan 1"],
+    "subtitle": "Dasmarinas, Cavite",
+    "weight": 8
+  },
+  {
+    "title": "DBBC",
+    "aliases": ["DBB C", "Dasmarinas Bayan C"],
+    "subtitle": "Dasmarinas, Cavite",
+    "weight": 8
+  },
+  {
+    "title": "Robinson Pala Pala",
+    "aliases": ["Robinsons Pala Pala", "Rob Pala Pala", "Pala Pala"],
+    "subtitle": "Dasmarinas, Cavite",
+    "weight": 10,
+    "coordinate": [120.9587, 14.3014]
+  }
+]

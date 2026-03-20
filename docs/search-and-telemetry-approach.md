@@ -29,6 +29,16 @@ The Home search flow should be reliable even when public APIs are slow, rate-lim
 ## Do we need a text location list?
 Yes. A maintained gazetteer is strongly recommended.
 
+Current implementation file:
+- `data/known-locations.json`
+
+Field guide:
+- `title`: canonical user-facing location name.
+- `aliases`: common alternate spellings and colloquial names.
+- `subtitle`: optional context shown in suggestions.
+- `weight`: manual priority boost (higher means suggested earlier).
+- `coordinate`: optional `[lng, lat]` fallback if stop-derived coordinate is unavailable.
+
 Minimum viable list:
 - Route terminals (start and end)
 - Known landmarks and malls
@@ -52,6 +62,13 @@ Ranking inputs:
 - Distance to current location
 - Route frequency / route coverage count
 - Optional manual weight override for high-traffic landmarks
+
+Implemented ranking behavior in Home:
+- Exact title/alias match has highest score.
+- Prefix and contains matches are scored below exact.
+- Typo-tolerance via Levenshtein distance (small edit distance boost).
+- Nearby places receive a distance bonus when GPS is available.
+- Catalog entries receive a small trust boost over raw stop-derived names.
 
 ## Telemetry requirements
 The app should log, in order, all meaningful states and interactions:

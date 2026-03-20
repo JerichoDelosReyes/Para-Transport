@@ -9,6 +9,7 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useJeepneyRoutes } from '../../hooks/useJeepneyRoutes';
 import { logError, logTrace } from '../../utils/telemetry';
+import knownLocationCatalog from '../../data/known-locations.json';
 
 const { height, width } = Dimensions.get('window');
 
@@ -47,6 +48,17 @@ type LocalLocation = {
   subtitle: string;
   latitude: number;
   longitude: number;
+  aliases: string[];
+  weight: number;
+  source: 'catalog' | 'route-stops';
+};
+
+type KnownLocationEntry = {
+  title: string;
+  aliases?: string[];
+  subtitle?: string;
+  weight?: number;
+  coordinate?: [number, number];
 };
 
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
@@ -54,6 +66,10 @@ const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
 
 function normalizeQuery(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function toSlug(value: string): string {
+  return normalizeQuery(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
 function haversineKm(a: MapCoordinate, b: MapCoordinate): number {
@@ -64,6 +80,130 @@ function haversineKm(a: MapCoordinate, b: MapCoordinate): number {
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLng / 2) ** 2;
   return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) {
+    return 0;
+  }
+
+  if (!a.length) {
+    return b.length;
+  }
+
+  if (!b.length) {
+    return a.length;
+  }
+
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  const next = new Array<number>(b.length + 1);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    next[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      next[j] = Math.min(
+        next[j - 1] + 1,
+        prev[j] + 1,
+        prev[j - 1] + cost
+      );
+    }
+
+    for (let j = 0; j <= b.length; j += 1) {
+      prev[j] = next[j];
+    }
+  }
+
+  return prev[b.length];
+}
+
+function scoreLocationMatch(query: string, location: LocalLocation, currentLocation: MapCoordinate | null): number {
+  const q = normalizeQuery(query);
+  if (!q) {
+    let baseScore = 120 + location.weight * 14;
+    if (currentLocation) {
+      const km = haversineKm(currentLocation, {
+        latitude: location.latitude,
+        longitude: location.longitude,
+      });
+      baseScore += Math.max(0, 140 - km * 9);
+    }
+    return baseScore;
+  }
+
+  const title = normalizeQuery(location.title);
+  const aliases = location.aliases.map(normalizeQuery).filter(Boolean);
+
+  let score = location.weight * 14;
+  let matched = false;
+
+  if (title === q) {
+    score += 1300;
+    matched = true;
+  } else if (title.startsWith(q)) {
+    score += 980;
+    matched = true;
+  } else if (title.includes(q)) {
+    score += 820;
+    matched = true;
+  }
+
+  for (const alias of aliases) {
+    if (alias === q) {
+      score += 1180;
+      matched = true;
+      break;
+    }
+    if (alias.startsWith(q)) {
+      score += 920;
+      matched = true;
+      break;
+    }
+    if (alias.includes(q)) {
+      score += 760;
+      matched = true;
+      break;
+    }
+  }
+
+  const qTokens = q.split(' ').filter(Boolean);
+  if (qTokens.length) {
+    const bag = [title, ...aliases].join(' ');
+    let tokenHits = 0;
+    for (const token of qTokens) {
+      if (bag.includes(token)) {
+        tokenHits += 1;
+      }
+    }
+    if (tokenHits > 0) {
+      score += tokenHits * 70;
+      matched = true;
+    }
+  }
+
+  const bestEditDistance = Math.min(title ? levenshtein(q, title) : 999, ...aliases.map((alias) => levenshtein(q, alias)));
+  if (bestEditDistance <= 2) {
+    score += 660 - bestEditDistance * 130;
+    matched = true;
+  }
+
+  if (!matched) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  if (currentLocation) {
+    const km = haversineKm(currentLocation, {
+      latitude: location.latitude,
+      longitude: location.longitude,
+    });
+    score += Math.max(0, 190 - km * 11);
+  }
+
+  if (location.source === 'catalog') {
+    score += 25;
+  }
+
+  return score;
 }
 
 export default function HomeScreen() {
@@ -92,7 +232,7 @@ export default function HomeScreen() {
     };
   }, []);
 
-  const localLocations = React.useMemo<LocalLocation[]>(() => {
+  const routeStopLocations = React.useMemo<LocalLocation[]>(() => {
     const byName = new Map<string, LocalLocation>();
 
     for (const route of jeepneyRoutes) {
@@ -114,6 +254,9 @@ export default function HomeScreen() {
             subtitle: 'Cavite, Philippines',
             latitude: stop.coordinate.latitude,
             longitude: stop.coordinate.longitude,
+            aliases: [],
+            weight: 1,
+            source: 'route-stops',
           });
         }
       }
@@ -122,33 +265,93 @@ export default function HomeScreen() {
     return [...byName.values()].sort((a, b) => a.title.localeCompare(b.title, 'en'));
   }, [jeepneyRoutes]);
 
-  const getLocalMatches = React.useCallback((query: string, limit = 8): LocalLocation[] => {
-    const q = normalizeQuery(query);
-    if (!q) {
-      return localLocations.slice(0, limit);
+  const localLocations = React.useMemo<LocalLocation[]>(() => {
+    const catalog = knownLocationCatalog as KnownLocationEntry[];
+    const routeByTitle = new Map<string, LocalLocation>();
+    for (const item of routeStopLocations) {
+      routeByTitle.set(normalizeQuery(item.title), item);
     }
 
-    const exact = localLocations.filter((item) => normalizeQuery(item.title) === q);
-    const startsWith = localLocations.filter((item) => normalizeQuery(item.title).startsWith(q));
-    const includes = localLocations.filter((item) => normalizeQuery(item.title).includes(q));
+    const merged = new Map<string, LocalLocation>();
 
-    const merged = [...exact, ...startsWith, ...includes];
-    const seen = new Set<string>();
-    const result: LocalLocation[] = [];
-
-    for (const item of merged) {
-      if (seen.has(item.id)) {
+    for (const entry of catalog) {
+      const titleKey = normalizeQuery(entry.title || '');
+      if (!titleKey) {
         continue;
       }
-      seen.add(item.id);
-      result.push(item);
-      if (result.length >= limit) {
-        break;
+
+      const normalizedAliases = (entry.aliases || []).map(normalizeQuery).filter(Boolean);
+
+      let matchedRouteLocation: LocalLocation | undefined = routeByTitle.get(titleKey);
+      if (!matchedRouteLocation) {
+        for (const alias of normalizedAliases) {
+          const maybe = routeByTitle.get(alias);
+          if (maybe) {
+            matchedRouteLocation = maybe;
+            break;
+          }
+        }
+      }
+
+      const latitude = matchedRouteLocation
+        ? matchedRouteLocation.latitude
+        : Number(entry.coordinate?.[1]);
+      const longitude = matchedRouteLocation
+        ? matchedRouteLocation.longitude
+        : Number(entry.coordinate?.[0]);
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        continue;
+      }
+
+      const candidate: LocalLocation = {
+        id: `catalog-${toSlug(entry.title)}`,
+        title: entry.title,
+        subtitle: entry.subtitle || matchedRouteLocation?.subtitle || 'Cavite, Philippines',
+        latitude,
+        longitude,
+        aliases: [...new Set([...(entry.aliases || []), matchedRouteLocation?.title || ''].filter(Boolean))],
+        weight: entry.weight || 0,
+        source: 'catalog',
+      };
+
+      merged.set(titleKey, candidate);
+    }
+
+    for (const routeLoc of routeStopLocations) {
+      const key = normalizeQuery(routeLoc.title);
+      if (!merged.has(key)) {
+        merged.set(key, routeLoc);
       }
     }
 
-    return result;
-  }, [localLocations]);
+    const finalized = [...merged.values()];
+    logTrace('HomeScreen', 'local-location-catalog-ready', {
+      routeStopCount: routeStopLocations.length,
+      mergedCount: finalized.length,
+      catalogCount: catalog.length,
+    });
+    return finalized;
+  }, [routeStopLocations]);
+
+  const getLocalMatches = React.useCallback((query: string, limit = 8): LocalLocation[] => {
+    const ranked = localLocations
+      .map((location) => ({
+        location,
+        score: scoreLocationMatch(query, location, currentLocation),
+      }))
+      .filter((item) => Number.isFinite(item.score))
+      .sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        return a.location.title.localeCompare(b.location.title, 'en');
+      })
+      .slice(0, limit)
+      .map((item) => item.location);
+
+    return ranked;
+  }, [localLocations, currentLocation]);
 
   // Bottom Sheet Animation state
   const sheetHeight = height * 0.5; // max height of bottom sheet
