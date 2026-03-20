@@ -49,6 +49,13 @@ export default function ProfileScreen() {
           contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
         >
+          {/* Avatar Area */}
+          <View style={styles.avatarSection}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{getInitials(user?.name || '')}</Text>
+            </View>
+          </View>
+
           {/* Top Info Area */}
           <View style={styles.infoArea}>
             <View style={styles.userInfo}>
@@ -128,14 +135,6 @@ export default function ProfileScreen() {
 
         </ScrollView>
       </View>
-
-      {/* Floating Avatar */}
-      <View style={[styles.avatarContainer, { top: insets.top + 70 }]}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{getInitials(user?.name || '')}</Text>
-        </View>
-      </View>
-
     </View>
   );
 }
@@ -146,18 +145,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   topSection: {
-    height: 190,
     backgroundColor: COLORS.primary,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'visible',
+    zIndex: 10,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 10,
+    paddingVertical: 14,
+    height: 64,
   },
   headerTitleText: {
     fontFamily: 'Cubao',
@@ -183,15 +180,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  avatarContainer: {
-    position: 'absolute',
-    left: SPACING.screenX,
-    zIndex: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+  avatarSection: {
+    paddingVertical: 16,
+    alignItems: 'flex-start',
   },
   avatar: {
     width: 90,
@@ -202,6 +193,11 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
   },
   avatarText: {
     fontFamily: 'Inter',
@@ -211,14 +207,13 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     flex: 1,
-    marginTop: -40,
     backgroundColor: COLORS.background,
   },
   scrollArea: {
     flex: 1,
   },
   contentContainer: {
-    paddingTop: 85,
+    paddingTop: 8,
     paddingHorizontal: SPACING.screenX,
   },
   infoArea: {

@@ -66,7 +66,7 @@ export default function EditProfileScreen() {
             </View>
           </TouchableOpacity>
           
-          <Text style={styles.headerTitle}>EDIT PROFILE</Text>
+          <Text style={styles.headerTitle}>EDIT</Text>
           
           <TouchableOpacity 
             style={styles.saveButton}

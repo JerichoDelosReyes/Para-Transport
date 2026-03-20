@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.navy,
+    backgroundColor: '#E8A020',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -48,8 +48,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
   },
   avatarImage: {
     width: '100%',
@@ -60,6 +58,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: COLORS.navy,
   },
 });
