@@ -23,12 +23,12 @@ export const ROUTE_LABELS = {
   share_taxi: 'UV Express',
 };
 
-// Clip bounds: Bacoor, Imus, Dasmariñas area with a small padding
+// Clip bounds: whole Cavite province
 const CLIP_BOUNDS = {
-  minLat: 14.27,
-  maxLat: 14.48,
-  minLon: 120.90,
-  maxLon: 121.00,
+  minLat: 14.10,
+  maxLat: 14.49,
+  minLon: 120.56,
+  maxLon: 121.10,
 };
 
 // Simplification tolerance in degrees (~11m at Cavite's latitude)
