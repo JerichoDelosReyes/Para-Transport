@@ -74,9 +74,13 @@ export default function EditProfileScreen() {
             disabled={isSaving}
           >
             {isSaving ? (
-               <ActivityIndicator size="small" color={COLORS.navy} />
+               <View style={styles.saveButtonCircle}>
+                 <ActivityIndicator size="small" color={COLORS.navy} />
+               </View>
             ) : (
-               <Text style={styles.saveText}>Save</Text>
+               <View style={styles.saveButtonCircle}>
+                 <Ionicons name="checkmark" size={24} color={COLORS.navy} />
+               </View>
             )}
           </TouchableOpacity>
         </View>
@@ -120,11 +124,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   topSection: {
-    height: 120,
     backgroundColor: COLORS.primary,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'visible',
     zIndex: 10,
   },
   header: {
@@ -132,7 +132,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 10,
+    paddingVertical: 14,
+    height: 64,
   },
   backButton: {
     width: 44,
@@ -163,6 +164,19 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     alignItems: 'flex-end',
+  },
+  saveButtonCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   saveText: {
     fontFamily: 'Inter',

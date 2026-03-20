@@ -134,11 +134,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   topSection: {
-    height: 120,
     backgroundColor: COLORS.primary,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'visible',
     zIndex: 10,
   },
   header: {
@@ -146,7 +142,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 10,
+    paddingVertical: 14,
+    height: 64,
   },
   backButton: {
     width: 44,
