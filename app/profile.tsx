@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   headerTitleText: {
     fontFamily: 'Cubao',
     fontSize: TYPOGRAPHY.screenTitle,
-    color: '#000000',
+    color: COLORS.navy,
   },
   iconButton: {
     width: 44,

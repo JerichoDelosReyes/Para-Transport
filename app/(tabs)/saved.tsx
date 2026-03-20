@@ -27,10 +27,12 @@ export default function SavedScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>SAVED</Text>
-        <ProfileButton />
+    <View style={styles.screen}>
+      <View style={[styles.topSection, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>SAVED</Text>
+          <ProfileButton />
+        </View>
       </View>
 
       <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
@@ -77,7 +79,7 @@ export default function SavedScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -90,18 +92,21 @@ const styles = StyleSheet.create({
   closeButtonText: { color: '#fff', fontWeight: 'bold' },
   screen: {
     flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  topSection: {
+    height: 190,
     backgroundColor: COLORS.primary,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'visible',
   },
   header: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.screenX,
-    paddingVertical: 14,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 64,
+    paddingHorizontal: SPACING.screenX,
+    paddingTop: 10,
   },
   headerTitle: {
     fontFamily: 'Cubao',
