@@ -5,13 +5,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useStore } from '../store/useStore';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
-
-const MOCK_BADGES = [
-  { id: '1', name: 'First Ride', emoji: '🎉', earned: true },
-  { id: '2', name: 'Night Owl', emoji: '🦉', earned: true },
-  { id: '3', name: 'Early Bird', emoji: '🌅', earned: false },
-  { id: '4', name: 'Explorer', emoji: '🗺️', earned: false },
-];
+import { BADGES } from '../constants/badges';
 
 function getInitials(name: string) {
   if (!name) return 'PR';
@@ -60,7 +54,6 @@ export default function ProfileScreen() {
           <View style={styles.infoArea}>
             <View style={styles.userInfo}>
               <Text style={styles.name}>{user?.name || 'Passenger'}</Text>
-              <Text style={styles.email}>{user?.email || 'user@example.com'}</Text>
             </View>
 
             <View style={styles.quickStatsRow}>
@@ -114,23 +107,26 @@ export default function ProfileScreen() {
           {/* Badges Section */}
           <View style={styles.sectionHeaderContainer}>
             <Text style={styles.sectionTitle}>Badges</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/achievements')}>
               <Text style={styles.sectionLink}>View All</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.badgesWrapper}>
-            {MOCK_BADGES.map((badge) => (
-              <View key={badge.id} style={[styles.badgeCard, !badge.earned && styles.badgeLocked]}>
-                <Text style={[styles.badgeEmoji, !badge.earned && { opacity: 0.3 }]}>{badge.emoji}</Text>
-                <Text style={[styles.badgeName, !badge.earned && { color: COLORS.textMuted }]}>{badge.name}</Text>
-                {!badge.earned && (
-                  <View style={styles.lockOverlay}>
-                    <Ionicons name="lock-closed" size={14} color={COLORS.textMuted} />
-                  </View>
-                )}
-              </View>
-            ))}
+            {BADGES.slice(0, 3).map((badge, index) => {
+              const isEarned = false; // explicitly locked instead of mock data
+              return (
+                <View key={badge.id} style={[styles.badgeCard, !isEarned && styles.badgeLocked]}>
+                  <Text style={[styles.badgeEmoji, !isEarned && { opacity: 0.3 }]}>{badge.icon}</Text>
+                  <Text style={[styles.badgeName, !isEarned && { color: COLORS.textMuted }]}>{badge.name}</Text>
+                  {!isEarned && (
+                    <View style={styles.lockOverlay}>
+                      <Ionicons name="lock-closed" size={14} color={COLORS.textMuted} />
+                    </View>
+                  )}
+                </View>
+              );
+            })}
           </View>
 
         </ScrollView>
@@ -231,11 +227,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: COLORS.navy,
     marginBottom: 4,
-  },
-  email: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    color: COLORS.textMuted,
   },
   quickStatsRow: {
     flexDirection: 'row',

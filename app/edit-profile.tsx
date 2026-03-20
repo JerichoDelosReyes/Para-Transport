@@ -52,6 +52,37 @@ export default function EditProfileScreen() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!user?.email) {
+      Alert.alert('Error', 'No email address associated with your account.');
+      return;
+    }
+    
+    Alert.alert(
+      'Reset Password',
+      `Send a password reset email to ${user.email}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Send Email', 
+          onPress: async () => {
+            try {
+              const { error } = await supabase.auth.resetPasswordForEmail(user.email);
+              
+              if (error) {
+                Alert.alert('Error', error.message);
+              } else {
+                Alert.alert('Success', 'Password reset email sent! Check your inbox.');
+              }
+            } catch (err: any) {
+              Alert.alert('Error', 'Failed to send password reset email.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <View style={styles.screen}>
       <View style={[styles.topSection, { paddingTop: insets.top }]}>
@@ -112,6 +143,17 @@ export default function EditProfileScreen() {
           <Text style={styles.guestNotice}>
             Profile cannot be modified for guest accounts.
           </Text>
+        )}
+
+        {!isGuestAccount && (
+          <TouchableOpacity 
+            style={styles.changePasswordButton}
+            onPress={handleResetPassword}
+          >
+            <Ionicons name="lock-closed-outline" size={20} color={COLORS.navy} />
+            <Text style={styles.changePasswordText}>Change Password</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} style={styles.chevronIcon} />
+          </TouchableOpacity>
         )}
       </View>
     </View>
@@ -218,5 +260,30 @@ const styles = StyleSheet.create({
     color: COLORS.heavyText,
     marginTop: 10,
     textAlign: 'center',
+  },
+  changePasswordButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.input,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  changePasswordText: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    fontSize: 16,
+    color: COLORS.navy,
+    marginLeft: 12,
+  },
+  chevronIcon: {
+    opacity: 0.5,
   }
 });
