@@ -99,7 +99,17 @@ export function parseRouteElements(elements) {
     if (el.type !== 'relation') continue;
 
     const tags = el.tags || {};
-    const routeType = tags.route;
+    let routeType = tags.route;
+
+    // In OSM PH, jeepneys are often mapped as share_taxi, minibus, or light_rail.
+    if (routeType === 'share_taxi' || routeType === 'minibus' || routeType === 'bus') {
+      const n = (tags.name || '').toLowerCase();
+      const net = (tags.network || '').toLowerCase();
+      if (n.includes('jeep') || net.includes('puj')) {
+        routeType = 'jeepney';
+      }
+    }
+
     if (!routeType || !ROUTE_COLORS[routeType]) continue;
 
     const members = el.members || [];
