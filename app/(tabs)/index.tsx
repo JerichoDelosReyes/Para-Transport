@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Animated, PanResponder, Dimensions, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { UrlTile, Marker, Polyline, Callout } from 'react-native-maps';
+import MapView, { UrlTile, Marker, Polyline, Callout, Region } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
@@ -30,6 +30,39 @@ type PlaceSuggestion = {
   longitude: number;
 };
 
+const PH_BOUNDS = MAP_CONFIG.PHILIPPINES_BOUNDS;
+const PH_CENTER_LAT = (PH_BOUNDS.minLatitude + PH_BOUNDS.maxLatitude) / 2;
+const PH_CENTER_LNG = (PH_BOUNDS.minLongitude + PH_BOUNDS.maxLongitude) / 2;
+const PH_MAX_LAT_DELTA = PH_BOUNDS.maxLatitude - PH_BOUNDS.minLatitude;
+const PH_MAX_LNG_DELTA = PH_BOUNDS.maxLongitude - PH_BOUNDS.minLongitude;
+
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(Math.max(value, min), max);
+
+const clampToPhilippinesRegion = (region: Region): Region => {
+  const latitudeDelta = clamp(region.latitudeDelta, 0.002, PH_MAX_LAT_DELTA);
+  const longitudeDelta = clamp(region.longitudeDelta, 0.002, PH_MAX_LNG_DELTA);
+
+  const minCenterLat = PH_BOUNDS.minLatitude + latitudeDelta / 2;
+  const maxCenterLat = PH_BOUNDS.maxLatitude - latitudeDelta / 2;
+  const minCenterLng = PH_BOUNDS.minLongitude + longitudeDelta / 2;
+  const maxCenterLng = PH_BOUNDS.maxLongitude - longitudeDelta / 2;
+
+  return {
+    latitude: clamp(region.latitude, minCenterLat, maxCenterLat),
+    longitude: clamp(region.longitude, minCenterLng, maxCenterLng),
+    latitudeDelta,
+    longitudeDelta,
+  };
+};
+
+const regionsAreClose = (a: Region, b: Region): boolean => (
+  Math.abs(a.latitude - b.latitude) < 0.0001 &&
+  Math.abs(a.longitude - b.longitude) < 0.0001 &&
+  Math.abs(a.latitudeDelta - b.latitudeDelta) < 0.0001 &&
+  Math.abs(a.longitudeDelta - b.longitudeDelta) < 0.0001
+);
+
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
 
@@ -55,6 +88,7 @@ export default function HomeScreen() {
   const [showTransitLayer, setShowTransitLayer] = useState(true);
   const [nearestStop, setNearestStop] = useState<any>(null);
   const mapRef = useRef<MapView | null>(null);
+  const lastClampedRegionRef = useRef<Region | null>(null);
 
   // Search Expand Animation
   const searchHeightAnim = useRef(new Animated.Value(48)).current;
@@ -137,6 +171,24 @@ export default function HomeScreen() {
       }, 600);
     }
   }, [currentLocation, transitStops]);
+
+  const handleRegionChangeComplete = useCallback((region: Region) => {
+    const clampedRegion = clampToPhilippinesRegion(region);
+
+    if (regionsAreClose(region, clampedRegion)) {
+      return;
+    }
+
+    if (
+      lastClampedRegionRef.current &&
+      regionsAreClose(lastClampedRegionRef.current, clampedRegion)
+    ) {
+      return;
+    }
+
+    lastClampedRegionRef.current = clampedRegion;
+    mapRef.current?.animateToRegion(clampedRegion, 0);
+  }, []);
 
   // Visible routes: if a route is selected show only that, otherwise show all
   const visibleTransitRoutes = useMemo(() => {
@@ -382,8 +434,8 @@ export default function HomeScreen() {
         style={StyleSheet.absoluteFillObject}
         mapType="none"
         initialRegion={{
-          latitude: 14.4296,
-          longitude: 120.9367,
+          latitude: PH_CENTER_LAT,
+          longitude: PH_CENTER_LNG,
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         }}
@@ -392,6 +444,7 @@ export default function HomeScreen() {
         showsCompass={false}
         onMapReady={() => setIsMapLoaded(true)}
         onTouchStart={() => setIsMapInteracted(true)}
+        onRegionChangeComplete={handleRegionChangeComplete}
         pitchEnabled={false}
         rotateEnabled={false}
         minZoomLevel={10}
@@ -401,7 +454,7 @@ export default function HomeScreen() {
         <UrlTile
           urlTemplate={MAP_CONFIG.OSM_TILE_URL}
           maximumZ={19}
-          minimumZ={1}
+          minimumZ={6}
           flipY={false}
           zIndex={1}
           shouldReplaceMapContent={true}
