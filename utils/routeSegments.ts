@@ -74,16 +74,66 @@ function isNearTransit(
 }
 
 /**
+ * Approximate total path length of a coordinate array in metres.
+ */
+function totalLengthMetres(coords: Coord[]): number {
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    total += Math.sqrt(sqDistMetres(coords[i - 1], coords[i]));
+  }
+  return total;
+}
+
+/**
+ * Merge consecutive segments with the same onTransit value.
+ */
+function mergeAdjacentSameType(segments: RouteSegment[]): RouteSegment[] {
+  if (segments.length === 0) return segments;
+  const merged: RouteSegment[] = [{ ...segments[0], coordinates: [...segments[0].coordinates] }];
+  for (let i = 1; i < segments.length; i++) {
+    const last = merged[merged.length - 1];
+    if (last.onTransit === segments[i].onTransit) {
+      // Skip duplicate junction point already shared at boundary
+      last.coordinates.push(...segments[i].coordinates.slice(1));
+    } else {
+      merged.push({ ...segments[i], coordinates: [...segments[i].coordinates] });
+    }
+  }
+  return merged;
+}
+
+/**
+ * Remove transit segments shorter than minTransitMetres by converting them
+ * back to walking, then re-merge adjacent same-type segments.
+ * This eliminates false-positive orange islands on inner streets.
+ */
+function dropShortTransitSegments(
+  segments: RouteSegment[],
+  minTransitMetres: number,
+): RouteSegment[] {
+  const flipped = segments.map((seg) => {
+    if (!seg.onTransit) return seg;
+    return totalLengthMetres(seg.coordinates) < minTransitMetres
+      ? { ...seg, onTransit: false }
+      : seg;
+  });
+  return mergeAdjacentSameType(flipped);
+}
+
+/**
  * Split `routePoints` into alternating on-transit / walking segments.
  *
- * @param routePoints  The full OSRM route coordinates
- * @param transitRoutes  Array of transit routes, each with a `.coordinates` array
- * @param thresholdMetres  Distance threshold to consider "on transit" (default 150m)
+ * @param routePoints       The full OSRM route coordinates
+ * @param transitRoutes     Array of transit routes, each with a `.coordinates` array
+ * @param thresholdMetres   Max distance from a transit polyline to count as "on transit" (default 50m)
+ * @param minTransitMetres  Minimum length a transit segment must be to survive; shorter ones become
+ *                          walking to avoid false orange islands on inner streets (default 150m)
  */
 export function splitRouteSegments(
   routePoints: Coord[],
   transitRoutes: { coordinates: Coord[] }[],
-  thresholdMetres = 150,
+  thresholdMetres = 50,
+  minTransitMetres = 150,
 ): RouteSegment[] {
   if (routePoints.length < 2) return [];
 
@@ -120,5 +170,6 @@ export function splitRouteSegments(
     segments.push({ coordinates: currentCoords, onTransit: currentOnTransit });
   }
 
-  return segments;
+  // Remove short transit islands caused by loose proximity matches
+  return dropShortTransitSegments(segments, minTransitMetres);
 }

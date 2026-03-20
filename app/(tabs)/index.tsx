@@ -626,7 +626,7 @@ export default function HomeScreen() {
   // Split searched route into on-transit (solid) and walking (dashed) segments
   const routeSegments = useMemo(() => {
     if (routeCoordinates.length < 2) return [];
-    return splitRouteSegments(routeCoordinates, transitRoutes, 200);
+    return splitRouteSegments(routeCoordinates, transitRoutes, 50);
   }, [routeCoordinates, transitRoutes]);
 
 
