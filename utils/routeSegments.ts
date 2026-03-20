@@ -74,6 +74,38 @@ function isNearTransit(
 }
 
 /**
+ * Remove tiny "on-transit" blips caused by proximity noise.
+ * Any true-run shorter than `minRunPoints` is treated as walking.
+ */
+function suppressShortTransitRuns(flags: boolean[], minRunPoints: number): boolean[] {
+  if (minRunPoints <= 1 || flags.length === 0) return flags;
+
+  const result = [...flags];
+  let runStart = -1;
+
+  for (let i = 0; i <= flags.length; i++) {
+    const isTransit = i < flags.length ? flags[i] : false; // sentinel false to flush trailing run
+
+    if (isTransit && runStart === -1) {
+      runStart = i;
+      continue;
+    }
+
+    if (!isTransit && runStart !== -1) {
+      const runLength = i - runStart;
+      if (runLength < minRunPoints) {
+        for (let j = runStart; j < i; j++) {
+          result[j] = false;
+        }
+      }
+      runStart = -1;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Split `routePoints` into alternating on-transit / walking segments.
  *
  * @param routePoints  The full OSRM route coordinates
@@ -84,6 +116,7 @@ export function splitRouteSegments(
   routePoints: Coord[],
   transitRoutes: { coordinates: Coord[] }[],
   thresholdMetres = 150,
+  minTransitRunPoints = 4,
 ): RouteSegment[] {
   if (routePoints.length < 2) return [];
 
@@ -97,13 +130,17 @@ export function splitRouteSegments(
   }
 
   const thresholdSq = thresholdMetres * thresholdMetres;
+  const rawFlags = routePoints.map((point) =>
+    isNearTransit(point, transitCoords, thresholdSq)
+  );
+  const pointOnTransit = suppressShortTransitRuns(rawFlags, minTransitRunPoints);
   const segments: RouteSegment[] = [];
 
-  let currentOnTransit = isNearTransit(routePoints[0], transitCoords, thresholdSq);
+  let currentOnTransit = pointOnTransit[0];
   let currentCoords: Coord[] = [routePoints[0]];
 
   for (let i = 1; i < routePoints.length; i++) {
-    const onTransit = isNearTransit(routePoints[i], transitCoords, thresholdSq);
+    const onTransit = pointOnTransit[i];
 
     if (onTransit !== currentOnTransit) {
       // Overlap: share the boundary point so lines connect visually

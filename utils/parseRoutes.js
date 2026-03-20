@@ -146,6 +146,7 @@ export function parseRouteElements(elements) {
       from: tags.from || '',
       to: tags.to || '',
       network: tags.network || '',
+      source: 'overpass-api',
       color: ROUTE_COLORS[routeType],
       label: ROUTE_LABELS[routeType],
       coordinates,

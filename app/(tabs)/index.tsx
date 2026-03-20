@@ -170,7 +170,8 @@ export default function HomeScreen() {
   // Split searched route into on-transit (solid) and walking (dashed) segments
   const routeSegments = useMemo(() => {
     if (routeCoordinates.length < 2) return [];
-    return splitRouteSegments(routeCoordinates, transitRoutes, 200);
+    const apiTransitRoutes = transitRoutes.filter((route: any) => route?.source === 'overpass-api');
+    return splitRouteSegments(routeCoordinates, apiTransitRoutes, 40, 4);
   }, [routeCoordinates, transitRoutes]);
 
 
