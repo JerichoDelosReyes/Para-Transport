@@ -34,6 +34,7 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
             </View>
           </TouchableOpacity>
+          <Text style={styles.headerTitleText}>PROFILE</Text>
           <TouchableOpacity onPress={() => router.push('/settings')} style={styles.iconButton}>
             <View style={styles.iconButtonCircle}>
               <Ionicons name="settings-outline" size={24} color={COLORS.navy} />
@@ -129,7 +130,7 @@ export default function ProfileScreen() {
       </View>
 
       {/* Floating Avatar */}
-      <View style={[styles.avatarContainer, { top: insets.top + 60 }]}>
+      <View style={[styles.avatarContainer, { top: insets.top + 100 }]}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{getInitials(user?.name || '')}</Text>
         </View>
@@ -145,7 +146,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   topSection: {
-    height: 180,
+    height: 220,
     backgroundColor: COLORS.primary,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
@@ -157,6 +158,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.screenX,
     paddingTop: 10,
+  },
+  headerTitleText: {
+    fontFamily: 'Cubao',
+    fontSize: TYPOGRAPHY.screenTitle,
+    color: '#000000',
   },
   iconButton: {
     width: 44,
@@ -212,7 +218,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingTop: 65,
+    paddingTop: 85,
     paddingHorizontal: SPACING.screenX,
   },
   infoArea: {
