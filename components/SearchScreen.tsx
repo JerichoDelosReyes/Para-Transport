@@ -46,6 +46,7 @@ export default function SearchScreen({
 }: SearchScreenProps) {
   const [activeField, setActiveField] = useState<'origin' | 'destination'>('destination');
   const [originText, setOriginText] = useState('');
+  const [originPlace, setOriginPlace] = useState<PlaceResult | null>(null);
   const [destinationText, setDestinationText] = useState('');
   const [usingCurrentLocation, setUsingCurrentLocation] = useState(true);
 
@@ -151,6 +152,7 @@ export default function SearchScreen({
       addRecent(place);
 
       if (activeField === 'origin') {
+        setOriginPlace(place);
         setOriginText(place.title);
         setUsingCurrentLocation(false);
         setActiveField('destination');
@@ -158,12 +160,12 @@ export default function SearchScreen({
       } else {
         setDestinationText(place.title);
         // Both fields filled → trigger route
-        const origin = usingCurrentLocation ? null : suggestions.find((s) => s.title === originText) || null;
+        const origin = usingCurrentLocation ? null : originPlace;
         onSelectRoute(origin, place);
       }
       setSuggestions([]);
     },
-    [activeField, originText, usingCurrentLocation, addRecent, onSelectRoute, suggestions],
+    [activeField, originPlace, usingCurrentLocation, addRecent, onSelectRoute],
   );
 
   const handleRecentPress = useCallback(

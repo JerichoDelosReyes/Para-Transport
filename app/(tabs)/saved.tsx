@@ -61,17 +61,53 @@ export default function SavedScreen() {
         ))}
       </ScrollView>
 
-      <Modal visible={isModalVisible} animationType="slide" transparent>
+      <Modal visible={isModalVisible} animationType="fade" transparent>
         <View style={styles.modalBg}>
           <View style={styles.modalContent}>
             {selectedRoute && (
               <>
-                <Text style={styles.modalTitle}>{selectedRoute.name}</Text>
-                <Text style={styles.modalText}>Fare: ₱{selectedRoute.total_fare.toFixed(2)}</Text>
-                <Text style={styles.modalText}>Time: {selectedRoute.estimated_minutes} mins</Text>
-                <Text style={styles.modalText}>Distance: {selectedRoute.total_km} km</Text>
-                <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.closeButtonText}>Close</Text>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle} numberOfLines={2}>
+                    {selectedRoute.name}
+                  </Text>
+                  <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close" size={24} color={COLORS.navy} />
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.modalBody}>
+                  <View style={styles.modalRow}>
+                    <Text style={styles.modalLabel}>Fare</Text>
+                    <Text style={styles.modalValue}>₱{selectedRoute.total_fare.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.modalRow}>
+                    <Text style={styles.modalLabel}>Estimated Time</Text>
+                    <Text style={styles.modalValue}>{selectedRoute.estimated_minutes} mins</Text>
+                  </View>
+                  <View style={styles.modalRow}>
+                    <Text style={styles.modalLabel}>Total Distance</Text>
+                    <Text style={styles.modalValue}>{selectedRoute.total_km} km</Text>
+                  </View>
+
+                  <View style={styles.legsContainer}>
+                    <Text style={styles.legsTitle}>Route Legs</Text>
+                    {selectedRoute.legs.map((leg: any, i: number) => (
+                      <View key={i} style={styles.legItem}>
+                        <View style={styles.legPrefix}>
+                          <View style={styles.legDot} />
+                          {i < selectedRoute.legs.length - 1 && <View style={styles.legLine} />}
+                        </View>
+                        <View style={styles.legDetails}>
+                          <Text style={styles.legMode}>Ride {leg.mode}</Text>
+                          <Text style={styles.legRoute}>{leg.from} → {leg.to}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                <TouchableOpacity style={styles.primaryButton} onPress={() => setModalVisible(false)} activeOpacity={0.9}>
+                  <Text style={styles.primaryButtonText}>Close</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -83,12 +119,123 @@ export default function SavedScreen() {
 }
 
 const styles = StyleSheet.create({
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 10 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
-  modalText: { fontSize: 16, marginBottom: 5 },
-  closeButton: { marginTop: 20, padding: 10, backgroundColor: COLORS.navy, borderRadius: 5, alignItems: 'center' },
-  closeButtonText: { color: '#fff', fontWeight: 'bold' },
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: SPACING.screenX,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: RADIUS.card,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    flex: 1,
+    fontFamily: 'Cubao',
+    fontSize: 24,
+    color: COLORS.navy,
+    marginRight: 10,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  modalBody: {
+    marginBottom: 24,
+  },
+  modalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+  },
+  modalLabel: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLORS.textMuted,
+  },
+  modalValue: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textStrong,
+  },
+  legsContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.06)',
+  },
+  legsTitle: {
+    fontFamily: 'Inter',
+    fontWeight: '700',
+    fontSize: 16,
+    color: COLORS.navy,
+    marginBottom: 12,
+  },
+  legItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  legPrefix: {
+    width: 20,
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  legDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
+    marginTop: 4,
+  },
+  legLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    marginTop: 4,
+  },
+  legDetails: {
+    flex: 1,
+    paddingBottom: 16,
+  },
+  legMode: {
+    fontFamily: 'Inter',
+    fontWeight: '700',
+    fontSize: 14,
+    color: COLORS.textStrong,
+  },
+  legRoute: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  primaryButton: {
+    height: 52,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
   screen: {
     flex: 1,
     backgroundColor: COLORS.primary,
