@@ -786,7 +786,7 @@ export default function HomeScreen() {
             >
               <Image 
                 source={require('../../assets/logo/icon_achievement.png')} 
-                style={{ width: 34, height: 14 }} 
+                style={{ width: 48, height: 20 }} 
                 resizeMode="contain"
               />
               <Text style={[styles.searchInputText, {color: COLORS.textMuted, flex: 1, marginLeft: 6}]} numberOfLines={1}>
