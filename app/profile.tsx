@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   headerTitleText: {
     fontFamily: 'Cubao',
     fontSize: TYPOGRAPHY.screenTitle,
-    color: COLORS.navy,
+    color: '#000000',
   },
   iconButton: {
     width: 44,
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: COLORS.navy,
+    backgroundColor: '#DE9F35',
     borderWidth: 4,
     borderColor: '#FFFFFF',
     alignItems: 'center',
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontWeight: '700',
     fontSize: 32,
-    color: '#FFFFFF',
+    color: COLORS.navy,
   },
   bottomSection: {
     flex: 1,
