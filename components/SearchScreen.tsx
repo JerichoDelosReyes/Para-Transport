@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
+  Modal,
   View,
   Text,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
   Keyboard,
   Platform,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -169,16 +171,17 @@ export default function SearchScreen({
     [handleSelectPlace],
   );
 
-  if (!visible) return null;
+  
 
   const displayOrigin = usingCurrentLocation
     ? currentLocationLabel || 'Current Location'
     : originText;
 
   return (
-    <View style={styles.container}>
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        {/* Header */}
+    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
+      <View style={styles.container}>
+        <SafeAreaView style={styles.safe} edges={['top']}>
+          {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={24} color={COLORS.navy} />
@@ -189,51 +192,42 @@ export default function SearchScreen({
         {/* Search Fields */}
         <View style={styles.fieldsContainer}>
           {/* Origin */}
-          <TouchableOpacity
+          <View
             style={[
               styles.fieldRow,
               activeField === 'origin' && styles.fieldRowActive,
             ]}
-            activeOpacity={0.8}
-            onPress={() => {
-              setActiveField('origin');
-              if (usingCurrentLocation) setOriginText('');
-              setTimeout(() => originRef.current?.focus(), 100);
-            }}
           >
             <View style={[styles.fieldDot, { backgroundColor: '#4A90D9' }]} />
-            {activeField === 'origin' && !usingCurrentLocation ? (
-              <TextInput
-                ref={originRef}
-                style={styles.fieldInput}
-                placeholder="Where are you now?"
-                placeholderTextColor={COLORS.textMuted}
-                value={originText}
-                onChangeText={(t) => {
-                  setOriginText(t);
+            <TextInput
+              ref={originRef}
+              style={styles.fieldInput}
+              placeholder="Where are you now?"
+              placeholderTextColor={COLORS.textMuted}
+              value={usingCurrentLocation && !originText ? (currentLocationLabel || 'Current Location') : originText}
+              onChangeText={(t) => {
+                setOriginText(t);
+                if (usingCurrentLocation) {
                   setUsingCurrentLocation(false);
-                }}
-                returnKeyType="next"
-                onSubmitEditing={() => {
-                  setActiveField('destination');
-                  destRef.current?.focus();
-                }}
-              />
-            ) : (
-              <Text
-                style={[
-                  styles.fieldText,
-                  usingCurrentLocation && activeField !== 'origin' && { color: COLORS.navy },
-                ]}
-                numberOfLines={1}
-              >
-                {displayOrigin}
-              </Text>
-            )}
-            {usingCurrentLocation && activeField !== 'origin' && (
-              <Ionicons name="navigate-circle" size={18} color="#4A90D9" style={{ marginLeft: 'auto' }} />
-            )}
-          </TouchableOpacity>
+                }
+              }}
+              onFocus={() => {
+                setActiveField('origin');
+                if (usingCurrentLocation) {
+                  setUsingCurrentLocation(false);
+                  setOriginText('');
+                }
+              }}
+              returnKeyType="next"
+              onSubmitEditing={() => {
+                setActiveField('destination');
+                destRef.current?.focus();
+              }}
+            />
+            <TouchableOpacity onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon!')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="mic" size={20} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          </View>
 
           {/* Connector dots */}
           <View style={styles.connectorDots}>
@@ -243,43 +237,54 @@ export default function SearchScreen({
           </View>
 
           {/* Destination */}
-          <TouchableOpacity
+          <View
             style={[
               styles.fieldRow,
               activeField === 'destination' && styles.fieldRowActive,
             ]}
-            activeOpacity={0.8}
-            onPress={() => {
-              setActiveField('destination');
-              setTimeout(() => destRef.current?.focus(), 100);
-            }}
           >
             <View style={[styles.fieldDot, { backgroundColor: '#E8A020' }]} />
-            {activeField === 'destination' ? (
-              <TextInput
-                ref={destRef}
-                style={styles.fieldInput}
-                placeholder="Where are you going?"
-                placeholderTextColor={COLORS.textMuted}
-                value={destinationText}
-                onChangeText={setDestinationText}
-                returnKeyType="search"
-                onSubmitEditing={() => {
-                  if (suggestions.length > 0) {
-                    handleSelectPlace(suggestions[0]);
-                  }
-                }}
-              />
-            ) : (
-              <Text
-                style={[styles.fieldText, !destinationText && { color: COLORS.textMuted }]}
-                numberOfLines={1}
-              >
-                {destinationText || 'Where are you going?'}
-              </Text>
-            )}
-          </TouchableOpacity>
+            <TextInput
+              ref={destRef}
+              style={styles.fieldInput}
+              placeholder="Where are you going?"
+              placeholderTextColor={COLORS.textMuted}
+              value={destinationText}
+              onChangeText={setDestinationText}
+              onFocus={() => setActiveField('destination')}
+              returnKeyType="search"
+              onSubmitEditing={() => {
+                if (suggestions.length > 0) {
+                  handleSelectPlace(suggestions[0]);
+                }
+              }}
+            />
+            <TouchableOpacity onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon!')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="mic" size={20} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* Choose Current Location Button */}
+        <TouchableOpacity
+          style={styles.currentLocationBtn}
+          activeOpacity={0.7}
+          onPress={() => {
+            if (activeField === 'origin') {
+              setUsingCurrentLocation(true);
+              setOriginText('');
+              setActiveField('destination');
+              setTimeout(() => destRef.current?.focus(), 100);
+            } else {
+              setDestinationText('Current Location');
+            }
+          }}
+        >
+          <View style={[styles.resultIcon, { backgroundColor: 'rgba(74,144,217,0.1)', width: 32, height: 32, borderRadius: 16 }]}>
+            <Ionicons name="locate" size={16} color="#4A90D9" />
+          </View>
+          <Text style={[styles.resultTitle, { color: '#4A90D9' }]}>Choose Current Location</Text>
+        </TouchableOpacity>
 
         {/* Divider */}
         <View style={styles.divider} />
@@ -363,15 +368,15 @@ export default function SearchScreen({
           </>
         )}
       </SafeAreaView>
-    </View>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     backgroundColor: COLORS.background,
-    zIndex: 100,
   },
   safe: {
     flex: 1,
@@ -466,6 +471,20 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: SPACING.screenX,
+  },
+  currentLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: SPACING.screenX,
+  },
+  currentLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: SPACING.screenX,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(10,22,40,0.06)',
   },
   resultRow: {
     flexDirection: 'row',

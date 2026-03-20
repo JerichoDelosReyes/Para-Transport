@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert, StatusBar, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { UrlTile, Marker, Polyline, Callout } from 'react-native-maps';
+import MapView, { Marker, Polyline, Callout } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
@@ -545,7 +545,7 @@ export default function HomeScreen() {
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        mapType="none"
+        mapType="standard"
         initialRegion={INITIAL_REGION}
         showsUserLocation={true}
         showsMyLocationButton={false}
@@ -559,14 +559,7 @@ export default function HomeScreen() {
         maxZoomLevel={18}
         liteMode={Platform.OS === 'android' && !isMapInteracted}
       >
-        <UrlTile
-          urlTemplate={MAP_CONFIG.OSM_TILE_URL}
-          maximumZ={19}
-          minimumZ={1}
-          flipY={false}
-          zIndex={1}
-          shouldReplaceMapContent={true}
-        />
+        
 
         {destinationLocation && (
           <Marker
@@ -680,24 +673,28 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Floating Top Header */}
         <View style={[styles.header, isSearchActive && { zIndex: 10 }]}>
-          <View style={styles.headerTopRow}>
-            <Text style={styles.headerTitle}>{`HI, ${displayName}!`}</Text>
-            <ProfileButton />
-          </View>
-                    <View style={styles.searchContainer}>
-            <TouchableOpacity
-              style={styles.searchBarWrapper}
+          <TouchableOpacity
+              style={styles.searchPillWrapper}
               activeOpacity={0.8}
               onPress={() => setIsSearchActive(true)}
             >
-              <Ionicons name="search" size={18} color={COLORS.textMuted} />
-              <Text style={[styles.searchInputText, {color: COLORS.textMuted}]} numberOfLines={1}>
-                {destinationQuery ? `${originQuery || 'My Location'} → ${destinationQuery}` : 'Going Somewhere?'}
+              <Image 
+                source={require('../../assets/logo/icon_achievement.png')} 
+                style={{ width: 34, height: 14 }} 
+                resizeMode="contain"
+              />
+              <Text style={[styles.searchInputText, {color: COLORS.textMuted, flex: 1, marginLeft: 6}]} numberOfLines={1}>
+                {destinationQuery ? `${originQuery || 'My Location'} → ${destinationQuery}` : `Saan tayo, ${(user?.name || 'Komyuter').split(' ')[0]}?`}
               </Text>
+              <TouchableOpacity 
+                onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon! (Requires a native voice plugin)')} 
+                style={{ paddingHorizontal: 8 }}
+              >
+                <Ionicons name="mic" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+              <ProfileButton />
             </TouchableOpacity>
-          </View>
         </View>
-
         {/* Transit layer controls */}
         <View style={styles.transitControlsRow}>
           <TouchableOpacity
@@ -891,52 +888,24 @@ const styles = StyleSheet.create({
     zIndex: 0,
   },
   header: {
-    marginHorizontal: SPACING.screenX,
-    marginTop: 10,
-    borderRadius: 20,
-    padding: 16,
-    overflow: 'hidden',
-    backgroundColor: '#F5C518',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
+    paddingHorizontal: SPACING.screenX,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 10 : 10,
+    width: '100%',
+    zIndex: 10,
+    elevation: 10,
+  },
+  searchPillWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 30,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
-    elevation: 8,
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  headerTitle: {
-    fontFamily: 'Cubao',
-    fontSize: TYPOGRAPHY.screenTitle,
-    color: '#0A1628',
-  },
-  searchContainer: {
-    width: '100%',
-  },
-  searchBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  searchBarWrapper: {
-    width: '100%',
-    height: 48,
-    backgroundColor: '#FFFFFF',
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    elevation: 5,
   },
   searchInputText: {
     flex: 1,

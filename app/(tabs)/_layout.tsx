@@ -123,6 +123,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
       <View style={[styles.customTabBarContainer, { height: 60, paddingBottom: 6, marginBottom: bottomInset }]}>
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
+            if (options.href === null) return null;
           const label =
             options.tabBarLabel !== undefined
               ? options.tabBarLabel
@@ -192,6 +193,8 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabLayout() {
+  const sessionMode = useStore((state) => state.sessionMode);
+  const user = useStore((state) => state.user);
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
@@ -203,6 +206,7 @@ export default function TabLayout() {
         name="saved"
         options={{
           title: 'Saved',
+          href: sessionMode === 'guest' ? null : undefined,
         }}
       />
       <Tabs.Screen
