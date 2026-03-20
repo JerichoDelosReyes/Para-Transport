@@ -9,6 +9,8 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 import { useTransitData } from '../../hooks/useTransitData';
+import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
+import { ROUTE_COLORS } from '../../services/parseRoutes';
 import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
 import { splitRouteSegments } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
@@ -68,7 +70,32 @@ export default function HomeScreen() {
   const [matchedCommute, setMatchedCommute] = useState<any>(null); // from useCommuteRoutes
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
   const { routes: commuteRoutes } = useCommuteRoutes();
-  const { routes: transitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
+  const { routes: rawTransitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
+  const { routes: gpxRoutes } = useJeepneyRoutes();
+
+  // Normalize GPX routes to the same shape as Overpass transit routes
+  const transitRoutes = useMemo(() => {
+    const normalized = gpxRoutes.map((r: JeepneyRoute) => ({
+      id: r.properties.code,
+      type: r.properties.type,
+      color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
+      ref: r.properties.code,
+      name: r.properties.name,
+      from: r.stops[0]?.label || '',
+      to: r.stops[r.stops.length - 1]?.label || '',
+      operator: r.properties.operator || '',
+      coordinates: r.coordinates,
+      stops: r.stops.map((s, idx) => ({
+        id: `${r.properties.code}-stop-${idx}`,
+        coordinate: s.coordinate,
+        name: s.label,
+        operator: r.properties.operator || '',
+      })),
+      verified: true,
+      fare: r.properties.fare,
+    }));
+    return [...normalized, ...(rawTransitRoutes as any[])];
+  }, [gpxRoutes, rawTransitRoutes]);
   const [showTransitLayer, setShowTransitLayer] = useState(false);
   const [nearestStop, setNearestStop] = useState<any>(null);
   const user = useStore((state) => state.user);
