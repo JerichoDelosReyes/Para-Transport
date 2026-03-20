@@ -178,7 +178,7 @@ export default function SearchScreen({
     : originText;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
+    <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>
       <View style={styles.container}>
         <SafeAreaView style={styles.safe} edges={['top']}>
           {/* Header */}

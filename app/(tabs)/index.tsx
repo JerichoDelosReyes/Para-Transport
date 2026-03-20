@@ -101,6 +101,15 @@ export default function HomeScreen() {
 
   const handleLocateUser = () => {
     if (currentLocation) {
+      if (
+        currentLocation.latitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLatitude ||
+        currentLocation.latitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLatitude ||
+        currentLocation.longitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLongitude ||
+        currentLocation.longitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLongitude
+      ) {
+        Alert.alert('Out of Range', 'Your current location is outside the Philippines.');
+        return;
+      }
       const next: MapRegion = {
         latitude: currentLocation.latitude,
         longitude: currentLocation.longitude,
@@ -812,7 +821,20 @@ export default function HomeScreen() {
         visible={isSearchActive}
         currentLocationLabel="Current Location"
         onClose={() => setIsSearchActive(false)}
-        onSelectRoute={handleSearchSelectRoute}
+        onSelectRoute={(origin, dest) => {
+          if (!origin && currentLocation) {
+            if (
+              currentLocation.latitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLatitude ||
+              currentLocation.latitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLatitude ||
+              currentLocation.longitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLongitude ||
+              currentLocation.longitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLongitude
+            ) {
+              Alert.alert('Out of Range', 'Your current location is outside the Philippines.');
+              return;
+            }
+          }
+          handleSearchSelectRoute(origin, dest);
+        }}
       />
 
     </View>
