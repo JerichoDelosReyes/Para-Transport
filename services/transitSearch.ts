@@ -933,6 +933,142 @@ function buildSearchGraph(
   };
 }
 
+/**
+ * Build search graph with custom indexed routes and base graph
+ * Used for hardcoded District search to use the filtered 2 routes
+ */
+function buildSearchGraphWithRoutes(
+  origin: ResolvedLocation,
+  destination: ResolvedLocation,
+  customIndexedRoutes: IndexedRoute[],
+  customBaseGraph: BaseGraph
+): { graph: BaseGraph; startNodeId: string; endNodeId: string } {
+  const stamp = `${Date.now()}:${Math.random()}`;
+  const startNodeId = `virtual:start:${stamp}`;
+  const endNodeId = `virtual:end:${stamp}`;
+
+  const nodes = new Map(customBaseGraph.nodes);
+  const edges = [...customBaseGraph.edges];
+
+  nodes.set(startNodeId, {
+    id: startNodeId,
+    kind: 'virtual',
+    label: origin.label,
+    coordinate: origin.coordinate,
+  });
+
+  nodes.set(endNodeId, {
+    id: endNodeId,
+    kind: 'virtual',
+    label: destination.label,
+    coordinate: destination.coordinate,
+  });
+
+  // Find access candidates from custom indexed routes
+  const originCandidates = findAccessCandidatesFromRoutes(
+    origin.coordinate,
+    ORIGIN_MATCH_BUFFER_KM,
+    customIndexedRoutes
+  );
+  for (const candidate of originCandidates) {
+    edges.push({
+      id: `walk:start:${startNodeId}:${candidate.nodeId}`,
+      fromNodeId: startNodeId,
+      toNodeId: candidate.nodeId,
+      mode: 'walk',
+      distanceKm: candidate.distanceKm,
+      etaMinutes: walkingMinutes(Math.round(candidate.distanceKm * 1000)),
+      fare: 0,
+      description: `Walk from origin to ${candidate.label}`,
+    });
+  }
+
+  const destinationCandidates = findAccessCandidatesFromRoutes(
+    destination.coordinate,
+    DEST_MATCH_BUFFER_KM,
+    customIndexedRoutes
+  );
+  for (const candidate of destinationCandidates) {
+    edges.push({
+      id: `walk:end:${candidate.nodeId}:${endNodeId}`,
+      fromNodeId: candidate.nodeId,
+      toNodeId: endNodeId,
+      mode: 'walk',
+      distanceKm: candidate.distanceKm,
+      etaMinutes: walkingMinutes(Math.round(candidate.distanceKm * 1000)),
+      fare: 0,
+      description: `Walk to destination from ${candidate.label}`,
+    });
+  }
+
+  const adjacency = new Map<string, GraphEdge[]>();
+  for (const edge of edges) {
+    const list = adjacency.get(edge.fromNodeId) || [];
+    list.push(edge);
+    adjacency.set(edge.fromNodeId, list);
+  }
+
+  return {
+    graph: {
+      nodes,
+      edges,
+      adjacency,
+    },
+    startNodeId,
+    endNodeId,
+  };
+}
+
+/**
+ * Find access candidates from custom indexed routes
+ * Similar to findAccessCandidates but uses provided routes instead of global
+ */
+function findAccessCandidatesFromRoutes(
+  point: GeoJSONCoordinate,
+  bufferKm: number,
+  customIndexedRoutes: IndexedRoute[]
+): AccessCandidate[] {
+  const candidates: AccessCandidate[] = [];
+
+  for (const indexedRoute of customIndexedRoutes) {
+    const byDistance = [...indexedRoute.indexedStops]
+      .map((stop) => ({
+        nodeId: stop.nodeId,
+        routeId: indexedRoute.route.routeId,
+        label: stop.name,
+        coordinate: stop.coordinate,
+        distanceKm: haversineKm(stop.coordinate, point),
+      }))
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, 3);
+
+    for (const item of byDistance) {
+      if (item.distanceKm <= bufferKm) {
+        candidates.push(item);
+      }
+    }
+  }
+
+  if (!candidates.length) {
+    const fallback = customIndexedRoutes
+      .flatMap((indexedRoute) =>
+        indexedRoute.indexedStops.map((stop) => ({
+          nodeId: stop.nodeId,
+          routeId: indexedRoute.route.routeId,
+          label: stop.name,
+          coordinate: stop.coordinate,
+          distanceKm: haversineKm(stop.coordinate, point),
+        }))
+      )
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, 5);
+
+    return fallback;
+  }
+
+  return candidates.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 12);
+}
+
 function routeById(routeId: string): TransitRoute | undefined {
   return ROUTES.find((route) => route.routeId === routeId);
 }
@@ -1338,6 +1474,43 @@ function buildLegacyRankedOptions(
   return rankOptions([...deduped.values()]).slice(0, 8);
 }
 
+/**
+ * HARDCODED TEST: District Search Handler
+ * When searching for "District", return ONLY these 2 routes:
+ * - SMMOLINO-DISTRICT-OUT: "SM Molino to District"
+ * - MANGGAHAN-SMMOLINO-IN: "SM Molino to Manggahan"
+ * 
+ * This filters out all other routes and the global fallback.
+ */
+function buildHardcodedDistrictSearch(
+  origin: ResolvedLocation,
+  destination: ResolvedLocation
+): { districtFiltered: boolean; indexedRoutes: IndexedRoute[] } {
+  const destLabel = normalize(destination.label);
+  
+  if (!destLabel.includes('district')) {
+    return { districtFiltered: false, indexedRoutes: INDEXED_ROUTES };
+  }
+
+  console.log('[HARDCODED TEST] District search detected - filtering to ONLY 2 routes');
+
+  // Filter ROUTES to ONLY include:
+  // - SMMOLINO-DISTRICT-OUT (SM Molino to District)
+  // - MANGGAHAN-SMMOLINO-IN (SM Molino to Manggahan)
+  const allowedRouteIds = new Set(['SMMOLINO-DISTRICT-OUT', 'MANGGAHAN-SMMOLINO-IN']);
+  const filteredRoutes = ROUTES.filter((route) => allowedRouteIds.has(route.routeId));
+
+  console.log(`[HARDCODED TEST] Filtered routes: ${filteredRoutes.map((r) => `${r.routeId}:${r.routeName}`).join(', ')}`);
+
+  // Rebuild indexed routes from filtered set only
+  const hardcodedIndexedRoutes = buildIndexedRoutes(filteredRoutes);
+
+  return {
+    districtFiltered: true,
+    indexedRoutes: hardcodedIndexedRoutes,
+  };
+}
+
 export async function searchTransitRoutes(input: SearchInput): Promise<TransitSearchResult> {
   const originQuery = (input.originQuery || '').trim();
   const destinationQuery = input.destinationQuery.trim();
@@ -1356,6 +1529,22 @@ export async function searchTransitRoutes(input: SearchInput): Promise<TransitSe
     throw new Error('Destination not found. Please refine your destination input.');
   }
 
+  // ============================================================================
+  // HARDCODED TEST: Check for District search and rebuild graph with filtered routes
+  // ============================================================================
+  const { districtFiltered, indexedRoutes: activeIndexedRoutes } = buildHardcodedDistrictSearch(
+    origin,
+    destination
+  );
+
+  if (districtFiltered) {
+    console.log('[HARDCODED TEST] Using FILTERED GRAPH with only 2 District routes');
+  }
+
+  // Rebuild intersection detection and base graph if District search
+  const activeIntersections = detectIntersections(activeIndexedRoutes);
+  const activeBaseGraph = buildBaseGraph(activeIndexedRoutes, activeIntersections);
+
   try {
     await ensureRoutingRuntimeInitialized();
 
@@ -1371,7 +1560,11 @@ export async function searchTransitRoutes(input: SearchInput): Promise<TransitSe
     );
 
     const graphOption = mapPayloadToOption(payload);
-    const { graph, startNodeId, endNodeId } = buildSearchGraph(origin, destination);
+    
+    // Use active graph (filtered or global)
+    const searchGraphResult = buildSearchGraphWithRoutes(origin, destination, activeIndexedRoutes, activeBaseGraph);
+    const { graph, startNodeId, endNodeId } = searchGraphResult;
+    
     const legacyRanked = buildLegacyRankedOptions(origin, destination, graph, startNodeId, endNodeId);
 
     const mergedBySignature = new Map<string, PlannedRouteOption>();

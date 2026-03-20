@@ -4,14 +4,14 @@
     "aliases": ["SM Molino Bacoor", "SM City Molino", "S M Molino"],
     "subtitle": "Bacoor, Cavite",
     "weight": 12,
-    "coordinate": [120.9775971, 14.3832246]
+    "coordinate": [120.97756051078939, 14.38331997432321]
   },
   {
     "title": "District",
     "aliases": ["The District", "District Imus"],
     "subtitle": "Imus, Cavite",
     "weight": 11,
-    "coordinate": [120.9405, 14.3963]
+    "coordinate": [120.93938521078907, 14.370845634979261]
   },
   {
     "title": "Baclaran",
@@ -25,13 +25,63 @@
     "aliases": ["Manggahan Bacoor"],
     "subtitle": "Bacoor, Cavite",
     "weight": 8,
-    "coordinate": [120.958, 14.401]
+    "coordinate": [120.90709708840576, 14.29383007663906]
   },
   {
     "title": "BDO",
-    "aliases": ["BDO Molino", "Banco de Oro"],
-    "subtitle": "Cavite",
-    "weight": 7
+    "aliases": ["BDO Molino", "BDO Imus", "Banco de Oro"],
+    "subtitle": "Imus, Cavite",
+    "weight": 9,
+    "coordinate": [120.9411207012121, 14.420636921413818]
+  },
+  {
+    "title": "Robinson Imus",
+    "aliases": ["Robinsons Imus", "Robinson Department Store"],
+    "subtitle": "Imus, Cavite",
+    "weight": 9,
+    "coordinate": [120.94180580100735, 14.412912703716152]
+  },
+  {
+    "title": "Cavite State University",
+    "aliases": ["CSU", "Cavite State University Imus", "CvSU Imus"],
+    "subtitle": "Imus, Cavite",
+    "weight": 8,
+    "coordinate": [120.94703592186234, 14.428577144880922]
+  },
+  {
+    "title": "SM Bacoor",
+    "aliases": ["SM City Bacoor", "S M Bacoor"],
+    "subtitle": "Bacoor, Cavite",
+    "weight": 10,
+    "coordinate": [120.95106269627833, 14.445246711049599]
+  },
+  {
+    "title": "Lumina Malls",
+    "aliases": ["Lumina", "Lumina Malls Imus"],
+    "subtitle": "Imus, Cavite",
+    "weight": 9,
+    "coordinate": [120.94186114200237, 14.422807370094214]
+  },
+  {
+    "title": "Robinson Pala Pala",
+    "aliases": ["Robinsons Pala Pala", "Rob Pala Pala", "Pala Pala"],
+    "subtitle": "Dasmarinas, Cavite",
+    "weight": 10,
+    "coordinate": [120.95369233802543, 14.300881789881108]
+  },
+  {
+    "title": "SM Dasmarinas",
+    "aliases": ["SM City Dasmarinas", "S M Dasmarinas"],
+    "subtitle": "Dasmarinas, Cavite",
+    "weight": 9,
+    "coordinate": [120.95666422569101, 14.301588741924832]
+  },
+  {
+    "title": "Summerpointe Country Homes",
+    "aliases": ["Summerpointe", "Summer Pointe", "Summerpointe Subd"],
+    "subtitle": "Bacoor, Cavite",
+    "weight": 7,
+    "coordinate": [120.96288440954102, 14.387605977367105]
   },
   {
     "title": "DBB1",
@@ -44,12 +94,5 @@
     "aliases": ["DBB C", "Dasmarinas Bayan C"],
     "subtitle": "Dasmarinas, Cavite",
     "weight": 8
-  },
-  {
-    "title": "Robinson Pala Pala",
-    "aliases": ["Robinsons Pala Pala", "Rob Pala Pala", "Pala Pala"],
-    "subtitle": "Dasmarinas, Cavite",
-    "weight": 10,
-    "coordinate": [120.9587, 14.3014]
   }
 ]

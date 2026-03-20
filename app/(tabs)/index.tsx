@@ -291,23 +291,31 @@ export default function HomeScreen() {
         }
       }
 
-      const latitude = matchedRouteLocation
-        ? matchedRouteLocation.latitude
-        : Number(entry.coordinate?.[1]);
-      const longitude = matchedRouteLocation
-        ? matchedRouteLocation.longitude
-        : Number(entry.coordinate?.[0]);
+      // Prefer curated catalog coordinates when provided.
+      // Route-stop terminals can be noisy or mislabeled in generated GPX output.
+      const catalogLatitude = Number(entry.coordinate?.[1]);
+      const catalogLongitude = Number(entry.coordinate?.[0]);
+
+      const latitude = Number.isFinite(catalogLatitude)
+        ? catalogLatitude
+        : matchedRouteLocation?.latitude;
+      const longitude = Number.isFinite(catalogLongitude)
+        ? catalogLongitude
+        : matchedRouteLocation?.longitude;
 
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
         continue;
       }
 
+      const resolvedLatitude = Number(latitude);
+      const resolvedLongitude = Number(longitude);
+
       const candidate: LocalLocation = {
         id: `catalog-${toSlug(entry.title)}`,
         title: entry.title,
         subtitle: entry.subtitle || matchedRouteLocation?.subtitle || 'Cavite, Philippines',
-        latitude,
-        longitude,
+        latitude: resolvedLatitude,
+        longitude: resolvedLongitude,
         aliases: [...new Set([...(entry.aliases || []), matchedRouteLocation?.title || ''].filter(Boolean))],
         weight: entry.weight || 0,
         source: 'catalog',
