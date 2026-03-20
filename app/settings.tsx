@@ -30,7 +30,7 @@ export default function SettingsScreen() {
             navigation.dispatch(
               CommonActions.reset({
                 index: 0,
-                routes: [{ name: 'login' as never }],
+                routes: [{ name: 'index' as never }],
               })
             );
           } catch (error) {
