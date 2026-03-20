@@ -1,10 +1,12 @@
-import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useNavigation } from 'expo-router';
 import { CommonActions, StackActions } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { mapResetPasswordError, sendPasswordResetEmail } from '../services/authService';
 
 const MOCK_BADGES = [
   { id: '1', name: 'First Ride', emoji: '🎉', earned: true },
@@ -27,6 +29,49 @@ export default function ProfileScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const user = useStore((state) => state.user);
+  const [isSendingReset, setIsSendingReset] = useState(false);
+  const [resetStatusMsg, setResetStatusMsg] = useState('');
+  const [resetErrorMsg, setResetErrorMsg] = useState('');
+
+  const sendChangePasswordEmail = async () => {
+    setResetStatusMsg('');
+    setResetErrorMsg('');
+
+    const email = user?.email?.trim();
+    if (!email) {
+      setResetErrorMsg('No account email found. Please log in again and try.');
+      return;
+    }
+
+    setIsSendingReset(true);
+    try {
+      await sendPasswordResetEmail(email);
+      setResetStatusMsg('If this email is registered, a password reset link has been sent.');
+    } catch (err: any) {
+      setResetErrorMsg(mapResetPasswordError(err?.code || err?.message));
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
+  const handleChangePassword = () => {
+    Alert.alert(
+      'Change Password',
+      'Do you want to proceed with changing your password? We will send a reset link to your email.',
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes',
+          onPress: () => {
+            void sendChangePasswordEmail();
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -118,6 +163,19 @@ export default function ProfileScreen() {
               style={{ transform: [{ scale: 0.9 }] }}
             />
           </View>
+          <TouchableOpacity
+            style={[styles.settingRow, styles.rowDivider]}
+            activeOpacity={0.7}
+            onPress={handleChangePassword}
+            disabled={isSendingReset}
+          >
+            <Text style={styles.settingLabel}>Change Password</Text>
+            {isSendingReset ? (
+              <ActivityIndicator size="small" color={COLORS.textMuted} />
+            ) : (
+              <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+            )}
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.settingRow, styles.rowDivider]} activeOpacity={0.7}>
             <Text style={styles.settingLabel}>About Para</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
@@ -138,6 +196,9 @@ export default function ProfileScreen() {
             <Ionicons name="log-out-outline" size={20} color="#ff4444" />
           </TouchableOpacity>
         </View>
+
+        {resetStatusMsg ? <Text style={styles.successText}>{resetStatusMsg}</Text> : null}
+        {resetErrorMsg ? <Text style={styles.errorText}>{resetErrorMsg}</Text> : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -353,5 +414,19 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: TYPOGRAPHY.body,
     color: COLORS.textStrong,
+  },
+  successText: {
+    marginTop: 10,
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.successText,
+    textAlign: 'center',
+  },
+  errorText: {
+    marginTop: 10,
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.caption,
+    color: '#ff4d4d',
+    textAlign: 'center',
   },
 });

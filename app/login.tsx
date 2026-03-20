@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -21,7 +22,9 @@ import {
   loginWithEmailPassword,
   verifyEmailOtp,
   isEmailValid,
-  mapLoginError
+  mapLoginError,
+  mapResetPasswordError,
+  sendPasswordResetEmail,
 } from '../services/authService';
 import { useStore } from '../store/useStore';
 import OtpModal from '../components/OtpModal';
@@ -54,6 +57,10 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isForgotModalVisible, setIsForgotModalVisible] = useState(false);
+  const [resetEmailInput, setResetEmailInput] = useState('');
+  const [forgotErrorMsg, setForgotErrorMsg] = useState('');
+  const [isForgotSubmitting, setIsForgotSubmitting] = useState(false);
   
   const [isOtpPending, setIsOtpPending] = useState(false);
   const [otp, setOtp] = useState('');
@@ -93,6 +100,33 @@ export default function LoginScreen() {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const openForgotPasswordPopup = () => {
+    setForgotErrorMsg('');
+    setResetEmailInput(email.trim());
+    setIsForgotModalVisible(true);
+  };
+
+  const handleForgotPasswordSubmit = async () => {
+    setForgotErrorMsg('');
+    const normalizedEmail = resetEmailInput.trim();
+    if (!isEmailValid(normalizedEmail)) {
+      setForgotErrorMsg('Please enter a valid email address.');
+      return;
+    }
+
+    setIsForgotSubmitting(true);
+    try {
+      await sendPasswordResetEmail(normalizedEmail);
+      setIsForgotModalVisible(false);
+      setResetEmailInput(normalizedEmail);
+      Alert.alert('Reset Email Sent', 'If this email is registered, a password reset link has been sent.');
+    } catch (err: any) {
+      setForgotErrorMsg(mapResetPasswordError(err?.code || err?.message));
+    } finally {
+      setIsForgotSubmitting(false);
     }
   };
 
@@ -197,6 +231,15 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
+            <TouchableOpacity
+              style={styles.forgotPasswordWrap}
+              onPress={openForgotPasswordPopup}
+              activeOpacity={0.8}
+              disabled={isLoading}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+
             {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
 
             <TouchableOpacity 
@@ -232,6 +275,51 @@ export default function LoginScreen() {
             onClose={() => setIsOtpPending(false)}
           />
         )}
+
+        <Modal
+          visible={isForgotModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsForgotModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Forgot Password</Text>
+              <Text style={styles.modalBody}>Enter your email and we will send a reset link.</Text>
+
+              <TextInput
+                value={resetEmailInput}
+                onChangeText={setResetEmailInput}
+                style={styles.modalInput}
+                placeholder="someone@gmail.com"
+                placeholderTextColor={COLORS.textMuted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+
+              {forgotErrorMsg ? <Text style={styles.modalErrorText}>{forgotErrorMsg}</Text> : null}
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalSecondaryButton}
+                  onPress={() => setIsForgotModalVisible(false)}
+                  activeOpacity={0.8}
+                  disabled={isForgotSubmitting}
+                >
+                  <Text style={styles.modalSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalPrimaryButton, isForgotSubmitting && styles.disabledButton]}
+                  onPress={handleForgotPasswordSubmit}
+                  activeOpacity={0.8}
+                  disabled={isForgotSubmitting}
+                >
+                  <Text style={styles.modalPrimaryText}>{isForgotSubmitting ? 'Sending...' : 'Send Email'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </View>
   );
@@ -308,6 +396,95 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 8,
     marginBottom: -8,
+  },
+  forgotPasswordWrap: {
+    marginTop: 10,
+    alignSelf: 'flex-end',
+  },
+  forgotPasswordText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: COLORS.navy,
+    textDecorationLine: 'underline',
+    opacity: 0.9,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(10,22,40,0.35)',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.screenX,
+  },
+  modalCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.card,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  modalTitle: {
+    fontFamily: 'Cubao',
+    fontSize: 24,
+    color: COLORS.navy,
+  },
+  modalBody: {
+    marginTop: 6,
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLORS.textStrong,
+    opacity: 0.8,
+  },
+  modalInput: {
+    marginTop: 12,
+    height: 48,
+    borderRadius: RADIUS.input,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    fontFamily: 'Inter',
+    fontSize: 16,
+    color: COLORS.navy,
+  },
+  modalErrorText: {
+    marginTop: 8,
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: '#ff4d4d',
+  },
+  modalActions: {
+    marginTop: 14,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  modalSecondaryButton: {
+    height: 40,
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+  },
+  modalSecondaryText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLORS.navy,
+    fontWeight: '600',
+  },
+  modalPrimaryButton: {
+    height: 40,
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+  },
+  modalPrimaryText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLORS.navy,
+    fontWeight: '700',
   },
   input: {
     height: 52,

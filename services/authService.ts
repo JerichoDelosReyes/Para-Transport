@@ -65,6 +65,22 @@ export function mapRegisterError(error?: string): string {
   return error || 'Account creation failed. Please try again.';
 }
 
+export function mapResetPasswordError(error?: string): string {
+  const normalized = (error || '').toLowerCase();
+  if (normalized.includes('email') && normalized.includes('invalid')) {
+    return 'Please enter a valid email address.';
+  }
+  if (
+    normalized.includes('rate limit') ||
+    normalized.includes('too many') ||
+    normalized.includes('max_frequency') ||
+    normalized.includes('over_email_send_rate_limit')
+  ) {
+    return 'Too many reset attempts. Please wait a bit and try again.';
+  }
+  return error || 'Could not send reset email. Please try again.';
+}
+
 export async function loginWithEmailPassword(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -105,5 +121,12 @@ export async function verifyEmailOtp(email: string, token: string) {
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+}
+
+export async function sendPasswordResetEmail(email: string, redirectTo?: string) {
+  const options = redirectTo ? { redirectTo } : undefined;
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, options);
+  if (error) throw error;
+  return data;
 }
 
