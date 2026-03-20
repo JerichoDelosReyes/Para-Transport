@@ -47,7 +47,7 @@ const HEADER_DOODLES: HeaderDoodle[] = [
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const setUser = useStore((state) => state.setUser);
+  const beginAuthSession = useStore((state) => state.beginAuthSession);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -94,7 +94,7 @@ export default function RegisterScreen() {
       if (data?.user && !data.session) {
         setIsOtpSent(true);
       } else {
-        setUser({
+        beginAuthSession({
           name: data?.user?.user_metadata?.display_name || name,
           email: data?.user?.email || email,
           points: 0,
@@ -124,7 +124,7 @@ export default function RegisterScreen() {
     try {
       const data = await verifyEmailOtp(email, otp);
       
-      setUser({
+      beginAuthSession({
         name: data?.user?.user_metadata?.display_name || name,
         email: data?.user?.email || email,
         points: 0,

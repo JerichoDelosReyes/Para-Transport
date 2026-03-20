@@ -50,7 +50,7 @@ const HEADER_DOODLES: HeaderDoodle[] = [
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const setUser = useStore((state) => state.setUser);
+  const beginAuthSession = useStore((state) => state.beginAuthSession);
   
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
@@ -80,7 +80,7 @@ export default function LoginScreen() {
     try {
       const data = await loginWithEmailPassword(email, password);
       // Construct a unified user to save in store
-      setUser({
+      beginAuthSession({
         name: data?.user?.user_metadata?.display_name || 'Commuter',
         email: data?.user?.email || email,
         points: 0,
@@ -141,7 +141,7 @@ export default function LoginScreen() {
     try {
       const data = await verifyEmailOtp(email, otp);
       
-      setUser({
+      beginAuthSession({
         name: data?.user?.user_metadata?.display_name || 'Commuter',
         email: data?.user?.email || email,
         points: 0,

@@ -6,7 +6,7 @@ import { useRouter, useNavigation } from 'expo-router';
 import { CommonActions, StackActions } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
-import { mapResetPasswordError, sendPasswordResetEmail } from '../services/authService';
+import { mapResetPasswordError, sendPasswordResetEmail, signOut } from '../services/authService';
 
 const MOCK_BADGES = [
   { id: '1', name: 'First Ride', emoji: '🎉', earned: true },
@@ -29,6 +29,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const user = useStore((state) => state.user);
+  const clearSession = useStore((state) => state.clearSession);
+  const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [resetStatusMsg, setResetStatusMsg] = useState('');
   const [resetErrorMsg, setResetErrorMsg] = useState('');
@@ -163,19 +165,21 @@ export default function ProfileScreen() {
               style={{ transform: [{ scale: 0.9 }] }}
             />
           </View>
-          <TouchableOpacity
-            style={[styles.settingRow, styles.rowDivider]}
-            activeOpacity={0.7}
-            onPress={handleChangePassword}
-            disabled={isSendingReset}
-          >
-            <Text style={styles.settingLabel}>Change Password</Text>
-            {isSendingReset ? (
-              <ActivityIndicator size="small" color={COLORS.textMuted} />
-            ) : (
-              <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
-            )}
-          </TouchableOpacity>
+          {!isGuestAccount ? (
+            <TouchableOpacity
+              style={[styles.settingRow, styles.rowDivider]}
+              activeOpacity={0.7}
+              onPress={handleChangePassword}
+              disabled={isSendingReset}
+            >
+              <Text style={styles.settingLabel}>Change Password</Text>
+              {isSendingReset ? (
+                <ActivityIndicator size="small" color={COLORS.textMuted} />
+              ) : (
+                <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+              )}
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity style={[styles.settingRow, styles.rowDivider]} activeOpacity={0.7}>
             <Text style={styles.settingLabel}>About Para</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
@@ -183,7 +187,15 @@ export default function ProfileScreen() {
           <TouchableOpacity 
             style={[styles.settingRow, styles.rowDivider]} 
             activeOpacity={0.7}
-            onPress={() => {
+            onPress={async () => {
+              if (!isGuestAccount) {
+                try {
+                  await signOut();
+                } catch {
+                  // Continue with local logout even if remote sign out fails.
+                }
+              }
+              clearSession();
               navigation.dispatch(
                 CommonActions.reset({
                   index: 0,

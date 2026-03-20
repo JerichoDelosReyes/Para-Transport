@@ -2,6 +2,7 @@ import { supabase } from '../config/supabaseClient';
 
 const EMAIL_POLICY = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_POLICY = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+const DEFAULT_PASSWORD_RESET_REDIRECT = 'para://reset-password';
 
 export type SupabaseUserProfile = {
   uid: string;
@@ -124,8 +125,15 @@ export async function signOut() {
 }
 
 export async function sendPasswordResetEmail(email: string, redirectTo?: string) {
-  const options = redirectTo ? { redirectTo } : undefined;
+  const resolvedRedirect = redirectTo || DEFAULT_PASSWORD_RESET_REDIRECT;
+  const options = { redirectTo: resolvedRedirect };
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, options);
+  if (error) throw error;
+  return data;
+}
+
+export async function updatePassword(password: string) {
+  const { data, error } = await supabase.auth.updateUser({ password });
   if (error) throw error;
   return data;
 }

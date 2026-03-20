@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 
 type Doodle = {
@@ -36,7 +36,9 @@ const DOODLES: Doodle[] = [
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const setUser = useStore((state) => state.setUser);
+  const beginGuestSession = useStore((state) => state.beginGuestSession);
+  const hasHydrated = useStore((state) => state.hasHydrated);
+  const sessionMode = useStore((state) => state.sessionMode);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const insets = useSafeAreaInsets();
   const sheetTranslateY = useRef(new Animated.Value(0)).current;
@@ -83,6 +85,12 @@ export default function WelcomeScreen() {
       }),
     [sheetTranslateY]
   );
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+    if (!sessionMode) return;
+    router.replace('/(tabs)');
+  }, [hasHydrated, sessionMode, router]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -194,14 +202,7 @@ export default function WelcomeScreen() {
             <TouchableOpacity
               style={styles.guestLinkWrap}
               onPress={() => {
-                setUser({
-                  name: 'Komyuter',
-                  email: 'guest@para.ph',
-                  points: 0,
-                  streak_count: 0,
-                  total_km: 0,
-                  total_fare_spent: 0,                  saved_routes: [],
-                  badges: [],                });
+                beginGuestSession();
                 setShowAuthPopup(false);
                 router.replace('/(tabs)');
               }}
