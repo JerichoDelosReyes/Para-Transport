@@ -4,9 +4,9 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep.svg';
-import GoogleIcon from '../assets/icons/GoogleIcon.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { useMemo, useRef, useState } from 'react';
+import { useStore } from '../store/useStore';
 
 type Doodle = {
   id: number;
@@ -36,6 +36,7 @@ const DOODLES: Doodle[] = [
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const setUser = useStore((state) => state.setUser);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const insets = useSafeAreaInsets();
   const sheetTranslateY = useRef(new Animated.Value(0)).current;
@@ -186,18 +187,6 @@ export default function WelcomeScreen() {
               <Text style={styles.modalSecondaryText}>Sign up</Text>
             </TouchableOpacity>
 
-            <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.googleButton} activeOpacity={0.9}>
-                <GoogleIcon width={18} height={18} style={{ marginRight: 8 }} />
-                <Text style={styles.socialLabel}>Google</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.appleButton} activeOpacity={0.9}>
-                <Ionicons name="logo-apple" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.appleButtonText}>Apple</Text>
-              </TouchableOpacity>
-            </View>
-
             <Text style={styles.modalFooterText}>
               By continuing, you agree to Privacy Policy and Terms of Service.
             </Text>
@@ -205,6 +194,14 @@ export default function WelcomeScreen() {
             <TouchableOpacity
               style={styles.guestLinkWrap}
               onPress={() => {
+                setUser({
+                  name: 'Komyuter',
+                  email: 'guest@para.ph',
+                  points: 0,
+                  streak_count: 0,
+                  total_km: 0,
+                  total_fare_spent: 0,
+                });
                 setShowAuthPopup(false);
                 router.replace('/(tabs)');
               }}
@@ -348,7 +345,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenX,
     paddingTop: 12,
     paddingBottom: 28,
-    minHeight: 440,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.2,
@@ -377,7 +373,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.textMuted,
     textAlign: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   modalPrimaryAction: {
     height: 54,
@@ -409,52 +405,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.navy,
   },
-  socialRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  googleButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1.5,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  socialLabel: {
-    fontFamily: 'Inter',
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.navy,
-  },
-  appleButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  appleButtonText: {
-    fontFamily: 'Inter',
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
   modalFooterText: {
-    marginTop: 12,
+    marginTop: 14,
     textAlign: 'center',
     fontFamily: 'Inter',
     fontSize: 12,
+    lineHeight: 18,
     color: COLORS.textMuted,
   },
   guestLinkWrap: {
-    marginTop: 10,
+    marginTop: 12,
     alignItems: 'center',
   },
   guestLink: {

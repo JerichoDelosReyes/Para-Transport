@@ -61,9 +61,11 @@ export default function HomeScreen() {
   const [matchedCommute, setMatchedCommute] = useState<any>(null); // from useCommuteRoutes
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
   const { routes: commuteRoutes } = useCommuteRoutes();
+  const user = useStore((state) => state.user);
   const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
   const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
   const mapRef = useRef<MapView | null>(null);
+  const displayName = (user?.name || 'Komyuter').toUpperCase();
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -475,7 +477,7 @@ export default function HomeScreen() {
         {/* Floating Top Header */}
         <View style={[styles.header, isSearchActive && { zIndex: 10 }]}>
           <View style={styles.headerTopRow}>
-            <Text style={styles.headerTitle}>HI, JERICHO!</Text>
+            <Text style={styles.headerTitle}>{`HI, ${displayName}!`}</Text>
             <ProfileButton />
           </View>
           <Animated.View style={{ height: searchHeightAnim, overflow: 'hidden' }}>

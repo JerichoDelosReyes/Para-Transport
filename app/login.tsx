@@ -14,7 +14,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
-import GoogleIcon from '../assets/icons/GoogleIcon.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 
 type HeaderDoodle = {
@@ -115,18 +114,6 @@ export default function LoginScreen() {
             <TouchableOpacity style={styles.primaryButton} onPress={() => router.replace('/(tabs)')} activeOpacity={0.9}>
               <Text style={styles.primaryButtonText}>LOG IN</Text>
             </TouchableOpacity>
-
-            <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.lightSocial} activeOpacity={0.9}>
-                <GoogleIcon width={18} height={18} style={{ marginRight: 7 }} />
-                <Text style={styles.lightSocialText}>Google</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.appleSocial} activeOpacity={0.9}>
-                <Ionicons name="logo-apple" size={16} color="#FFFFFF" style={{ marginRight: 5 }} />
-                <Text style={styles.appleSocialText}>Apple</Text>
-              </TouchableOpacity>
-            </View>
 
             <TouchableOpacity style={styles.linkWrap} onPress={() => router.push('/register')} activeOpacity={0.8}>
               <Text style={styles.linkText}>Create account</Text>
@@ -250,43 +237,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.navy,
-  },
-  socialRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  appleSocial: {
-    flex: 1,
-    height: 52,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  appleSocialText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  lightSocial: {
-    flex: 1,
-    height: 52,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1.5,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  lightSocialText: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    fontWeight: '600',
     color: COLORS.navy,
   },
   linkWrap: {
