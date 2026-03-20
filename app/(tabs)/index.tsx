@@ -1,13 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { UrlTile, Marker, Polyline } from 'react-native-maps';
+import MapView, { UrlTile, Marker, Polyline, Callout } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
+import { useTransitData } from '../../hooks/useTransitData';
+import RouteListPanel from '../../components/RouteListPanel';
+import { splitRouteSegments } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 
@@ -31,6 +34,11 @@ const INITIAL_REGION: MapRegion = {
   longitude: 120.9367,
   latitudeDelta: 0.05,
   longitudeDelta: 0.05,
+};
+
+const PH_BOUNDS = {
+  northEast: { latitude: 21.12, longitude: 126.61 },
+  southWest: { latitude: 4.59, longitude: 114.26 },
 };
 
 type PlaceSuggestion = {
@@ -61,6 +69,9 @@ export default function HomeScreen() {
   const [matchedCommute, setMatchedCommute] = useState<any>(null); // from useCommuteRoutes
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
   const { routes: commuteRoutes } = useCommuteRoutes();
+  const { routes: transitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
+  const [showTransitLayer, setShowTransitLayer] = useState(true);
+  const [nearestStop, setNearestStop] = useState<any>(null);
   const user = useStore((state) => state.user);
   const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
   const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
@@ -380,6 +391,90 @@ export default function HomeScreen() {
     }
   };
 
+  // Handle selecting a transit route from the panel
+  const handleSelectTransitRoute = useCallback((route: any) => {
+    setSelectedTransitRoute(selectedTransitRoute?.id === route.id ? null : route);
+    if (route.coordinates?.length > 0) {
+      mapRef.current?.fitToCoordinates(route.coordinates, {
+        edgePadding: { top: 120, right: 40, bottom: 200, left: 40 },
+        animated: true,
+      });
+    }
+  }, [selectedTransitRoute, setSelectedTransitRoute]);
+
+  // Find the nearest stop to the user's current location
+  const handleFindNearestStop = useCallback(() => {
+    if (!currentLocation) {
+      Alert.alert('GPS Not Ready', 'Waiting for your current location.');
+      return;
+    }
+    if (transitStops.length === 0) {
+      Alert.alert('No Stops', 'No transit stops loaded yet.');
+      return;
+    }
+
+    let closest: any = null;
+    let closestDist = Infinity;
+    for (const stop of transitStops as any[]) {
+      const dlat = stop.coordinate.latitude - currentLocation.latitude;
+      const dlng = stop.coordinate.longitude - currentLocation.longitude;
+      const dist = dlat * dlat + dlng * dlng;
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = stop;
+      }
+    }
+
+    if (closest) {
+      setNearestStop(closest);
+      const nearestRegion: MapRegion = {
+        latitude: closest.coordinate.latitude,
+        longitude: closest.coordinate.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      };
+      //mapRegionRef.current = nearestRegion;
+      mapRef.current?.animateToRegion(nearestRegion, 600);
+    }
+  }, [currentLocation, transitStops]);
+
+  // Visible routes: show selected route if active, otherwise all (if layer is on)
+  const visibleTransitRoutes = useMemo(() => {
+    if (!showTransitLayer) return [];
+    if (selectedTransitRoute) return [selectedTransitRoute];
+    return transitRoutes;
+  }, [showTransitLayer, selectedTransitRoute, transitRoutes]);
+
+  // Visible stops: show stops for selected route or all stops
+  const visibleTransitStops = useMemo(() => {
+    if (!showTransitLayer) return [];
+    if (selectedTransitRoute?.stops?.length > 0) return selectedTransitRoute.stops;
+    return transitStops;
+  }, [showTransitLayer, selectedTransitRoute, transitStops]);
+
+  // Split searched route into on-transit (solid) and walking (dashed) segments
+  const routeSegments = useMemo(() => {
+    if (routeCoordinates.length < 2) return [];
+    return splitRouteSegments(routeCoordinates, transitRoutes, 200);
+  }, [routeCoordinates, transitRoutes]);
+
+
+  const handleRegionChangeComplete = (region: MapRegion) => {
+    let newLat = region.latitude;
+    let newLng = region.longitude;
+
+    if (newLat > PH_BOUNDS.northEast.latitude) newLat = PH_BOUNDS.northEast.latitude;
+    if (newLat < PH_BOUNDS.southWest.latitude) newLat = PH_BOUNDS.southWest.latitude;
+
+    if (newLng > PH_BOUNDS.northEast.longitude) newLng = PH_BOUNDS.northEast.longitude;
+    if (newLng < PH_BOUNDS.southWest.longitude) newLng = PH_BOUNDS.southWest.longitude;
+
+    if (newLat !== region.latitude || newLng !== region.longitude) {
+      const fixedRegion = { ...region, latitude: newLat, longitude: newLng };
+      mapRef.current?.animateToRegion(fixedRegion, 100);
+    }
+  };
+
   return (
     <View style={styles.screen}>
       <MapView
@@ -391,7 +486,7 @@ export default function HomeScreen() {
         showsMyLocationButton={false}
         showsCompass={false}
         onMapReady={() => setIsMapLoaded(true)}
-        onRegionChangeComplete={(region) => setMapRegion(region)}
+        onRegionChangeComplete={handleRegionChangeComplete}
         onTouchStart={() => setIsMapInteracted(true)}
         pitchEnabled={false}
         rotateEnabled={false}
@@ -417,15 +512,69 @@ export default function HomeScreen() {
           />
         )}
 
-        {routeCoordinates.length > 1 && (
+        {/* Render searched route: solid for transit, dashed for walking */}
+        {routeSegments.map((seg, idx) => (
           <Polyline
-            coordinates={routeCoordinates}
-            strokeColor="#E8A020"
-            strokeWidth={5}
+            key={`route-seg-${idx}`}
+            coordinates={seg.coordinates}
+            strokeColor={seg.onTransit ? '#E8A020' : '#999999'}
+            strokeWidth={seg.onTransit ? 5 : 3}
+            lineDashPattern={seg.onTransit ? undefined : [10, 6]}
             lineCap="round"
             lineJoin="round"
           />
+        ))}
+
+        {/* Walking indicator markers at transition points */}
+        {routeSegments.map((seg, idx) =>
+          !seg.onTransit && seg.coordinates.length >= 2 ? (
+            <Marker
+              key={`walk-marker-${idx}`}
+              coordinate={seg.coordinates[0]}
+              tracksViewChanges={false}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={styles.walkMarker}>
+                <Ionicons name="walk" size={14} color="#FFFFFF" />
+              </View>
+            </Marker>
+          ) : null
         )}
+
+        {/* Transit route polylines (hidden when a search route is active) */}
+        {!destinationLocation && visibleTransitRoutes.map((route: any) => (
+          <Polyline
+            key={`transit-route-${route.id}`}
+            coordinates={route.coordinates}
+            strokeColor={selectedTransitRoute?.id === route.id ? route.color : route.color + 'AA'}
+            strokeWidth={selectedTransitRoute?.id === route.id ? 5 : 3}
+            lineCap="round"
+            lineJoin="round"
+          />
+        ))}
+
+        {/* Transit stop markers (hidden when a search route is active) */}
+        {!destinationLocation && visibleTransitStops.map((stop: any) => (
+          <Marker
+            key={`transit-stop-${stop.id}`}
+            coordinate={stop.coordinate}
+            tracksViewChanges={false}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={[
+              styles.transitStopMarker,
+              nearestStop?.id === stop.id && styles.nearestStopMarker,
+            ]}>
+              <Ionicons name="ellipse" size={6} color="#FFFFFF" />
+            </View>
+            <Callout tooltip>
+              <View style={styles.stopCallout}>
+                <Text style={styles.stopCalloutLabel}>{stop.name}</Text>
+                {stop.operator ? <Text style={styles.stopCalloutType}>{stop.operator}</Text> : null}
+              </View>
+            </Callout>
+          </Marker>
+        ))}
 
         {selectedTransitRoute?.segments?.map((seg: any[], idx: number) => (
           <Polyline
@@ -574,6 +723,56 @@ export default function HomeScreen() {
           </Animated.View>
         </View>
 
+        {/* Transit layer controls */}
+        <View style={styles.transitControlsRow}>
+          <TouchableOpacity
+            style={[styles.transitToggle, showTransitLayer && styles.transitToggleActive]}
+            onPress={() => setShowTransitLayer(prev => !prev)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="git-branch" size={16} color={showTransitLayer ? '#FFFFFF' : COLORS.navy} />
+            <Text style={[styles.transitToggleText, showTransitLayer && { color: '#FFFFFF' }]}>
+              Transit
+            </Text>
+          </TouchableOpacity>
+
+          {showTransitLayer && (
+            <TouchableOpacity
+              style={styles.nearestStopBtn}
+              onPress={handleFindNearestStop}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="navigate" size={14} color={COLORS.navy} />
+              <Text style={styles.nearestStopBtnText}>Nearest Stop</Text>
+            </TouchableOpacity>
+          )}
+
+          {transitLoading && showTransitLayer && (
+            <ActivityIndicator size="small" color="#E8A020" style={{ marginLeft: 8 }} />
+          )}
+        </View>
+
+        {transitError && showTransitLayer && (
+          <View style={styles.transitErrorCard}>
+            <Ionicons name="warning" size={16} color="#E53935" />
+            <Text style={styles.transitErrorText}>Transit: {transitError}</Text>
+            <TouchableOpacity onPress={refreshTransit}>
+              <Text style={styles.transitRetryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {nearestStop && showTransitLayer && (
+          <View style={styles.nearestStopCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="location" size={16} color="#E8A020" />
+              <Text style={styles.nearestStopName}>{nearestStop.name}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setNearestStop(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {routeSummary && (
           <View style={styles.routeSummaryCard}>
@@ -635,6 +834,15 @@ export default function HomeScreen() {
             ) : null}
           </View>
         ) : null}
+
+        {/* Transit route list panel */}
+        {showTransitLayer && !transitLoading && transitRoutes.length > 0 && !isSearchActive && !destinationLocation && (
+          <RouteListPanel
+            routes={transitRoutes}
+            selectedRouteId={selectedTransitRoute?.id}
+            onSelectRoute={handleSelectTransitRoute}
+          />
+        )}
       </SafeAreaView>
 
     </View>
@@ -1234,4 +1442,72 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#E53935',
   },
+  walkMarker: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#666666',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
+  },
+  nearestStopMarker: {
+    backgroundColor: '#E8A020',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 3,
+  },
+  nearestStopBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  nearestStopBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  nearestStopCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginHorizontal: SPACING.screenX,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(232,160,32,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  nearestStopName: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.navy,
+  }
 });
