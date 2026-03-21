@@ -18,7 +18,7 @@ function getInitials(name: string) {
 
 function TabBarBackground() {
   const insets = useSafeAreaInsets();
-  const height = 63 + insets.bottom;
+  const height = 53 + insets.bottom;
   const cx = width / 2;
 
   // A smooth continuous notch for the button to sit in
@@ -103,7 +103,7 @@ function LiquidGlassHomeButton({ focused, onPress }: { focused: boolean, onPress
     <TouchableWithoutFeedback onPressIn={handlePressIn} onPressOut={handlePressOut}>
       <Animated.View style={[styles.homeButtonContainer, { transform: [{ scale: buttonScale }] }]}>
         <View style={styles.homeButtonBase}>
-          <Ionicons name={focused ? 'home' : 'home-outline'} size={28} color="#FFFFFF" />
+          <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color="#FFFFFF" />
         </View>
       </Animated.View>
     </TouchableWithoutFeedback>
@@ -120,7 +120,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
       {/* Cutout Background */}
       <TabBarBackground />
       
-      <View style={[styles.customTabBarContainer, { height: 60, paddingBottom: 6, marginBottom: bottomInset }]}>
+      <View style={[styles.customTabBarContainer, { height: 50, paddingBottom: 6, marginBottom: bottomInset }]}>
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
             if (options.href === null) return null;
@@ -148,11 +148,11 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           if (route.name === 'index') {
             return (
               <View key={route.key} style={styles.centerTabWrapper}>
-                <View style={{ height: 24, marginBottom: 4 }} />
+                <View style={{ height: 24, marginBottom: 2 }} />
                 <Text style={[styles.tabLabel, { color: isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
                   Home
                 </Text>
-                <View style={[styles.homeButtonWrapper, { bottom: 25 }]}>
+                <View style={[styles.homeButtonWrapper, { bottom: 12 }]}>
                    <LiquidGlassHomeButton focused={isFocused} onPress={onPress} />
                 </View>
               </View>
@@ -164,7 +164,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             return (
               <TouchableWithoutFeedback key={route.key} onPress={onPress}>
                 <View style={styles.tabItem}>
-                  <Ionicons name={isHistoryFocused ? 'map' : 'map-outline'} size={24} color={isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 4 }} />
+                  <Ionicons name={isHistoryFocused ? 'map' : 'map-outline'} size={20} color={isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 2 }} />
                   <Text style={[styles.tabLabel, { color: isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
                     {label as string}
                   </Text>
@@ -179,7 +179,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           return (
             <TouchableWithoutFeedback key={route.key} onPress={onPress}>
               <View style={styles.tabItem}>
-                <Ionicons name={iconName as any} size={24} color={isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 4 }} />
+                <Ionicons name={iconName as any} size={20} color={isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 2 }} />
                 <Text style={[styles.tabLabel, { color: isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
                   {label as string}
                 </Text>
@@ -251,15 +251,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   homeButtonContainer: {
-    width: 62,
-    height: 62,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   homeButtonBase: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#E8A020',
     alignItems: 'center',
     justifyContent: 'center',
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontFamily: 'Inter',
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '600',
   },
   avatarIcon: {
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   avatarFocused: {
     backgroundColor: '#E8A020',
