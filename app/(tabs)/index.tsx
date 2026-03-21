@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert, StatusBar, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert, StatusBar, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, Callout } from 'react-native-maps';
@@ -38,16 +38,6 @@ const INITIAL_REGION: MapRegion = {
 };
 
 const PH_BOUNDS = MAP_CONFIG.PHILIPPINES_BOUNDS;
-const PH_CENTER_LAT = (PH_BOUNDS.minLatitude + PH_BOUNDS.maxLatitude) / 2;
-const PH_CENTER_LNG = (PH_BOUNDS.minLongitude + PH_BOUNDS.maxLongitude) / 2;
-
-type PlaceSuggestion = {
-  id: string;
-  title: string;
-  subtitle: string;
-  latitude: number;
-  longitude: number;
-};
 
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
@@ -58,14 +48,11 @@ export default function HomeScreen() {
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
   const [originQuery, setOriginQuery] = useState('');
-  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
-  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
-  const [showRoutes, setShowRoutes] = useState(true);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
   const { routes: rawTransitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
   const { routes: gpxRoutes } = useJeepneyRoutes();
@@ -101,7 +88,6 @@ export default function HomeScreen() {
   const pendingRouteSearch = useStore((state) => state.pendingRouteSearch);
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const mapRef = useRef<MapView | null>(null);
-  const displayName = (user?.name || 'Komyuter').split(' ')[0].toUpperCase();
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -150,7 +136,6 @@ export default function HomeScreen() {
   };
 
   // Search Expand Animation
-  const searchHeightAnim = useRef(new Animated.Value(48)).current;
   const searchOpacityAnim = useRef(new Animated.Value(0)).current;
 
   // Search Expand Animation (moved pending search handler below)
@@ -158,11 +143,6 @@ export default function HomeScreen() {
   useEffect(() => {
     if (isSearchActive) {
       Animated.parallel([
-        Animated.timing(searchHeightAnim, {
-          toValue: 120, // Height for expanded search
-          duration: 300,
-          useNativeDriver: false,
-        }),
         Animated.timing(searchOpacityAnim, {
           toValue: 1,
           duration: 300,
@@ -171,11 +151,6 @@ export default function HomeScreen() {
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(searchHeightAnim, {
-          toValue: 48,
-          duration: 300,
-          useNativeDriver: false,
-        }),
         Animated.timing(searchOpacityAnim, {
           toValue: 0,
           duration: 300,
@@ -187,81 +162,6 @@ export default function HomeScreen() {
   }, [isSearchActive]);
 
   const closeSearch = () => setIsSearchActive(false);
-
-  const selectSuggestion = (suggestion: PlaceSuggestion) => {
-    setDestinationQuery(suggestion.title);
-    setPlaceSuggestions([]);
-  };
-
-  useEffect(() => {
-    const query = destinationQuery.trim();
-    if (!isSearchActive || query.length < 2) {
-      setPlaceSuggestions([]);
-      setIsFetchingSuggestions(false);
-      return;
-    }
-
-    let cancelled = false;
-    const debounceTimer = setTimeout(async () => {
-      setIsFetchingSuggestions(true);
-      try {
-        const params = new URLSearchParams({
-          q: `${query}, Cavite, Philippines`,
-          format: 'json',
-          limit: '5',
-          countrycodes: 'ph',
-          addressdetails: '0',
-        });
-
-        const response = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
-          headers: {
-            'Accept-Language': 'en',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Suggestion fetch failed (${response.status})`);
-        }
-
-        const results = await response.json();
-        if (cancelled) {
-          return;
-        }
-
-        const mapped: PlaceSuggestion[] = (Array.isArray(results) ? results : [])
-          .map((item: any, idx: number) => {
-            const displayName = String(item.display_name || '').trim();
-            const parts = displayName.split(',').map((p) => p.trim()).filter(Boolean);
-            const title = parts[0] || query;
-            const subtitle = parts.slice(1).join(', ') || 'Cavite, Philippines';
-            return {
-              id: String(item.place_id || `${displayName}-${idx}`),
-              title,
-              subtitle,
-              latitude: parseFloat(item.lat),
-              longitude: parseFloat(item.lon),
-            };
-          })
-          .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
-
-        setPlaceSuggestions(mapped);
-      } catch (error) {
-        if (!cancelled) {
-          console.warn('[HomeScreen] Suggestion search failed:', error);
-          setPlaceSuggestions([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsFetchingSuggestions(false);
-        }
-      }
-    }, 350);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(debounceTimer);
-    };
-  }, [destinationQuery, isSearchActive]);
 
   useEffect(() => {
     let locationSubscription: Location.LocationSubscription | null = null;
@@ -322,106 +222,6 @@ export default function HomeScreen() {
       });
     }
   }, [selectedTransitRoute]);
-
-  const handleRouteSearch = async () => {
-    Keyboard.dismiss();
-    const dest = destinationQuery.trim().toLowerCase();
-    
-    if (!dest) {
-      Alert.alert('Destination Required', 'Type where you want to go first.');
-      return;
-    }
-
-    if (!currentLocation) {
-      Alert.alert('GPS Not Ready', 'Waiting for your current location. Please try again in a few seconds.');
-      return;
-    }
-
-    setIsRouting(true);
-    try {
-      const geocodeParams = new URLSearchParams({
-        q: `${destinationQuery}, Cavite, Philippines`,
-        format: 'json',
-        limit: '1',
-        countrycodes: 'ph',
-      });
-
-      const geocodeResponse = await fetch(`${GEOCODING_BASE_URL}/search?${geocodeParams.toString()}`, {
-        headers: {
-          'Accept-Language': 'en',
-        },
-      });
-
-      if (!geocodeResponse.ok) {
-        throw new Error(`Geocoding failed (${geocodeResponse.status})`);
-      }
-
-      const geocodeResults = await geocodeResponse.json();
-      if (!Array.isArray(geocodeResults) || geocodeResults.length === 0) {
-        Alert.alert('Location Not Found', 'Try a more specific destination name.');
-        return;
-      }
-
-      const destination = geocodeResults[0];
-      const destinationPoint: MapCoordinate = {
-        latitude: parseFloat(destination.lat),
-        longitude: parseFloat(destination.lon),
-      };
-      setDestinationLocation(destinationPoint);
-
-      const startLng = currentLocation.longitude;
-      const startLat = currentLocation.latitude;
-      const destLng = destinationPoint.longitude;
-      const destLat = destinationPoint.latitude;
-
-      const routeResponse = await fetch(
-        `${ROUTING_BASE_URL}/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`
-      );
-
-      if (!routeResponse.ok) {
-        throw new Error(`Routing failed (${routeResponse.status})`);
-      }
-
-      const routeResult = await routeResponse.json();
-      const bestRoute = routeResult?.routes?.[0];
-      if (!bestRoute?.geometry?.coordinates) {
-        Alert.alert('Route Not Found', 'No drivable route found for this destination.');
-        return;
-      }
-
-      const mappedCoordinates = toMapCoordinates(bestRoute.geometry.coordinates);
-      setRouteCoordinates(mappedCoordinates);
-      setRouteSummary({
-        distanceKm: bestRoute.distance / 1000,
-        durationMin: bestRoute.duration / 60,
-      });
-
-      mapRef.current?.fitToCoordinates(mappedCoordinates, {
-        edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
-        animated: true,
-      });
-
-      setIsSearchActive(false);
-      setPlaceSuggestions([]);
-      Keyboard.dismiss();
-    } catch (error) {
-      console.warn('[HomeScreen] Route search failed:', error);
-      Alert.alert('Search Failed', 'Unable to fetch route right now. Please try again.');
-    } finally {
-      setIsRouting(false);
-    }
-  };
-
-  // Handle selecting a transit route from the panel
-  const handleSelectTransitRoute = useCallback((route: any) => {
-    setSelectedTransitRoute(selectedTransitRoute?.id === route.id ? null : route);
-    if (route.coordinates?.length > 0) {
-      mapRef.current?.fitToCoordinates(route.coordinates, {
-        edgePadding: { top: 120, right: 40, bottom: 200, left: 40 },
-        animated: true,
-      });
-    }
-  }, [selectedTransitRoute, setSelectedTransitRoute]);
 
   // Find the nearest stop to the user's current location
 
