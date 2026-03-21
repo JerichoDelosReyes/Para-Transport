@@ -38,7 +38,7 @@ async function fetchAll() {
   console.log('\nSaved raw cache. Calling dynamic parser...');
 
   // Parse using our app logic so the file size goes from 60MB down to ~1MB
-  import('../utils/parseRoutes.js').then(module => {
+  import('../services/parseRoutes.js').then(module => {
     const rawData = JSON.parse(fs.readFileSync('data/temp_overpass_cache.json', 'utf8'));
     console.log('Parsing routes (clipping bounds, interpolating coordinates)...');
     const routes = module.parseRouteElements(rawData.routeElements);
