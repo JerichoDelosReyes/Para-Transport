@@ -1,11 +1,12 @@
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, PanResponder } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useStore } from '../store/useStore';
 
 type Doodle = {
   id: number;
@@ -35,11 +36,64 @@ const DOODLES: Doodle[] = [
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const beginGuestSession = useStore((state) => state.beginGuestSession);
+  const hasHydrated = useStore((state) => state.hasHydrated);
+  const sessionMode = useStore((state) => state.sessionMode);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const insets = useSafeAreaInsets();
+  const sheetTranslateY = useRef(new Animated.Value(0)).current;
+
+  const resetSheetPosition = () => {
+    Animated.spring(sheetTranslateY, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 0,
+    }).start();
+  };
+
+  const dismissSheet = () => {
+    Animated.timing(sheetTranslateY, {
+      toValue: 420,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowAuthPopup(false);
+      sheetTranslateY.setValue(0);
+    });
+  };
+
+  const sheetPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          gestureState.dy > 1 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 0.5,
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          gestureState.dy > 1 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 0.5,
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dy > 0) {
+            sheetTranslateY.setValue(gestureState.dy);
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dy > 40 || gestureState.vy > 0.45) {
+            dismissSheet();
+            return;
+          }
+          resetSheetPosition();
+        },
+        onPanResponderTerminate: resetSheetPosition,
+      }),
+    [sheetTranslateY]
+  );
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+    if (!sessionMode) return;
+    router.replace('/(tabs)');
+  }, [hasHydrated, sessionMode, router]);
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
 
       <View style={styles.canvas}>
@@ -95,15 +149,26 @@ export default function WelcomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <Modal transparent visible={showAuthPopup} animationType="fade" onRequestClose={() => setShowAuthPopup(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.handle} />
-            <TouchableOpacity style={styles.closeButton} onPress={() => setShowAuthPopup(false)} activeOpacity={0.8}>
-              <Ionicons name="close" size={18} color={COLORS.textMuted} />
-            </TouchableOpacity>
+      <Modal
+        transparent
+        visible={showAuthPopup}
+        animationType="fade"
+        onRequestClose={() => setShowAuthPopup(false)}
+      >
+        <View style={styles.modalOverlay} {...sheetPanResponder.panHandlers}>
+          <TouchableOpacity
+            style={styles.modalScrimTapZone}
+            activeOpacity={1}
+            onPress={() => setShowAuthPopup(false)}
+          />
 
-            <Text style={styles.modalTitle}>Login or sign up</Text>
+          <Animated.View
+            style={[styles.modalSheet, { transform: [{ translateY: sheetTranslateY }] }]}
+            {...sheetPanResponder.panHandlers}
+          >
+            <View style={styles.handle} />
+
+            <Text style={styles.modalTitle}>Login or Sign up</Text>
             <Text style={styles.modalSubtitle}>
               Choose your preferred method to continue to Para.
             </Text>
@@ -112,7 +177,7 @@ export default function WelcomeScreen() {
               style={styles.modalPrimaryAction}
               onPress={() => {
                 setShowAuthPopup(false);
-                router.push('/login');
+                router.navigate('/login');
               }}
               activeOpacity={0.9}
             >
@@ -123,24 +188,12 @@ export default function WelcomeScreen() {
               style={styles.modalSecondaryAction}
               onPress={() => {
                 setShowAuthPopup(false);
-                router.push('/register');
+                router.navigate('/register');
               }}
               activeOpacity={0.9}
             >
               <Text style={styles.modalSecondaryText}>Sign up</Text>
             </TouchableOpacity>
-
-            <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.googleButton} activeOpacity={0.9}>
-                <Text style={styles.googleMark}>G</Text>
-                <Text style={styles.socialLabel}>Google</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.appleButton} activeOpacity={0.9}>
-                <Ionicons name="logo-apple" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.appleButtonText}>Apple</Text>
-              </TouchableOpacity>
-            </View>
 
             <Text style={styles.modalFooterText}>
               By continuing, you agree to Privacy Policy and Terms of Service.
@@ -149,6 +202,7 @@ export default function WelcomeScreen() {
             <TouchableOpacity
               style={styles.guestLinkWrap}
               onPress={() => {
+                beginGuestSession();
                 setShowAuthPopup(false);
                 router.replace('/(tabs)');
               }}
@@ -156,11 +210,11 @@ export default function WelcomeScreen() {
             >
               <Text style={styles.guestLink}>Continue as guest</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -233,7 +287,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     marginTop: -60,
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 36,
+    paddingTop: 20,
     paddingBottom: 18,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
@@ -266,6 +320,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 10,
     elevation: 6,
+    marginBottom: 20,
   },
   primaryButtonText: {
     fontFamily: 'Inter',
@@ -281,6 +336,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'flex-end',
   },
+  modalScrimTapZone: {
+    flex: 1,
+  },
   modalSheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 28,
@@ -288,7 +346,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenX,
     paddingTop: 12,
     paddingBottom: 28,
-    minHeight: 440,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.2,
@@ -301,16 +358,7 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 999,
     backgroundColor: COLORS.primary,
-    marginBottom: 8,
-  },
-  closeButton: {
-    alignSelf: 'flex-end',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#F3F3F3',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 10,
   },
   modalTitle: {
     marginTop: 2,
@@ -326,7 +374,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.textMuted,
     textAlign: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   modalPrimaryAction: {
     height: 54,
@@ -358,59 +406,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.navy,
   },
-  socialRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  googleButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1.5,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  socialLabel: {
-    fontFamily: 'Inter',
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.navy,
-  },
-  appleButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  appleButtonText: {
-    fontFamily: 'Inter',
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  googleMark: {
-    fontFamily: 'Inter',
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#4285F4',
-    marginRight: 6,
-  },
   modalFooterText: {
-    marginTop: 12,
+    marginTop: 14,
     textAlign: 'center',
     fontFamily: 'Inter',
     fontSize: 12,
+    lineHeight: 18,
     color: COLORS.textMuted,
   },
   guestLinkWrap: {
-    marginTop: 10,
+    marginTop: 12,
     alignItems: 'center',
   },
   guestLink: {

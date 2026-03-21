@@ -6,6 +6,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, Animated, StyleSheet, Easing, Image } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -115,21 +116,24 @@ export default function RootLayout() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.background } }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="register" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="journey" />
-        <Stack.Screen name="journey-summary" />
-      </Stack>
+    <SafeAreaProvider>
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <StatusBar style="dark" />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.background } }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="register" />
+          <Stack.Screen name="reset-password" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="journey" />
+          <Stack.Screen name="journey-summary" />
+        </Stack>
 
-      {/* Custom Animated Splash Screen Overlay */}
-      {showAnimatedSplash && (
-        <CustomSplash onFinish={() => setShowAnimatedSplash(false)} />
-      )}
-    </View>
+        {/* Custom Animated Splash Screen Overlay */}
+        {showAnimatedSplash && (
+          <CustomSplash onFinish={() => setShowAnimatedSplash(false)} />
+        )}
+      </View>
+    </SafeAreaProvider>
   );
 }
