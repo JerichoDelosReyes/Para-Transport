@@ -37,5 +37,4 @@ export const BADGES: Badge[] = [
   { id: "habit_builder", name: "Habit Builder", description: "Complete at least 1 trip per day for 14 days.", icon: "📆", goal: 14 },
   { id: "multi_hop_master", name: "Multi-Hop Master", description: "Complete a trip with 3 or more transfers.", icon: "🦘", goal: 3 },
   { id: "ultimate_commuter", name: "Ultimate Commuter", description: "Complete 100 total trips.", icon: "🌟", goal: 100 },
-  { id: "metro_connector", name: "Metro Connector", description: "Travel using multi-transport routes in one trip.", icon: "🚇", goal: 1 }
 ];
