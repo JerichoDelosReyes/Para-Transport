@@ -16,7 +16,6 @@ export const BADGE_IMAGES: Record<string, any> = {
   'rush_hour_survivor': require('../assets/achievements/RushHourSurvivor.png'),
   'speed_commuter': require('../assets/achievements/SpeedCommuter.png'),
   'time_optimizer': require('../assets/achievements/TimeOptimizer.png'),
-  'early_bird': require('../assets/achievements/EarlyBird.png'),
   'smart_planner': require('../assets/achievements/SmartPlanner.png'),
   'route_comparator': require('../assets/achievements/RouteComparator.png'),
   'navigator': require('../assets/achievements/Navigator.png'),

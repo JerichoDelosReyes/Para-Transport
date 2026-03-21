@@ -29,7 +29,6 @@ export default function AchievementsScreen() {
       case 'ultimate_commuter': return trips;
       case 'long_hauler': return distance;
       case 'thrifty_commuter': return spent;
-      case 'consistent_traveler': return streak;
       case 'dedicated_commuter': return streak;
       case 'habit_builder': return streak;
       default: return 0; // Default active progress for non-tracked yet
