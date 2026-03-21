@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useStore } from '../store/useStore';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { BADGES } from '../constants/badges';
+import { BADGE_IMAGES } from '../constants/badgeImages';
 
 function getInitials(name: string) {
   if (!name) return 'PR';
@@ -117,7 +118,17 @@ export default function ProfileScreen() {
               const isEarned = false; // explicitly locked instead of mock data
               return (
                 <View key={badge.id} style={[styles.badgeCard, !isEarned && styles.badgeLocked]}>
-                  <Text style={[styles.badgeEmoji, !isEarned && { opacity: 0.3 }]}>{badge.icon}</Text>
+                                    <View style={styles.profileIconWrapper}>
+                    {BADGE_IMAGES[badge.id] ? (
+                      <Image 
+                        source={BADGE_IMAGES[badge.id]} 
+                        style={[styles.badgeImage, !isEarned && { opacity: 0.3 }]} 
+                        resizeMode="contain" 
+                      />
+                    ) : (
+                      <Text style={[styles.badgeEmoji, !isEarned && { opacity: 0.3 }]}>{badge.icon}</Text>
+                    )}
+                  </View>
                   <Text style={[styles.badgeName, !isEarned && { color: COLORS.textMuted }]}>{badge.name}</Text>
                   {!isEarned && (
                     <View style={styles.lockOverlay}>
@@ -333,12 +344,24 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  profileIconWrapper: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#d5a944',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  badgeImage: {
+    width: 35,
+    height: 35,
+  },
   badgeLocked: {
     backgroundColor: 'rgba(0,0,0,0.02)',
   },
   badgeEmoji: {
     fontSize: 32,
-    marginBottom: 8,
   },
   badgeName: {
     fontFamily: 'Inter',
