@@ -11,10 +11,10 @@ import { useTransitData } from '../../hooks/useTransitData';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
 import { ROUTE_COLORS } from '../../services/parseRoutes';
 import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
-import { splitRouteSegments } from '../../utils/routeSegments';
+import { splitRouteSegments, buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
-import RouteRecommenderPanel, { TransitRouteOption } from '../../components/RouteRecommenderPanel';
+import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
@@ -432,41 +432,10 @@ export default function HomeScreen() {
     return splitRouteSegments(routeCoordinates, transitRoutes, 50);
   }, [routeCoordinates, transitRoutes]);
 
-  // Compute nearby transit routes that overlap with the searched route
-  const nearbyTransitRoutes = useMemo((): TransitRouteOption[] => {
+  // Build multi-leg transit journey plan
+  const transitLegs = useMemo((): TransitLeg[] => {
     if (routeCoordinates.length < 2) return [];
-    const routeStart = routeCoordinates[0];
-    const routeEnd = routeCoordinates[routeCoordinates.length - 1];
-    const PROXIMITY_THRESHOLD = 0.015; // ~1.5km in degrees
-
-    return transitRoutes.filter((tr: any) => {
-      if (!tr.coordinates || tr.coordinates.length < 2) return false;
-      // Check if any transit coordinate is near the route start or end
-      const nearStart = tr.coordinates.some((c: any) => {
-        const dlat = Math.abs(c.latitude - routeStart.latitude);
-        const dlng = Math.abs(c.longitude - routeStart.longitude);
-        return dlat < PROXIMITY_THRESHOLD && dlng < PROXIMITY_THRESHOLD;
-      });
-      const nearEnd = tr.coordinates.some((c: any) => {
-        const dlat = Math.abs(c.latitude - routeEnd.latitude);
-        const dlng = Math.abs(c.longitude - routeEnd.longitude);
-        return dlat < PROXIMITY_THRESHOLD && dlng < PROXIMITY_THRESHOLD;
-      });
-      return nearStart || nearEnd;
-    }).map((tr: any) => ({
-      id: tr.id,
-      ref: tr.ref,
-      name: tr.name,
-      type: tr.type,
-      from: tr.from,
-      to: tr.to,
-      fare: tr.fare,
-      operator: tr.operator,
-      color: tr.color,
-      verified: tr.verified,
-      coordinates: tr.coordinates,
-      stops: tr.stops,
-    }));
+    return buildTransitLegs(routeCoordinates, transitRoutes as any[], 50, 150);
   }, [routeCoordinates, transitRoutes]);
 
 
@@ -547,6 +516,34 @@ export default function HomeScreen() {
             </Marker>
           ) : null
         )}
+
+        {/* Transfer point markers between transit legs */}
+        {transitLegs.map((leg, idx) => {
+          if (!leg.onTransit) return null;
+          const nextTransitLeg = transitLegs.slice(idx + 1).find(l => l.onTransit);
+          if (!nextTransitLeg) return null;
+          // Show a transfer marker where this transit leg ends
+          return (
+            <Marker
+              key={`transfer-${idx}`}
+              coordinate={leg.alightAt}
+              tracksViewChanges={false}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={styles.transferMarker}>
+                <Ionicons name="swap-vertical" size={14} color="#FFFFFF" />
+              </View>
+              <Callout tooltip>
+                <View style={styles.stopCallout}>
+                  <Text style={styles.stopCalloutLabel}>Transfer Point</Text>
+                  <Text style={styles.stopCalloutType}>
+                    Get off at {leg.alightLabel}, then ride {nextTransitLeg.transitInfo?.ref || nextTransitLeg.transitInfo?.name || 'next transit'}
+                  </Text>
+                </View>
+              </Callout>
+            </Marker>
+          );
+        })}
 
         {/* Transit route polylines (hidden when a search route is active) */}
         {!destinationLocation && visibleTransitRoutes.map((route: any) => (
@@ -735,11 +732,7 @@ export default function HomeScreen() {
       <RouteRecommenderPanel
         visible={showRecommender}
         routeSummary={routeSummary}
-        nearbyTransitRoutes={nearbyTransitRoutes}
-        onSelectTransitRoute={(route) => {
-          setShowRecommender(false);
-          setSelectedTransitRoute(route as any);
-        }}
+        transitLegs={transitLegs}
         onClose={() => setShowRecommender(false)}
       />
 
@@ -1301,6 +1294,21 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
     elevation: 3,
+  },
+  transferMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
   },
   nearestStopMarker: {
     backgroundColor: '#E8A020',
