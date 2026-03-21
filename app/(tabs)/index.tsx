@@ -771,50 +771,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Speed chips – visible during simulation */}
-          {sim.state !== 'idle' && (
-            <>
-              {[1, 2, 3, 5].map((s) => (
-                <TouchableOpacity
-                  key={`speed-${s}`}
-                  style={[
-                    styles.speedChip,
-                    sim.speed === s && styles.speedChipActive,
-                  ]}
-                  onPress={() => sim.setSpeed(s)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[
-                    styles.speedChipText,
-                    sim.speed === s && styles.speedChipTextActive,
-                  ]}>{s}x</Text>
-                </TouchableOpacity>
-              ))}
-              {/* Re-center / follow button */}
-              {!simAutoFollow && (
-                <TouchableOpacity
-                  style={styles.followChip}
-                  onPress={() => setSimAutoFollow(true)}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="locate" size={13} color={COLORS.navy} />
-                  <Text style={styles.followChipText}>Follow</Text>
-                </TouchableOpacity>
-              )}
-              {/* Stop / Reset */}
-              <TouchableOpacity
-                style={styles.simStopChip}
-                onPress={() => {
-                  sim.reset();
-                  setSimAutoFollow(true);
-                }}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="stop" size={13} color="#E53935" />
-              </TouchableOpacity>
-            </>
-          )}
-
           {showTransitLayer && (
             <TouchableOpacity
               style={styles.nearestStopBtn}
@@ -875,18 +831,99 @@ export default function HomeScreen() {
         ) : null}
       </SafeAreaView>
       {/* Simulation segment info banner */}
-      {sim.state !== 'idle' && sim.currentSegInfo && (
+      {sim.state !== 'idle' && (
         <View style={styles.simBanner}>
-          <View style={[styles.simBannerDot, { backgroundColor: sim.currentSegInfo.color }]} />
-          <Text style={styles.simBannerText}>
-            {sim.currentSegInfo.label}
-          </Text>
-          {sim.state === 'finished' && (
-            <Text style={styles.simBannerFinished}>Arrived!</Text>
-          )}
+          {/* Top row: segment info + playback controls */}
+          <View style={styles.simBannerTopRow}>
+            {sim.currentSegInfo ? (
+              <View style={styles.simBannerSegInfo}>
+                <View style={[styles.simBannerDot, { backgroundColor: sim.currentSegInfo.color }]} />
+                <Text style={styles.simBannerText} numberOfLines={1}>
+                  {sim.currentSegInfo.label}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.simBannerSegInfo}>
+                <Text style={styles.simBannerText}>Ready to simulate</Text>
+              </View>
+            )}
+            {sim.state === 'finished' && (
+              <Text style={styles.simBannerFinished}>Arrived!</Text>
+            )}
+          </View>
+
           {/* Progress bar */}
           <View style={styles.simProgressBarBg}>
             <View style={[styles.simProgressBarFill, { width: `${Math.round(sim.progress * 100)}%` }]} />
+          </View>
+
+          {/* Playback control row */}
+          <View style={styles.simControlRow}>
+            {/* Stop */}
+            <TouchableOpacity
+              style={styles.simControlBtn}
+              onPress={() => { sim.reset(); setSimAutoFollow(true); }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="stop-circle" size={28} color="#E53935" />
+            </TouchableOpacity>
+
+            {/* Play / Pause */}
+            <TouchableOpacity
+              style={styles.simControlBtnMain}
+              onPress={() => {
+                if (sim.state === 'idle' || sim.state === 'finished') setSimAutoFollow(true);
+                sim.togglePlayPause();
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={sim.state === 'playing' ? 'pause-circle' : 'play-circle'}
+                size={44}
+                color={sim.state === 'playing' ? COLORS.navy : '#E8A020'}
+              />
+            </TouchableOpacity>
+
+            {/* Replay (visible when finished or paused) */}
+            <TouchableOpacity
+              style={styles.simControlBtn}
+              onPress={() => {
+                sim.reset();
+                setSimAutoFollow(true);
+                // Small delay so reset takes effect before play
+                setTimeout(() => sim.play(), 50);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="reload-circle" size={28} color={COLORS.navy} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Speed selector row */}
+          <View style={styles.simSpeedRow}>
+            <Text style={styles.simSpeedLabel}>Speed:</Text>
+            {[1, 2, 3, 5].map((s) => (
+              <TouchableOpacity
+                key={`banner-speed-${s}`}
+                style={[styles.simSpeedChip, sim.speed === s && styles.simSpeedChipActive]}
+                onPress={() => sim.setSpeed(s)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.simSpeedChipText, sim.speed === s && styles.simSpeedChipTextActive]}>
+                  {s}x
+                </Text>
+              </TouchableOpacity>
+            ))}
+            {/* Re-follow button */}
+            {!simAutoFollow && (
+              <TouchableOpacity
+                style={styles.simFollowBtn}
+                onPress={() => setSimAutoFollow(true)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="locate" size={14} color="#E8A020" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       )}
@@ -1600,69 +1637,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.navy,
   },
-  speedChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(10,22,40,0.08)',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  },
-  speedChipActive: {
-    backgroundColor: COLORS.navy,
-    borderColor: COLORS.navy,
-  },
-  speedChipText: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.navy,
-  },
-  speedChipTextActive: {
-    color: '#FFFFFF',
-  },
-  followChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(232,160,32,0.3)',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  },
-  followChipText: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.navy,
-  },
-  simStopChip: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(229,57,53,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  },
   simMarker: {
     width: 36,
     height: 36,
@@ -1691,22 +1665,31 @@ const styles = StyleSheet.create({
     bottom: 90,
     left: SPACING.screenX,
     right: SPACING.screenX,
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: 18,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 14,
+    paddingBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(10,22,40,0.08)',
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 5,
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
     zIndex: 10,
+  },
+  simBannerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  simBannerSegInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+    flex: 1,
   },
   simBannerDot: {
     width: 10,
@@ -1722,20 +1705,79 @@ const styles = StyleSheet.create({
   },
   simBannerFinished: {
     fontFamily: 'Inter',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: '#4CAF50',
+    marginLeft: 8,
   },
   simProgressBarBg: {
     width: '100%',
     height: 4,
     borderRadius: 2,
     backgroundColor: 'rgba(10,22,40,0.08)',
-    marginTop: 4,
   },
   simProgressBarFill: {
     height: 4,
     borderRadius: 2,
     backgroundColor: '#E8A020',
+  },
+  simControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 12,
+  },
+  simControlBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  simControlBtnMain: {
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  simSpeedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 10,
+  },
+  simSpeedLabel: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginRight: 2,
+  },
+  simSpeedChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.pill,
+    backgroundColor: 'rgba(10,22,40,0.05)',
+  },
+  simSpeedChipActive: {
+    backgroundColor: COLORS.navy,
+  },
+  simSpeedChipText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  simSpeedChipTextActive: {
+    color: '#FFFFFF',
+  },
+  simFollowBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(232,160,32,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
 });
