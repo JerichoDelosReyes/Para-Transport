@@ -14,7 +14,8 @@ import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import type { TransitLeg } from '../utils/routeSegments';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const PANEL_HEIGHT = 340;
+const PANEL_VISIBLE = 540;
+const PANEL_HEIGHT = PANEL_VISIBLE + 300;
 
 export type RouteAlternativeId = 'recommended' | 'least_transfers' | 'fastest' | 'cheapest' | 'shortest';
 
@@ -83,8 +84,8 @@ export default function RouteRecommenderPanel({
   transitLegs,
   onClose,
 }: Props) {
-  const panY = useRef(new Animated.Value(PANEL_HEIGHT)).current;
-  const lastOffset = useRef(PANEL_HEIGHT);
+  const panY = useRef(new Animated.Value(PANEL_VISIBLE)).current;
+  const lastOffset = useRef(PANEL_VISIBLE);
   const [selectedAlt, setSelectedAlt] = useState<RouteAlternativeId>('recommended');
 
   React.useEffect(() => {
@@ -97,11 +98,11 @@ export default function RouteRecommenderPanel({
       lastOffset.current = 0;
     } else {
       Animated.timing(panY, {
-        toValue: PANEL_HEIGHT,
+        toValue: PANEL_VISIBLE,
         duration: 300,
         useNativeDriver: false,
       }).start();
-      lastOffset.current = PANEL_HEIGHT;
+      lastOffset.current = PANEL_VISIBLE;
     }
   }, [visible]);
 
@@ -119,11 +120,11 @@ export default function RouteRecommenderPanel({
         panY.flattenOffset();
         if (gs.dy > 40 || gs.vy > 0.4) {
           Animated.spring(panY, {
-            toValue: PANEL_HEIGHT,
+            toValue: PANEL_VISIBLE,
             useNativeDriver: false,
             bounciness: 4,
           }).start(() => {
-            lastOffset.current = PANEL_HEIGHT;
+            lastOffset.current = PANEL_VISIBLE;
             onClose();
           });
           return;
@@ -139,7 +140,7 @@ export default function RouteRecommenderPanel({
     })
   ).current;
 
-  if (!visible && lastOffset.current === PANEL_HEIGHT) return null;
+  if (!visible && lastOffset.current === PANEL_VISIBLE) return null;
 
   return (
     <Animated.View
@@ -210,7 +211,7 @@ export default function RouteRecommenderPanel({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 0,
+    bottom: -300,
     left: 0,
     right: 0,
     backgroundColor: COLORS.card,
@@ -226,7 +227,7 @@ const styles = StyleSheet.create({
   handleArea: {
     alignItems: 'center',
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 16,
     paddingHorizontal: SPACING.screenX,
   },
   dragHandle: {
@@ -258,7 +259,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenX,
-    paddingBottom: 32,
+    paddingBottom: 60,
     paddingTop: 4,
     gap: 8,
   },
