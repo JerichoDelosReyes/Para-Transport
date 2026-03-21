@@ -10,18 +10,20 @@ import { useStore } from '../../store/useStore';
 import { ROUTE_COLORS, ROUTE_LABELS } from '../../constants/routeVisuals';
 import { getRouteDisplayRef } from '../../constants/routeCatalog';
 
-const FILTER_MODES = ['All', 'Jeepney', 'Bus', 'UV Express'] as const;
+const FILTER_MODES = ['All', 'Jeepney', 'Tricycle', 'Bus', 'UV Express'] as const;
 const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> = {
   All: null,
   Jeepney: 'jeepney',
+  Tricycle: 'tricycle',
   Bus: 'bus',
   'UV Express': 'share_taxi',
 };
 
-const TYPE_ORDER = ['bus', 'jeepney', 'share_taxi'];
+const TYPE_ORDER = ['tricycle', 'jeepney', 'bus', 'share_taxi'];
 const TYPE_ICONS: Record<string, string> = {
   bus: 'bus',
   jeepney: 'car',
+  tricycle: 'bicycle',
   share_taxi: 'car-sport',
 };
 

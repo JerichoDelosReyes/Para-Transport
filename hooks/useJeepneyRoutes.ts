@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import routeData from '../data/routes.json';
+import tricycleRouteData from '../data/tricycle_routes.json';
 import { ENABLED_ROUTE_CODES, getRouteDisplayName } from '../constants/routeCatalog';
 
 export type RouteCoord = {
@@ -35,8 +36,11 @@ export function useJeepneyRoutes() {
 
   useEffect(() => {
     try {
-      const data = routeData as any;
-      const parsed: JeepneyRoute[] = (data.routes || [])
+      const baseData = routeData as any;
+      const trikeData = tricycleRouteData as any;
+      const allRoutes = [...(baseData.routes || []), ...(trikeData.routes || [])];
+
+      const parsed: JeepneyRoute[] = allRoutes
         .filter((r: any) => r.status === 'active' && r.path?.length >= 2 && ENABLED_ROUTE_CODES.includes(r.code))
         .map((r: any) => {
           const coordinates: RouteCoord[] = r.path.map(([lng, lat]: [number, number]) => ({
