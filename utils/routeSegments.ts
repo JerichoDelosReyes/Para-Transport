@@ -253,35 +253,108 @@ export function buildTransitLegs(
   const thresholdSq = thresholdMetres * thresholdMetres;
   const routeMap = new Map(transitRoutes.map(r => [r.id, r]));
 
-  // Step 1: Tag each route point with its nearest transit route id (or null)
-  const tags: (string | null)[] = routePoints.map(p =>
-    findNearestTransitRoute(p, transitRoutes, thresholdSq)
-  );
+  // Step 1: For each route point, find ALL transit routes within threshold (not just nearest)
+  const allMatches: Set<string>[] = routePoints.map(p => {
+    const matches = new Set<string>();
+    for (const route of transitRoutes) {
+      if (!route.coordinates || route.coordinates.length < 2) continue;
+      for (let i = 0; i < route.coordinates.length - 1; i++) {
+        if (sqDistToSegment(p, route.coordinates[i], route.coordinates[i + 1]) <= thresholdSq) {
+          matches.add(route.id);
+          break;
+        }
+      }
+    }
+    return matches;
+  });
 
-  // Step 2: Group consecutive same-tag points into raw legs
+  // Step 2: Greedy assignment — prefer continuing the same route to avoid unnecessary transfers
+  // Pick the route that covers the longest consecutive stretch from the current position
+  const tags: (string | null)[] = new Array(routePoints.length).fill(null);
+
+  let i = 0;
+  while (i < routePoints.length) {
+    const candidates = allMatches[i];
+    if (candidates.size === 0) {
+      tags[i] = null;
+      i++;
+      continue;
+    }
+
+    // For each candidate route, count how many consecutive points it covers from here
+    let bestRoute = '';
+    let bestRun = 0;
+    for (const routeId of candidates) {
+      let run = 0;
+      for (let j = i; j < routePoints.length; j++) {
+        if (allMatches[j].has(routeId)) {
+          run++;
+        } else {
+          break;
+        }
+      }
+      if (run > bestRun) {
+        bestRun = run;
+        bestRoute = routeId;
+      }
+    }
+
+    // Assign all points in the run to this route
+    for (let j = i; j < i + bestRun; j++) {
+      tags[j] = bestRoute;
+    }
+    i += bestRun;
+  }
+
+  // Step 3: Group consecutive same-tag points into raw legs
   type RawLeg = { routeId: string | null; startIdx: number; endIdx: number };
   const rawLegs: RawLeg[] = [];
   let currentId = tags[0];
   let startIdx = 0;
 
-  for (let i = 1; i < tags.length; i++) {
-    if (tags[i] !== currentId) {
-      rawLegs.push({ routeId: currentId, startIdx, endIdx: i });
-      currentId = tags[i];
-      startIdx = i;
+  for (let k = 1; k < tags.length; k++) {
+    if (tags[k] !== currentId) {
+      rawLegs.push({ routeId: currentId, startIdx, endIdx: k });
+      currentId = tags[k];
+      startIdx = k;
     }
   }
   rawLegs.push({ routeId: currentId, startIdx, endIdx: tags.length - 1 });
 
-  // Step 3: Remove short transit legs (noise) — convert to walking, then re-merge
+  // Step 4: Absorb short walking gaps between the same transit route
+  // e.g. Route A → walk (50m) → Route A  =>  Route A (continuous)
+  const absorbed: RawLeg[] = [rawLegs[0]];
+  for (let k = 1; k < rawLegs.length; k++) {
+    const prev = absorbed[absorbed.length - 1];
+    const curr = rawLegs[k];
+
+    // If prev is transit, curr is walking (short), and next is the SAME transit route — absorb
+    if (
+      prev.routeId !== null &&
+      curr.routeId === null &&
+      k + 1 < rawLegs.length &&
+      rawLegs[k + 1].routeId === prev.routeId
+    ) {
+      const walkCoords = routePoints.slice(curr.startIdx, curr.endIdx + 1);
+      if (totalLengthMetres(walkCoords) < 300) {
+        // Absorb this walking gap and the next leg into prev
+        prev.endIdx = rawLegs[k + 1].endIdx;
+        k++; // Skip the next leg too (already absorbed)
+        continue;
+      }
+    }
+
+    absorbed.push(curr);
+  }
+
+  // Step 5: Remove short transit legs (noise) — convert to walking, then re-merge
   const cleaned: RawLeg[] = [];
-  for (const leg of rawLegs) {
+  for (const leg of absorbed) {
     const coords = routePoints.slice(leg.startIdx, leg.endIdx + 1);
     const len = totalLengthMetres(coords);
     const isTransit = leg.routeId !== null;
 
     if (isTransit && len < minLegMetres) {
-      // Convert to walking
       cleaned.push({ ...leg, routeId: null });
     } else {
       cleaned.push(leg);
@@ -290,16 +363,16 @@ export function buildTransitLegs(
 
   // Re-merge adjacent same-id legs
   const merged: RawLeg[] = [cleaned[0]];
-  for (let i = 1; i < cleaned.length; i++) {
+  for (let k = 1; k < cleaned.length; k++) {
     const last = merged[merged.length - 1];
-    if (last.routeId === cleaned[i].routeId) {
-      last.endIdx = cleaned[i].endIdx;
+    if (last.routeId === cleaned[k].routeId) {
+      last.endIdx = cleaned[k].endIdx;
     } else {
-      merged.push({ ...cleaned[i] });
+      merged.push({ ...cleaned[k] });
     }
   }
 
-  // Step 4: Build TransitLeg objects
+  // Step 6: Build TransitLeg objects
   return merged.map((raw): TransitLeg => {
     const coords = routePoints.slice(raw.startIdx, raw.endIdx + 1);
     const board = coords[0];

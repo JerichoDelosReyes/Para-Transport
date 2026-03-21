@@ -631,6 +631,16 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {/* Route Calculating Indicator */}
+      {isRouting && (
+        <View style={styles.routingOverlay}>
+          <BlurView intensity={40} tint="dark" style={styles.routingCard}>
+            <ActivityIndicator size="small" color="#E8A020" />
+            <Text style={styles.routingText}>Finding your route…</Text>
+          </BlurView>
+        </View>
+      )}
+
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Floating Top Header */}
         <View style={[styles.header, isSearchActive && { zIndex: 10 }]}>
@@ -835,6 +845,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(245, 240, 232, 0.6)',
     zIndex: 0,
+  },
+  routingOverlay: {
+    position: 'absolute',
+    top: '45%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  routingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  routingText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 10,
   },
   header: {
     paddingHorizontal: SPACING.screenX,
