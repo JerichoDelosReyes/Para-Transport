@@ -18,15 +18,16 @@ function getInitials(name: string) {
 
 function TabBarBackground() {
   const insets = useSafeAreaInsets();
-  const height = 53 + insets.bottom;
+  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.45 : 14;
+  const height = 48 + bottomSpace;
   const cx = width / 2;
 
   // A smooth continuous notch for the button to sit in
   const path = `
     M 0,0 
-    L ${cx - 45},0
-    C ${cx - 32},0 ${cx - 34},36 ${cx},36
-    C ${cx + 34},36 ${cx + 32},0 ${cx + 45},0
+    L ${cx - 52},0
+    C ${cx - 36},0 ${cx - 38},44 ${cx},44
+    C ${cx + 38},44 ${cx + 36},0 ${cx + 52},0
     L ${width},0
     L ${width},${height}
     L 0,${height}
@@ -103,7 +104,7 @@ function LiquidGlassHomeButton({ focused, onPress }: { focused: boolean, onPress
     <TouchableWithoutFeedback onPressIn={handlePressIn} onPressOut={handlePressOut}>
       <Animated.View style={[styles.homeButtonContainer, { transform: [{ scale: buttonScale }] }]}>
         <View style={styles.homeButtonBase}>
-          <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color="#FFFFFF" />
+          <Ionicons name={focused ? 'home' : 'home-outline'} size={28} color="#FFFFFF" />
         </View>
       </Animated.View>
     </TouchableWithoutFeedback>
@@ -114,13 +115,15 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
   const user = useStore((state) => state.user);
+  
+  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.45 : 14;
 
   return (
     <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
       {/* Cutout Background */}
       <TabBarBackground />
       
-      <View style={[styles.customTabBarContainer, { height: 50, paddingBottom: 6, marginBottom: bottomInset }]}>
+      <View style={[styles.customTabBarContainer, { height: 48, paddingBottom: 0, marginBottom: bottomSpace }]}>
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
             if (options.href === null) return null;
@@ -164,7 +167,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             return (
               <TouchableWithoutFeedback key={route.key} onPress={onPress}>
                 <View style={styles.tabItem}>
-                  <Ionicons name={isHistoryFocused ? 'map' : 'map-outline'} size={20} color={isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 2 }} />
+                  <Ionicons name={isHistoryFocused ? 'map' : 'map-outline'} size={24} color={isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 2 }} />
                   <Text style={[styles.tabLabel, { color: isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
                     {label as string}
                   </Text>
@@ -179,7 +182,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           return (
             <TouchableWithoutFeedback key={route.key} onPress={onPress}>
               <View style={styles.tabItem}>
-                <Ionicons name={iconName as any} size={20} color={isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 2 }} />
+                <Ionicons name={iconName as any} size={24} color={isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 2 }} />
                 <Text style={[styles.tabLabel, { color: isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
                   {label as string}
                 </Text>
@@ -251,15 +254,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   homeButtonContainer: {
-    width: 48,
-    height: 48,
+    width: 60,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
   },
   homeButtonBase: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#E8A020',
     alignItems: 'center',
     justifyContent: 'center',
