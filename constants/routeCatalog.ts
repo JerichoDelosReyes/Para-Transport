@@ -1,8 +1,6 @@
-export const ENABLED_ROUTE_CODES = [
+export const MAP_ENABLED_ROUTE_CODES = [
   'SMMOLINO-BDO',
   'SMMOLINO-BDO2',
-  'LAJOYA-TERMINAL',
-  'LAJOYA-HAMPTON',
 ] as const;
 
 const ROUTE_DISPLAY_NAMES: Record<string, string> = {

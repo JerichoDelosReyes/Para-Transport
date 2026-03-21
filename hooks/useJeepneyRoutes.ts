@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import routeData from '../data/routes.json';
 import tricycleRouteData from '../data/tricycle_routes.json';
-import { ENABLED_ROUTE_CODES, getRouteDisplayName } from '../constants/routeCatalog';
+import { getRouteDisplayName } from '../constants/routeCatalog';
 
 export type RouteCoord = {
   latitude: number;
@@ -38,10 +38,18 @@ export function useJeepneyRoutes() {
     try {
       const baseData = routeData as any;
       const trikeData = tricycleRouteData as any;
-      const allRoutes = [...(baseData.routes || []), ...(trikeData.routes || [])];
+      const mergedRoutes = [...(baseData.routes || []), ...(trikeData.routes || [])];
+
+      const byCode = new Map<string, any>();
+      for (const r of mergedRoutes) {
+        if (!r?.code) continue;
+        // Later source wins for same code (tricycle_routes overrides routes.json)
+        byCode.set(r.code, r);
+      }
+      const allRoutes = Array.from(byCode.values());
 
       const parsed: JeepneyRoute[] = allRoutes
-        .filter((r: any) => r.status === 'active' && r.path?.length >= 2 && ENABLED_ROUTE_CODES.includes(r.code))
+        .filter((r: any) => r.status === 'active' && r.path?.length >= 2)
         .map((r: any) => {
           const coordinates: RouteCoord[] = r.path.map(([lng, lat]: [number, number]) => ({
             latitude: lat,

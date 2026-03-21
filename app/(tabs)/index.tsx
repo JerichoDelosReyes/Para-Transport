@@ -9,7 +9,7 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
 import { ROUTE_COLORS } from '../../constants/routeVisuals';
-import { getRouteDisplayRef } from '../../constants/routeCatalog';
+import { getRouteDisplayRef, MAP_ENABLED_ROUTE_CODES } from '../../constants/routeCatalog';
 import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
 import { splitRouteSegments, buildTransitLegs, scoreTransitLegs, TransitLeg } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
@@ -70,7 +70,11 @@ export default function HomeScreen() {
 
   // Normalize GPX routes to a unified transit shape
   const transitRoutes = useMemo(() => {
-    const normalized = gpxRoutes.map((r: JeepneyRoute) => ({
+    const mapReadyRoutes = gpxRoutes.filter((r: JeepneyRoute) =>
+      MAP_ENABLED_ROUTE_CODES.includes(r.properties.code as any)
+    );
+
+    const normalized = mapReadyRoutes.map((r: JeepneyRoute) => ({
       id: r.properties.code,
       type: r.properties.type,
       color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',

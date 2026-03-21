@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo, useEffect } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, InteractionManager } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, InteractionManager, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -8,23 +8,21 @@ import { ProfileButton } from '../../components/ProfileButton';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
 import { useStore } from '../../store/useStore';
 import { ROUTE_COLORS, ROUTE_LABELS } from '../../constants/routeVisuals';
-import { getRouteDisplayRef } from '../../constants/routeCatalog';
+import { getRouteDisplayRef, MAP_ENABLED_ROUTE_CODES } from '../../constants/routeCatalog';
 
-const FILTER_MODES = ['All', 'Jeepney', 'Tricycle', 'Bus', 'UV Express'] as const;
+const FILTER_MODES = ['All', 'Jeepney', 'Tricycle', 'Bus'] as const;
 const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> = {
   All: null,
   Jeepney: 'jeepney',
   Tricycle: 'tricycle',
   Bus: 'bus',
-  'UV Express': 'share_taxi',
 };
 
-const TYPE_ORDER = ['tricycle', 'jeepney', 'bus', 'share_taxi'];
+const TYPE_ORDER = ['tricycle', 'jeepney', 'bus'];
 const TYPE_ICONS: Record<string, string> = {
   bus: 'bus',
   jeepney: 'car',
   tricycle: 'bicycle',
-  share_taxi: 'car-sport',
 };
 
 function normalizeGpxRoute(r: JeepneyRoute) {
@@ -95,6 +93,11 @@ export default function RoutesScreen() {
   const totalTransitCount = filteredVerifiedRoutes.length;
 
   const handleTransitRoutePress = (route: any) => {
+    const isMapEnabled = MAP_ENABLED_ROUTE_CODES.includes(route.id as any);
+    if (!isMapEnabled) {
+      Alert.alert('UI Only', 'This route is visible in Routes, but map implementation is not enabled yet.');
+      return;
+    }
     setSelectedTransitRoute(route);
     router.navigate('/(tabs)');
   };
