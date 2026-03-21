@@ -1604,7 +1604,7 @@ const styles = StyleSheet.create({
   recommenderToggle: {
     position: 'absolute',
     left: 16,
-    bottom: 118,
+    bottom: 88,
     zIndex: 10,
   },
   recommenderGlassWrap: {
