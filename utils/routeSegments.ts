@@ -476,8 +476,59 @@ export function buildTransitLegs(
     }
   }
 
+  // Step 5.5: Avoid unnecessary final transfer near destination without
+  // using a fixed metre threshold.
+  // Keep future transit only when it provides a meaningful relative
+  // improvement in distance-to-destination, not just a tiny geometric gain.
+  const nearDestOptimized: RawLeg[] = merged.map((l) => ({ ...l }));
+  const destinationPoint = routePoints[routePoints.length - 1];
+  const MIN_RELATIVE_GAIN = 0.15; // requires at least 15% improvement
+
+  for (let k = 0; k < nearDestOptimized.length - 1; k++) {
+    const leg = nearDestOptimized[k];
+    if (leg.routeId === null) continue;
+
+    const currentAlight = routePoints[leg.endIdx];
+    const currentToDest = sqDistMetres(currentAlight, destinationPoint);
+
+    // Find the best future transit alight point.
+    let bestFutureToDest = Number.POSITIVE_INFINITY;
+    for (let j = k + 1; j < nearDestOptimized.length; j++) {
+      const future = nearDestOptimized[j];
+      if (future.routeId === null) continue;
+      const futureAlight = routePoints[future.endIdx];
+      const futureToDest = sqDistMetres(futureAlight, destinationPoint);
+      if (futureToDest < bestFutureToDest) bestFutureToDest = futureToDest;
+    }
+
+    const hasFutureTransit = Number.isFinite(bestFutureToDest);
+    if (!hasFutureTransit) continue;
+
+    const relativeGain = currentToDest > 0
+      ? (currentToDest - bestFutureToDest) / currentToDest
+      : 0;
+
+    if (relativeGain < MIN_RELATIVE_GAIN) {
+      for (let j = k + 1; j < nearDestOptimized.length; j++) {
+        nearDestOptimized[j].routeId = null;
+      }
+      break;
+    }
+  }
+
+  // Re-merge after near-destination optimization
+  const finalMerged: RawLeg[] = [nearDestOptimized[0]];
+  for (let k = 1; k < nearDestOptimized.length; k++) {
+    const last = finalMerged[finalMerged.length - 1];
+    if (last.routeId === nearDestOptimized[k].routeId) {
+      last.endIdx = nearDestOptimized[k].endIdx;
+    } else {
+      finalMerged.push({ ...nearDestOptimized[k] });
+    }
+  }
+
   // Step 6: Build TransitLeg objects
-  return merged.map((raw): TransitLeg => {
+  return finalMerged.map((raw): TransitLeg => {
     const coords = routePoints.slice(raw.startIdx, raw.endIdx + 1);
     const board = coords[0];
     const alight = coords[coords.length - 1];

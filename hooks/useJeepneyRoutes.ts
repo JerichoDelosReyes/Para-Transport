@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import routeData from '../data/routes.json';
+import { ENABLED_ROUTE_CODES, getRouteDisplayName } from '../constants/routeCatalog';
 
 export type RouteCoord = {
   latitude: number;
@@ -36,7 +37,7 @@ export function useJeepneyRoutes() {
     try {
       const data = routeData as any;
       const parsed: JeepneyRoute[] = (data.routes || [])
-        .filter((r: any) => r.status === 'active' && r.path?.length >= 2)
+        .filter((r: any) => r.status === 'active' && r.path?.length >= 2 && ENABLED_ROUTE_CODES.includes(r.code))
         .map((r: any) => {
           const coordinates: RouteCoord[] = r.path.map(([lng, lat]: [number, number]) => ({
             latitude: lat,
@@ -52,7 +53,7 @@ export function useJeepneyRoutes() {
           return {
             properties: {
               code: r.code,
-              name: r.name,
+              name: getRouteDisplayName(r.code, r.name),
               description: r.description,
               type: r.type,
               fare: r.fare,

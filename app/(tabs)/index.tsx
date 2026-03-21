@@ -7,9 +7,9 @@ import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
-import { useTransitData } from '../../hooks/useTransitData';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
-import { ROUTE_COLORS } from '../../services/parseRoutes';
+import { ROUTE_COLORS } from '../../constants/routeVisuals';
+import { getRouteDisplayRef } from '../../constants/routeCatalog';
 import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
 import { splitRouteSegments, buildTransitLegs, scoreTransitLegs, TransitLeg } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
@@ -44,6 +44,16 @@ const PH_BOUNDS = MAP_CONFIG.PHILIPPINES_BOUNDS;
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
 
+const sqDistApprox = (a: MapCoordinate, b: MapCoordinate): number => {
+  const DEG = 111_320;
+  const dLat = (a.latitude - b.latitude) * DEG;
+  const dLng =
+    (a.longitude - b.longitude) *
+    DEG *
+    Math.cos(((a.latitude + b.latitude) / 2) * (Math.PI / 180));
+  return dLat * dLat + dLng * dLng;
+};
+
 export default function HomeScreen() {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
@@ -56,16 +66,15 @@ export default function HomeScreen() {
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
-  const { routes: rawTransitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
   const { routes: gpxRoutes } = useJeepneyRoutes();
 
-  // Normalize GPX routes to the same shape as Overpass transit routes
+  // Normalize GPX routes to a unified transit shape
   const transitRoutes = useMemo(() => {
     const normalized = gpxRoutes.map((r: JeepneyRoute) => ({
       id: r.properties.code,
       type: r.properties.type,
       color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
-      ref: r.properties.code,
+      ref: getRouteDisplayRef(r.properties.code, r.properties.code),
       name: r.properties.name,
       from: r.stops[0]?.label || '',
       to: r.stops[r.stops.length - 1]?.label || '',
@@ -81,8 +90,11 @@ export default function HomeScreen() {
       verified: true,
       fare: r.properties.fare,
     }));
-    return [...normalized, ...(rawTransitRoutes as any[])];
-  }, [gpxRoutes, rawTransitRoutes]);
+    return normalized;
+  }, [gpxRoutes]);
+  const transitStops = useMemo(() => {
+    return transitRoutes.flatMap((route: any) => route.stops || []);
+  }, [transitRoutes]);
   const [showTransitLayer, setShowTransitLayer] = useState(false);
   const [nearestStop, setNearestStop] = useState<any>(null);
   const user = useStore((state) => state.user);
@@ -563,6 +575,18 @@ export default function HomeScreen() {
           if (!leg.onTransit) return null;
           const nextTransitLeg = transitLegs.slice(idx + 1).find(l => l.onTransit);
           if (!nextTransitLeg) return null;
+
+          // Do not show transfer marker unless the next transit leg gives
+          // a meaningful destination-distance improvement.
+          const destinationPoint = routeCoordinates[routeCoordinates.length - 1];
+          if (!destinationPoint) return null;
+          const currentToDest = sqDistApprox(leg.alightAt, destinationPoint);
+          const nextToDest = sqDistApprox(nextTransitLeg.alightAt, destinationPoint);
+          const relativeGain = currentToDest > 0
+            ? (currentToDest - nextToDest) / currentToDest
+            : 0;
+          if (relativeGain < 0.15) return null;
+
           // Show a transfer marker where this transit leg ends
           return (
             <Marker
@@ -783,20 +807,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           )}
 
-          {transitLoading && showTransitLayer && (
-            <ActivityIndicator size="small" color="#E8A020" style={{ marginLeft: 8 }} />
-          )}
         </View>
-
-        {transitError && showTransitLayer && (
-          <View style={styles.transitErrorCard}>
-            <Ionicons name="warning" size={16} color="#E53935" />
-            <Text style={styles.transitErrorText}>Transit: {transitError}</Text>
-            <TouchableOpacity onPress={refreshTransit}>
-              <Text style={styles.transitRetryText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {nearestStop && showTransitLayer && (
           <View style={styles.nearestStopCard}>

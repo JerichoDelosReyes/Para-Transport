@@ -5,10 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
-import { useTransitData } from '../../hooks/useTransitData';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
 import { useStore } from '../../store/useStore';
-import { ROUTE_COLORS, ROUTE_LABELS } from '../../services/parseRoutes';
+import { ROUTE_COLORS, ROUTE_LABELS } from '../../constants/routeVisuals';
+import { getRouteDisplayRef } from '../../constants/routeCatalog';
 
 const FILTER_MODES = ['All', 'Jeepney', 'Bus', 'UV Express'] as const;
 const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> = {
@@ -30,7 +30,7 @@ function normalizeGpxRoute(r: JeepneyRoute) {
     id: r.properties.code,
     type: r.properties.type,
     color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
-    ref: r.properties.code,
+    ref: getRouteDisplayRef(r.properties.code, r.properties.code),
     name: r.properties.name,
     from: r.stops[0]?.label || '',
     to: r.stops[r.stops.length - 1]?.label || '',
@@ -64,7 +64,6 @@ export default function RoutesScreen() {
     return () => task.cancel();
   }, []);
 
-  const { routes: transitRoutes, loading } = useTransitData();
   const { routes: gpxRoutes, loading: gpxLoading } = useJeepneyRoutes();
 
   const verifiedRoutes = useMemo(
@@ -78,26 +77,20 @@ export default function RoutesScreen() {
     return verifiedRoutes.filter((r) => r.type === targetType);
   }, [verifiedRoutes, selectedMode]);
 
-  const filteredRoutes = useMemo(() => {
-    const targetType = MODE_TO_ROUTE_TYPE[selectedMode];
-    if (!targetType) return transitRoutes as any[];
-    return (transitRoutes as any[]).filter((route) => route.type === targetType);
-  }, [transitRoutes, selectedMode]);
-
   const grouped = useMemo(() => {
     const groups: Record<string, any[]> = {};
     for (const type of TYPE_ORDER) {
       groups[type] = [];
     }
-    for (const route of filteredRoutes) {
+    for (const route of filteredVerifiedRoutes) {
       if (groups[route.type]) {
         groups[route.type].push(route);
       }
     }
     return groups;
-  }, [filteredRoutes]);
+  }, [filteredVerifiedRoutes]);
 
-  const totalTransitCount = filteredRoutes.length + filteredVerifiedRoutes.length;
+  const totalTransitCount = filteredVerifiedRoutes.length;
 
   const handleTransitRoutePress = (route: any) => {
     setSelectedTransitRoute(route);
@@ -154,7 +147,7 @@ export default function RoutesScreen() {
               </ScrollView>
             </View>
 
-            {(!isReady || loading || gpxLoading) ? (
+            {(!isReady || gpxLoading) ? (
               <View style={styles.skeletonContainer}>
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <View key={i} style={styles.skeletonCard} />
@@ -166,47 +159,6 @@ export default function RoutesScreen() {
               </View>
             ) : (
               <>
-                {filteredVerifiedRoutes.length > 0 && (
-                  <View style={styles.group}>
-                    <View style={styles.groupHeader}>
-                      <View style={[styles.groupDot, { backgroundColor: '#22C55E' }]} />
-                      <Text style={styles.groupTitle}>Verified Routes ({filteredVerifiedRoutes.length})</Text>
-                    </View>
-                    {filteredVerifiedRoutes.map((route) => (
-                      <TouchableOpacity
-                        key={route.id}
-                        style={styles.routeCard}
-                        activeOpacity={0.85}
-                        onPress={() => handleTransitRoutePress(route)}
-                      >
-                        <View style={[styles.routeIcon, { backgroundColor: route.color + '20' }]}>
-                          <Ionicons name={(TYPE_ICONS[route.type] || 'car') as any} size={18} color={route.color} />
-                        </View>
-                        <View style={styles.routeInfo}>
-                          <View style={styles.routeNameRow}>
-                            <Text style={styles.routeName} numberOfLines={1}>{route.name}</Text>
-                            <View style={styles.verifiedBadge}>
-                              <Ionicons name="checkmark-circle" size={12} color="#22C55E" />
-                              <Text style={styles.verifiedBadgeText}>Verified</Text>
-                            </View>
-                          </View>
-                          {(route.from || route.to) ? (
-                            <Text style={styles.routeMeta} numberOfLines={1}>
-                              {route.from}{route.from && route.to ? ' -> ' : ''}{route.to}
-                            </Text>
-                          ) : null}
-                          {route.fare ? (
-                            <Text style={styles.routeOperator} numberOfLines={1}>
-                              Base fare: P{route.fare}
-                            </Text>
-                          ) : null}
-                        </View>
-                        <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-
                 {TYPE_ORDER.map((type) => {
                   const group = grouped[type];
                   if (!group || group.length === 0) return null;
