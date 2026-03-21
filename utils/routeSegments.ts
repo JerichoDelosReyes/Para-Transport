@@ -306,6 +306,72 @@ export function buildTransitLegs(
     i += bestRun;
   }
 
+  // Step 2.5: Reduce long walks by expanding search radius
+  // If a walking stretch exceeds LONG_WALK_THRESHOLD, re-scan those points with
+  // a wider radius so the user walks a short distance to a nearby transit route
+  // instead of walking the entire stretch.
+  const LONG_WALK_THRESHOLD = 400; // metres
+  const expandedThresholdSq = (thresholdMetres * 3) * (thresholdMetres * 3);
+
+  let walkStart = -1;
+  for (let k = 0; k <= routePoints.length; k++) {
+    const isWalking = k < routePoints.length && tags[k] === null;
+
+    if (isWalking && walkStart === -1) {
+      walkStart = k;
+    } else if (!isWalking && walkStart !== -1) {
+      const walkCoords = routePoints.slice(walkStart, k);
+      const walkLength = totalLengthMetres(walkCoords);
+
+      if (walkLength > LONG_WALK_THRESHOLD) {
+        // Re-scan these walking points with the wider threshold
+        for (let j = walkStart; j < k; j++) {
+          const p = routePoints[j];
+          for (const route of transitRoutes) {
+            if (!route.coordinates || route.coordinates.length < 2) continue;
+            for (let s = 0; s < route.coordinates.length - 1; s++) {
+              if (sqDistToSegment(p, route.coordinates[s], route.coordinates[s + 1]) <= expandedThresholdSq) {
+                allMatches[j].add(route.id);
+                break;
+              }
+            }
+          }
+        }
+
+        // Re-apply greedy assignment only within this walking section
+        let wi = walkStart;
+        while (wi < k) {
+          const candidates = allMatches[wi];
+          if (candidates.size === 0) { wi++; continue; }
+
+          let bestWalkRoute = '';
+          let bestWalkRun = 0;
+          for (const routeId of candidates) {
+            let run = 0;
+            for (let j = wi; j < k; j++) {
+              if (allMatches[j].has(routeId)) run++;
+              else break;
+            }
+            if (run > bestWalkRun) {
+              bestWalkRun = run;
+              bestWalkRoute = routeId;
+            }
+          }
+
+          // Only assign if the matched stretch is meaningful
+          const matchedCoords = routePoints.slice(wi, wi + bestWalkRun);
+          if (totalLengthMetres(matchedCoords) >= minLegMetres) {
+            for (let j = wi; j < wi + bestWalkRun; j++) {
+              tags[j] = bestWalkRoute;
+            }
+          }
+          wi += bestWalkRun;
+        }
+      }
+      walkStart = -1;
+    }
+  }
+
   // Step 3: Group consecutive same-tag points into raw legs
   type RawLeg = { routeId: string | null; startIdx: number; endIdx: number };
   const rawLegs: RawLeg[] = [];
@@ -409,6 +475,38 @@ export function buildTransitLegs(
       onTransit,
     };
   });
+}
+
+/**
+ * Score a set of transit legs by total walking distance.
+ * Lower score = less walking = better route for transit users.
+ * Mid-journey walks (between two transit legs) beyond maxMidWalkMetres are
+ * heavily penalised so the algorithm avoids routes with long transfer walks.
+ */
+export function scoreTransitLegs(
+  legs: TransitLeg[],
+  maxMidWalkMetres = 300,
+): number {
+  let totalWalkMetres = 0;
+  let penalty = 0;
+
+  for (let i = 0; i < legs.length; i++) {
+    if (!legs[i].onTransit) {
+      const walkLen = totalLengthMetres(legs[i].coordinates);
+      totalWalkMetres += walkLen;
+
+      // Check if this walk is mid-journey (between two transit legs)
+      const hasPrevTransit = legs.slice(0, i).some(l => l.onTransit);
+      const hasNextTransit = legs.slice(i + 1).some(l => l.onTransit);
+
+      if (hasPrevTransit && hasNextTransit && walkLen > maxMidWalkMetres) {
+        // Heavy penalty for long mid-journey walks
+        penalty += (walkLen - maxMidWalkMetres) * 3;
+      }
+    }
+  }
+
+  return totalWalkMetres + penalty;
 }
 
 export function splitRouteSegments(

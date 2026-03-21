@@ -11,7 +11,7 @@ import { useTransitData } from '../../hooks/useTransitData';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
 import { ROUTE_COLORS } from '../../services/parseRoutes';
 import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
-import { splitRouteSegments, buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
+import { splitRouteSegments, buildTransitLegs, scoreTransitLegs, TransitLeg } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
@@ -267,21 +267,40 @@ export default function HomeScreen() {
     
     setIsRouting(true);
     try {
+      // Fetch multiple OSRM alternatives so we can pick the one with least walking
       const routeResponse = await fetch(
-        `${ROUTING_BASE_URL}/${startPoint.longitude},${startPoint.latitude};${destinationPoint.longitude},${destinationPoint.latitude}?overview=full&geometries=geojson`
+        `${ROUTING_BASE_URL}/${startPoint.longitude},${startPoint.latitude};${destinationPoint.longitude},${destinationPoint.latitude}?overview=full&geometries=geojson&alternatives=3`
       );
       if (!routeResponse.ok) throw new Error(`Routing failed (${routeResponse.status})`);
       const routeResult = await routeResponse.json();
-      const bestRoute = routeResult?.routes?.[0];
-      if (!bestRoute?.geometry?.coordinates) {
+      const osrmRoutes = routeResult?.routes;
+      if (!osrmRoutes || osrmRoutes.length === 0 || !osrmRoutes[0]?.geometry?.coordinates) {
         Alert.alert('Route Not Found', 'No drivable route found for this destination.');
         return;
       }
-      const mappedCoordinates = toMapCoordinates(bestRoute.geometry.coordinates);
+
+      // Score each alternative by transit coverage (less walking = better)
+      let bestIdx = 0;
+      let bestScore = Infinity;
+
+      for (let i = 0; i < osrmRoutes.length; i++) {
+        const route = osrmRoutes[i];
+        if (!route?.geometry?.coordinates) continue;
+        const coords = toMapCoordinates(route.geometry.coordinates);
+        const legs = buildTransitLegs(coords, transitRoutes as any[], 50, 150);
+        const score = scoreTransitLegs(legs, 300);
+        if (score < bestScore) {
+          bestScore = score;
+          bestIdx = i;
+        }
+      }
+
+      const chosenRoute = osrmRoutes[bestIdx];
+      const mappedCoordinates = toMapCoordinates(chosenRoute.geometry.coordinates);
       setRouteCoordinates(mappedCoordinates);
       setRouteSummary({
-        distanceKm: bestRoute.distance / 1000,
-        durationMin: bestRoute.duration / 60,
+        distanceKm: chosenRoute.distance / 1000,
+        durationMin: chosenRoute.duration / 60,
       });
       mapRef.current?.fitToCoordinates(mappedCoordinates, {
         edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
@@ -294,7 +313,7 @@ export default function HomeScreen() {
     } finally {
       setIsRouting(false);
     }
-  }, [currentLocation]);
+  }, [currentLocation, transitRoutes]);
 
   // Automatically process pending route searches (e.g. from Saved routes page)
   useEffect(() => {
