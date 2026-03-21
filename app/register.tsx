@@ -250,7 +250,7 @@ export default function RegisterScreen() {
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.linkWrap} onPress={() => router.push('/login')}>
+              <TouchableOpacity style={styles.linkWrap} onPress={() => router.navigate('/login')}>
                 <Text style={styles.linkText}>Already have an account? Log in</Text>
               </TouchableOpacity>
             </View>

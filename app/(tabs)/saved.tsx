@@ -39,7 +39,7 @@ export default function SavedScreen() {
       } else {
         setSelectedTransitRoute(selectedRoute);
       }
-      router.push('/(tabs)');
+      router.navigate('/(tabs)');
     }
   };
 

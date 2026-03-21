@@ -25,7 +25,7 @@ export default function ActiveJourneyScreen() {
         </View>
 
         <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/journey-summary')} activeOpacity={0.9}>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => router.navigate('/journey-summary')} activeOpacity={0.9}>
             <Text style={styles.primaryText}>Complete Leg</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.ghostButton} onPress={() => router.replace('/(tabs)')} activeOpacity={0.9}>

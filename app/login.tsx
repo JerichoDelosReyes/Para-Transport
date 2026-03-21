@@ -255,7 +255,7 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.linkWrap} onPress={() => router.push('/register')} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.linkWrap} onPress={() => router.navigate('/register')} activeOpacity={0.8}>
               <Text style={styles.linkText}>Create account</Text>
             </TouchableOpacity>
 

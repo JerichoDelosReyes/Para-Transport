@@ -20,7 +20,7 @@ export function ProfileButton() {
   return (
     <TouchableOpacity 
       style={styles.avatarButton} 
-      onPress={() => router.push('/profile')}
+      onPress={() => router.navigate('/profile')}
       activeOpacity={0.8}
     >
       {photoUrl ? (

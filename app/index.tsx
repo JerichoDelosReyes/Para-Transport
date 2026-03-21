@@ -177,7 +177,7 @@ export default function WelcomeScreen() {
               style={styles.modalPrimaryAction}
               onPress={() => {
                 setShowAuthPopup(false);
-                router.push('/login');
+                router.navigate('/login');
               }}
               activeOpacity={0.9}
             >
@@ -188,7 +188,7 @@ export default function WelcomeScreen() {
               style={styles.modalSecondaryAction}
               onPress={() => {
                 setShowAuthPopup(false);
-                router.push('/register');
+                router.navigate('/register');
               }}
               activeOpacity={0.9}
             >

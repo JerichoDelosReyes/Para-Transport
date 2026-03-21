@@ -68,7 +68,7 @@ export default function RoutesScreen() {
 
   const handleTransitRoutePress = (route: any) => {
     setSelectedTransitRoute(route);
-    router.push('/(tabs)');
+    router.navigate('/(tabs)');
   };
 
   return (

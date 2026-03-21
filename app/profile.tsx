@@ -29,7 +29,7 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
           <Text style={styles.headerTitleText}>PROFILE</Text>
-          <TouchableOpacity onPress={() => router.push('/settings')} style={styles.iconButton}>
+          <TouchableOpacity onPress={() => router.navigate('/settings')} style={styles.iconButton}>
             <View style={styles.iconButtonCircle}>
               <Ionicons name="settings-outline" size={24} color={COLORS.navy} />
             </View>
@@ -107,7 +107,7 @@ export default function ProfileScreen() {
           {/* Badges Section */}
           <View style={styles.sectionHeaderContainer}>
             <Text style={styles.sectionTitle}>Badges</Text>
-            <TouchableOpacity onPress={() => router.push('/achievements')}>
+            <TouchableOpacity onPress={() => router.navigate('/achievements')}>
               <Text style={styles.sectionLink}>View All</Text>
             </TouchableOpacity>
           </View>

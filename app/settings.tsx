@@ -68,7 +68,7 @@ export default function SettingsScreen() {
           <TouchableOpacity 
             style={styles.settingRow} 
             activeOpacity={0.7}
-            onPress={() => router.push('/edit-profile')}
+            onPress={() => router.navigate('/edit-profile')}
           >
             <View style={styles.rowLeft}>
               <Feather name="user" size={20} color={COLORS.textStrong} style={styles.icon} />
