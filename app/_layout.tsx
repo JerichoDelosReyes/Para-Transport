@@ -1,6 +1,5 @@
 import '../global.css';
 import { useFonts } from 'expo-font';
-import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState, useRef } from 'react';
 
 import { Stack } from 'expo-router';
@@ -8,8 +7,6 @@ import { StatusBar } from 'expo-status-bar';
 import { View, Animated, StyleSheet, Easing, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
-
-SplashScreen.preventAutoHideAsync();
 
 function CustomSplash({ onFinish }: { onFinish: () => void }) {
   const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -104,12 +101,6 @@ export default function RootLayout() {
   });
 
   const [showAnimatedSplash, setShowAnimatedSplash] = useState(true);
-
-  useEffect(() => {
-    if (loaded || error) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded, error]);
 
   if (!loaded && !error) {
     return null;

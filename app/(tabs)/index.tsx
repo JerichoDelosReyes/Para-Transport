@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Animated, PanResponder, Dimensions, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { UrlTile, Marker, Polyline, Callout } from 'react-native-maps';
+import MapView, { UrlTile, Marker, Polyline, Callout, MapPressEvent } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
@@ -12,18 +12,6 @@ import { findRoutesForDestination, MatchedRoute } from '../../services/routeSear
 import RouteResultCard from '../../components/RouteResultCard';
 
 const { height, width } = Dimensions.get('window');
-
-const TRAFFIC = [
-  { road: 'Bacoor Boulevard', status: 'Heavy' as const },
-  { road: 'Imus Crossing', status: 'Moderate' as const },
-  { road: 'Dasmariñas Crossing', status: 'Light' as const },
-];
-
-function trafficPill(status: 'Light' | 'Moderate' | 'Heavy') {
-  if (status === 'Light') return { backgroundColor: COLORS.successBg, color: COLORS.successText };
-  if (status === 'Moderate') return { backgroundColor: COLORS.moderateBg, color: COLORS.moderateText };
-  return { backgroundColor: COLORS.heavyBg, color: COLORS.heavyText };
-}
 
 const MODES = ['Jeepney', 'Tricycle', 'UV Express', 'Bus', 'LRT'];
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
@@ -71,7 +59,7 @@ export default function HomeScreen() {
 
   // Bottom Sheet Animation state
   const sheetHeight = height * 0.5; // max height of bottom sheet
-  const minHeight = 100; // min peek height to show "LIVE TRAFFIC"
+  const minHeight = 100;
   const slideAnim = useRef(new Animated.Value(sheetHeight - minHeight)).current;
 
   // Search Expand Animation
@@ -263,6 +251,49 @@ export default function HomeScreen() {
     };
   }, []);
 
+  const applyDestination = (destinationPoint: MapCoordinate, label: string) => {
+    setDestinationLocation(destinationPoint);
+    setDestinationName(label);
+    setDestinationQuery(label);
+    setRouteCoordinates([]);
+    setRouteSummary(null);
+
+    const results = findRoutesForDestination(
+      currentLocation,
+      destinationPoint,
+      jeepneyRoutes,
+    );
+
+    setMatchedRoutes(results);
+    setSearchMode('results');
+    setSelectedRoute(null);
+    toggleSheet(true);
+
+    if (results.length > 0) {
+      const allCoords = results.flatMap(m => m.legs.flatMap(l => l.route.coordinates));
+      mapRef.current?.fitToCoordinates(allCoords, {
+        edgePadding: { top: 160, right: 50, bottom: 300, left: 50 },
+        animated: true,
+      });
+    }
+
+    setIsSearchActive(false);
+    setPlaceSuggestions([]);
+    Keyboard.dismiss();
+  };
+
+  const handleMapLongPress = (event: MapPressEvent) => {
+    if (!currentLocation) {
+      Alert.alert('GPS Not Ready', 'Waiting for your current location. Please try again in a few seconds.');
+      return;
+    }
+
+    const { latitude, longitude } = event.nativeEvent.coordinate;
+    const pinnedPoint: MapCoordinate = { latitude, longitude };
+    const pinnedLabel = `Pinned location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`;
+    applyDestination(pinnedPoint, pinnedLabel);
+  };
+
   // Fetch road-following walking paths when a route is selected
   useEffect(() => {
     if (!selectedRoute || searchMode !== 'results' || !currentLocation) {
@@ -373,21 +404,14 @@ export default function HomeScreen() {
         latitude: parseFloat(destination.lat),
         longitude: parseFloat(destination.lon),
       };
-      setDestinationLocation(destinationPoint);
-      setDestinationName(query);
+      applyDestination(destinationPoint, query);
 
-      // Find matching transit routes using spatial buffer matching
+      // If there are matching routes, fit map to show them
       const results = findRoutesForDestination(
         currentLocation,
         destinationPoint,
         jeepneyRoutes,
       );
-      setMatchedRoutes(results);
-      setSearchMode('results');
-      setSelectedRoute(null);
-      toggleSheet(true); // Expand bottom sheet to show route results
-
-      // If there are matching routes, fit map to show them
       if (results.length > 0) {
         const allCoords = results.flatMap(m => m.legs.flatMap(l => l.route.coordinates));
         mapRef.current?.fitToCoordinates(allCoords, {
@@ -449,6 +473,7 @@ export default function HomeScreen() {
         showsUserLocation={true}
         onMapReady={() => setIsMapLoaded(true)}
         onTouchStart={() => setIsMapInteracted(true)}
+        onLongPress={handleMapLongPress}
         pitchEnabled={false}
         rotateEnabled={false}
         minZoomLevel={10}
@@ -948,7 +973,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <Text style={styles.sheetHeaderTitle}>LIVE TRAFFIC</Text>
+              <Text style={styles.sheetHeaderTitle}>ROUTE FINDER</Text>
             )}
           </View>
         </TouchableOpacity>
@@ -991,20 +1016,13 @@ export default function HomeScreen() {
             </View>
           ) : (
             <View style={styles.cardList}>
-              {TRAFFIC.map((item) => {
-                const pill = trafficPill(item.status);
-                return (
-                  <View key={item.road} style={styles.trafficCard}>
-                    <View style={styles.trafficLeft}>
-                      <Ionicons name="ellipse" size={8} color="rgba(10,22,40,0.28)" />
-                      <Text style={styles.trafficRoad}>{item.road}</Text>
-                    </View>
-                    <View style={[styles.statusPill, { backgroundColor: pill.backgroundColor }]}>
-                      <Text style={[styles.statusText, { color: pill.color }]}>{item.status}</Text>
-                    </View>
-                  </View>
-                );
-              })}
+              <View style={styles.emptyResultCard}>
+                <Ionicons name="search-outline" size={36} color={COLORS.textMuted} />
+                <Text style={styles.emptyResultTitle}>Search a destination</Text>
+                <Text style={styles.emptyResultText}>
+                  Enter a destination above to see available transit route options.
+                </Text>
+              </View>
             </View>
           )}
         </ScrollView>

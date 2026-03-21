@@ -5,14 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
+import { useTransitData } from '../../hooks/useTransitData';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
 import { useStore } from '../../store/useStore';
-
-const ROUTE_COLORS: Record<string, string> = {
-  bus: '#0072CE',
-  jeepney: '#FF6B35',
-  share_taxi: '#8B5CF6',
-};
+import { ROUTE_COLORS, ROUTE_LABELS } from '../../services/parseRoutes';
 
 const FILTER_MODES = ['All', 'Jeepney', 'Bus', 'UV Express'] as const;
 const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> = {
@@ -22,6 +18,7 @@ const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> =
   'UV Express': 'share_taxi',
 };
 
+const TYPE_ORDER = ['bus', 'jeepney', 'share_taxi'];
 const TYPE_ICONS: Record<string, string> = {
   bus: 'bus',
   jeepney: 'car',
@@ -67,6 +64,7 @@ export default function RoutesScreen() {
     return () => task.cancel();
   }, []);
 
+  const { routes: transitRoutes, loading } = useTransitData();
   const { routes: gpxRoutes, loading: gpxLoading } = useJeepneyRoutes();
 
   const verifiedRoutes = useMemo(
@@ -80,7 +78,26 @@ export default function RoutesScreen() {
     return verifiedRoutes.filter((r) => r.type === targetType);
   }, [verifiedRoutes, selectedMode]);
 
-  const totalTransitCount = filteredVerifiedRoutes.length;
+  const filteredRoutes = useMemo(() => {
+    const targetType = MODE_TO_ROUTE_TYPE[selectedMode];
+    if (!targetType) return transitRoutes as any[];
+    return (transitRoutes as any[]).filter((route) => route.type === targetType);
+  }, [transitRoutes, selectedMode]);
+
+  const grouped = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    for (const type of TYPE_ORDER) {
+      groups[type] = [];
+    }
+    for (const route of filteredRoutes) {
+      if (groups[route.type]) {
+        groups[route.type].push(route);
+      }
+    }
+    return groups;
+  }, [filteredRoutes]);
+
+  const totalTransitCount = filteredRoutes.length + filteredVerifiedRoutes.length;
 
   const handleTransitRoutePress = (route: any) => {
     setSelectedTransitRoute(route);
@@ -137,7 +154,7 @@ export default function RoutesScreen() {
               </ScrollView>
             </View>
 
-            {(!isReady || gpxLoading) ? (
+            {(!isReady || loading || gpxLoading) ? (
               <View style={styles.skeletonContainer}>
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <View key={i} style={styles.skeletonCard} />
@@ -190,7 +207,48 @@ export default function RoutesScreen() {
                   </View>
                 )}
 
-
+                {TYPE_ORDER.map((type) => {
+                  const group = grouped[type];
+                  if (!group || group.length === 0) return null;
+                  return (
+                    <View key={type} style={styles.group}>
+                      <View style={styles.groupHeader}>
+                        <View style={[styles.groupDot, { backgroundColor: ROUTE_COLORS[type as keyof typeof ROUTE_COLORS] }]} />
+                        <Text style={styles.groupTitle}>
+                          {ROUTE_LABELS[type as keyof typeof ROUTE_LABELS]} ({group.length})
+                        </Text>
+                      </View>
+                      {group.map((route) => (
+                        <TouchableOpacity
+                          key={route.id}
+                          style={styles.routeCard}
+                          activeOpacity={0.85}
+                          onPress={() => handleTransitRoutePress(route)}
+                        >
+                          <View style={[styles.routeIcon, { backgroundColor: route.color + '20' }]}>
+                            <Ionicons name={TYPE_ICONS[route.type] as any} size={18} color={route.color} />
+                          </View>
+                          <View style={styles.routeInfo}>
+                            <Text style={styles.routeName} numberOfLines={1}>
+                              {route.ref ? `[${route.ref}] ` : ''}{route.name}
+                            </Text>
+                            {(route.from || route.to) ? (
+                              <Text style={styles.routeMeta} numberOfLines={1}>
+                                {route.from}{route.from && route.to ? ' -> ' : ''}{route.to}
+                              </Text>
+                            ) : null}
+                            {route.operator ? (
+                              <Text style={styles.routeOperator} numberOfLines={1}>
+                                {route.operator}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  );
+                })}
               </>
             )}
           </View>
