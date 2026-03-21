@@ -9,6 +9,7 @@ import { useTransitData } from '../../hooks/useTransitData';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
 import { useStore } from '../../store/useStore';
 import { ROUTE_COLORS, ROUTE_LABELS } from '../../services/parseRoutes';
+import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
 
 const FILTER_MODES = ['All', 'Jeepney', 'Bus', 'UV Express'] as const;
 const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> = {
@@ -52,10 +53,14 @@ export default function RoutesScreen() {
   const insets = useSafeAreaInsets();
   const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
   const bottomPadding = 48 + bottomSpace + 16;
-  const [activeTab, setActiveTab] = useState<'transit' | 'history'>('transit');
+  const [activeTab, setActiveTab] = useState<'transit' | 'history'>('history');
   const [selectedMode, setSelectedMode] = useState<(typeof FILTER_MODES)[number]>('All');
   const [isReady, setIsReady] = useState(false);
   const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
+  const user = useStore((state) => state.user);
+  const saveRoute = useStore((state) => state.saveRoute);
+  const removeSavedRoute = useStore((state) => state.removeSavedRoute);
+  const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
 
   useEffect(() => {
     const task = InteractionManager.runAfterInteractions(() => {
@@ -113,16 +118,26 @@ export default function RoutesScreen() {
 
       <View style={styles.tabSwitcher}>
         <TouchableOpacity
-          style={[styles.switchTab, activeTab === 'transit' && styles.switchTabActive]}
-          onPress={() => setActiveTab('transit')}
-        >
-          <Text style={[styles.switchTabText, activeTab === 'transit' && styles.switchTabTextActive]}>TRANSIT</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
           style={[styles.switchTab, activeTab === 'history' && styles.switchTabActive]}
-          onPress={() => setActiveTab('history')}
+          onPress={() => {
+            if (activeTab === 'history') return;
+            setActiveTab('history');
+          }}
         >
           <Text style={[styles.switchTabText, activeTab === 'history' && styles.switchTabTextActive]}>HISTORY</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.switchTab, activeTab === 'transit' && styles.switchTabActive]}
+          onPress={() => {
+            if (activeTab === 'transit') return;
+            setIsReady(false);
+            setActiveTab('transit');
+            InteractionManager.runAfterInteractions(() => {
+              setIsReady(true);
+            });
+          }}
+        >
+          <Text style={[styles.switchTabText, activeTab === 'transit' && styles.switchTabTextActive]}>TRANSIT</Text>
         </TouchableOpacity>
       </View>
 
@@ -252,11 +267,64 @@ export default function RoutesScreen() {
               </>
             )}
           </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No history yet.</Text>
-          </View>
-        )}
+        ) : (!user.commute_history || user.commute_history.length === 0) ? (
+              <View style={[styles.emptyState, { marginTop: 16 }]}>
+                <JeepIllustration width={220} height={150} />
+                <Text style={styles.emptyTitle}>WALA PANG SAVED.</Text>
+              </View>
+            ) : (
+              <View style={[styles.group, { marginTop: 16 }]}>
+                {user.commute_history.map((hist) => {
+                  const orgName = hist.origin ? hist.origin.name : "Current Location";
+                  const dstName = hist.destination.name;
+                  const routeId = `${orgName} - ${dstName}`;
+                  const isSaved = user.saved_routes?.some(r => r.id === routeId) || false;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={hist.id}
+                      style={styles.routeCard}
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        setPendingRouteSearch({ origin: orgName, destination: dstName });
+                        router.navigate('/(tabs)');
+                      }}
+                    >
+                      <View style={[styles.routeIcon, { backgroundColor: '#E8A02020' }]}>
+                        <Ionicons name="time" size={18} color="#E8A020" />
+                      </View>
+                      <View style={styles.routeInfo}>
+                        <Text style={styles.routeName} numberOfLines={1}>
+                          {orgName} ➔ {dstName}
+                        </Text>
+                        <Text style={styles.routeMeta} numberOfLines={1}>
+                          {new Date(hist.timestamp).toLocaleDateString()} • {new Date(hist.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={() => {
+                          if (isSaved) {
+                            removeSavedRoute(routeId);
+                          } else {
+                            saveRoute({
+                              id: routeId,
+                              name: `${orgName} to ${dstName}`,
+                              legs: [{ mode: 'Custom Route', from: orgName, to: dstName, fare: 0, km: 0, minutes: 0, instructions: 'From History' }],
+                              total_fare: 0,
+                              total_km: 0,
+                              estimated_minutes: 0,
+                            });
+                          }
+                        }}
+                      >
+                        <Ionicons name={isSaved ? "heart" : "heart-outline"} size={22} color={isSaved ? COLORS.primary : COLORS.textMuted} />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
       </ScrollView>
     </View>
   );
@@ -374,8 +442,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: RADIUS.card,
-    padding: 12,
-    marginBottom: 10,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(10,22,40,0.06)',
     shadowColor: '#000',
@@ -385,12 +453,12 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   routeIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 16,
   },
   routeInfo: {
     flex: 1,
@@ -403,16 +471,16 @@ const styles = StyleSheet.create({
   },
   routeName: {
     fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: COLORS.navy,
     flexShrink: 1,
+    marginBottom: 4,
   },
   routeMeta: {
     fontFamily: 'Inter',
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginTop: 2,
+    fontSize: 13,
+    color: '#8E8E93',
   },
   routeOperator: {
     fontFamily: 'Inter',
@@ -437,15 +505,18 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: COLORS.card,
+    padding: SPACING.cardPadding,
     marginTop: 60,
   },
   emptyTitle: {
-    fontFamily: 'Inter',
-    fontSize: 18,
-    fontWeight: '700',
+    marginTop: 8,
+    fontFamily: 'Cubao',
+    fontSize: 24,
     color: COLORS.navy,
-    marginTop: 20,
   },
   skeletonContainer: {
     paddingTop: 10,

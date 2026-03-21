@@ -10,6 +10,8 @@ interface User {
   total_km: number;
   total_fare_spent: number;
   saved_routes?: any[];
+  saved_places?: any[];
+  commute_history?: any[];
   badges?: string[];
 }
 
@@ -23,6 +25,8 @@ const DEFAULT_GUEST_USER: User = {
   total_km: 0,
   total_fare_spent: 0,
   saved_routes: [],
+  saved_places: [],
+  commute_history: [],
   badges: [],
 };
 
@@ -44,6 +48,10 @@ interface StoreState {
   setPendingRouteSearch: (search: { origin: any; destination: any } | null) => void;
   saveRoute: (route: any) => void;
   removeSavedRoute: (routeId: string | number) => void;
+  savePlace: (place: any) => void;
+  removeSavedPlace: (placeId: string) => void;
+  addHistory: (historyItem: any) => void;
+  clearHistory: () => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -91,6 +99,31 @@ export const useStore = create<StoreState>()(
             ...state.user,
             saved_routes: (state.user.saved_routes || []).filter((r) => r.id !== routeId),
           },
+        })),
+      savePlace: (place: any) =>
+        set((state) => {
+          const currentSaved = state.user.saved_places || [];
+          if (!currentSaved.find((p) => p.id === place.id)) {
+            return { user: { ...state.user, saved_places: [...currentSaved, place] } };
+          }
+          return state;
+        }),
+      removeSavedPlace: (placeId: string) =>
+        set((state) => ({
+          user: {
+            ...state.user,
+            saved_places: (state.user.saved_places || []).filter((p) => p.id !== placeId),
+          },
+        })),
+      addHistory: (item: any) =>
+        set((state) => {
+          const currentHistory = state.user.commute_history || [];
+          const newHistory = [item, ...currentHistory.filter((h: any) => h.id !== item.id)].slice(0, 20);
+          return { user: { ...state.user, commute_history: newHistory } };
+        }),
+      clearHistory: () =>
+        set((state) => ({
+          user: { ...state.user, commute_history: [] },
         })),
     }),
     {

@@ -88,6 +88,7 @@ export default function HomeScreen() {
   const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
   const pendingRouteSearch = useStore((state) => state.pendingRouteSearch);
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
+  const addHistory = useStore((state) => state.addHistory);
   const mapRef = useRef<MapView | null>(null);
   const [showRecommender, setShowRecommender] = useState(false);
 
@@ -307,6 +308,16 @@ export default function HomeScreen() {
         animated: true,
       });
       setShowRecommender(true);
+      
+      // Save this to commute history
+      const h_origin = origin ? { name: origin.title, lat: origin.latitude, lon: origin.longitude } : null;
+      addHistory({
+        id: Date.now().toString(),
+        origin: h_origin,
+        destination: { name: destination.title, lat: destination.latitude, lon: destination.longitude },
+        timestamp: Date.now(),
+      });
+      
     } catch (error) {
       console.warn('[HomeScreen] Route search failed:', error);
       Alert.alert('Search Failed', 'Unable to fetch route right now. Please try again.');
