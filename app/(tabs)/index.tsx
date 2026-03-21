@@ -702,7 +702,7 @@ export default function HomeScreen() {
               onPress={() => setShowRecommender(true)}
               activeOpacity={0.8}
             >
-              <Ionicons name="layers" size={21} color={COLORS.navy} />
+              <Ionicons name="options" size={21} color={COLORS.navy} />
             </TouchableOpacity>
           </BlurView>
         </View>

@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useCallback } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,23 +14,61 @@ import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import type { TransitLeg } from '../utils/routeSegments';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const PANEL_COLLAPSED_HEIGHT = 140;
-const PANEL_EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.6;
+const PANEL_HEIGHT = 340;
 
-export type TransitRouteOption = {
-  id: string;
-  ref?: string;
-  name?: string;
-  type?: string;
-  from?: string;
-  to?: string;
-  fare?: string | number;
-  operator?: string;
-  color?: string;
-  verified?: boolean;
-  coordinates?: { latitude: number; longitude: number }[];
-  stops?: any[];
+export type RouteAlternativeId = 'recommended' | 'least_transfers' | 'fastest' | 'cheapest' | 'shortest';
+
+type RouteAlternative = {
+  id: RouteAlternativeId;
+  label: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  accentColor: string;
+  bgColor: string;
 };
+
+const ROUTE_ALTERNATIVES: RouteAlternative[] = [
+  {
+    id: 'recommended',
+    label: 'Recommended',
+    description: 'Best overall balance of speed, cost and transfers',
+    icon: 'star',
+    accentColor: '#E8A020',
+    bgColor: '#FFF8E1',
+  },
+  {
+    id: 'least_transfers',
+    label: 'Least Transfers',
+    description: 'Minimise the number of vehicle changes',
+    icon: 'swap-vertical',
+    accentColor: '#3B82F6',
+    bgColor: '#EFF6FF',
+  },
+  {
+    id: 'fastest',
+    label: 'Fastest',
+    description: 'Arrive at your destination the quickest',
+    icon: 'flash',
+    accentColor: '#F97316',
+    bgColor: '#FFF7ED',
+  },
+  {
+    id: 'cheapest',
+    label: 'Cheapest',
+    description: 'Lowest total fare for the trip',
+    icon: 'cash',
+    accentColor: '#22C55E',
+    bgColor: '#F0FDF4',
+  },
+  {
+    id: 'shortest',
+    label: 'Shortest Distance',
+    description: 'Least distance travelled overall',
+    icon: 'resize',
+    accentColor: '#8B5CF6',
+    bgColor: '#F5F3FF',
+  },
+];
 
 type Props = {
   visible: boolean;
@@ -39,45 +77,31 @@ type Props = {
   onClose: () => void;
 };
 
-function formatFare(fare?: string | number): string {
-  if (fare == null) return '';
-  if (typeof fare === 'number') return `₱${fare}`;
-  return fare;
-}
-
-function getTransitIcon(type?: string): string {
-  switch (type) {
-    case 'bus': return 'bus';
-    case 'jeepney': return 'car';
-    case 'uv_express': return 'car-sport';
-    default: return 'trail-sign';
-  }
-}
-
 export default function RouteRecommenderPanel({
   visible,
   routeSummary,
   transitLegs,
   onClose,
 }: Props) {
-  const panY = useRef(new Animated.Value(PANEL_EXPANDED_HEIGHT)).current;
-  const lastOffset = useRef(PANEL_EXPANDED_HEIGHT);
+  const panY = useRef(new Animated.Value(PANEL_HEIGHT)).current;
+  const lastOffset = useRef(PANEL_HEIGHT);
+  const [selectedAlt, setSelectedAlt] = useState<RouteAlternativeId>('recommended');
 
   React.useEffect(() => {
     if (visible) {
       Animated.spring(panY, {
-        toValue: PANEL_COLLAPSED_HEIGHT,
+        toValue: 0,
         useNativeDriver: false,
         bounciness: 4,
       }).start();
-      lastOffset.current = PANEL_COLLAPSED_HEIGHT;
+      lastOffset.current = 0;
     } else {
       Animated.timing(panY, {
-        toValue: PANEL_EXPANDED_HEIGHT,
+        toValue: PANEL_HEIGHT,
         duration: 300,
         useNativeDriver: false,
       }).start();
-      lastOffset.current = PANEL_EXPANDED_HEIGHT;
+      lastOffset.current = PANEL_HEIGHT;
     }
   }, [visible]);
 
@@ -93,54 +117,29 @@ export default function RouteRecommenderPanel({
       },
       onPanResponderRelease: (_, gs) => {
         panY.flattenOffset();
-        // Snap down if dragged down > 40 or velocity > 0.4
         if (gs.dy > 40 || gs.vy > 0.4) {
           Animated.spring(panY, {
-            toValue: PANEL_EXPANDED_HEIGHT,
+            toValue: PANEL_HEIGHT,
             useNativeDriver: false,
             bounciness: 4,
           }).start(() => {
-            lastOffset.current = PANEL_EXPANDED_HEIGHT;
+            lastOffset.current = PANEL_HEIGHT;
             onClose();
           });
           return;
         }
-        // Snap up if dragged up < -40 or velocity < -0.4
-        if (gs.dy < -40 || gs.vy < -0.4) {
-          Animated.spring(panY, {
-            toValue: 0,
-            useNativeDriver: false,
-            bounciness: 4,
-          }).start(() => {
-            lastOffset.current = 0;
-          });
-          return;
-        }
-
         Animated.spring(panY, {
-          toValue: lastOffset.current,
+          toValue: 0,
           useNativeDriver: false,
           bounciness: 4,
-        }).start();
+        }).start(() => {
+          lastOffset.current = 0;
+        });
       },
     })
   ).current;
 
-  // Compute summary stats
-  const stats = useMemo(() => {
-    const transitCount = transitLegs.filter(l => l.onTransit).length;
-    const transfers = Math.max(0, transitCount - 1);
-    let totalFare = 0;
-    for (const leg of transitLegs) {
-      if (leg.onTransit && leg.transitInfo?.fare != null) {
-        const f = leg.transitInfo.fare;
-        totalFare += typeof f === 'number' ? f : parseFloat(String(f).replace(/[^0-9.]/g, '')) || 0;
-      }
-    }
-    return { transitCount, transfers, totalFare };
-  }, [transitLegs]);
-
-  if (!visible && lastOffset.current === PANEL_EXPANDED_HEIGHT) return null;
+  if (!visible && lastOffset.current === PANEL_HEIGHT) return null;
 
   return (
     <Animated.View
@@ -148,7 +147,7 @@ export default function RouteRecommenderPanel({
         styles.container,
         {
           transform: [{ translateY: panY }],
-          height: PANEL_EXPANDED_HEIGHT,
+          height: PANEL_HEIGHT,
         },
       ]}
     >
@@ -157,8 +156,8 @@ export default function RouteRecommenderPanel({
         <View style={styles.dragHandle} />
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
-            <Ionicons name="map" size={20} color={COLORS.navy} />
-            <Text style={styles.title}>YOUR JOURNEY</Text>
+            <Ionicons name="options" size={20} color={COLORS.navy} />
+            <Text style={styles.title}>ROUTE OPTIONS</Text>
           </View>
           <TouchableOpacity
             onPress={onClose}
@@ -167,179 +166,42 @@ export default function RouteRecommenderPanel({
             <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
           </TouchableOpacity>
         </View>
-
-        {/* Summary badges */}
-        <View style={styles.summaryRow}>
-          {routeSummary && (
-            <View style={[styles.summaryBadge, { backgroundColor: '#FFF3D0' }]}>
-              <Ionicons name="speedometer-outline" size={12} color="#E8A020" />
-              <Text style={[styles.summaryBadgeText, { color: '#E8A020' }]}>
-                {routeSummary.distanceKm.toFixed(1)} km • {Math.ceil(routeSummary.durationMin)} min
-              </Text>
-            </View>
-          )}
-          {stats.transfers > 0 && (
-            <View style={[styles.summaryBadge, { backgroundColor: '#DBEAFE' }]}>
-              <Ionicons name="swap-vertical" size={12} color="#3B82F6" />
-              <Text style={[styles.summaryBadgeText, { color: '#3B82F6' }]}>
-                {stats.transfers} transfer{stats.transfers !== 1 ? 's' : ''}
-              </Text>
-            </View>
-          )}
-          {stats.totalFare > 0 && (
-            <View style={[styles.summaryBadge, { backgroundColor: '#DCFCE7' }]}>
-              <Ionicons name="cash-outline" size={12} color="#22C55E" />
-              <Text style={[styles.summaryBadgeText, { color: '#22C55E' }]}>
-                ~₱{stats.totalFare}
-              </Text>
-            </View>
-          )}
-        </View>
       </View>
 
-      {/* Scrollable journey legs */}
+      {/* Route alternatives list */}
       <ScrollView
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {transitLegs.map((leg, idx) => {
-          const isFirst = idx === 0;
-          const isLast = idx === transitLegs.length - 1;
-          const nextLeg = idx < transitLegs.length - 1 ? transitLegs[idx + 1] : null;
-
+        {ROUTE_ALTERNATIVES.map((alt) => {
+          const isActive = selectedAlt === alt.id;
           return (
-            <View key={`leg-${idx}`}>
-              {/* Leg card */}
-              <View style={styles.legRow}>
-                {/* Timeline connector */}
-                <View style={styles.timeline}>
-                  {/* Top line */}
-                  {!isFirst && (
-                    <View style={[styles.timelineLine, styles.timelineLineTop, { backgroundColor: leg.onTransit ? (leg.transitInfo?.color || '#E8A020') : '#CCCCCC' }]} />
-                  )}
-                  {/* Dot */}
-                  <View style={[
-                    styles.timelineDot,
-                    { backgroundColor: leg.onTransit ? (leg.transitInfo?.color || '#E8A020') : '#999999' },
-                  ]}>
-                    <Ionicons
-                      name={leg.onTransit ? getTransitIcon(leg.transitInfo?.type) as any : 'walk'}
-                      size={12}
-                      color="#FFFFFF"
-                    />
-                  </View>
-                  {/* Bottom line */}
-                  {!isLast && (
-                    <View style={[styles.timelineLine, styles.timelineLineBottom, { backgroundColor: leg.onTransit ? (leg.transitInfo?.color || '#E8A020') : '#CCCCCC' }]} />
-                  )}
-                </View>
-
-                {/* Leg content */}
-                <View style={[
-                  styles.legCard,
-                  leg.onTransit && { borderLeftColor: leg.transitInfo?.color || '#E8A020', borderLeftWidth: 3 },
-                ]}>
-                  {leg.onTransit && leg.transitInfo ? (
-                    <>
-                      {/* Transit header */}
-                      <View style={styles.legHeader}>
-                        <View style={[styles.legTypeBadge, { backgroundColor: leg.transitInfo.color || '#E8A020' }]}>
-                          <Ionicons name={getTransitIcon(leg.transitInfo.type) as any} size={11} color="#FFFFFF" />
-                          <Text style={styles.legTypeBadgeText}>
-                            {(leg.transitInfo.type || 'transit').toUpperCase()}
-                          </Text>
-                        </View>
-                        {leg.transitInfo.fare != null && (
-                          <Text style={styles.legFare}>{formatFare(leg.transitInfo.fare)}</Text>
-                        )}
-                      </View>
-
-                      {/* Route name */}
-                      <Text style={styles.legRouteName} numberOfLines={1}>
-                        {leg.transitInfo.ref ? `[${leg.transitInfo.ref}] ` : ''}
-                        {leg.transitInfo.name || 'Transit Route'}
-                      </Text>
-
-                      {/* Board / Alight */}
-                      <View style={styles.legStops}>
-                        <View style={styles.legStopRow}>
-                          <View style={[styles.legStopDot, { backgroundColor: '#22C55E' }]} />
-                          <Text style={styles.legStopLabel}>Board at <Text style={styles.legStopName}>{leg.boardLabel}</Text></Text>
-                        </View>
-                        <View style={styles.legStopConnector} />
-                        <View style={styles.legStopRow}>
-                          <View style={[styles.legStopDot, { backgroundColor: '#EF4444' }]} />
-                          <Text style={styles.legStopLabel}>Alight at <Text style={styles.legStopName}>{leg.alightLabel}</Text></Text>
-                        </View>
-                      </View>
-
-                      {leg.transitInfo.verified && (
-                        <View style={styles.verifiedRow}>
-                          <Ionicons name="checkmark-circle" size={12} color="#22C55E" />
-                          <Text style={styles.verifiedText}>Verified route</Text>
-                        </View>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {/* Walking leg */}
-                      <View style={styles.legHeader}>
-                        <View style={[styles.legTypeBadge, { backgroundColor: '#999999' }]}>
-                          <Ionicons name="walk" size={11} color="#FFFFFF" />
-                          <Text style={styles.legTypeBadgeText}>WALK</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.legWalkText}>
-                        {isFirst ? 'Walk to the nearest transit stop' : isLast ? 'Walk to your destination' : 'Walk to the next transit stop'}
-                      </Text>
-                    </>
-                  )}
-                </View>
+            <TouchableOpacity
+              key={alt.id}
+              activeOpacity={0.7}
+              onPress={() => setSelectedAlt(alt.id)}
+              style={[
+                styles.altCard,
+                { backgroundColor: isActive ? alt.bgColor : '#FFFFFF' },
+                isActive && { borderColor: alt.accentColor, borderWidth: 1.5 },
+              ]}
+            >
+              <View style={[styles.altIconWrap, { backgroundColor: isActive ? alt.accentColor : 'rgba(10,22,40,0.06)' }]}>
+                <Ionicons name={alt.icon as any} size={18} color={isActive ? '#FFFFFF' : COLORS.textMuted} />
               </View>
-
-              {/* Transfer indicator between legs */}
-              {nextLeg && leg.onTransit && nextLeg.onTransit && (
-                <View style={styles.transferCard}>
-                  <View style={styles.transferIconWrap}>
-                    <Ionicons name="swap-vertical" size={16} color="#3B82F6" />
-                  </View>
-                  <View style={styles.transferTextWrap}>
-                    <Text style={styles.transferTitle}>Transfer here</Text>
-                    <Text style={styles.transferSubtitle}>
-                      Get off and ride{' '}
-                      <Text style={{ fontWeight: '700' }}>
-                        {nextLeg.transitInfo?.ref || nextLeg.transitInfo?.name || 'next transit'}
-                      </Text>
-                    </Text>
-                  </View>
-                </View>
+              <View style={styles.altTextWrap}>
+                <Text style={[styles.altLabel, isActive && { color: alt.accentColor }]}>
+                  {alt.label}
+                </Text>
+                <Text style={styles.altDesc} numberOfLines={1}>{alt.description}</Text>
+              </View>
+              {isActive && (
+                <Ionicons name="checkmark-circle" size={22} color={alt.accentColor} />
               )}
-            </View>
+            </TouchableOpacity>
           );
         })}
-
-        {/* Destination marker */}
-        <View style={styles.legRow}>
-          <View style={styles.timeline}>
-            <View style={[styles.timelineLine, styles.timelineLineTop, { backgroundColor: '#EF4444' }]} />
-            <View style={[styles.timelineDot, { backgroundColor: '#EF4444' }]}>
-              <Ionicons name="flag" size={12} color="#FFFFFF" />
-            </View>
-          </View>
-          <View style={[styles.legCard, { paddingVertical: 10 }]}>
-            <Text style={styles.legRouteName}>Destination</Text>
-          </View>
-        </View>
-
-        {transitLegs.length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="bus-outline" size={28} color={COLORS.textMuted} />
-            <Text style={styles.emptyText}>
-              No transit route data for this path.
-            </Text>
-          </View>
-        )}
       </ScrollView>
     </Animated.View>
   );
@@ -391,212 +253,44 @@ const styles = StyleSheet.create({
     color: COLORS.navy,
     letterSpacing: 0.5,
   },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    flexWrap: 'wrap',
-  },
-  summaryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  summaryBadgeText: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    fontWeight: '700',
-  },
   scrollArea: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenX,
-    paddingBottom: 120,
-    paddingTop: 8,
+    paddingBottom: 32,
+    paddingTop: 4,
+    gap: 8,
   },
-  // --- Journey leg rows ---
-  legRow: {
+  altCard: {
     flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  timeline: {
-    width: 32,
     alignItems: 'center',
-    position: 'relative',
-  },
-  timelineDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
-    borderWidth: 2.5,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 3,
-  },
-  timelineLine: {
-    width: 3,
-    flex: 1,
-    borderRadius: 1.5,
-  },
-  timelineLineTop: {
-    marginBottom: -1,
-  },
-  timelineLineBottom: {
-    marginTop: -1,
-  },
-  legCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
+    padding: 14,
     borderRadius: RADIUS.card,
-    padding: 12,
-    marginLeft: 10,
-    marginBottom: 4,
     borderWidth: 1,
     borderColor: 'rgba(10,22,40,0.06)',
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    gap: 12,
   },
-  legHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  legTypeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  altIconWrap: {
+    width: 38,
+    height: 38,
     borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  legTypeBadgeText: {
-    fontFamily: 'Inter',
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  legFare: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#22C55E',
-  },
-  legRouteName: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.navy,
-  },
-  legStops: {
-    marginTop: 8,
+  altTextWrap: {
+    flex: 1,
     gap: 2,
   },
-  legStopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  legStopDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legStopLabel: {
+  altLabel: {
     fontFamily: 'Inter',
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  legStopName: {
+    fontSize: 14,
     fontWeight: '700',
     color: COLORS.navy,
   },
-  legStopConnector: {
-    width: 1,
-    height: 10,
-    backgroundColor: 'rgba(10,22,40,0.12)',
-    marginLeft: 3.5,
-  },
-  legWalkText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  verifiedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-  },
-  verifiedText: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    color: '#22C55E',
-  },
-  // --- Transfer card ---
-  transferCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 42,
-    marginBottom: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: '#EFF6FF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.15)',
-    gap: 10,
-  },
-  transferIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#DBEAFE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  transferTextWrap: {
-    flex: 1,
-  },
-  transferTitle: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#3B82F6',
-  },
-  transferSubtitle: {
+  altDesc: {
     fontFamily: 'Inter',
     fontSize: 11,
     color: COLORS.textMuted,
-    marginTop: 1,
-  },
-  // --- Empty state ---
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    gap: 8,
-  },
-  emptyText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    color: COLORS.textMuted,
-    textAlign: 'center',
   },
 });
