@@ -54,6 +54,7 @@ export default function HomeScreen() {
   const [searchMode, setSearchMode] = useState<'idle' | 'results'>('idle');
   const [destinationName, setDestinationName] = useState('');
   const [walkingPaths, setWalkingPaths] = useState<Record<string, MapCoordinate[]>>({});
+  const [destinationMarkerKey, setDestinationMarkerKey] = useState(0);
   const { routes: jeepneyRoutes } = useJeepneyRoutes();
   const mapRef = useRef<MapView | null>(null);
 
@@ -251,10 +252,30 @@ export default function HomeScreen() {
     };
   }, []);
 
+  const resetDestinationState = () => {
+    setSelectedRoute(null);
+    setMatchedRoutes([]);
+    setWalkingPaths({});
+    setRouteCoordinates([]);
+    setRouteSummary(null);
+    setSearchMode('idle');
+    setDestinationLocation(null);
+    setDestinationName('');
+    setDestinationMarkerKey((prev) => prev + 1);
+  };
+
+  const startFreshDestination = (destinationPoint: MapCoordinate, label: string) => {
+    resetDestinationState();
+    requestAnimationFrame(() => {
+      applyDestination(destinationPoint, label);
+    });
+  };
+
   const applyDestination = (destinationPoint: MapCoordinate, label: string) => {
     setDestinationLocation(destinationPoint);
     setDestinationName(label);
     setDestinationQuery(label);
+    setWalkingPaths({});
     setRouteCoordinates([]);
     setRouteSummary(null);
 
@@ -291,7 +312,7 @@ export default function HomeScreen() {
     const { latitude, longitude } = event.nativeEvent.coordinate;
     const pinnedPoint: MapCoordinate = { latitude, longitude };
     const pinnedLabel = `Pinned location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`;
-    applyDestination(pinnedPoint, pinnedLabel);
+    startFreshDestination(pinnedPoint, pinnedLabel);
   };
 
   // Fetch road-following walking paths when a route is selected
@@ -404,7 +425,7 @@ export default function HomeScreen() {
         latitude: parseFloat(destination.lat),
         longitude: parseFloat(destination.lon),
       };
-      applyDestination(destinationPoint, query);
+      startFreshDestination(destinationPoint, query);
 
       // If there are matching routes, fit map to show them
       const results = findRoutesForDestination(
@@ -491,6 +512,7 @@ export default function HomeScreen() {
 
         {destinationLocation && (
           <Marker
+            key={`destination-${destinationMarkerKey}-${destinationLocation.latitude}-${destinationLocation.longitude}`}
             coordinate={destinationLocation}
             title="Destination"
             description={destinationQuery}
@@ -515,11 +537,11 @@ export default function HomeScreen() {
           const allMatchedCodes = new Set(matchedRoutes.flatMap(m => m.legs.map(l => l.route.properties.code)));
           const isMatched = allMatchedCodes.has(code);
 
+          // Master visibility toggle: hide every transit route overlay.
+          if (!showRoutes) return null;
+
           // When a route is selected in search mode, only show that route
           if (searchMode === 'results' && selectedRoute && !isSelected) return null;
-
-          // Hide non-recommended routes when toggle is off
-          if (!showRoutes && !isMatched && !isSelected) return null;
 
           const dimmed = searchMode === 'results' && !isMatched && !isSelected;
 
