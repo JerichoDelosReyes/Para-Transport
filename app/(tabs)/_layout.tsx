@@ -151,10 +151,6 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           if (route.name === 'index') {
             return (
               <View key={route.key} style={styles.centerTabWrapper}>
-                <View style={{ height: 24, marginBottom: 2 }} />
-                <Text style={[styles.tabLabel, { color: isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
-                  Home
-                </Text>
                 <View style={[styles.homeButtonWrapper, { bottom: 12 }]}>
                    <LiquidGlassHomeButton focused={isFocused} onPress={onPress} />
                 </View>
