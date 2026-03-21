@@ -171,7 +171,7 @@ type TransitRouteWithMeta = {
   to?: string;
   verified?: boolean;
   coordinates: Coord[];
-  stops?: { coordinate: Coord; name: string }[];
+  stops?: { coordinate: Coord; name: string; type?: string }[];
 };
 
 /**
@@ -202,23 +202,61 @@ function findNearestTransitRoute(
 /**
  * Find the nearest named stop on a specific transit route to a given point.
  */
+function isCodeLikeLabel(label: string): boolean {
+  const trimmed = label.trim();
+  if (!trimmed) return true;
+  if (trimmed.length <= 4) return true;
+  if (/^[A-Z0-9\-]+$/.test(trimmed)) return true;
+  return false;
+}
+
+function isTerminalName(label: string, route: TransitRouteWithMeta): boolean {
+  const upper = label.trim().toUpperCase();
+  const tokens = [route.from, route.to, route.ref, route.name]
+    .filter(Boolean)
+    .map((v) => String(v).trim().toUpperCase());
+  return tokens.includes(upper);
+}
+
 function findNearestStop(
   point: Coord,
   route: TransitRouteWithMeta,
+  purpose: 'board' | 'alight',
 ): string {
+  const fallback = purpose === 'board' ? 'Nearest pickup point' : 'Nearest drop-off point';
+
   if (!route.stops || route.stops.length === 0) {
-    return route.from || route.name || 'Transit stop';
+    return fallback;
   }
-  let best = route.stops[0];
+
+  const hasIntermediateStops = route.stops.some((s) => s.type === 'stop');
+
+  // Prefer non-terminal stops when we have proper stop data.
+  const candidateStops = hasIntermediateStops
+    ? route.stops.filter((s) => s.type !== 'terminal')
+    : route.stops;
+
+  if (candidateStops.length === 0) return fallback;
+
+  let best = candidateStops[0];
   let bestDist = sqDistMetres(point, best.coordinate);
-  for (let i = 1; i < route.stops.length; i++) {
-    const d = sqDistMetres(point, route.stops[i].coordinate);
+  for (let i = 1; i < candidateStops.length; i++) {
+    const d = sqDistMetres(point, candidateStops[i].coordinate);
     if (d < bestDist) {
       bestDist = d;
-      best = route.stops[i];
+      best = candidateStops[i];
     }
   }
-  return best.name;
+
+  const bestName = best.name || '';
+
+  // If the route only has terminal-like labels (e.g., BDO, SMMOLINO), avoid
+  // presenting those as mandatory alight instructions.
+  if (!hasIntermediateStops && (isCodeLikeLabel(bestName) || isTerminalName(bestName, route))) {
+    return fallback;
+  }
+
+  return bestName;
 }
 
 /**
@@ -450,8 +488,8 @@ export function buildTransitLegs(
     let alightLabel = 'Walk';
 
     if (route) {
-      boardLabel = findNearestStop(board, route);
-      alightLabel = findNearestStop(alight, route);
+      boardLabel = findNearestStop(board, route, 'board');
+      alightLabel = findNearestStop(alight, route, 'alight');
     }
 
     return {

@@ -75,6 +75,7 @@ export default function HomeScreen() {
         id: `${r.properties.code}-stop-${idx}`,
         coordinate: s.coordinate,
         name: s.label,
+        type: s.type,
         operator: r.properties.operator || '',
       })),
       verified: true,
