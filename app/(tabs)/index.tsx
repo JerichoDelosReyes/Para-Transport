@@ -8,6 +8,8 @@ import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useJeepneyRoutes } from '../../hooks/useJeepneyRoutes';
+import { findRoutesForDestination, MatchedRoute } from '../../services/routeSearch';
+import RouteResultCard from '../../components/RouteResultCard';
 
 const { height, width } = Dimensions.get('window');
 
@@ -59,6 +61,9 @@ export default function HomeScreen() {
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
   const [showRoutes, setShowRoutes] = useState(true);
+  const [matchedRoutes, setMatchedRoutes] = useState<MatchedRoute[]>([]);
+  const [searchMode, setSearchMode] = useState<'idle' | 'results'>('idle');
+  const [destinationName, setDestinationName] = useState('');
   const { routes: jeepneyRoutes } = useJeepneyRoutes();
   const mapRef = useRef<MapView | null>(null);
 
@@ -299,38 +304,55 @@ export default function HomeScreen() {
         longitude: parseFloat(destination.lon),
       };
       setDestinationLocation(destinationPoint);
+      setDestinationName(query);
 
-      const startLng = currentLocation.longitude;
-      const startLat = currentLocation.latitude;
-      const destLng = destinationPoint.longitude;
-      const destLat = destinationPoint.latitude;
-
-      const routeResponse = await fetch(
-        `${ROUTING_BASE_URL}/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`
+      // Find matching transit routes using spatial buffer matching
+      const results = findRoutesForDestination(
+        currentLocation,
+        destinationPoint,
+        jeepneyRoutes,
       );
+      setMatchedRoutes(results);
+      setSearchMode('results');
+      setSelectedRoute(null);
+      toggleSheet(true); // Expand bottom sheet to show route results
 
-      if (!routeResponse.ok) {
-        throw new Error(`Routing failed (${routeResponse.status})`);
+      // If there are matching routes, fit map to show them
+      if (results.length > 0) {
+        const allCoords = results.flatMap(m => m.legs.flatMap(l => l.route.coordinates));
+        mapRef.current?.fitToCoordinates(allCoords, {
+          edgePadding: { top: 160, right: 50, bottom: 300, left: 50 },
+          animated: true,
+        });
+      } else {
+        // Fallback: fetch OSRM driving route for reference
+        const startLng = currentLocation.longitude;
+        const startLat = currentLocation.latitude;
+        const destLng = destinationPoint.longitude;
+        const destLat = destinationPoint.latitude;
+
+        try {
+          const routeResponse = await fetch(
+            `${ROUTING_BASE_URL}/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`
+          );
+          if (routeResponse.ok) {
+            const routeResult = await routeResponse.json();
+            const bestRoute = routeResult?.routes?.[0];
+            if (bestRoute?.geometry?.coordinates) {
+              const mappedCoordinates = toMapCoordinates(bestRoute.geometry.coordinates);
+              setRouteCoordinates(mappedCoordinates);
+              setRouteSummary({
+                distanceKm: bestRoute.distance / 1000,
+                durationMin: bestRoute.duration / 60,
+              });
+              mapRef.current?.fitToCoordinates(mappedCoordinates, {
+                edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
+                animated: true,
+              });
+            }
+          }
+        } catch {} // Silently fail OSRM — we already show "no transit routes"
       }
-
-      const routeResult = await routeResponse.json();
-      const bestRoute = routeResult?.routes?.[0];
-      if (!bestRoute?.geometry?.coordinates) {
-        Alert.alert('Route Not Found', 'No drivable route found for this destination.');
-        return;
-      }
-
-      const mappedCoordinates = toMapCoordinates(bestRoute.geometry.coordinates);
-      setRouteCoordinates(mappedCoordinates);
-      setRouteSummary({
-        distanceKm: bestRoute.distance / 1000,
-        durationMin: bestRoute.duration / 60,
-      });
-
-      mapRef.current?.fitToCoordinates(mappedCoordinates, {
-        edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
-        animated: true,
-      });
 
       setIsSearchActive(false);
       setPlaceSuggestions([]);
@@ -391,56 +413,230 @@ export default function HomeScreen() {
         )}
 
         {/* Route Overlays */}
-        {showRoutes && selectedMode === 'Jeepney' && jeepneyRoutes.map((route) => {
-          const isSelected = selectedRoute === route.properties.code;
+        {showRoutes && jeepneyRoutes.map((route) => {
+          const code = route.properties.code;
+          const selectedCodes = selectedRoute ? selectedRoute.split('+') : [];
+          const isSelected = selectedCodes.includes(code);
+          const allMatchedCodes = new Set(matchedRoutes.flatMap(m => m.legs.map(l => l.route.properties.code)));
+          const isMatched = allMatchedCodes.has(code);
+          const dimmed = searchMode === 'results' && !isMatched && !isSelected;
+
+          // Trim to boarding → alighting segment when selected in search mode
+          let coords = route.coordinates;
+          if (isSelected && searchMode === 'results') {
+            const matched = matchedRoutes.find(m =>
+              m.legs.map(l => l.route.properties.code).join('+') === selectedRoute
+            );
+            if (matched) {
+              const leg = matched.legs.find(l => l.route.properties.code === code);
+              if (leg) {
+                const nearest = (pt: { latitude: number; longitude: number }) => {
+                  let best = 0;
+                  let bestD = Infinity;
+                  for (let i = 0; i < route.coordinates.length; i++) {
+                    const d = (route.coordinates[i].latitude - pt.latitude) ** 2
+                            + (route.coordinates[i].longitude - pt.longitude) ** 2;
+                    if (d < bestD) { bestD = d; best = i; }
+                  }
+                  return best;
+                };
+                const bIdx = nearest(leg.boardingPoint);
+                const aIdx = nearest(leg.alightingPoint);
+                const start = Math.min(bIdx, aIdx);
+                const end = Math.max(bIdx, aIdx);
+                coords = route.coordinates.slice(start, end + 1);
+              }
+            }
+          }
+
           return (
             <Polyline
-              key={route.properties.code}
-              coordinates={route.coordinates}
-              strokeColor={isSelected ? '#E8A020' : '#2196F3'}
-              strokeWidth={isSelected ? 5 : 3}
+              key={code}
+              coordinates={coords}
+              strokeColor={isSelected ? '#E8A020' : dimmed ? 'rgba(33,150,243,0.2)' : '#2196F3'}
+              strokeWidth={isSelected ? 5 : isMatched ? 4 : 3}
               lineCap="round"
               lineJoin="round"
               lineDashPattern={isSelected ? undefined : [1]}
               tappable
               onPress={() => {
-                setSelectedRoute(isSelected ? null : route.properties.code);
+                setSelectedRoute(isSelected ? null : code);
               }}
             />
           );
         })}
 
-        {/* Boarding guide markers along the selected route */}
-        {showRoutes && selectedMode === 'Jeepney' && selectedRoute && (() => {
-          const route = jeepneyRoutes.find(r => r.properties.code === selectedRoute);
-          if (!route) return null;
-          return route.stops.map((stop, idx) => {
-            const isTerminal = stop.type === 'terminal';
-            return (
+        {/* Boarding guide markers along the selected route(s) */}
+        {showRoutes && selectedRoute && (() => {
+          const selectedCodes = selectedRoute.split('+');
+          return selectedCodes.flatMap((code) => {
+            const route = jeepneyRoutes.find(r => r.properties.code === code);
+            if (!route) return [];
+            return route.stops.map((stop, idx) => {
+              const isTerminal = stop.type === 'terminal';
+              return (
+                <Marker
+                  key={`stop-${code}-${idx}`}
+                  coordinate={stop.coordinate}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  tracksViewChanges={false}
+                >
+                  <View style={isTerminal ? styles.terminalMarker : styles.stopMarker}>
+                    <Ionicons
+                      name={isTerminal ? 'bus' : 'ellipse'}
+                      size={isTerminal ? 16 : 8}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                  <Callout tooltip>
+                    <View style={styles.stopCallout}>
+                      <Text style={styles.stopCalloutLabel}>{stop.label}</Text>
+                      <Text style={styles.stopCalloutType}>
+                        {isTerminal ? '🚏 Terminal' : '📍 Boarding Point'}
+                      </Text>
+                    </View>
+                  </Callout>
+                </Marker>
+              );
+            });
+          });
+        })()}
+
+        {/* Walking paths: user → board leg1 → (alight leg1 → walk → board leg2 →) → alight → destination */}
+        {searchMode === 'results' && selectedRoute && currentLocation && (() => {
+          const matched = matchedRoutes.find(m =>
+            m.legs.map(l => l.route.properties.code).join('+') === selectedRoute
+          );
+          if (!matched) return null;
+
+          const { legs } = matched;
+          const firstLeg = legs[0];
+          const lastLeg = legs[legs.length - 1];
+          const elements: React.ReactNode[] = [];
+
+          // Helper: dashed walking line + walking icon at midpoint
+          const walkSegment = (
+            from: { latitude: number; longitude: number },
+            to: { latitude: number; longitude: number },
+            key: string,
+          ) => (
+            <React.Fragment key={key}>
+              <Polyline
+                coordinates={[from, to]}
+                strokeColor="#555555"
+                strokeWidth={3}
+                lineDashPattern={[8, 8]}
+                lineCap="round"
+              />
               <Marker
-                key={`stop-${selectedRoute}-${idx}`}
-                coordinate={stop.coordinate}
+                coordinate={{
+                  latitude: (from.latitude + to.latitude) / 2,
+                  longitude: (from.longitude + to.longitude) / 2,
+                }}
                 anchor={{ x: 0.5, y: 0.5 }}
                 tracksViewChanges={false}
               >
-                <View style={isTerminal ? styles.terminalMarker : styles.stopMarker}>
-                  <Ionicons
-                    name={isTerminal ? 'bus' : 'ellipse'}
-                    size={isTerminal ? 16 : 8}
-                    color="#FFFFFF"
-                  />
+                <View style={styles.walkingIconBubble}>
+                  <Ionicons name="walk" size={16} color="#555555" />
+                </View>
+              </Marker>
+            </React.Fragment>
+          );
+
+          // 1. Walk from current location → first boarding point
+          elements.push(walkSegment(currentLocation, firstLeg.boardingPoint, 'walk-to-board'));
+          elements.push(
+            <Marker
+              key="board-first"
+              coordinate={firstLeg.boardingPoint}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={false}
+            >
+              <View style={styles.boardMarker}>
+                <Ionicons name="arrow-up-circle" size={20} color="#FFFFFF" />
+              </View>
+              <Callout tooltip>
+                <View style={styles.stopCallout}>
+                  <Text style={styles.stopCalloutLabel}>Board {firstLeg.route.properties.code}</Text>
+                  <Text style={styles.stopCalloutType}>🚶 Walk to this point</Text>
+                </View>
+              </Callout>
+            </Marker>
+          );
+
+          // 2. Transfer walks between legs
+          for (let i = 0; i < legs.length - 1; i++) {
+            const alightPoint = legs[i].alightingPoint;
+            const nextBoardPoint = legs[i + 1].boardingPoint;
+
+            // Alight marker for current leg
+            elements.push(
+              <Marker
+                key={`alight-${i}`}
+                coordinate={alightPoint}
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={false}
+              >
+                <View style={styles.alightMarker}>
+                  <Ionicons name="arrow-down-circle" size={20} color="#FFFFFF" />
                 </View>
                 <Callout tooltip>
                   <View style={styles.stopCallout}>
-                    <Text style={styles.stopCalloutLabel}>{stop.label}</Text>
-                    <Text style={styles.stopCalloutType}>
-                      {isTerminal ? '🚏 Terminal' : '📍 Boarding Point'}
-                    </Text>
+                    <Text style={styles.stopCalloutLabel}>Alight {legs[i].route.properties.code}</Text>
+                    <Text style={styles.stopCalloutType}>🔄 Transfer</Text>
                   </View>
                 </Callout>
               </Marker>
             );
-          });
+
+            // Walk line between transfer
+            elements.push(walkSegment(alightPoint, nextBoardPoint, `walk-transfer-${i}`));
+
+            // Board marker for next leg
+            elements.push(
+              <Marker
+                key={`board-${i + 1}`}
+                coordinate={nextBoardPoint}
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={false}
+              >
+                <View style={styles.boardMarker}>
+                  <Ionicons name="arrow-up-circle" size={20} color="#FFFFFF" />
+                </View>
+                <Callout tooltip>
+                  <View style={styles.stopCallout}>
+                    <Text style={styles.stopCalloutLabel}>Board {legs[i + 1].route.properties.code}</Text>
+                    <Text style={styles.stopCalloutType}>🚶 Walk to this point</Text>
+                  </View>
+                </Callout>
+              </Marker>
+            );
+          }
+
+          // 3. Walk from last alight → destination
+          if (destinationLocation) {
+            elements.push(
+              <Marker
+                key="alight-last"
+                coordinate={lastLeg.alightingPoint}
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={false}
+              >
+                <View style={styles.alightMarker}>
+                  <Ionicons name="arrow-down-circle" size={20} color="#FFFFFF" />
+                </View>
+                <Callout tooltip>
+                  <View style={styles.stopCallout}>
+                    <Text style={styles.stopCalloutLabel}>Alight here</Text>
+                    <Text style={styles.stopCalloutType}>🚶 Walk to destination</Text>
+                  </View>
+                </Callout>
+              </Marker>
+            );
+            elements.push(walkSegment(lastLeg.alightingPoint, destinationLocation, 'walk-to-dest'));
+          }
+
+          return <>{elements}</>;
         })()}
       </MapView>
 
@@ -636,7 +832,29 @@ export default function HomeScreen() {
         >
           <View {...panResponder.panHandlers} style={styles.dragHandleContainer}>
             <View style={styles.dragHandle} />
-            <Text style={styles.sheetHeaderTitle}>LIVE TRAFFIC</Text>
+            {searchMode === 'results' ? (
+              <View style={styles.sheetHeaderRow}>
+                <Text style={styles.sheetHeaderTitle}>AVAILABLE ROUTES</Text>
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={() => {
+                    setSearchMode('idle');
+                    setMatchedRoutes([]);
+                    setSelectedRoute(null);
+                    setDestinationLocation(null);
+                    setRouteCoordinates([]);
+                    setRouteSummary(null);
+                    setDestinationName('');
+                    setDestinationQuery('');
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={22} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={styles.sheetHeaderTitle}>LIVE TRAFFIC</Text>
+            )}
           </View>
         </TouchableOpacity>
 
@@ -645,22 +863,55 @@ export default function HomeScreen() {
           contentContainerStyle={styles.sheetContent}
           bounces={false}
         >
-          <View style={styles.cardList}>
-            {TRAFFIC.map((item) => {
-              const pill = trafficPill(item.status);
-              return (
-                <View key={item.road} style={styles.trafficCard}>
-                  <View style={styles.trafficLeft}>
-                    <Ionicons name="ellipse" size={8} color="rgba(10,22,40,0.28)" />
-                    <Text style={styles.trafficRoad}>{item.road}</Text>
-                  </View>
-                  <View style={[styles.statusPill, { backgroundColor: pill.backgroundColor }]}>
-                    <Text style={[styles.statusText, { color: pill.color }]}>{item.status}</Text>
-                  </View>
+          {searchMode === 'results' ? (
+            <View style={styles.cardList}>
+              {destinationName ? (
+                <Text style={styles.routeResultSubtitle}>
+                  {matchedRoutes.length} route{matchedRoutes.length !== 1 ? 's' : ''} to {destinationName}
+                </Text>
+              ) : null}
+              {matchedRoutes.length > 0 ? (
+                matchedRoutes.map((matched) => {
+                  const id = matched.legs.map(l => l.route.properties.code).join('+');
+                  return (
+                    <RouteResultCard
+                      key={id}
+                      matched={matched}
+                      isSelected={selectedRoute === id}
+                      onPress={(pressedId) => {
+                        setSelectedRoute(selectedRoute === pressedId ? null : pressedId);
+                      }}
+                    />
+                  );
+                })
+              ) : (
+                <View style={styles.emptyResultCard}>
+                  <Ionicons name="bus-outline" size={36} color={COLORS.textMuted} />
+                  <Text style={styles.emptyResultTitle}>No transit routes found</Text>
+                  <Text style={styles.emptyResultText}>
+                    No jeepney routes pass near both your location and this destination. Try a different place.
+                  </Text>
                 </View>
-              );
-            })}
-          </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.cardList}>
+              {TRAFFIC.map((item) => {
+                const pill = trafficPill(item.status);
+                return (
+                  <View key={item.road} style={styles.trafficCard}>
+                    <View style={styles.trafficLeft}>
+                      <Ionicons name="ellipse" size={8} color="rgba(10,22,40,0.28)" />
+                      <Text style={styles.trafficRoad}>{item.road}</Text>
+                    </View>
+                    <View style={[styles.statusPill, { backgroundColor: pill.backgroundColor }]}>
+                      <Text style={[styles.statusText, { color: pill.color }]}>{item.status}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </ScrollView>
       </Animated.View>
     </View>
@@ -1084,5 +1335,85 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 2,
+  },
+  walkingIconBubble: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#555555',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
+  },
+  boardMarker: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#4CAF50',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  alightMarker: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F44336',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: SPACING.screenX,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  routeResultSubtitle: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    marginBottom: 4,
+  },
+  emptyResultCard: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  emptyResultTitle: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  emptyResultText: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

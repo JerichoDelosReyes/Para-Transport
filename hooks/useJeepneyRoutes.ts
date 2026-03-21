@@ -36,7 +36,7 @@ export function useJeepneyRoutes() {
     try {
       const data = routeData as any;
       const parsed: JeepneyRoute[] = (data.routes || [])
-        .filter((r: any) => r.status === 'active' && r.path?.length >= 2)
+        .filter((r: any) => r.path?.length >= 2)
         .map((r: any) => {
           const coordinates: RouteCoord[] = r.path.map(([lng, lat]: [number, number]) => ({
             latitude: lat,
