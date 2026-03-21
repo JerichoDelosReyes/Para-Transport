@@ -7,7 +7,6 @@ import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
-import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 import { useTransitData } from '../../hooks/useTransitData';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
 import { ROUTE_COLORS } from '../../services/parseRoutes';
@@ -67,9 +66,7 @@ export default function HomeScreen() {
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
   const [showRoutes, setShowRoutes] = useState(true);
-  const [matchedCommute, setMatchedCommute] = useState<any>(null); // from useCommuteRoutes
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
-  const { routes: commuteRoutes } = useCommuteRoutes();
   const { routes: rawTransitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
   const { routes: gpxRoutes } = useJeepneyRoutes();
 
@@ -329,7 +326,6 @@ export default function HomeScreen() {
   const handleRouteSearch = async () => {
     Keyboard.dismiss();
     const dest = destinationQuery.trim().toLowerCase();
-    const orig = originQuery.trim().toLowerCase() || 'buendia';
     
     if (!dest) {
       Alert.alert('Destination Required', 'Type where you want to go first.');
@@ -343,20 +339,6 @@ export default function HomeScreen() {
 
     setIsRouting(true);
     try {
-      // Match with commuteData
-      const matches = commuteRoutes.filter(r => r.destination.toLowerCase().includes(dest));
-      let bestMatch = matches.find(r => r.origin.toLowerCase().includes(orig));
-      if (!bestMatch && matches.length > 0) {
-          bestMatch = matches[0]; // fallback
-      }
-
-      if (bestMatch) {
-         setMatchedCommute(bestMatch);
-      } else {
-         setMatchedCommute(null);
-         Alert.alert('Route Not Found', 'Sorry, the commute guide data does not fully answer the question for this route.');
-      }
-
       const geocodeParams = new URLSearchParams({
         q: `${destinationQuery}, Cavite, Philippines`,
         format: 'json',
@@ -449,7 +431,6 @@ export default function HomeScreen() {
     setDestinationLocation(null);
     setRouteCoordinates([]);
     setRouteSummary(null);
-    setMatchedCommute(null);
     setPendingRouteSearch(null);
     setSelectedTransitRoute(null);
   }, [setPendingRouteSearch, setSelectedTransitRoute]);
@@ -458,14 +439,6 @@ export default function HomeScreen() {
     setIsSearchActive(false);
     setDestinationQuery(destination.title);
     setOriginQuery(origin?.title || '');
-    
-    const dest = destination.title.trim().toLowerCase();
-    const orig = origin?.title.trim().toLowerCase() || 'buendia';
-    
-    const matches = commuteRoutes.filter((r: any) => r.destination.toLowerCase().includes(dest));
-    let bestMatch = matches.find((r: any) => r.origin.toLowerCase().includes(orig));
-    if (!bestMatch && matches.length > 0) bestMatch = matches[0];
-    setMatchedCommute(bestMatch || null);
     
     const destinationPoint: MapCoordinate = {
       latitude: destination.latitude,
@@ -518,7 +491,7 @@ export default function HomeScreen() {
     } finally {
       setIsRouting(false);
     }
-  }, [currentLocation, commuteRoutes]);
+  }, [currentLocation]);
 
   // Automatically process pending route searches (e.g. from Saved routes page)
   useEffect(() => {
@@ -888,37 +861,6 @@ export default function HomeScreen() {
             <Text style={styles.routeSummaryValue}>
               {routeSummary.distanceKm.toFixed(1)} km • {Math.ceil(routeSummary.durationMin)} min
             </Text>
-          </View>
-        )}
-
-        {/* Matched Commute Route Info */}
-        {matchedCommute && (
-          <View style={styles.routeInfoCard}>
-            <View style={styles.routeInfoHeader}>
-              <View style={styles.routeCodeBadge}>
-                <Text style={styles.routeCodeText}>{matchedCommute.transport}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setMatchedCommute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.routeInfoTitle}>
-              {matchedCommute.origin} to {matchedCommute.destination}
-            </Text>
-            {matchedCommute.schedule ? (
-              <Text style={styles.routeInfoDesc}>Schedule: {matchedCommute.schedule}</Text>
-            ) : null}
-            {matchedCommute.notes ? (
-              <Text style={styles.routeInfoDesc}>Notes: {matchedCommute.notes}</Text>
-            ) : null}
-            <View style={styles.routeInfoMeta}>
-              <Text style={styles.routeInfoMetaText}>
-                <Ionicons name="cash" size={12} color={COLORS.textMuted} /> {matchedCommute.fare || 'Unknown fare'}
-              </Text>
-              <Text style={styles.routeInfoMetaText} numberOfLines={1}>
-                <Ionicons name="bus" size={12} color={COLORS.textMuted} /> {matchedCommute.transport}
-              </Text>
-            </View>
           </View>
         )}
 
@@ -1313,63 +1255,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: TYPOGRAPHY.caption,
     fontWeight: '700',
-  },
-  routeInfoCard: {
-    marginTop: 12,
-    marginHorizontal: SPACING.screenX,
-    backgroundColor: '#FFFFFF',
-    borderRadius: RADIUS.card,
-    borderWidth: 1,
-    borderColor: 'rgba(10,22,40,0.08)',
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  routeInfoHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  routeCodeBadge: {
-    backgroundColor: '#2196F3',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  routeCodeText: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.caption,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  routeInfoTitle: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.body,
-    fontWeight: '700',
-    color: COLORS.navy,
-    marginBottom: 4,
-  },
-  routeInfoDesc: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  routeInfoMeta: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  routeInfoMetaText: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    flexShrink: 1,
   },
   transitRouteCard: {
     marginTop: 12,
