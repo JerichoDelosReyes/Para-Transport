@@ -28,6 +28,7 @@ function trafficPill(status: 'Light' | 'Moderate' | 'Heavy') {
 const MODES = ['Jeepney', 'Tricycle', 'UV Express', 'Bus', 'LRT'];
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
+const WALKING_ROUTE_URL = 'https://router.project-osrm.org/route/v1/foot';
 
 type MapCoordinate = {
   latitude: number;
@@ -64,6 +65,7 @@ export default function HomeScreen() {
   const [matchedRoutes, setMatchedRoutes] = useState<MatchedRoute[]>([]);
   const [searchMode, setSearchMode] = useState<'idle' | 'results'>('idle');
   const [destinationName, setDestinationName] = useState('');
+  const [walkingPaths, setWalkingPaths] = useState<Record<string, MapCoordinate[]>>({});
   const { routes: jeepneyRoutes } = useJeepneyRoutes();
   const mapRef = useRef<MapView | null>(null);
 
@@ -261,6 +263,74 @@ export default function HomeScreen() {
     };
   }, []);
 
+  // Fetch road-following walking paths when a route is selected
+  useEffect(() => {
+    if (!selectedRoute || searchMode !== 'results' || !currentLocation) {
+      setWalkingPaths({});
+      return;
+    }
+
+    const matched = matchedRoutes.find(m =>
+      m.legs.map(l => l.route.properties.code).join('+') === selectedRoute
+    );
+    if (!matched) return;
+
+    const { legs } = matched;
+    const segments: { key: string; from: MapCoordinate; to: MapCoordinate }[] = [];
+
+    // Walk to first boarding
+    segments.push({ key: 'walk-to-board', from: currentLocation, to: legs[0].boardingPoint });
+
+    // Transfer walks between legs
+    for (let i = 0; i < legs.length - 1; i++) {
+      segments.push({
+        key: `walk-transfer-${i}`,
+        from: legs[i].alightingPoint,
+        to: legs[i + 1].boardingPoint,
+      });
+    }
+
+    // Walk from last alight to destination
+    if (destinationLocation) {
+      segments.push({
+        key: 'walk-to-dest',
+        from: legs[legs.length - 1].alightingPoint,
+        to: destinationLocation,
+      });
+    }
+
+    let cancelled = false;
+
+    const fetchWalkPaths = async () => {
+      const paths: Record<string, MapCoordinate[]> = {};
+
+      await Promise.all(
+        segments.map(async (seg) => {
+          try {
+            const url = `${WALKING_ROUTE_URL}/${seg.from.longitude},${seg.from.latitude};${seg.to.longitude},${seg.to.latitude}?overview=full&geometries=geojson`;
+            const res = await fetch(url);
+            if (!res.ok) return;
+            const data = await res.json();
+            const coords = data?.routes?.[0]?.geometry?.coordinates;
+            if (coords && Array.isArray(coords)) {
+              paths[seg.key] = coords.map(([lng, lat]: [number, number]) => ({
+                latitude: lat,
+                longitude: lng,
+              }));
+            }
+          } catch {
+            // fallback: straight line (will use default)
+          }
+        })
+      );
+
+      if (!cancelled) setWalkingPaths(paths);
+    };
+
+    fetchWalkPaths();
+    return () => { cancelled = true; };
+  }, [selectedRoute, searchMode, currentLocation, destinationLocation, matchedRoutes]);
+
   const handleRouteSearch = async () => {
     const query = destinationQuery.trim();
     if (!query) {
@@ -413,12 +483,19 @@ export default function HomeScreen() {
         )}
 
         {/* Route Overlays */}
-        {showRoutes && jeepneyRoutes.map((route) => {
+        {jeepneyRoutes.map((route) => {
           const code = route.properties.code;
           const selectedCodes = selectedRoute ? selectedRoute.split('+') : [];
           const isSelected = selectedCodes.includes(code);
           const allMatchedCodes = new Set(matchedRoutes.flatMap(m => m.legs.map(l => l.route.properties.code)));
           const isMatched = allMatchedCodes.has(code);
+
+          // When a route is selected in search mode, only show that route
+          if (searchMode === 'results' && selectedRoute && !isSelected) return null;
+
+          // Hide non-recommended routes when toggle is off
+          if (!showRoutes && !isMatched && !isSelected) return null;
+
           const dimmed = searchMode === 'results' && !isMatched && !isSelected;
 
           // Trim to boarding → alighting segment when selected in search mode
@@ -467,7 +544,7 @@ export default function HomeScreen() {
         })}
 
         {/* Boarding guide markers along the selected route(s) */}
-        {showRoutes && selectedRoute && (() => {
+        {selectedRoute && (() => {
           const selectedCodes = selectedRoute.split('+');
           return selectedCodes.flatMap((code) => {
             const route = jeepneyRoutes.find(r => r.properties.code === code);
@@ -519,29 +596,32 @@ export default function HomeScreen() {
             from: { latitude: number; longitude: number },
             to: { latitude: number; longitude: number },
             key: string,
-          ) => (
-            <React.Fragment key={key}>
-              <Polyline
-                coordinates={[from, to]}
-                strokeColor="#555555"
-                strokeWidth={3}
-                lineDashPattern={[8, 8]}
-                lineCap="round"
-              />
-              <Marker
-                coordinate={{
-                  latitude: (from.latitude + to.latitude) / 2,
-                  longitude: (from.longitude + to.longitude) / 2,
-                }}
-                anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={false}
-              >
-                <View style={styles.walkingIconBubble}>
-                  <Ionicons name="walk" size={16} color="#555555" />
-                </View>
-              </Marker>
-            </React.Fragment>
-          );
+          ) => {
+            // Use road-following path if available, otherwise straight line
+            const routedPath = walkingPaths[key];
+            const coords = routedPath && routedPath.length > 1 ? routedPath : [from, to];
+            const mid = coords[Math.floor(coords.length / 2)];
+            return (
+              <React.Fragment key={key}>
+                <Polyline
+                  coordinates={coords}
+                  strokeColor="#555555"
+                  strokeWidth={3}
+                  lineDashPattern={[8, 8]}
+                  lineCap="round"
+                />
+                <Marker
+                  coordinate={mid}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  tracksViewChanges={false}
+                >
+                  <View style={styles.walkingIconBubble}>
+                    <Ionicons name="walk" size={16} color="#555555" />
+                  </View>
+                </Marker>
+              </React.Fragment>
+            );
+          };
 
           // 1. Walk from current location → first boarding point
           elements.push(walkSegment(currentLocation, firstLeg.boardingPoint, 'walk-to-board'));
@@ -751,18 +831,33 @@ export default function HomeScreen() {
         </BlurView>
 
         {/* Floating Quick Actions */}
-        <View style={styles.quickActionsContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScroll}>
-            {MODES.map(mode => (
-              <TouchableOpacity
-                key={mode}
-                style={[styles.modePill, selectedMode === mode && styles.modePillActive]}
-                onPress={() => setSelectedMode(mode)}
-              >
-                <Text style={[styles.modePillText, selectedMode === mode && styles.modePillTextActive]}>{mode}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+        <View style={styles.quickActionsRow}>
+          <View style={styles.quickActionsContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScroll}>
+              {MODES.map(mode => (
+                <TouchableOpacity
+                  key={mode}
+                  style={[styles.modePill, selectedMode === mode && styles.modePillActive]}
+                  onPress={() => setSelectedMode(mode)}
+                >
+                  <Text style={[styles.modePillText, selectedMode === mode && styles.modePillTextActive]}>{mode}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Toggle transit routes visibility */}
+          <TouchableOpacity
+            style={styles.routeToggleBtn}
+            activeOpacity={0.8}
+            onPress={() => setShowRoutes(prev => !prev)}
+          >
+            <Ionicons
+              name={showRoutes ? 'bus' : 'bus-outline'}
+              size={20}
+              color={showRoutes ? '#2196F3' : COLORS.textMuted}
+            />
+          </TouchableOpacity>
         </View>
 
         {routeSummary && (
@@ -1085,9 +1180,30 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  quickActionsContainer: {
+  quickActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 16,
     marginHorizontal: SPACING.screenX,
+    gap: 8,
+  },
+  quickActionsContainer: {
+    flex: 1,
+  },
+  routeToggleBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   routeSummaryCard: {
     marginTop: 6,
