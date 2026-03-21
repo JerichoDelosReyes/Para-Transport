@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
-import { ROUTE_COLORS, ROUTE_LABELS } from '../utils/parseRoutes';
+import { ROUTE_COLORS, ROUTE_LABELS } from '../services/parseRoutes';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const COLLAPSED_HEIGHT = 120;

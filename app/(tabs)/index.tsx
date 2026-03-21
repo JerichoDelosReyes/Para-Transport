@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert, StatusBar, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert, StatusBar, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, Callout } from 'react-native-maps';
@@ -7,12 +7,14 @@ import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
-import { useCommuteRoutes } from '../../hooks/useCommuteRoutes';
 import { useTransitData } from '../../hooks/useTransitData';
+import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
+import { ROUTE_COLORS } from '../../services/parseRoutes';
 import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
-import { splitRouteSegments } from '../../utils/routeSegments';
+import { splitRouteSegments, buildTransitLegs, scoreTransitLegs, TransitLeg } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
+import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
@@ -37,16 +39,6 @@ const INITIAL_REGION: MapRegion = {
 };
 
 const PH_BOUNDS = MAP_CONFIG.PHILIPPINES_BOUNDS;
-const PH_CENTER_LAT = (PH_BOUNDS.minLatitude + PH_BOUNDS.maxLatitude) / 2;
-const PH_CENTER_LNG = (PH_BOUNDS.minLongitude + PH_BOUNDS.maxLongitude) / 2;
-
-type PlaceSuggestion = {
-  id: string;
-  title: string;
-  subtitle: string;
-  latitude: number;
-  longitude: number;
-};
 
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
@@ -57,18 +49,38 @@ export default function HomeScreen() {
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
   const [originQuery, setOriginQuery] = useState('');
-  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
-  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
-  const [showRoutes, setShowRoutes] = useState(true);
-  const [matchedCommute, setMatchedCommute] = useState<any>(null); // from useCommuteRoutes
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
-  const { routes: commuteRoutes } = useCommuteRoutes();
-  const { routes: transitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
+  const { routes: rawTransitRoutes, stops: transitStops, loading: transitLoading, error: transitError, refresh: refreshTransit } = useTransitData();
+  const { routes: gpxRoutes } = useJeepneyRoutes();
+
+  // Normalize GPX routes to the same shape as Overpass transit routes
+  const transitRoutes = useMemo(() => {
+    const normalized = gpxRoutes.map((r: JeepneyRoute) => ({
+      id: r.properties.code,
+      type: r.properties.type,
+      color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
+      ref: r.properties.code,
+      name: r.properties.name,
+      from: r.stops[0]?.label || '',
+      to: r.stops[r.stops.length - 1]?.label || '',
+      operator: r.properties.operator || '',
+      coordinates: r.coordinates,
+      stops: r.stops.map((s, idx) => ({
+        id: `${r.properties.code}-stop-${idx}`,
+        coordinate: s.coordinate,
+        name: s.label,
+        operator: r.properties.operator || '',
+      })),
+      verified: true,
+      fare: r.properties.fare,
+    }));
+    return [...normalized, ...(rawTransitRoutes as any[])];
+  }, [gpxRoutes, rawTransitRoutes]);
   const [showTransitLayer, setShowTransitLayer] = useState(false);
   const [nearestStop, setNearestStop] = useState<any>(null);
   const user = useStore((state) => state.user);
@@ -77,7 +89,7 @@ export default function HomeScreen() {
   const pendingRouteSearch = useStore((state) => state.pendingRouteSearch);
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const mapRef = useRef<MapView | null>(null);
-  const displayName = (user?.name || 'Komyuter').split(' ')[0].toUpperCase();
+  const [showRecommender, setShowRecommender] = useState(false);
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -126,7 +138,6 @@ export default function HomeScreen() {
   };
 
   // Search Expand Animation
-  const searchHeightAnim = useRef(new Animated.Value(48)).current;
   const searchOpacityAnim = useRef(new Animated.Value(0)).current;
 
   // Search Expand Animation (moved pending search handler below)
@@ -134,11 +145,6 @@ export default function HomeScreen() {
   useEffect(() => {
     if (isSearchActive) {
       Animated.parallel([
-        Animated.timing(searchHeightAnim, {
-          toValue: 120, // Height for expanded search
-          duration: 300,
-          useNativeDriver: false,
-        }),
         Animated.timing(searchOpacityAnim, {
           toValue: 1,
           duration: 300,
@@ -147,11 +153,6 @@ export default function HomeScreen() {
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(searchHeightAnim, {
-          toValue: 48,
-          duration: 300,
-          useNativeDriver: false,
-        }),
         Animated.timing(searchOpacityAnim, {
           toValue: 0,
           duration: 300,
@@ -163,81 +164,6 @@ export default function HomeScreen() {
   }, [isSearchActive]);
 
   const closeSearch = () => setIsSearchActive(false);
-
-  const selectSuggestion = (suggestion: PlaceSuggestion) => {
-    setDestinationQuery(suggestion.title);
-    setPlaceSuggestions([]);
-  };
-
-  useEffect(() => {
-    const query = destinationQuery.trim();
-    if (!isSearchActive || query.length < 2) {
-      setPlaceSuggestions([]);
-      setIsFetchingSuggestions(false);
-      return;
-    }
-
-    let cancelled = false;
-    const debounceTimer = setTimeout(async () => {
-      setIsFetchingSuggestions(true);
-      try {
-        const params = new URLSearchParams({
-          q: `${query}, Cavite, Philippines`,
-          format: 'json',
-          limit: '5',
-          countrycodes: 'ph',
-          addressdetails: '0',
-        });
-
-        const response = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
-          headers: {
-            'Accept-Language': 'en',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Suggestion fetch failed (${response.status})`);
-        }
-
-        const results = await response.json();
-        if (cancelled) {
-          return;
-        }
-
-        const mapped: PlaceSuggestion[] = (Array.isArray(results) ? results : [])
-          .map((item: any, idx: number) => {
-            const displayName = String(item.display_name || '').trim();
-            const parts = displayName.split(',').map((p) => p.trim()).filter(Boolean);
-            const title = parts[0] || query;
-            const subtitle = parts.slice(1).join(', ') || 'Cavite, Philippines';
-            return {
-              id: String(item.place_id || `${displayName}-${idx}`),
-              title,
-              subtitle,
-              latitude: parseFloat(item.lat),
-              longitude: parseFloat(item.lon),
-            };
-          })
-          .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
-
-        setPlaceSuggestions(mapped);
-      } catch (error) {
-        if (!cancelled) {
-          console.warn('[HomeScreen] Suggestion search failed:', error);
-          setPlaceSuggestions([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsFetchingSuggestions(false);
-        }
-      }
-    }, 350);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(debounceTimer);
-    };
-  }, [destinationQuery, isSearchActive]);
 
   useEffect(() => {
     let locationSubscription: Location.LocationSubscription | null = null;
@@ -299,121 +225,6 @@ export default function HomeScreen() {
     }
   }, [selectedTransitRoute]);
 
-  const handleRouteSearch = async () => {
-    Keyboard.dismiss();
-    const dest = destinationQuery.trim().toLowerCase();
-    const orig = originQuery.trim().toLowerCase() || 'buendia';
-    
-    if (!dest) {
-      Alert.alert('Destination Required', 'Type where you want to go first.');
-      return;
-    }
-
-    if (!currentLocation) {
-      Alert.alert('GPS Not Ready', 'Waiting for your current location. Please try again in a few seconds.');
-      return;
-    }
-
-    setIsRouting(true);
-    try {
-      // Match with commuteData
-      const matches = commuteRoutes.filter(r => r.destination.toLowerCase().includes(dest));
-      let bestMatch = matches.find(r => r.origin.toLowerCase().includes(orig));
-      if (!bestMatch && matches.length > 0) {
-          bestMatch = matches[0]; // fallback
-      }
-
-      if (bestMatch) {
-         setMatchedCommute(bestMatch);
-      } else {
-         setMatchedCommute(null);
-         Alert.alert('Route Not Found', 'Sorry, the commute guide data does not fully answer the question for this route.');
-      }
-
-      const geocodeParams = new URLSearchParams({
-        q: `${destinationQuery}, Cavite, Philippines`,
-        format: 'json',
-        limit: '1',
-        countrycodes: 'ph',
-      });
-
-      const geocodeResponse = await fetch(`${GEOCODING_BASE_URL}/search?${geocodeParams.toString()}`, {
-        headers: {
-          'Accept-Language': 'en',
-        },
-      });
-
-      if (!geocodeResponse.ok) {
-        throw new Error(`Geocoding failed (${geocodeResponse.status})`);
-      }
-
-      const geocodeResults = await geocodeResponse.json();
-      if (!Array.isArray(geocodeResults) || geocodeResults.length === 0) {
-        Alert.alert('Location Not Found', 'Try a more specific destination name.');
-        return;
-      }
-
-      const destination = geocodeResults[0];
-      const destinationPoint: MapCoordinate = {
-        latitude: parseFloat(destination.lat),
-        longitude: parseFloat(destination.lon),
-      };
-      setDestinationLocation(destinationPoint);
-
-      const startLng = currentLocation.longitude;
-      const startLat = currentLocation.latitude;
-      const destLng = destinationPoint.longitude;
-      const destLat = destinationPoint.latitude;
-
-      const routeResponse = await fetch(
-        `${ROUTING_BASE_URL}/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`
-      );
-
-      if (!routeResponse.ok) {
-        throw new Error(`Routing failed (${routeResponse.status})`);
-      }
-
-      const routeResult = await routeResponse.json();
-      const bestRoute = routeResult?.routes?.[0];
-      if (!bestRoute?.geometry?.coordinates) {
-        Alert.alert('Route Not Found', 'No drivable route found for this destination.');
-        return;
-      }
-
-      const mappedCoordinates = toMapCoordinates(bestRoute.geometry.coordinates);
-      setRouteCoordinates(mappedCoordinates);
-      setRouteSummary({
-        distanceKm: bestRoute.distance / 1000,
-        durationMin: bestRoute.duration / 60,
-      });
-
-      mapRef.current?.fitToCoordinates(mappedCoordinates, {
-        edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
-        animated: true,
-      });
-
-      setIsSearchActive(false);
-      setPlaceSuggestions([]);
-      Keyboard.dismiss();
-    } catch (error) {
-      console.warn('[HomeScreen] Route search failed:', error);
-      Alert.alert('Search Failed', 'Unable to fetch route right now. Please try again.');
-    } finally {
-      setIsRouting(false);
-    }
-  };
-
-  // Handle selecting a transit route from the panel
-  const handleSelectTransitRoute = useCallback((route: any) => {
-    setSelectedTransitRoute(selectedTransitRoute?.id === route.id ? null : route);
-    if (route.coordinates?.length > 0) {
-      mapRef.current?.fitToCoordinates(route.coordinates, {
-        edgePadding: { top: 120, right: 40, bottom: 200, left: 40 },
-        animated: true,
-      });
-    }
-  }, [selectedTransitRoute, setSelectedTransitRoute]);
-
   // Find the nearest stop to the user's current location
 
   const handleClearRoute = useCallback((clearOrigin = true, clearDestination = true) => {
@@ -422,7 +233,6 @@ export default function HomeScreen() {
     setDestinationLocation(null);
     setRouteCoordinates([]);
     setRouteSummary(null);
-    setMatchedCommute(null);
     setPendingRouteSearch(null);
     setSelectedTransitRoute(null);
   }, [setPendingRouteSearch, setSelectedTransitRoute]);
@@ -431,14 +241,6 @@ export default function HomeScreen() {
     setIsSearchActive(false);
     setDestinationQuery(destination.title);
     setOriginQuery(origin?.title || '');
-    
-    const dest = destination.title.trim().toLowerCase();
-    const orig = origin?.title.trim().toLowerCase() || 'buendia';
-    
-    const matches = commuteRoutes.filter((r: any) => r.destination.toLowerCase().includes(dest));
-    let bestMatch = matches.find((r: any) => r.origin.toLowerCase().includes(orig));
-    if (!bestMatch && matches.length > 0) bestMatch = matches[0];
-    setMatchedCommute(bestMatch || null);
     
     const destinationPoint: MapCoordinate = {
       latitude: destination.latitude,
@@ -465,33 +267,53 @@ export default function HomeScreen() {
     
     setIsRouting(true);
     try {
+      // Fetch multiple OSRM alternatives so we can pick the one with least walking
       const routeResponse = await fetch(
-        `${ROUTING_BASE_URL}/${startPoint.longitude},${startPoint.latitude};${destinationPoint.longitude},${destinationPoint.latitude}?overview=full&geometries=geojson`
+        `${ROUTING_BASE_URL}/${startPoint.longitude},${startPoint.latitude};${destinationPoint.longitude},${destinationPoint.latitude}?overview=full&geometries=geojson&alternatives=3`
       );
       if (!routeResponse.ok) throw new Error(`Routing failed (${routeResponse.status})`);
       const routeResult = await routeResponse.json();
-      const bestRoute = routeResult?.routes?.[0];
-      if (!bestRoute?.geometry?.coordinates) {
+      const osrmRoutes = routeResult?.routes;
+      if (!osrmRoutes || osrmRoutes.length === 0 || !osrmRoutes[0]?.geometry?.coordinates) {
         Alert.alert('Route Not Found', 'No drivable route found for this destination.');
         return;
       }
-      const mappedCoordinates = toMapCoordinates(bestRoute.geometry.coordinates);
+
+      // Score each alternative by transit coverage (less walking = better)
+      let bestIdx = 0;
+      let bestScore = Infinity;
+
+      for (let i = 0; i < osrmRoutes.length; i++) {
+        const route = osrmRoutes[i];
+        if (!route?.geometry?.coordinates) continue;
+        const coords = toMapCoordinates(route.geometry.coordinates);
+        const legs = buildTransitLegs(coords, transitRoutes as any[], 50, 150);
+        const score = scoreTransitLegs(legs, 300);
+        if (score < bestScore) {
+          bestScore = score;
+          bestIdx = i;
+        }
+      }
+
+      const chosenRoute = osrmRoutes[bestIdx];
+      const mappedCoordinates = toMapCoordinates(chosenRoute.geometry.coordinates);
       setRouteCoordinates(mappedCoordinates);
       setRouteSummary({
-        distanceKm: bestRoute.distance / 1000,
-        durationMin: bestRoute.duration / 60,
+        distanceKm: chosenRoute.distance / 1000,
+        durationMin: chosenRoute.duration / 60,
       });
       mapRef.current?.fitToCoordinates(mappedCoordinates, {
         edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
         animated: true,
       });
+      setShowRecommender(true);
     } catch (error) {
       console.warn('[HomeScreen] Route search failed:', error);
       Alert.alert('Search Failed', 'Unable to fetch route right now. Please try again.');
     } finally {
       setIsRouting(false);
     }
-  }, [currentLocation, commuteRoutes]);
+  }, [currentLocation, transitRoutes]);
 
   // Automatically process pending route searches (e.g. from Saved routes page)
   useEffect(() => {
@@ -607,26 +429,32 @@ export default function HomeScreen() {
     }
   }, [currentLocation, transitStops]);
 
-  // Visible routes: show selected route if active, otherwise all (if layer is on)
+  // Visible routes: always show selected route; otherwise show all if transit layer is on
   const visibleTransitRoutes = useMemo(() => {
-    if (!showTransitLayer) return [];
     if (selectedTransitRoute) {
       return selectedTransitRoute.coordinates ? [selectedTransitRoute] : [];
     }
+    if (!showTransitLayer) return [];
     return transitRoutes;
   }, [showTransitLayer, selectedTransitRoute, transitRoutes]);
 
-  // Visible stops: show stops for selected route or all stops
+  // Visible stops: always show stops for selected route; otherwise show all if transit layer is on
   const visibleTransitStops = useMemo(() => {
-    if (!showTransitLayer) return [];
     if (selectedTransitRoute?.stops?.length > 0) return selectedTransitRoute.stops;
+    if (!showTransitLayer) return [];
     return transitStops;
   }, [showTransitLayer, selectedTransitRoute, transitStops]);
 
   // Split searched route into on-transit (solid) and walking (dashed) segments
   const routeSegments = useMemo(() => {
     if (routeCoordinates.length < 2) return [];
-    return splitRouteSegments(routeCoordinates, transitRoutes, 200);
+    return splitRouteSegments(routeCoordinates, transitRoutes, 50);
+  }, [routeCoordinates, transitRoutes]);
+
+  // Build multi-leg transit journey plan
+  const transitLegs = useMemo((): TransitLeg[] => {
+    if (routeCoordinates.length < 2) return [];
+    return buildTransitLegs(routeCoordinates, transitRoutes as any[], 50, 150);
   }, [routeCoordinates, transitRoutes]);
 
 
@@ -708,6 +536,34 @@ export default function HomeScreen() {
           ) : null
         )}
 
+        {/* Transfer point markers between transit legs */}
+        {transitLegs.map((leg, idx) => {
+          if (!leg.onTransit) return null;
+          const nextTransitLeg = transitLegs.slice(idx + 1).find(l => l.onTransit);
+          if (!nextTransitLeg) return null;
+          // Show a transfer marker where this transit leg ends
+          return (
+            <Marker
+              key={`transfer-${idx}`}
+              coordinate={leg.alightAt}
+              tracksViewChanges={false}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={styles.transferMarker}>
+                <Ionicons name="swap-vertical" size={14} color="#FFFFFF" />
+              </View>
+              <Callout tooltip>
+                <View style={styles.stopCallout}>
+                  <Text style={styles.stopCalloutLabel}>Transfer Point</Text>
+                  <Text style={styles.stopCalloutType}>
+                    Get off at {leg.alightLabel}, then ride {nextTransitLeg.transitInfo?.ref || nextTransitLeg.transitInfo?.name || 'next transit'}
+                  </Text>
+                </View>
+              </Callout>
+            </Marker>
+          );
+        })}
+
         {/* Transit route polylines (hidden when a search route is active) */}
         {!destinationLocation && visibleTransitRoutes.map((route: any) => (
           <Polyline
@@ -764,6 +620,21 @@ export default function HomeScreen() {
         </BlurView>
       </View>
 
+      {/* Route Options toggle button — only visible when a route is active */}
+      {routeSummary && !showRecommender && (
+        <View style={styles.recommenderToggle}>
+          <BlurView intensity={35} tint="light" style={styles.recommenderGlassWrap}>
+            <TouchableOpacity
+              style={styles.recommenderButton}
+              onPress={() => setShowRecommender(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="layers" size={21} color={COLORS.navy} />
+            </TouchableOpacity>
+          </BlurView>
+        </View>
+      )}
+
 
       {/* Dim map when search is active */}
       {isSearchActive && (
@@ -776,6 +647,16 @@ export default function HomeScreen() {
       {!isMapLoaded && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#E8A020" />
+        </View>
+      )}
+
+      {/* Route Calculating Indicator */}
+      {isRouting && (
+        <View style={styles.routingOverlay}>
+          <BlurView intensity={40} tint="dark" style={styles.routingCard}>
+            <ActivityIndicator size="small" color="#E8A020" />
+            <Text style={styles.routingText}>Finding your route…</Text>
+          </BlurView>
         </View>
       )}
 
@@ -855,46 +736,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {routeSummary && (
-          <View style={styles.routeSummaryCard}>
-            <Text style={styles.routeSummaryTitle}>Route Ready</Text>
-            <Text style={styles.routeSummaryValue}>
-              {routeSummary.distanceKm.toFixed(1)} km • {Math.ceil(routeSummary.durationMin)} min
-            </Text>
-          </View>
-        )}
-
-        {/* Matched Commute Route Info */}
-        {matchedCommute && (
-          <View style={styles.routeInfoCard}>
-            <View style={styles.routeInfoHeader}>
-              <View style={styles.routeCodeBadge}>
-                <Text style={styles.routeCodeText}>{matchedCommute.transport}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setMatchedCommute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.routeInfoTitle}>
-              {matchedCommute.origin} to {matchedCommute.destination}
-            </Text>
-            {matchedCommute.schedule ? (
-              <Text style={styles.routeInfoDesc}>Schedule: {matchedCommute.schedule}</Text>
-            ) : null}
-            {matchedCommute.notes ? (
-              <Text style={styles.routeInfoDesc}>Notes: {matchedCommute.notes}</Text>
-            ) : null}
-            <View style={styles.routeInfoMeta}>
-              <Text style={styles.routeInfoMetaText}>
-                <Ionicons name="cash" size={12} color={COLORS.textMuted} /> {matchedCommute.fare || 'Unknown fare'}
-              </Text>
-              <Text style={styles.routeInfoMetaText} numberOfLines={1}>
-                <Ionicons name="bus" size={12} color={COLORS.textMuted} /> {matchedCommute.transport}
-              </Text>
-            </View>
-          </View>
-        )}
-
         {selectedTransitRoute ? (
           <View style={styles.transitRouteCard}>
             <View style={styles.transitRouteHeader}>
@@ -916,6 +757,14 @@ export default function HomeScreen() {
           </View>
         ) : null}
       </SafeAreaView>
+      {/* Route Recommender Panel */}
+      <RouteRecommenderPanel
+        visible={showRecommender}
+        routeSummary={routeSummary}
+        transitLegs={transitLegs}
+        onClose={() => setShowRecommender(false)}
+      />
+
       {/* Full-screen search */}
       <SearchScreen
         visible={isSearchActive}
@@ -1015,6 +864,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(245, 240, 232, 0.6)',
     zIndex: 0,
+  },
+  routingOverlay: {
+    position: 'absolute',
+    top: '45%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  routingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  routingText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 10,
   },
   header: {
     paddingHorizontal: SPACING.screenX,
@@ -1287,63 +1158,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.caption,
     fontWeight: '700',
   },
-  routeInfoCard: {
-    marginTop: 12,
-    marginHorizontal: SPACING.screenX,
-    backgroundColor: '#FFFFFF',
-    borderRadius: RADIUS.card,
-    borderWidth: 1,
-    borderColor: 'rgba(10,22,40,0.08)',
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  routeInfoHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  routeCodeBadge: {
-    backgroundColor: '#2196F3',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  routeCodeText: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.caption,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  routeInfoTitle: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.body,
-    fontWeight: '700',
-    color: COLORS.navy,
-    marginBottom: 4,
-  },
-  routeInfoDesc: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  routeInfoMeta: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  routeInfoMetaText: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    flexShrink: 1,
-  },
   transitRouteCard: {
     marginTop: 12,
     marginHorizontal: SPACING.screenX,
@@ -1532,6 +1346,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 3,
   },
+  transferMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
+  },
   nearestStopMarker: {
     backgroundColor: '#E8A020',
     width: 22,
@@ -1584,5 +1413,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.navy,
-  }
+  },
+  recommenderToggle: {
+    position: 'absolute',
+    left: 16,
+    bottom: 118,
+    zIndex: 10,
+  },
+  recommenderGlassWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.65)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  recommenderButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
