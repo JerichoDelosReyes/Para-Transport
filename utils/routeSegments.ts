@@ -410,6 +410,35 @@ export function buildTransitLegs(
     }
   }
 
+  // Step 2.7: If a transit route's terminal is near the user's destination,
+  // extend that route's tag to cover all trailing unmatched (walking) points.
+  // This handles the case where the jeepney goes all the way to the user's
+  // destination but the OSRM walking route diverges onto different streets.
+  const TERMINAL_DEST_SQ = 500 * 500; // 500 m
+  const destPt = routePoints[routePoints.length - 1];
+
+  for (const route of transitRoutes) {
+    if (!route.coordinates || route.coordinates.length < 2) continue;
+    const routeTerminal = route.coordinates[route.coordinates.length - 1];
+    if (sqDistMetres(routeTerminal, destPt) > TERMINAL_DEST_SQ) continue;
+
+    // This route ends near the destination — find the last point tagged with it
+    let lastTaggedIdx = -1;
+    for (let k = tags.length - 1; k >= 0; k--) {
+      if (tags[k] === route.id) { lastTaggedIdx = k; break; }
+    }
+    if (lastTaggedIdx === -1) continue;
+
+    // Extend: tag all trailing unmatched points as this route
+    for (let k = lastTaggedIdx + 1; k < tags.length; k++) {
+      if (tags[k] === null) {
+        tags[k] = route.id;
+      } else {
+        break; // another transit route — stop
+      }
+    }
+  }
+
   // Step 3: Group consecutive same-tag points into raw legs
   type RawLeg = { routeId: string | null; startIdx: number; endIdx: number };
   const rawLegs: RawLeg[] = [];

@@ -574,6 +574,50 @@ export default function HomeScreen() {
           ) : null
         )}
 
+        {/* Board & drop-off markers for each transit leg */}
+        {transitLegs.map((leg, idx) =>
+          leg.onTransit ? (
+            <React.Fragment key={`board-alight-${idx}`}>
+              {/* Board marker */}
+              <Marker
+                coordinate={leg.boardAt}
+                tracksViewChanges={false}
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <View style={styles.boardMarker}>
+                  <Ionicons name="arrow-up-circle" size={14} color="#FFFFFF" />
+                </View>
+                <Callout tooltip>
+                  <View style={styles.stopCallout}>
+                    <Text style={styles.stopCalloutLabel}>Board Here</Text>
+                    <Text style={styles.stopCalloutType}>
+                      Ride {leg.transitInfo?.type || 'transit'} heading to {leg.transitInfo?.to || leg.alightLabel}
+                    </Text>
+                  </View>
+                </Callout>
+              </Marker>
+              {/* Drop-off marker */}
+              <Marker
+                coordinate={leg.alightAt}
+                tracksViewChanges={false}
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <View style={styles.alightMarker}>
+                  <Ionicons name="arrow-down-circle" size={14} color="#FFFFFF" />
+                </View>
+                <Callout tooltip>
+                  <View style={styles.stopCallout}>
+                    <Text style={styles.stopCalloutLabel}>Drop-off Point</Text>
+                    <Text style={styles.stopCalloutType}>
+                      Get off near {leg.alightLabel}
+                    </Text>
+                  </View>
+                </Callout>
+              </Marker>
+            </React.Fragment>
+          ) : null
+        )}
+
         {/* Transfer point markers between transit legs */}
         {transitLegs.map((leg, idx) => {
           if (!leg.onTransit) return null;
@@ -1532,6 +1576,36 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
     elevation: 3,
+  },
+  boardMarker: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#16A34A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
+  },
+  alightMarker: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#E53935',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
   },
   transferMarker: {
     width: 28,
