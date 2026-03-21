@@ -11,7 +11,7 @@ import { useStore } from '../../store/useStore';
 export default function SavedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.45 : 14;
+  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
   const bottomPadding = 48 + bottomSpace + 16;
   const { user, removeSavedRoute, setSelectedTransitRoute, setPendingRouteSearch } = useStore();
   const savedRoutes = user?.saved_routes || [];

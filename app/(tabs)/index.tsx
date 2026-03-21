@@ -962,7 +962,7 @@ const styles = StyleSheet.create({
   mapControls: {
     position: 'absolute',
     right: 16,
-    bottom: 96,
+    bottom: 106,
     zIndex: 10,
     alignItems: 'flex-end',
   },
@@ -1151,7 +1151,7 @@ const styles = StyleSheet.create({
   },
   routeSummaryCard: {
     position: 'absolute',
-    bottom: 96,
+    bottom: 106,
     left: SPACING.screenX,
     backgroundColor: 'rgba(255,255,255,0.96)',
     borderRadius: 14,

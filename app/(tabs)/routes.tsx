@@ -27,7 +27,7 @@ const TYPE_ICONS: Record<string, string> = {
 export default function RoutesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.45 : 14;
+  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
   const bottomPadding = 48 + bottomSpace + 16;
   const [activeTab, setActiveTab] = useState<'transit' | 'history'>('transit');
   const [selectedMode, setSelectedMode] = useState<(typeof FILTER_MODES)[number]>('All');

@@ -18,7 +18,7 @@ function getInitials(name: string) {
 
 function TabBarBackground() {
   const insets = useSafeAreaInsets();
-  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.45 : 14;
+  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
   const height = 48 + bottomSpace;
   const cx = width / 2;
 
@@ -116,7 +116,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const bottomInset = insets.bottom;
   const user = useStore((state) => state.user);
   
-  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.45 : 14;
+  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
 
   return (
     <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
