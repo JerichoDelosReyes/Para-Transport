@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,62 +10,81 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const PANEL_HEIGHT = SCREEN_HEIGHT * 0.45;
+const PANEL_MIN_HEIGHT = 0;
+const PANEL_MAX_HEIGHT = SCREEN_HEIGHT * 0.55;
 
-type CommuteRoute = {
+export type TransitRouteOption = {
   id: string;
-  origin: string;
-  destination: string;
-  schedule: string;
-  fare: string;
-  notes: string;
-  transport: string;
+  ref?: string;
+  name?: string;
+  type?: string;
+  from?: string;
+  to?: string;
+  fare?: string | number;
+  operator?: string;
+  color?: string;
+  verified?: boolean;
+  coordinates?: { latitude: number; longitude: number }[];
+  stops?: any[];
 };
 
-type RouteOption = {
+type CategoryCard = {
+  key: string;
   label: string;
+  description: string;
   icon: string;
   iconColor: string;
   badgeColor: string;
-  route: CommuteRoute;
+  route: TransitRouteOption | null;
+  isCurrent: boolean;
 };
 
 type Props = {
   visible: boolean;
-  routes: CommuteRoute[];
-  currentRoute: CommuteRoute | null;
-  onSelectRoute: (route: CommuteRoute) => void;
+  routeSummary: { distanceKm: number; durationMin: number } | null;
+  nearbyTransitRoutes: TransitRouteOption[];
+  onSelectTransitRoute: (route: TransitRouteOption) => void;
   onClose: () => void;
 };
 
-function parseFare(fare: string): number {
-  const match = fare.match(/[\d,]+(\.\d+)?/);
+function parseFare(fare?: string | number): number {
+  if (fare == null) return Infinity;
+  if (typeof fare === 'number') return fare;
+  const str = String(fare);
+  const match = str.match(/[\d,]+(\.\d+)?/);
   if (!match) return Infinity;
   return parseFloat(match[0].replace(',', ''));
 }
 
-export default function RouteRecommenderPanel({ visible, routes, currentRoute, onSelectRoute, onClose }: Props) {
-  const panY = useRef(new Animated.Value(PANEL_HEIGHT)).current;
-  const lastOffset = useRef(PANEL_HEIGHT);
+export default function RouteRecommenderPanel({
+  visible,
+  routeSummary,
+  nearbyTransitRoutes,
+  onSelectTransitRoute,
+  onClose,
+}: Props) {
+  const panY = useRef(new Animated.Value(PANEL_MAX_HEIGHT)).current;
+  const lastOffset = useRef(PANEL_MAX_HEIGHT);
 
   React.useEffect(() => {
     if (visible) {
       Animated.spring(panY, {
-        toValue: 0,
+        toValue: PANEL_MIN_HEIGHT,
         useNativeDriver: false,
         bounciness: 4,
       }).start();
-      lastOffset.current = 0;
+      lastOffset.current = PANEL_MIN_HEIGHT;
     } else {
       Animated.timing(panY, {
-        toValue: PANEL_HEIGHT,
+        toValue: PANEL_MAX_HEIGHT,
         duration: 300,
         useNativeDriver: false,
       }).start();
-      lastOffset.current = PANEL_HEIGHT;
+      lastOffset.current = PANEL_MAX_HEIGHT;
     }
   }, [visible]);
 
@@ -83,95 +102,113 @@ export default function RouteRecommenderPanel({ visible, routes, currentRoute, o
       },
       onPanResponderRelease: (_, gs) => {
         panY.flattenOffset();
-        if (gs.dy > 80 || gs.vy > 0.5) {
+        if (gs.dy > 100 || gs.vy > 0.5) {
           Animated.timing(panY, {
-            toValue: PANEL_HEIGHT,
+            toValue: PANEL_MAX_HEIGHT,
             duration: 300,
             useNativeDriver: false,
           }).start(() => onClose());
-          lastOffset.current = PANEL_HEIGHT;
+          lastOffset.current = PANEL_MAX_HEIGHT;
         } else {
           Animated.spring(panY, {
-            toValue: 0,
+            toValue: PANEL_MIN_HEIGHT,
             useNativeDriver: false,
             bounciness: 4,
           }).start();
-          lastOffset.current = 0;
+          lastOffset.current = PANEL_MIN_HEIGHT;
         }
       },
     })
   ).current;
 
-  const categorized = useMemo(() => {
-    if (routes.length === 0) return [];
+  const categories = useMemo((): CategoryCard[] => {
+    const cards: CategoryCard[] = [];
 
-    const options: RouteOption[] = [];
+    // 1. Fastest Route = the current OSRM-calculated route (always first)
+    cards.push({
+      key: 'fastest',
+      label: 'Fastest Route',
+      description: routeSummary
+        ? `${routeSummary.distanceKm.toFixed(1)} km • ${Math.ceil(routeSummary.durationMin)} min`
+        : 'Current calculated route',
+      icon: 'flash',
+      iconColor: '#E8A020',
+      badgeColor: '#FFF3D0',
+      route: null,
+      isCurrent: true,
+    });
+
     const addedIds = new Set<string>();
 
-    // Fastest = current/default route
-    if (currentRoute) {
-      options.push({
-        label: 'Fastest Route',
-        icon: 'flash',
-        iconColor: '#E8A020',
-        badgeColor: '#FFF3D0',
-        route: currentRoute,
-      });
-      addedIds.add(currentRoute.id);
-    }
-
-    // Cheapest = lowest fare
-    const withFares = routes.filter(r => r.fare && parseFare(r.fare) < Infinity && !addedIds.has(r.id));
+    // 2. Cheapest Route = transit route with the lowest fare
+    const withFares = nearbyTransitRoutes.filter(
+      (r) => r.fare && parseFare(r.fare) < Infinity
+    );
     if (withFares.length > 0) {
       const sorted = [...withFares].sort((a, b) => parseFare(a.fare) - parseFare(b.fare));
       const cheapest = sorted[0];
-      if (!currentRoute || parseFare(cheapest.fare) < parseFare(currentRoute.fare)) {
-        options.push({
-          label: 'Cheapest Route',
-          icon: 'wallet',
-          iconColor: '#22C55E',
-          badgeColor: '#DCFCE7',
-          route: cheapest,
-        });
-        addedIds.add(cheapest.id);
-      }
+      cards.push({
+        key: `cheapest-${cheapest.id}`,
+        label: 'Cheapest Route',
+        description: cheapest.fare != null ? `Fare: ${typeof cheapest.fare === 'number' ? `₱${cheapest.fare}` : cheapest.fare}` : 'Lowest fare option',
+        icon: 'wallet',
+        iconColor: '#22C55E',
+        badgeColor: '#DCFCE7',
+        route: cheapest,
+        isCurrent: false,
+      });
+      addedIds.add(cheapest.id);
     }
 
-    // Least Transfers = direct route (single transport, no multi-step notes)
-    const directRoutes = routes.filter(r => {
+    // 3. Least Transfers = verified/direct route (single vehicle, no transfers)
+    const directRoutes = nearbyTransitRoutes.filter((r) => {
       if (addedIds.has(r.id)) return false;
-      const notes = (r.notes || '').toLowerCase();
-      return !notes.includes('then ride') && !notes.includes('transfer') && !notes.includes('then ') && r.transport;
+      return r.verified === true || r.type === 'jeepney';
     });
     if (directRoutes.length > 0) {
-      options.push({
+      const best = directRoutes[0];
+      cards.push({
+        key: `least-transfer-${best.id}`,
         label: 'Least Transfers',
+        description: 'Direct route — no transfers needed',
         icon: 'git-merge',
         iconColor: '#3B82F6',
         badgeColor: '#DBEAFE',
-        route: directRoutes[0],
+        route: best,
+        isCurrent: false,
       });
-      addedIds.add(directRoutes[0].id);
+      addedIds.add(best.id);
     }
 
-    // Remaining alternatives
-    routes.forEach(r => {
-      if (!addedIds.has(r.id)) {
-        options.push({
+    // 4. Alternatives
+    nearbyTransitRoutes.forEach((r) => {
+      if (!addedIds.has(r.id) && cards.length < 6) {
+        cards.push({
+          key: `alt-${r.id}`,
           label: 'Alternative',
+          description: r.from && r.to ? `${r.from} → ${r.to}` : 'Alternative transit route',
           icon: 'swap-horizontal',
           iconColor: '#8B5CF6',
           badgeColor: '#EDE9FE',
           route: r,
+          isCurrent: false,
         });
         addedIds.add(r.id);
       }
     });
 
-    return options;
-  }, [routes, currentRoute]);
+    return cards;
+  }, [routeSummary, nearbyTransitRoutes]);
 
-  if (!visible && lastOffset.current === PANEL_HEIGHT) return null;
+  const handleCardPress = useCallback(
+    (card: CategoryCard) => {
+      if (card.isCurrent) return; // Current route is already active
+      if (card.route) onSelectTransitRoute(card.route);
+    },
+    [onSelectTransitRoute]
+  );
+
+  if (!visible && lastOffset.current === PANEL_MAX_HEIGHT) return null;
 
   return (
     <Animated.View
@@ -179,84 +216,121 @@ export default function RouteRecommenderPanel({ visible, routes, currentRoute, o
         styles.container,
         {
           transform: [{ translateY: panY }],
-          height: PANEL_HEIGHT,
+          height: PANEL_MAX_HEIGHT,
         },
       ]}
     >
+      {/* Drag handle area */}
       <View {...panResponder.panHandlers} style={styles.handleArea}>
         <View style={styles.dragHandle} />
         <View style={styles.headerRow}>
-          <Text style={styles.title}>ROUTE OPTIONS</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <View style={styles.headerLeft}>
+            <Ionicons name="map" size={20} color={COLORS.navy} />
+            <Text style={styles.title}>ROUTE OPTIONS</Text>
+          </View>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
           </TouchableOpacity>
         </View>
         <Text style={styles.subtitle}>
-          {routes.length} route{routes.length !== 1 ? 's' : ''} available
+          {nearbyTransitRoutes.length} nearby transit route
+          {nearbyTransitRoutes.length !== 1 ? 's' : ''} found
         </Text>
       </View>
 
+      {/* Scrollable route cards */}
       <ScrollView
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {categorized.map((opt, idx) => {
-          const isActive = currentRoute?.id === opt.route.id;
-          return (
-            <TouchableOpacity
-              key={`${opt.route.id}-${idx}`}
-              style={[styles.routeCard, isActive && styles.routeCardActive]}
-              activeOpacity={0.7}
-              onPress={() => onSelectRoute(opt.route)}
-            >
-              <View style={styles.cardHeader}>
-                <View style={[styles.categoryBadge, { backgroundColor: opt.badgeColor }]}>
-                  <Ionicons name={opt.icon as any} size={12} color={opt.iconColor} />
-                  <Text style={[styles.categoryText, { color: opt.iconColor }]}>{opt.label}</Text>
-                </View>
-                {isActive && (
-                  <View style={styles.activePill}>
-                    <Text style={styles.activePillText}>ACTIVE</Text>
-                  </View>
-                )}
+        {categories.map((card) => (
+          <TouchableOpacity
+            key={card.key}
+            style={[styles.routeCard, card.isCurrent && styles.routeCardActive]}
+            activeOpacity={card.isCurrent ? 1 : 0.7}
+            onPress={() => handleCardPress(card)}
+          >
+            <View style={styles.cardHeader}>
+              <View style={[styles.categoryBadge, { backgroundColor: card.badgeColor }]}>
+                <Ionicons name={card.icon as any} size={13} color={card.iconColor} />
+                <Text style={[styles.categoryText, { color: card.iconColor }]}>
+                  {card.label}
+                </Text>
               </View>
+              {card.isCurrent && (
+                <View style={styles.activePill}>
+                  <Text style={styles.activePillText}>DEFAULT</Text>
+                </View>
+              )}
+            </View>
 
-              <View style={styles.cardBody}>
+            <View style={styles.cardBody}>
+              {/* Route name / description */}
+              {card.route ? (
+                <>
+                  <View style={styles.infoRow}>
+                    <Ionicons
+                      name={
+                        card.route.type === 'bus'
+                          ? 'bus'
+                          : card.route.type === 'jeepney'
+                          ? 'car'
+                          : 'trail-sign'
+                      }
+                      size={15}
+                      color={card.route.color || COLORS.navy}
+                    />
+                    <Text style={styles.transportLabel} numberOfLines={1}>
+                      {card.route.ref ? `[${card.route.ref}] ` : ''}
+                      {card.route.name || card.route.type || 'Transit'}
+                    </Text>
+                  </View>
+                  {card.route.from || card.route.to ? (
+                    <View style={styles.infoRow}>
+                      <Ionicons name="navigate-outline" size={13} color={COLORS.textMuted} />
+                      <Text style={styles.infoText} numberOfLines={1}>
+                        {card.route.from}
+                        {card.route.from && card.route.to ? ' → ' : ''}
+                        {card.route.to}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {card.route.fare != null ? (
+                    <View style={styles.infoRow}>
+                      <Ionicons name="cash-outline" size={13} color={COLORS.textMuted} />
+                      <Text style={styles.infoText}>{typeof card.route.fare === 'number' ? `₱${card.route.fare}` : card.route.fare}</Text>
+                    </View>
+                  ) : null}
+                  {card.route.verified && (
+                    <View style={styles.infoRow}>
+                      <Ionicons name="checkmark-circle" size={13} color="#22C55E" />
+                      <Text style={[styles.infoText, { color: '#22C55E' }]}>Verified route</Text>
+                    </View>
+                  ) }
+                </>
+              ) : (
                 <View style={styles.infoRow}>
-                  <Ionicons name="bus" size={15} color={COLORS.navy} />
-                  <Text style={styles.transportLabel}>{opt.route.transport}</Text>
+                  <Ionicons name="speedometer-outline" size={15} color={COLORS.navy} />
+                  <Text style={styles.transportLabel}>{card.description}</Text>
                 </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        ))}
 
-                {opt.route.fare ? (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="cash-outline" size={13} color={COLORS.textMuted} />
-                    <Text style={styles.infoText}>{opt.route.fare}</Text>
-                  </View>
-                ) : null}
-
-                {opt.route.schedule ? (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="time-outline" size={13} color={COLORS.textMuted} />
-                    <Text style={styles.infoText} numberOfLines={1}>{opt.route.schedule}</Text>
-                  </View>
-                ) : null}
-
-                {opt.route.notes ? (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="information-circle-outline" size={13} color={COLORS.textMuted} />
-                    <Text style={styles.infoText} numberOfLines={2}>{opt.route.notes}</Text>
-                  </View>
-                ) : null}
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-
-        {categorized.length === 0 && (
+        {nearbyTransitRoutes.length === 0 && (
           <View style={styles.emptyState}>
-            <Ionicons name="search-outline" size={28} color={COLORS.textMuted} />
-            <Text style={styles.emptyText}>No alternative routes found.</Text>
+            <Ionicons name="bus-outline" size={28} color={COLORS.textMuted} />
+            <Text style={styles.emptyText}>
+              No nearby transit routes found for this path.
+            </Text>
+            <Text style={styles.emptySubtext}>
+              Try a different route or check the Transit layer.
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -275,10 +349,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 12,
-    zIndex: 25,
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 14,
+    zIndex: 30,
   },
   handleArea: {
     alignItems: 'center',
@@ -299,6 +373,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   title: {
     fontFamily: 'Cubao',
     fontSize: 20,
@@ -318,7 +397,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenX,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   routeCard: {
     backgroundColor: '#FFFFFF',
@@ -382,6 +461,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.navy,
+    flex: 1,
   },
   infoText: {
     fontFamily: 'Inter',
@@ -393,11 +473,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 40,
-    gap: 12,
+    gap: 8,
   },
   emptyText: {
     fontFamily: 'Inter',
     fontSize: 14,
     color: COLORS.textMuted,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    opacity: 0.7,
   },
 });

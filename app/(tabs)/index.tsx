@@ -14,6 +14,7 @@ import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
 import { splitRouteSegments } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
+import RouteRecommenderPanel, { TransitRouteOption } from '../../components/RouteRecommenderPanel';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
@@ -88,6 +89,7 @@ export default function HomeScreen() {
   const pendingRouteSearch = useStore((state) => state.pendingRouteSearch);
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const mapRef = useRef<MapView | null>(null);
+  const [showRecommender, setShowRecommender] = useState(false);
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -429,6 +431,43 @@ export default function HomeScreen() {
     return splitRouteSegments(routeCoordinates, transitRoutes, 50);
   }, [routeCoordinates, transitRoutes]);
 
+  // Compute nearby transit routes that overlap with the searched route
+  const nearbyTransitRoutes = useMemo((): TransitRouteOption[] => {
+    if (routeCoordinates.length < 2) return [];
+    const routeStart = routeCoordinates[0];
+    const routeEnd = routeCoordinates[routeCoordinates.length - 1];
+    const PROXIMITY_THRESHOLD = 0.015; // ~1.5km in degrees
+
+    return transitRoutes.filter((tr: any) => {
+      if (!tr.coordinates || tr.coordinates.length < 2) return false;
+      // Check if any transit coordinate is near the route start or end
+      const nearStart = tr.coordinates.some((c: any) => {
+        const dlat = Math.abs(c.latitude - routeStart.latitude);
+        const dlng = Math.abs(c.longitude - routeStart.longitude);
+        return dlat < PROXIMITY_THRESHOLD && dlng < PROXIMITY_THRESHOLD;
+      });
+      const nearEnd = tr.coordinates.some((c: any) => {
+        const dlat = Math.abs(c.latitude - routeEnd.latitude);
+        const dlng = Math.abs(c.longitude - routeEnd.longitude);
+        return dlat < PROXIMITY_THRESHOLD && dlng < PROXIMITY_THRESHOLD;
+      });
+      return nearStart || nearEnd;
+    }).map((tr: any) => ({
+      id: tr.id,
+      ref: tr.ref,
+      name: tr.name,
+      type: tr.type,
+      from: tr.from,
+      to: tr.to,
+      fare: tr.fare,
+      operator: tr.operator,
+      color: tr.color,
+      verified: tr.verified,
+      coordinates: tr.coordinates,
+      stops: tr.stops,
+    }));
+  }, [routeCoordinates, transitRoutes]);
+
 
   const handleRegionChangeComplete = (region: MapRegion) => {
     let newLat = region.latitude;
@@ -564,6 +603,21 @@ export default function HomeScreen() {
         </BlurView>
       </View>
 
+      {/* Route Options toggle button — only visible when a route is active */}
+      {routeSummary && !showRecommender && (
+        <View style={styles.recommenderToggle}>
+          <BlurView intensity={35} tint="light" style={styles.recommenderGlassWrap}>
+            <TouchableOpacity
+              style={styles.recommenderButton}
+              onPress={() => setShowRecommender(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="layers" size={21} color={COLORS.navy} />
+            </TouchableOpacity>
+          </BlurView>
+        </View>
+      )}
+
 
       {/* Dim map when search is active */}
       {isSearchActive && (
@@ -655,15 +709,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {routeSummary && (
-          <View style={styles.routeSummaryCard}>
-            <Text style={styles.routeSummaryTitle}>Route Ready</Text>
-            <Text style={styles.routeSummaryValue}>
-              {routeSummary.distanceKm.toFixed(1)} km • {Math.ceil(routeSummary.durationMin)} min
-            </Text>
-          </View>
-        )}
-
         {selectedTransitRoute ? (
           <View style={styles.transitRouteCard}>
             <View style={styles.transitRouteHeader}>
@@ -685,6 +730,18 @@ export default function HomeScreen() {
           </View>
         ) : null}
       </SafeAreaView>
+      {/* Route Recommender Panel */}
+      <RouteRecommenderPanel
+        visible={showRecommender}
+        routeSummary={routeSummary}
+        nearbyTransitRoutes={nearbyTransitRoutes}
+        onSelectTransitRoute={(route) => {
+          setShowRecommender(false);
+          setSelectedTransitRoute(route as any);
+        }}
+        onClose={() => setShowRecommender(false)}
+      />
+
       {/* Full-screen search */}
       <SearchScreen
         visible={isSearchActive}
@@ -1296,5 +1353,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.navy,
-  }
+  },
+  recommenderToggle: {
+    position: 'absolute',
+    left: 16,
+    bottom: 118,
+    zIndex: 10,
+  },
+  recommenderGlassWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.65)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  recommenderButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
