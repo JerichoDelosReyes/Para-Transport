@@ -62,13 +62,27 @@ export default function RouteResultCard({ matched, isSelected, onPress }: Props)
         ) : null;
       })()}
 
+      {/* Per-leg fare breakdown for transfers */}
+      {isTransfer && (
+        <View style={styles.fareBreakdown}>
+          {legs.map((leg, i) => (
+            <Text key={i} style={styles.fareBreakdownText}>
+              {leg.route.properties.code}: ₱{leg.estimatedFare.toFixed(2)} ({leg.distanceKm.toFixed(1)} km)
+            </Text>
+          ))}
+        </View>
+      )}
+
       {/* Bottom row */}
       <View style={styles.bottomRow}>
         <View style={styles.distanceWrap}>
           <Ionicons name="navigate-outline" size={13} color={COLORS.textMuted} />
           <Text style={styles.distanceText}>{distanceKm.toFixed(1)} km</Text>
         </View>
-        <Text style={styles.fareText}>₱{estimatedFare}</Text>
+        <View style={styles.fareWrap}>
+          {isTransfer && <Text style={styles.fareLabelText}>Total</Text>}
+          <Text style={styles.fareText}>₱{estimatedFare.toFixed(2)}</Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -163,6 +177,26 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     color: '#E8A020',
+  },
+  fareWrap: {
+    alignItems: 'flex-end',
+  },
+  fareLabelText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    marginBottom: -2,
+  },
+  fareBreakdown: {
+    marginBottom: 8,
+    gap: 2,
+  },
+  fareBreakdownText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: '500',
   },
   transferBadge: {
     flexDirection: 'row',

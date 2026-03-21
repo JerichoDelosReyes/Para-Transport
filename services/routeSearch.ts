@@ -28,15 +28,59 @@ export type MatchedRoute = {
 
 const BUFFER_DISTANCE = 1000; // meters
 const TRANSFER_WALK_DISTANCE = 800; // max meters to walk between two routes for a transfer
-const BASE_FARE = 13;
-const BASE_DISTANCE_KM = 4;
-const FARE_PER_KM = 1.8;
 const AVG_SPEED_KMH = 15;
 const WALK_SPEED_KMH = 4;
 
+/**
+ * LTFRB Jeepney Fare Matrix (PUJ – Traditional)
+ * First 4 km = ₱13.00, then ₱1.80 per succeeding km
+ * Fares rounded to nearest ₱0.25
+ *
+ * Distance → Fare lookup table (from LTFRB order)
+ */
+const FARE_TABLE: [number, number][] = [
+  [4,  13.00],
+  [5,  14.75],
+  [6,  16.50],
+  [7,  18.25],
+  [8,  20.00],
+  [9,  21.75],
+  [10, 23.50],
+  [11, 25.25],
+  [12, 27.00],
+  [13, 28.75],
+  [14, 30.50],
+  [15, 32.25],
+  [16, 34.00],
+  [17, 35.75],
+  [18, 37.50],
+  [19, 39.25],
+  [20, 41.00],
+  [21, 42.75],
+  [22, 44.50],
+  [23, 46.25],
+  [24, 48.00],
+  [25, 49.75],
+];
+
+/**
+ * Calculate fare using the LTFRB fare matrix.
+ * For distances within the table, use exact lookup.
+ * For distances beyond the table, extrapolate at ₱1.80/km after base.
+ */
 function calculateFare(distanceKm: number): number {
-  if (distanceKm <= BASE_DISTANCE_KM) return BASE_FARE;
-  return Math.ceil(BASE_FARE + (distanceKm - BASE_DISTANCE_KM) * FARE_PER_KM);
+  if (distanceKm <= 4) return 13.00;
+
+  // Find the bracket in the table
+  const rounded = Math.ceil(distanceKm);
+  const entry = FARE_TABLE.find(([km]) => km === rounded);
+  if (entry) return entry[1];
+
+  // Extrapolate beyond table
+  const extraKm = distanceKm - 4;
+  const raw = 13.00 + extraKm * 1.80;
+  // Round to nearest ₱0.25
+  return Math.ceil(raw * 4) / 4;
 }
 
 function toGeoJSONCoord(point: { latitude: number; longitude: number }): [number, number] {
