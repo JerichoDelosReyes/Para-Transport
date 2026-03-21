@@ -63,6 +63,7 @@ export default function SearchScreen({
   const [isFetching, setIsFetching] = useState(false);
 
   const { recents, addRecent } = useRecentSearches();
+  const unlockBadge = useStore((state) => state.unlockBadge);
   const { savePlace, removeSavedPlace, user } = useStore();
 
   const originRef = useRef<TextInput>(null);
@@ -228,18 +229,23 @@ export default function SearchScreen({
     
     // Switch active field to destination to encourage flow
     setActiveField('destination');
+    
+    // Achievement System: Adaptive Commuter
+    setTimeout(() => {
+      const user = useStore.getState().user;
+      if (!user.badges?.includes('adaptive_commuter')) {
+        unlockBadge('adaptive_commuter');
+      }
+    }, 1000);
   }, [
     usingCurrentLocation, 
     originText, 
-    originPlace, 
+    originPlace,
     destinationText, 
     destinationPlace, 
-    currentLocationLabel
+    currentLocationLabel,
+    unlockBadge
   ]);
-
-  const displayOrigin = usingCurrentLocation
-    ? currentLocationLabel || 'Current Location'
-    : originText;
 
   return (
     <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>

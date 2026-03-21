@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { supabase } from '../config/supabaseClient';
 
 interface User {
   name: string;
@@ -52,6 +53,9 @@ interface StoreState {
   removeSavedPlace: (placeId: string) => void;
   addHistory: (historyItem: any) => void;
   clearHistory: () => void;
+  unlockedBadgeToShow: string | null;
+  unlockBadge: (badgeId: string) => void;
+  clearUnlockedBadge: () => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -63,6 +67,7 @@ export const useStore = create<StoreState>()(
       insightDismissed: false,
       selectedTransitRoute: null,
       pendingRouteSearch: null,
+      unlockedBadgeToShow: null,
       setUser: (user) => set({ user }),
       beginGuestSession: () =>
         set({
@@ -125,6 +130,30 @@ export const useStore = create<StoreState>()(
         set((state) => ({
           user: { ...state.user, commute_history: [] },
         })),
+      unlockBadge: (badgeId: string) =>
+        set((state) => {
+          const currentBadges = state.user.badges || [];
+          if (currentBadges.includes(badgeId)) return state;
+          
+          const newBadges = [...currentBadges, badgeId];
+          
+          // update supabase if authenticated
+          if (state.sessionMode === 'auth' && state.user.email) {
+            supabase
+              .from('users')
+              .update({ badges: newBadges })
+              .eq('email', state.user.email)
+              .then(({ error }) => {
+                if (error) console.log('Failed to array-sync badge to Supabase:', error.message);
+              });
+          }
+          
+          return {
+            user: { ...state.user, badges: newBadges },
+            unlockedBadgeToShow: badgeId,
+          };
+        }),
+      clearUnlockedBadge: () => set({ unlockedBadgeToShow: null }),
     }),
     {
       name: 'para-store',

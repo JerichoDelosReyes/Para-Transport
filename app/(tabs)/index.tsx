@@ -89,6 +89,7 @@ export default function HomeScreen() {
   const pendingRouteSearch = useStore((state) => state.pendingRouteSearch);
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const addHistory = useStore((state) => state.addHistory);
+  const unlockBadge = useStore((state) => state.unlockBadge);
   const mapRef = useRef<MapView | null>(null);
   const [showRecommender, setShowRecommender] = useState(false);
 
@@ -317,6 +318,19 @@ export default function HomeScreen() {
         destination: { name: destination.title, lat: destination.latitude, lon: destination.longitude },
         timestamp: Date.now(),
       });
+      
+      // Achievement System integration 
+      // Rule 1: First route trip -> route_rookie
+      // Given addHistory was just called, if they haven't gotten it yet, this will trigger:
+      setTimeout(() => {
+        const badges = useStore.getState().user.badges || [];
+        if (!badges.includes('route_rookie')) {
+          unlockBadge('route_rookie');
+        } else if (!badges.includes('path_explorer') && useStore.getState().user.commute_history!.length >= 5) {
+          // Rule 2: 5 trips -> path_explorer
+          unlockBadge('path_explorer');
+        }
+      }, 1000);
       
     } catch (error) {
       console.warn('[HomeScreen] Route search failed:', error);
