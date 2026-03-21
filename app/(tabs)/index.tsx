@@ -15,6 +15,7 @@ import { splitRouteSegments, buildTransitLegs, scoreTransitLegs, TransitLeg } fr
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
+import { useSimulation } from '../../hooks/useSimulation';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
@@ -90,6 +91,7 @@ export default function HomeScreen() {
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const mapRef = useRef<MapView | null>(null);
   const [showRecommender, setShowRecommender] = useState(false);
+  const [simAutoFollow, setSimAutoFollow] = useState(true);
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -457,6 +459,21 @@ export default function HomeScreen() {
     return buildTransitLegs(routeCoordinates, transitRoutes as any[], 50, 150);
   }, [routeCoordinates, transitRoutes]);
 
+  // Simulation — uses the actual searched route coordinates and transit legs
+  const sim = useSimulation(routeCoordinates, transitLegs);
+
+
+  // Auto-follow camera during simulation playback
+  useEffect(() => {
+    if (sim.state === 'playing' && sim.position && simAutoFollow && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: sim.position.latitude,
+        longitude: sim.position.longitude,
+        latitudeDelta: 0.012,
+        longitudeDelta: 0.012,
+      }, 200);
+    }
+  }, [sim.position, sim.state, simAutoFollow]);
 
   const handleRegionChangeComplete = (region: MapRegion) => {
     let newLat = region.latitude;
@@ -489,7 +506,11 @@ export default function HomeScreen() {
         showsCompass={false}
         onMapReady={() => setIsMapLoaded(true)}
         onRegionChangeComplete={handleRegionChangeComplete}
-        onTouchStart={() => setIsMapInteracted(true)}
+        onTouchStart={() => {
+          setIsMapInteracted(true);
+          // Disable auto-follow when user touches map during simulation
+          if (sim.state === 'playing') setSimAutoFollow(false);
+        }}
         pitchEnabled={false}
         rotateEnabled={false}
         minZoomLevel={10}
@@ -563,6 +584,29 @@ export default function HomeScreen() {
             </Marker>
           );
         })}
+
+        {/* Simulation animated marker — moves along the actual searched route */}
+        {sim.position && sim.state !== 'idle' && (
+          <Marker
+            coordinate={sim.position}
+            tracksViewChanges={true}
+            anchor={{ x: 0.5, y: 0.5 }}
+            flat
+          >
+            <View style={styles.simMarker}>
+              <View style={[
+                styles.simMarkerInner,
+                sim.currentSegInfo && { backgroundColor: sim.currentSegInfo.color },
+              ]}>
+                <Ionicons
+                  name={sim.currentSegInfo?.onTransit ? 'bus' : 'walk'}
+                  size={16}
+                  color="#FFFFFF"
+                />
+              </View>
+            </View>
+          </Marker>
+        )}
 
         {/* Transit route polylines (hidden when a search route is active) */}
         {!destinationLocation && visibleTransitRoutes.map((route: any) => (
@@ -698,6 +742,79 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
 
+          {/* Simulation Play Button — only visible when a route has been searched */}
+          {routeCoordinates.length >= 2 && (
+            <TouchableOpacity
+              style={[
+                styles.simPlayToggle,
+                sim.state === 'playing' && styles.simPlayToggleActive,
+              ]}
+              onPress={() => {
+                if (sim.state === 'idle') {
+                  setSimAutoFollow(true);
+                }
+                sim.togglePlayPause();
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name={sim.state === 'playing' ? 'pause' : 'play'}
+                size={16}
+                color={sim.state === 'playing' ? '#FFFFFF' : COLORS.navy}
+              />
+              <Text style={[
+                styles.simPlayToggleText,
+                sim.state === 'playing' && { color: '#FFFFFF' },
+              ]}>
+                {sim.state === 'idle' ? 'Simulate' : sim.state === 'playing' ? 'Pause' : sim.state === 'paused' ? 'Resume' : 'Replay'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Speed chips – visible during simulation */}
+          {sim.state !== 'idle' && (
+            <>
+              {[1, 2, 3, 5].map((s) => (
+                <TouchableOpacity
+                  key={`speed-${s}`}
+                  style={[
+                    styles.speedChip,
+                    sim.speed === s && styles.speedChipActive,
+                  ]}
+                  onPress={() => sim.setSpeed(s)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[
+                    styles.speedChipText,
+                    sim.speed === s && styles.speedChipTextActive,
+                  ]}>{s}x</Text>
+                </TouchableOpacity>
+              ))}
+              {/* Re-center / follow button */}
+              {!simAutoFollow && (
+                <TouchableOpacity
+                  style={styles.followChip}
+                  onPress={() => setSimAutoFollow(true)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="locate" size={13} color={COLORS.navy} />
+                  <Text style={styles.followChipText}>Follow</Text>
+                </TouchableOpacity>
+              )}
+              {/* Stop / Reset */}
+              <TouchableOpacity
+                style={styles.simStopChip}
+                onPress={() => {
+                  sim.reset();
+                  setSimAutoFollow(true);
+                }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="stop" size={13} color="#E53935" />
+              </TouchableOpacity>
+            </>
+          )}
+
           {showTransitLayer && (
             <TouchableOpacity
               style={styles.nearestStopBtn}
@@ -757,6 +874,23 @@ export default function HomeScreen() {
           </View>
         ) : null}
       </SafeAreaView>
+      {/* Simulation segment info banner */}
+      {sim.state !== 'idle' && sim.currentSegInfo && (
+        <View style={styles.simBanner}>
+          <View style={[styles.simBannerDot, { backgroundColor: sim.currentSegInfo.color }]} />
+          <Text style={styles.simBannerText}>
+            {sim.currentSegInfo.label}
+          </Text>
+          {sim.state === 'finished' && (
+            <Text style={styles.simBannerFinished}>Arrived!</Text>
+          )}
+          {/* Progress bar */}
+          <View style={styles.simProgressBarBg}>
+            <View style={[styles.simProgressBarFill, { width: `${Math.round(sim.progress * 100)}%` }]} />
+          </View>
+        </View>
+      )}
+
       {/* Route Recommender Panel */}
       <RouteRecommenderPanel
         visible={showRecommender}
@@ -1438,5 +1572,170 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Simulation styles
+  simPlayToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  simPlayToggleActive: {
+    backgroundColor: '#E8A020',
+    borderColor: '#E8A020',
+  },
+  simPlayToggleText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  speedChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  speedChipActive: {
+    backgroundColor: COLORS.navy,
+    borderColor: COLORS.navy,
+  },
+  speedChipText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  speedChipTextActive: {
+    color: '#FFFFFF',
+  },
+  followChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(232,160,32,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  followChipText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  simStopChip: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(229,57,53,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  simMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(232,160,32,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  simMarkerInner: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#E8A020',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
+  },
+  simBanner: {
+    position: 'absolute',
+    bottom: 90,
+    left: SPACING.screenX,
+    right: SPACING.screenX,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  simBannerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  simBannerText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.navy,
+    flex: 1,
+  },
+  simBannerFinished: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4CAF50',
+  },
+  simProgressBarBg: {
+    width: '100%',
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(10,22,40,0.08)',
+    marginTop: 4,
+  },
+  simProgressBarFill: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E8A020',
   },
 });

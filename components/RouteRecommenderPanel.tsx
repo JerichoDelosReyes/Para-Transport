@@ -14,8 +14,8 @@ import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import type { TransitLeg } from '../utils/routeSegments';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const PANEL_MIN_HEIGHT = 0;
-const PANEL_MAX_HEIGHT = SCREEN_HEIGHT * 0.6;
+const PANEL_COLLAPSED_HEIGHT = 140;
+const PANEL_EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.6;
 
 export type TransitRouteOption = {
   id: string;
@@ -60,24 +60,24 @@ export default function RouteRecommenderPanel({
   transitLegs,
   onClose,
 }: Props) {
-  const panY = useRef(new Animated.Value(PANEL_MAX_HEIGHT)).current;
-  const lastOffset = useRef(PANEL_MAX_HEIGHT);
+  const panY = useRef(new Animated.Value(PANEL_EXPANDED_HEIGHT)).current;
+  const lastOffset = useRef(PANEL_EXPANDED_HEIGHT);
 
   React.useEffect(() => {
     if (visible) {
       Animated.spring(panY, {
-        toValue: PANEL_MIN_HEIGHT,
+        toValue: PANEL_COLLAPSED_HEIGHT,
         useNativeDriver: false,
         bounciness: 4,
       }).start();
-      lastOffset.current = PANEL_MIN_HEIGHT;
+      lastOffset.current = PANEL_COLLAPSED_HEIGHT;
     } else {
       Animated.timing(panY, {
-        toValue: PANEL_MAX_HEIGHT,
+        toValue: PANEL_EXPANDED_HEIGHT,
         duration: 300,
         useNativeDriver: false,
       }).start();
-      lastOffset.current = PANEL_MAX_HEIGHT;
+      lastOffset.current = PANEL_EXPANDED_HEIGHT;
     }
   }, [visible]);
 
@@ -89,27 +89,39 @@ export default function RouteRecommenderPanel({
         panY.setValue(0);
       },
       onPanResponderMove: (_, gs) => {
-        if (gs.dy > 0) {
-          panY.setValue(gs.dy);
-        }
+        panY.setValue(gs.dy);
       },
       onPanResponderRelease: (_, gs) => {
         panY.flattenOffset();
-        if (gs.dy > 100 || gs.vy > 0.5) {
-          Animated.timing(panY, {
-            toValue: PANEL_MAX_HEIGHT,
-            duration: 300,
-            useNativeDriver: false,
-          }).start(() => onClose());
-          lastOffset.current = PANEL_MAX_HEIGHT;
-        } else {
+        // Snap down if dragged down > 40 or velocity > 0.4
+        if (gs.dy > 40 || gs.vy > 0.4) {
           Animated.spring(panY, {
-            toValue: PANEL_MIN_HEIGHT,
+            toValue: PANEL_EXPANDED_HEIGHT,
             useNativeDriver: false,
             bounciness: 4,
-          }).start();
-          lastOffset.current = PANEL_MIN_HEIGHT;
+          }).start(() => {
+            lastOffset.current = PANEL_EXPANDED_HEIGHT;
+            onClose();
+          });
+          return;
         }
+        // Snap up if dragged up < -40 or velocity < -0.4
+        if (gs.dy < -40 || gs.vy < -0.4) {
+          Animated.spring(panY, {
+            toValue: 0,
+            useNativeDriver: false,
+            bounciness: 4,
+          }).start(() => {
+            lastOffset.current = 0;
+          });
+          return;
+        }
+
+        Animated.spring(panY, {
+          toValue: lastOffset.current,
+          useNativeDriver: false,
+          bounciness: 4,
+        }).start();
       },
     })
   ).current;
@@ -128,7 +140,7 @@ export default function RouteRecommenderPanel({
     return { transitCount, transfers, totalFare };
   }, [transitLegs]);
 
-  if (!visible && lastOffset.current === PANEL_MAX_HEIGHT) return null;
+  if (!visible && lastOffset.current === PANEL_EXPANDED_HEIGHT) return null;
 
   return (
     <Animated.View
@@ -136,7 +148,7 @@ export default function RouteRecommenderPanel({
         styles.container,
         {
           transform: [{ translateY: panY }],
-          height: PANEL_MAX_HEIGHT,
+          height: PANEL_EXPANDED_HEIGHT,
         },
       ]}
     >
