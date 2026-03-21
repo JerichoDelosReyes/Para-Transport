@@ -287,6 +287,7 @@ export default function HomeScreen() {
         edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
         animated: true,
       });
+      setShowRecommender(true);
     } catch (error) {
       console.warn('[HomeScreen] Route search failed:', error);
       Alert.alert('Search Failed', 'Unable to fetch route right now. Please try again.');
