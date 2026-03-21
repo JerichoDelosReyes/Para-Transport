@@ -671,11 +671,15 @@ export default function HomeScreen() {
                 styles.simMarkerInner,
                 sim.currentSegInfo && { backgroundColor: sim.currentSegInfo.color },
               ]}>
-                <Ionicons
-                  name={sim.currentSegInfo?.onTransit ? 'bus' : 'walk'}
-                  size={16}
-                  color="#FFFFFF"
-                />
+                {sim.currentSegInfo?.vehicleType === 'jeepney' ? (
+                  <Image source={require('../../assets/icons/jeepney-icon.png')} style={styles.simMarkerIcon} />
+                ) : sim.currentSegInfo?.vehicleType === 'bus' ? (
+                  <Image source={require('../../assets/icons/bus-icon.png')} style={styles.simMarkerIcon} />
+                ) : sim.currentSegInfo?.vehicleType === 'tricycle' ? (
+                  <Image source={require('../../assets/icons/tricycle-icon.png')} style={styles.simMarkerIcon} />
+                ) : (
+                  <Ionicons name="walk" size={16} color="#FFFFFF" />
+                )}
               </View>
             </View>
           </Marker>
@@ -897,7 +901,15 @@ export default function HomeScreen() {
           <View style={styles.simBannerTopRow}>
             {sim.currentSegInfo ? (
               <View style={styles.simBannerSegInfo}>
-                <View style={[styles.simBannerDot, { backgroundColor: sim.currentSegInfo.color }]} />
+                {sim.currentSegInfo.vehicleType === 'jeepney' ? (
+                  <Image source={require('../../assets/icons/jeepney-icon.png')} style={[styles.simBannerIcon, { tintColor: sim.currentSegInfo.color }]} />
+                ) : sim.currentSegInfo.vehicleType === 'bus' ? (
+                  <Image source={require('../../assets/icons/bus-icon.png')} style={[styles.simBannerIcon, { tintColor: sim.currentSegInfo.color }]} />
+                ) : sim.currentSegInfo.vehicleType === 'tricycle' ? (
+                  <Image source={require('../../assets/icons/tricycle-icon.png')} style={[styles.simBannerIcon, { tintColor: sim.currentSegInfo.color }]} />
+                ) : (
+                  <Ionicons name="walk" size={16} color={sim.currentSegInfo.color} />
+                )}
                 <Text style={styles.simBannerText} numberOfLines={1}>
                   {sim.currentSegInfo.label}
                 </Text>
@@ -1750,6 +1762,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 5,
   },
+  simMarkerIcon: {
+    width: 16,
+    height: 16,
+    resizeMode: 'contain',
+    tintColor: '#FFFFFF',
+  },
   simBanner: {
     position: 'absolute',
     bottom: 90,
@@ -1785,6 +1803,11 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+  simBannerIcon: {
+    width: 18,
+    height: 18,
+    resizeMode: 'contain',
   },
   simBannerText: {
     fontFamily: 'Inter',

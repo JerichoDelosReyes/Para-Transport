@@ -13,6 +13,8 @@ export type SimSegmentInfo = {
   label: string;
   /** Color to use for this segment's indicator */
   color: string;
+  /** Vehicle type: jeepney, bus, tricycle, or null for walking */
+  vehicleType: string | null;
 };
 
 /** Linearly interpolate between two coordinates */
@@ -101,9 +103,9 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
         if (leg.onTransit) {
           const ref = leg.transitInfo?.ref || leg.transitInfo?.name || 'Transit';
           const color = leg.transitInfo?.color || '#E8A020';
-          return { onTransit: true, label: `${ref} → ${leg.alightLabel}`, color };
+          return { onTransit: true, label: `${ref} → ${leg.alightLabel}`, color, vehicleType: leg.transitInfo?.type || null };
         }
-        return { onTransit: false, label: `Walking to ${leg.alightLabel}`, color: '#808080' };
+        return { onTransit: false, label: `Walking to ${leg.alightLabel}`, color: '#808080', vehicleType: null };
       }
     }
     // Fallback: if we're past all legs (end of route)

@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo, useEffect } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, InteractionManager, Alert } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, InteractionManager, Alert, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -19,10 +19,10 @@ const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> =
 };
 
 const TYPE_ORDER = ['tricycle', 'jeepney', 'bus'];
-const TYPE_ICONS: Record<string, string> = {
-  bus: 'bus',
-  jeepney: 'car',
-  tricycle: 'bicycle',
+const VEHICLE_ICONS: Record<string, any> = {
+  jeepney: require('../../assets/icons/jeepney-icon.png'),
+  bus: require('../../assets/icons/bus-icon.png'),
+  tricycle: require('../../assets/icons/tricycle-icon.png'),
 };
 
 function normalizeGpxRoute(r: JeepneyRoute) {
@@ -183,7 +183,11 @@ export default function RoutesScreen() {
                           onPress={() => handleTransitRoutePress(route)}
                         >
                           <View style={[styles.routeIcon, { backgroundColor: route.color + '20' }]}>
-                            <Ionicons name={TYPE_ICONS[route.type] as any} size={18} color={route.color} />
+                            {VEHICLE_ICONS[route.type] ? (
+                              <Image source={VEHICLE_ICONS[route.type]} style={[styles.routeIconImage, { tintColor: route.color }]} />
+                            ) : (
+                              <Ionicons name="bus" size={18} color={route.color} />
+                            )}
                           </View>
                           <View style={styles.routeInfo}>
                             <Text style={styles.routeName} numberOfLines={1}>
@@ -348,6 +352,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+  },
+  routeIconImage: {
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
   },
   routeInfo: {
     flex: 1,
