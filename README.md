@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚌 Para Mobile
+# Para Mobile
 
 **The Smart, Offline-Resilient Commuter App for Imus, Cavite**
 
