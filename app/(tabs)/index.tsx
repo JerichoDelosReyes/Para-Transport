@@ -1474,14 +1474,6 @@ export default function HomeScreen() {
 
       {/* Map Controls */}
       <View style={styles.mapControls}>
-        <View style={styles.chatbotWrap}>
-          <TouchableOpacity style={styles.locateButton} onPress={() => router.push('/ai-chatbot')} activeOpacity={0.8}>
-            <Image 
-              source={require('../../assets/AIChatbot/IDLE.png')} 
-              style={{ width: 36, height: 36, resizeMode: 'contain' }} 
-            />
-          </TouchableOpacity>
-        </View>
 
         <BlurView intensity={35} tint="light" style={styles.locateGlassWrap}>
           <TouchableOpacity style={styles.locateButton} onPress={handleLocateUser} activeOpacity={0.8}>
@@ -1497,6 +1489,15 @@ export default function HomeScreen() {
             <Ionicons name="remove" size={20} color={COLORS.navy} />
           </TouchableOpacity>
         </BlurView>
+        
+        <View style={styles.chatbotWrap}>
+          <TouchableOpacity style={styles.locateButton} onPress={() => router.push('/ai-chatbot')} activeOpacity={0.8}>
+            <Image 
+              source={require('../../assets/AIChatbot/IDLE.png')} 
+              style={{ width: 36, height: 36, resizeMode: 'contain' }} 
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Route Options toggle button — only visible when a route is active */}
@@ -1581,10 +1582,7 @@ export default function HomeScreen() {
           {/* Simulation Play Button — only visible when a route has been searched */}
           {routeCoordinates.length >= 2 && (
             <TouchableOpacity
-              style={[
-                styles.simPlayToggle,
-                sim.state === 'playing' && styles.simPlayToggleActive,
-              ]}
+              style={styles.simPlayToggle}
               onPress={() => {
                 if (sim.state === 'idle') {
                   setSimAutoFollow(true);
@@ -1594,16 +1592,10 @@ export default function HomeScreen() {
               activeOpacity={0.85}
             >
               <Ionicons
-                name={sim.state === 'playing' ? 'pause' : 'play'}
-                size={16}
-                color={sim.state === 'playing' ? '#FFFFFF' : COLORS.navy}
+                name={sim.state === 'playing' ? 'pause' : sim.state === 'finished' ? 'reload' : 'play'}
+                size={20}
+                color={COLORS.navy}
               />
-              <Text style={[
-                styles.simPlayToggleText,
-                sim.state === 'playing' && { color: '#FFFFFF' },
-              ]}>
-                {sim.state === 'idle' ? 'Simulate' : sim.state === 'playing' ? 'Pause' : sim.state === 'paused' ? 'Resume' : 'Replay'}
-              </Text>
             </TouchableOpacity>
           )}
 
@@ -1668,112 +1660,6 @@ export default function HomeScreen() {
           </View>
         ) : null}
       </SafeAreaView>
-      {/* Simulation segment info banner */}
-      {sim.state !== 'idle' && (
-        <View style={styles.simBanner}>
-          {/* Top row: segment info + playback controls */}
-          <View style={styles.simBannerTopRow}>
-            {sim.currentSegInfo ? (
-              <View style={styles.simBannerSegInfo}>
-                {sim.currentSegInfo.vehicleType === 'jeepney' ? (
-                  <Image source={require('../../assets/icons/jeepney-icon.png')} style={[styles.simBannerIcon, { tintColor: sim.currentSegInfo.color }]} />
-                ) : sim.currentSegInfo.vehicleType === 'bus' ? (
-                  <Image source={require('../../assets/icons/bus-icon.png')} style={[styles.simBannerIcon, { tintColor: sim.currentSegInfo.color }]} />
-                ) : sim.currentSegInfo.vehicleType === 'tricycle' ? (
-                  <Image source={require('../../assets/icons/tricycle-icon.png')} style={[styles.simBannerIcon, { tintColor: sim.currentSegInfo.color }]} />
-                ) : (
-                  <Ionicons name="walk" size={16} color={sim.currentSegInfo.color} />
-                )}
-                <Text style={styles.simBannerText} numberOfLines={1}>
-                  {sim.currentSegInfo.label}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.simBannerSegInfo}>
-                <Text style={styles.simBannerText}>Ready to simulate</Text>
-              </View>
-            )}
-            {sim.state === 'finished' && (
-              <Text style={styles.simBannerFinished}>Arrived!</Text>
-            )}
-          </View>
-
-          {/* Progress bar */}
-          <View style={styles.simProgressBarBg}>
-            <View style={[styles.simProgressBarFill, { width: `${Math.round(sim.progress * 100)}%` }]} />
-          </View>
-
-          {/* Playback control row */}
-          <View style={styles.simControlRow}>
-            {/* Stop */}
-            <TouchableOpacity
-              style={styles.simControlBtn}
-              onPress={() => { sim.reset(); setSimAutoFollow(true); }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="stop-circle" size={28} color="#E53935" />
-            </TouchableOpacity>
-
-            {/* Play / Pause */}
-            <TouchableOpacity
-              style={styles.simControlBtnMain}
-              onPress={() => {
-                if (sim.state === 'idle' || sim.state === 'finished') setSimAutoFollow(true);
-                sim.togglePlayPause();
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={sim.state === 'playing' ? 'pause-circle' : 'play-circle'}
-                size={44}
-                color={sim.state === 'playing' ? COLORS.navy : '#E8A020'}
-              />
-            </TouchableOpacity>
-
-            {/* Replay (visible when finished or paused) */}
-            <TouchableOpacity
-              style={styles.simControlBtn}
-              onPress={() => {
-                sim.reset();
-                setSimAutoFollow(true);
-                // Small delay so reset takes effect before play
-                setTimeout(() => sim.play(), 50);
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="reload-circle" size={28} color={COLORS.navy} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Speed selector row */}
-          <View style={styles.simSpeedRow}>
-            <Text style={styles.simSpeedLabel}>Speed:</Text>
-            {[0.8, 1, 2, 3].map((s) => (
-              <TouchableOpacity
-                key={`banner-speed-${s}`}
-                style={[styles.simSpeedChip, sim.speed === s && styles.simSpeedChipActive]}
-                onPress={() => sim.setSpeed(s)}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.simSpeedChipText, sim.speed === s && styles.simSpeedChipTextActive]}>
-                  {s}x
-                </Text>
-              </TouchableOpacity>
-            ))}
-            {/* Re-follow button */}
-            {!simAutoFollow && (
-              <TouchableOpacity
-                style={styles.simFollowBtn}
-                onPress={() => setSimAutoFollow(true)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="locate" size={14} color="#E8A020" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      )}
-
       {/* Route Recommender Panel */}
       <RouteRecommenderPanel
         visible={showRecommender}
@@ -1848,7 +1734,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 14,
     elevation: 6,
-    marginBottom: 12,
+    marginBottom: -16, // Move it further down
   },
   locateGlassWrap: {
     width: 48,
@@ -1882,6 +1768,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 14,
     elevation: 6,
+    marginBottom: 16,
   },
   zoomButton: {
     width: 48,
@@ -2535,12 +2422,11 @@ const styles = StyleSheet.create({
   },
   // Simulation styles
   simPlayToggle: {
-    flexDirection: 'row',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: RADIUS.pill,
+    justifyContent: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: 'rgba(10,22,40,0.08)',
@@ -2549,16 +2435,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
-  },
-  simPlayToggleActive: {
-    backgroundColor: '#E8A020',
-    borderColor: '#E8A020',
-  },
-  simPlayToggleText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.navy,
   },
   liveUserMarker: {
     width: 34,
