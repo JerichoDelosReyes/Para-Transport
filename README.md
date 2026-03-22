@@ -20,6 +20,8 @@
 
 Para Mobile addresses the challenge of navigating informal public transportation networks where traditional mapping services lack coverage. By leveraging manually digitized route data (GeoJSON) and performing local spatial analysis, Para provides secure, offline-resilient route discovery without relying on costly external routing APIs. 
 
+Our route geometry is curated through manual plotting workflows (including map.ie/Map.io exports) and GPX parsing/import pipelines, giving better local coverage for routes that are often missing from mainstream routing stacks.
+
 Bringing clarity and confidence to your daily commute in **Imus, Cavite**.
 
 <br/>
@@ -28,10 +30,44 @@ Bringing clarity and confidence to your daily commute in **Imus, Cavite**.
 
 - 🗺️ **Smart Routing:** Discover direct and single-transfer routes using local spatial buffer analysis.
 - 📴 **Offline-Resilient:** Graph-Lite architecture designed to work beautifully off local mapping geometry.
-- 🚌 **Multi-Modal Transit:** Seamlessly maps out Jeepneys, Tricycles, and Buses.
+- 🚌 **Multi-Modal Transit:** Supports Jeepneys, Tricycles, Buses, and expandable local transport modes as the dataset grows.
+- 💸 **Cost-Aware Recommendations:** Prioritizes practical choices like Cheapest, Balanced, and Least Transfers based on route context.
 - 🏆 **Commuter Gamification:** Earn dynamic lifestyle milestones (like *“Thrifty Commuter”*) by logging your rides and minimizing spend.
 - 💾 **Personalized Experience:** Save custom locations, browse recent search history, and track fare totals visually.
 - 🌍 **Local Native Mapping:** Beautiful map rendering via `react-native-maps` and OpenStreetMap (OSM) tile integrations.
+- 🤖 **AI Chatbot (In Progress):** Conversational trip planning is being built so users can type requests like: *"I want to go to Cavite State University - Imus on a cheaper budget"* and receive budget-oriented route guidance.
+
+<br/>
+
+## 🌟 What Makes Para Unique
+
+- **Hyperlocal-first routing:** Para is tuned for local commuting realities, where route visibility is often incomplete in global apps.
+- **Community-curated geometry:** Routes are manually plotted, validated, and improved over time from field data and GPX traces.
+- **Transport context over generic navigation:** The app explicitly models jeepney, tricycle, bus, UV Express, and other transportation tradeoffs (fare, transfers, and practicality).
+- **Built for everyday commuters:** Features such as fare-aware suggestions, saved places, recent searches, and commuter achievements are designed for daily repeat use.
+
+<br/>
+
+## 🗂️ Data Availability Note
+
+- Route data files are currently tracked in this repository for development (`data/routes.json`, `data/tricycle_routes.json`).
+- For private deployments, full raw/field datasets can be kept out of Git and replaced with placeholders like the examples below.
+
+`data/routes.json`
+```json
+{
+   "routes": []
+}
+```
+
+`data/tricycle_routes.json`
+```json
+{
+   "routes": []
+}
+```
+
+- Included sample/processed route files are enough to run and evaluate the core routing experience locally.
 
 <br/>
 
