@@ -16,6 +16,8 @@ import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
 import { useSimulation } from '../../hooks/useSimulation';
+import LOCAL_PLACES from '../../data/local_places.json';
+import { fuzzyFilter } from '../../utils/fuzzySearch';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
@@ -341,60 +343,55 @@ export default function HomeScreen() {
 
       const { origin, destination } = pendingRouteSearch;
       setIsRouting(true);
+
+      // Helper: resolve a place name — check local places first, then Nominatim
+      const resolvePlace = async (name: string): Promise<PlaceResult | null> => {
+        const localHit = fuzzyFilter(LOCAL_PLACES, name, (p) => [p.title, p.subtitle], 1);
+        if (localHit.length > 0) {
+          const p = localHit[0].item;
+          return { id: p.id, title: p.title, subtitle: p.subtitle, latitude: p.latitude, longitude: p.longitude };
+        }
+        const params = new URLSearchParams({
+          q: name,
+          format: 'json',
+          limit: '1',
+          countrycodes: 'ph',
+          viewbox: '120.7,14.55,121.1,14.35',
+          bounded: '0',
+          addressdetails: '0',
+        });
+        const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
+          headers: { 'Accept-Language': 'en' },
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || data.length === 0) return null;
+        return {
+          id: data[0].place_id?.toString() || Math.random().toString(),
+          title: name,
+          subtitle: data[0].display_name || '',
+          latitude: parseFloat(data[0].lat),
+          longitude: parseFloat(data[0].lon),
+        };
+      };
       
       try {
         let originPlace: PlaceResult | null = null;
         
-        // 1. Geocode origin if it's not our current location
+        // 1. Resolve origin if it's not our current location
         if (origin && origin.toLowerCase() !== 'current location' && origin.toLowerCase() !== 'your location') {
-          const originQueryText = origin.includes('Philippines') ? origin : `${origin}, Cavite, Philippines`;
-          const originParams = new URLSearchParams({
-            q: originQueryText,
-            format: 'json',
-            limit: '1',
-            countrycodes: 'ph',
-          });
-          const originRes = await fetch(`${GEOCODING_BASE_URL}/search?${originParams.toString()}`);
-          if (!originRes.ok) throw new Error(`Geocoding origin failed`);
-          const originData = await originRes.json();
-          
-          if (originData && originData[0]) {
-            originPlace = {
-              id: originData[0].place_id?.toString() || Math.random().toString(),
-              title: origin,
-              subtitle: originData[0].display_name || '',
-              latitude: parseFloat(originData[0].lat),
-              longitude: parseFloat(originData[0].lon),
-            };
-          }
+          originPlace = await resolvePlace(origin);
         }
 
-        // 2. Geocode destination
-        const destQueryText = destination.includes('Philippines') ? destination : `${destination}, Cavite, Philippines`;
-        const destParams = new URLSearchParams({
-          q: destQueryText,
-          format: 'json',
-          limit: '1',
-          countrycodes: 'ph',
-        });
-        const destRes = await fetch(`${GEOCODING_BASE_URL}/search?${destParams.toString()}`);
-        if (!destRes.ok) throw new Error(`Geocoding destination failed`);
-        const destData = await destRes.json();
+        // 2. Resolve destination
+        const destPlace = await resolvePlace(destination);
 
-        if (!destData || destData.length === 0) {
+        if (!destPlace) {
           Alert.alert('Route Error', 'Could not locate the destination for this route.');
           setIsRouting(false);
           setPendingRouteSearch(null);
           return;
         }
-
-        const destPlace: PlaceResult = {
-          id: destData[0].place_id?.toString() || Math.random().toString(),
-          title: destination,
-          subtitle: destData[0].display_name || '',
-          latitude: parseFloat(destData[0].lat),
-          longitude: parseFloat(destData[0].lon),
-        };
 
         // 3. Call the search hander
         await handleSearchSelectRoute(originPlace, destPlace);

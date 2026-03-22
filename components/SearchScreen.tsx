@@ -19,6 +19,7 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { fuzzyFilter } from '../utils/fuzzySearch';
 import { useRecentSearches, RecentSearch } from '../hooks/useRecentSearches';
 import { useStore } from '../store/useStore';
+import LOCAL_PLACES from '../data/local_places.json';
 
 const GEOCODING_BASE_URL =
   process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
@@ -90,30 +91,52 @@ export default function SearchScreen({
   // Active query text
   const activeQuery = activeField === 'origin' ? originText : destinationText;
 
-  // Geocoding + fuzzy local search
+  // Instant local search (local places + recents, no debounce)
   useEffect(() => {
     const q = activeQuery.trim();
     if (q.length < 2) {
       setSuggestions([]);
+      return;
+    }
+    const recentMatches = fuzzyFilter(recents, q, (r) => [r.title, r.subtitle], 5).map(
+      (r) => r.item as PlaceResult,
+    );
+    const placeMatches: PlaceResult[] = fuzzyFilter(
+      LOCAL_PLACES,
+      q,
+      (p) => [p.title, p.subtitle],
+      20,
+    ).map((r) => r.item as PlaceResult);
+
+    // Merge: recents first, then local places (deduplicated)
+    const seenIds = new Set(recentMatches.map((r) => r.id));
+    const merged = [
+      ...recentMatches,
+      ...placeMatches.filter((p) => !seenIds.has(p.id)),
+    ];
+    setSuggestions(merged);
+  }, [activeQuery, recents]);
+
+  // Supplementary API search (debounced, merges with existing local results)
+  useEffect(() => {
+    const q = activeQuery.trim();
+    if (q.length < 3) {
       setIsFetching(false);
       return;
     }
 
     let cancelled = false;
+    setIsFetching(true);
+
     const timer = setTimeout(async () => {
-      setIsFetching(true);
-
-      // Local fuzzy match on recents first
-      const localMatches = fuzzyFilter(recents, q, (r) => [r.title, r.subtitle], 3).map(
-        (r) => r.item as PlaceResult,
-      );
-
       try {
         const params = new URLSearchParams({
-          q: `${q}, Cavite, Philippines`,
+          q,
           format: 'json',
-          limit: '8',
+          limit: '10',
           countrycodes: 'ph',
+          viewbox: '120.7,14.55,121.1,14.35',
+          bounded: '0',
           addressdetails: '0',
         });
 
@@ -139,29 +162,23 @@ export default function SearchScreen({
           })
           .filter((p: PlaceResult) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
 
-        // Merge: locals first (deduplicated), then remote
-        const seenIds = new Set(localMatches.map((l) => l.id));
-        const merged = [
-          ...localMatches,
-          ...remote.filter((r) => !seenIds.has(r.id)),
-        ].slice(0, 10);
-
-        setSuggestions(merged);
+        // Merge current local results with new remote results
+        setSuggestions((prev) => {
+          const seenIds = new Set(prev.map((p) => p.id));
+          return [...prev, ...remote.filter((r) => !seenIds.has(r.id))];
+        });
       } catch {
-        if (!cancelled) {
-          // Fall back to local results only
-          setSuggestions(localMatches);
-        }
+        // Keep existing local results
       } finally {
         if (!cancelled) setIsFetching(false);
       }
-    }, 350);
+    }, 300);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [activeQuery, activeField, recents]);
+  }, [activeQuery, activeField]);
 
   const handleSelectPlace = useCallback(
     (place: PlaceResult) => {
