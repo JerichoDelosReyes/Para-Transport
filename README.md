@@ -22,7 +22,7 @@ Para Mobile addresses the challenge of navigating informal public transportation
 
 Our route geometry is curated through manual plotting workflows (including map.ie/Map.io exports) and GPX parsing/import pipelines, giving better local coverage for routes that are often missing from mainstream routing stacks.
 
-Bringing clarity and confidence to your daily commute in **Imus, Cavite**.
+Bringing clarity and confidence to your daily commute around the **Philippines**.
 
 <br/>
 
