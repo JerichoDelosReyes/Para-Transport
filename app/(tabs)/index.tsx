@@ -89,7 +89,7 @@ const sumLegDistanceMeters = (legs: TransitLeg[]): number => {
 };
 
 const MODE_SPEED_KMPH: Record<string, number> = {
-  walk: 4.2,
+  walk: 3.8,
   tricycle: 24,
   jeepney: 16,
   bus: 18,
@@ -1134,6 +1134,14 @@ export default function HomeScreen() {
   // Simulation — uses the actual searched route coordinates and transit legs
   const sim = useSimulation(routeCoordinates, transitLegs);
 
+  const topRightSummaryText = useMemo(() => {
+    if (sim.state !== 'idle') {
+      return `${Math.max(0, sim.remainingDistanceKm).toFixed(1)} km left • ${Math.max(0, Math.round(sim.remainingEtaMin))} min left`;
+    }
+    if (!routeSummary) return null;
+    return `${routeSummary.distanceKm.toFixed(1)} km • ${Math.round(routeSummary.durationMin)} min`;
+  }, [sim.state, sim.remainingDistanceKm, sim.remainingEtaMin, routeSummary]);
+
   // During simulation, blink the vehicle/walk badge so the merged user marker
   // alternates between identity and current travel mode.
   useEffect(() => {
@@ -1585,13 +1593,15 @@ export default function HomeScreen() {
           )}
 
           {/* Live summary card — right side of the controls row */}
-          {routeSummary && (
+          {routeSummary && topRightSummaryText && (
             <>
               <View style={{ flex: 1 }} />
               <View style={styles.topRightSummaryCard}>
-                <Text style={styles.topRightSummaryTitle} numberOfLines={1}>{selectedOptionLabel}</Text>
+                <Text style={styles.topRightSummaryTitle} numberOfLines={1}>
+                  {sim.state !== 'idle' ? `${selectedOptionLabel} (Live)` : selectedOptionLabel}
+                </Text>
                 <Text style={styles.topRightSummaryValue}>
-                  {routeSummary.distanceKm.toFixed(1)} km • {Math.round(routeSummary.durationMin)} min
+                  {topRightSummaryText}
                 </Text>
               </View>
             </>
