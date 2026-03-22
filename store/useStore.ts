@@ -8,8 +8,9 @@ interface User {
   email: string;
   points: number;
   streak_count: number;
-  total_km: number;
-  total_fare_spent: number;
+  distance: number;
+  spent: number;
+  trips: number;
   saved_routes?: any[];
   saved_places?: any[];
   commute_history?: any[];
@@ -23,8 +24,9 @@ const DEFAULT_GUEST_USER: User = {
   email: 'guest@para.ph',
   points: 0,
   streak_count: 0,
-  total_km: 0,
-  total_fare_spent: 0,
+  distance: 0,
+  spent: 0,
+  trips: 0,
   saved_routes: [],
   saved_places: [],
   commute_history: [],
@@ -45,6 +47,8 @@ interface StoreState {
   setHasHydrated: (value: boolean) => void;
   dismissInsight: () => void;
   addPoints: (points: number) => void;
+  addTripStats: (stats: { distance: number; fare: number; points: number }) => void;
+  resetStreak: () => void;
   setSelectedTransitRoute: (route: any | null) => void;
   setPendingRouteSearch: (search: { origin: any; destination: any } | null) => void;
   saveRoute: (route: any) => void;
@@ -56,6 +60,7 @@ interface StoreState {
   unlockedBadgeToShow: string | null;
   unlockBadge: (badgeId: string) => void;
   clearUnlockedBadge: () => void;
+  resetProgress: () => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -88,38 +93,112 @@ export const useStore = create<StoreState>()(
       setHasHydrated: (value) => set({ hasHydrated: value }),
       dismissInsight: () => set({ insightDismissed: true }),
       addPoints: (points) => set((state) => ({ user: { ...state.user, points: state.user.points + points } })),
+      addTripStats: ({ distance, fare, points }) => set((state) => {
+        const newUser = {
+          ...state.user,
+          points: (state.user.points || 0) + points,
+          streak_count: (state.user.streak_count || 0) + 1,
+          distance: (state.user.distance || 0) + distance,
+          spent: (state.user.spent || 0) + fare,
+          trips: (state.user.trips || 0) + 1,
+        };
+
+        if (state.sessionMode === 'auth' && state.user.email) {
+          // optionally sync to supabase
+          supabase
+            .from('users')
+            .update({
+              points: newUser.points,
+              streak_count: newUser.streak_count,
+              distance: newUser.distance,
+              spent: newUser.spent,
+              trips: newUser.trips
+            })
+            .eq('email', state.user.email)
+            .then(({ error }) => {
+              if (error) console.log('Failed to sync trip stats to Supabase:', error.message);
+            });
+        }
+
+        return { user: newUser };
+      }),
+      resetStreak: () => set((state) => ({ user: { ...state.user, streak_count: 0 } })),
       setSelectedTransitRoute: (route) => set({ selectedTransitRoute: route }),
       setPendingRouteSearch: (search) => set({ pendingRouteSearch: search }),
       saveRoute: (route: any) =>
         set((state) => {
           const currentSaved = state.user.saved_routes || [];
           if (!currentSaved.find((r) => r.id === route.id)) {
-            return { user: { ...state.user, saved_routes: [...currentSaved, route] } };
+            const newSavedRoutes = [...currentSaved, route];
+            if (state.sessionMode === 'auth' && state.user.email) {
+              supabase
+                .from('users')
+                .update({ saved_routes: newSavedRoutes })
+                .eq('email', state.user.email)
+                .then(({ error }) => {
+                  if (error) console.log('Failed to save route to Supabase:', error);
+                });
+            }
+            return { user: { ...state.user, saved_routes: newSavedRoutes } };
           }
           return state;
         }),
       removeSavedRoute: (routeId: string | number) =>
-        set((state) => ({
-          user: {
-            ...state.user,
-            saved_routes: (state.user.saved_routes || []).filter((r) => r.id !== routeId),
-          },
-        })),
+        set((state) => {
+          const newSavedRoutes = (state.user.saved_routes || []).filter((r) => r.id !== routeId);
+          if (state.sessionMode === 'auth' && state.user.email) {
+            supabase
+              .from('users')
+              .update({ saved_routes: newSavedRoutes })
+              .eq('email', state.user.email)
+              .then(({ error }) => {
+                if (error) console.log('Failed to remove saved route in Supabase:', error);
+              });
+          }
+          return {
+            user: {
+              ...state.user,
+              saved_routes: newSavedRoutes,
+            },
+          };
+        }),
       savePlace: (place: any) =>
         set((state) => {
           const currentSaved = state.user.saved_places || [];
           if (!currentSaved.find((p) => p.id === place.id)) {
-            return { user: { ...state.user, saved_places: [...currentSaved, place] } };
+            const newSavedPlaces = [...currentSaved, place];
+            if (state.sessionMode === 'auth' && state.user.email) {
+              supabase
+                .from('users')
+                .update({ saved_places: newSavedPlaces })
+                .eq('email', state.user.email)
+                .then(({ error }) => {
+                  if (error) console.log('Failed to save place to Supabase:', error);
+                });
+            }
+            return { user: { ...state.user, saved_places: newSavedPlaces } };
           }
           return state;
         }),
       removeSavedPlace: (placeId: string) =>
-        set((state) => ({
-          user: {
-            ...state.user,
-            saved_places: (state.user.saved_places || []).filter((p) => p.id !== placeId),
-          },
-        })),
+        set((state) => {
+          const newSavedPlaces = (state.user.saved_places || []).filter((p) => p.id !== placeId);
+          if (state.sessionMode === 'auth' && state.user.email) {
+            supabase
+              .from('users')
+              .update({ saved_places: newSavedPlaces })
+              .eq('email', state.user.email)
+              .then(({ error }) => {
+                if (error) console.log('Failed to remove saved place in Supabase:', error);
+              });
+          }
+          return {
+            user: {
+              ...state.user,
+              saved_places: newSavedPlaces,
+            },
+          };
+        }),
       addHistory: (item: any) =>
         set((state) => {
           const currentHistory = state.user.commute_history || [];
@@ -154,6 +233,39 @@ export const useStore = create<StoreState>()(
           };
         }),
       clearUnlockedBadge: () => set({ unlockedBadgeToShow: null }),
+      resetProgress: () => set((state) => {
+        const resetUser = {
+          ...state.user,
+          points: 0,
+          streak_count: 0,
+          distance: 0,
+          spent: 0,
+          trips: 0,
+          badges: [],
+          saved_routes: [],
+          saved_places: [],
+          commute_history: [],
+        };
+        
+        if (state.sessionMode === 'auth' && state.user.email) {
+          supabase
+            .from('users')
+            .update({
+              points: 0,
+              streak_count: 0,
+              distance: 0,
+              spent: 0,
+              trips: 0,
+              badges: [],
+            })
+            .eq('email', state.user.email)
+            .then(({ error }) => {
+              if (error) console.log('Failed to reset progress in Supabase:', error.message);
+            });
+        }
+        
+        return { user: resetUser };
+      }),
     }),
     {
       name: 'para-store',

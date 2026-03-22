@@ -208,10 +208,12 @@ export default function RouteRecommenderPanel({
             : selectedAlt === alt.id;
 
           const walkKm = typeof alt.walkMeters === 'number' ? alt.walkMeters / 1000 : null;
-          const metrics = [
-            typeof alt.etaMin === 'number' ? `${Math.round(alt.etaMin)} min` : null,
-            typeof alt.distanceKm === 'number' ? `${alt.distanceKm.toFixed(1)} km` : null,
-            typeof alt.farePhp === 'number' ? `P${Math.round(alt.farePhp)}` : null,
+          
+          const hasTime = typeof alt.etaMin === 'number';
+          const hasDist = typeof alt.distanceKm === 'number';
+          const hasFare = typeof alt.farePhp === 'number';
+          
+          const secondaryMetrics = [
             typeof alt.transferCount === 'number' ? `${alt.transferCount} transfer${alt.transferCount === 1 ? '' : 's'}` : null,
             walkKm !== null ? `${walkKm.toFixed(1)} km walk` : null,
             typeof alt.tricycleLegs === 'number' && alt.tricycleLegs > 0
@@ -244,7 +246,32 @@ export default function RouteRecommenderPanel({
                   {alt.label}
                 </Text>
                 <Text style={styles.altDesc} numberOfLines={1}>{alt.description}</Text>
-                {!!metrics && <Text style={styles.altMetrics} numberOfLines={1}>{metrics}</Text>}
+                
+                {(hasTime || hasDist || hasFare) && (
+                  <View style={styles.primaryMetricsRow}>
+                    {hasTime && (
+                      <View style={styles.metricItem}>
+                        <Ionicons name="time" size={13} color={isActive ? alt.accentColor : COLORS.textMuted} />
+                        <Text style={[styles.metricText, isActive && { color: alt.accentColor }]}>{Math.round(alt.etaMin)} min</Text>
+                      </View>
+                    )}
+                    {hasDist && (
+                      <View style={styles.metricItem}>
+                        <Ionicons name="map" size={13} color={isActive ? alt.accentColor : COLORS.textMuted} />
+                        <Text style={[styles.metricText, isActive && { color: alt.accentColor }]}>{alt.distanceKm.toFixed(1)} km</Text>
+                      </View>
+                    )}
+                    {hasFare && (
+                      <View style={styles.metricItem}>
+                        <Ionicons name="cash" size={13} color={isActive ? alt.accentColor : COLORS.textMuted} />
+                        <Text style={[styles.metricText, isActive && { color: alt.accentColor }]}>₱{Math.round(alt.farePhp)}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {!!secondaryMetrics && <Text style={styles.altMetrics} numberOfLines={1}>{secondaryMetrics}</Text>}
+
                 {Array.isArray(alt.tags) && alt.tags.length > 0 && (
                   <View style={styles.tagRow}>
                     {alt.tags.map((tag: string) => (
@@ -351,6 +378,24 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 11,
     color: COLORS.textMuted,
+  },
+  primaryMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  metricItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metricText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textStrong,
   },
   altMetrics: {
     marginTop: 2,

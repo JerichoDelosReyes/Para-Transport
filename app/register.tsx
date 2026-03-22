@@ -99,8 +99,9 @@ export default function RegisterScreen() {
           email: data?.user?.email || email,
           points: 0,
           streak_count: 0,
-          total_km: 0,
-          total_fare_spent: 0,
+          distance: 0,
+        trips: 0,
+          spent: 0,
           saved_routes: [],
           badges: []
         });
@@ -129,8 +130,9 @@ export default function RegisterScreen() {
         email: data?.user?.email || email,
         points: 0,
         streak_count: 0,
-        total_km: 0,
-        total_fare_spent: 0,
+        distance: 0,
+        trips: 0,
+        spent: 0,
         saved_routes: [],
         badges: []
       });

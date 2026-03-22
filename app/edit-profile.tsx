@@ -1,20 +1,26 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useStore } from '../store/useStore';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { supabase } from '../config/supabaseClient';
+import { loginWithEmailPassword } from '../services/authService';
 
 export default function EditProfileScreen() {
   const router = useRouter();
   const user = useStore((state) => state.user);
   const setUser = useStore((state) => state.setUser);
+  const resetProgress = useStore((state) => state.resetProgress);
   const insets = useSafeAreaInsets();
   
   const [name, setName] = useState(user?.name || '');
   const [isSaving, setIsSaving] = useState(false);
+  
+  const [isResetModalVisible, setIsResetModalVisible] = useState(false);
+  const [resetPasswordInput, setResetPasswordInput] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
   
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
 
@@ -83,6 +89,31 @@ export default function EditProfileScreen() {
     );
   };
 
+  const handleConfirmResetProgress = async () => {
+    if (!resetPasswordInput) {
+      Alert.alert('Error', 'Please enter your password to confirm.');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      if (!isGuestAccount && user?.email) {
+        // verify password
+        await loginWithEmailPassword(user.email, resetPasswordInput);
+      }
+      
+      resetProgress();
+      
+      setIsResetModalVisible(false);
+      setResetPasswordInput('');
+      Alert.alert('Success', 'Your progress has been reset.');
+    } catch (err: any) {
+      Alert.alert('Error', 'Incorrect password or failed to reset progress.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <View style={styles.screen}>
       <View style={[styles.topSection, { paddingTop: insets.top }]}>
@@ -146,16 +177,79 @@ export default function EditProfileScreen() {
         )}
 
         {!isGuestAccount && (
-          <TouchableOpacity 
-            style={styles.changePasswordButton}
-            onPress={handleResetPassword}
-          >
-            <Ionicons name="lock-closed-outline" size={20} color={COLORS.navy} />
-            <Text style={styles.changePasswordText}>Change Password</Text>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} style={styles.chevronIcon} />
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity 
+              style={styles.changePasswordButton}
+              onPress={handleResetPassword}
+            >
+              <Ionicons name="lock-closed-outline" size={20} color={COLORS.navy} />
+              <Text style={styles.changePasswordText}>Change Password</Text>
+              <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} style={styles.chevronIcon} />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.changePasswordButton, { marginTop: 12, backgroundColor: '#FFE5E5' }]}
+              onPress={() => setIsResetModalVisible(true)}
+            >
+              <Ionicons name="warning-outline" size={20} color="#D32F2F" />
+              <Text style={[styles.changePasswordText, { color: '#D32F2F' }]}>Reset Progress</Text>
+              <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} style={styles.chevronIcon} />
+            </TouchableOpacity>
+          </>
         )}
       </View>
+
+      {/* Password Prompt Modal for Reset Progress */}
+      <Modal
+        visible={isResetModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsResetModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Reset Progress</Text>
+            <Text style={styles.modalDescription}>
+              This will permanently delete your scores, achievements, saved places, and history. Please enter your password to confirm.
+            </Text>
+            
+            <TextInput
+              style={styles.modalInput}
+              value={resetPasswordInput}
+              onChangeText={setResetPasswordInput}
+              placeholder="Enter password"
+              placeholderTextColor={COLORS.textMuted}
+              secureTextEntry
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={styles.modalCancelButton}
+                onPress={() => {
+                  setIsResetModalVisible(false);
+                  setResetPasswordInput('');
+                }}
+                disabled={isResetting}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.modalConfirmButton}
+                onPress={handleConfirmResetProgress}
+                disabled={isResetting}
+              >
+                {isResetting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Confirm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -285,5 +379,83 @@ const styles = StyleSheet.create({
   },
   chevronIcon: {
     opacity: 0.5,
-  }
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    width: '100%',
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.card,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontFamily: 'Cubao',
+    fontSize: 24,
+    color: COLORS.navy,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalDescription: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  modalInput: {
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.input,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontFamily: 'Inter',
+    fontSize: 16,
+    color: COLORS.navy,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 24,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: RADIUS.input,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  modalCancelText: {
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    fontSize: 16,
+    color: COLORS.textMuted,
+  },
+  modalConfirmButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: RADIUS.input,
+    backgroundColor: '#D32F2F',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
 });

@@ -52,10 +52,14 @@ export default function RoutesScreen() {
   const insets = useSafeAreaInsets();
   const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
   const bottomPadding = 48 + bottomSpace + 16;
-  const [activeTab, setActiveTab] = useState<'transit' | 'history'>('transit');
+  const [activeTab, setActiveTab] = useState<'transit' | 'history'>('history');
   const [selectedMode, setSelectedMode] = useState<(typeof FILTER_MODES)[number]>('All');
   const [isReady, setIsReady] = useState(false);
   const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
+  const user = useStore((state) => state.user);
+  const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
+  const saveRoute = useStore((state) => state.saveRoute);
+  const removeSavedRoute = useStore((state) => state.removeSavedRoute);
 
   useEffect(() => {
     const task = InteractionManager.runAfterInteractions(() => {
@@ -111,16 +115,16 @@ export default function RoutesScreen() {
 
       <View style={styles.tabSwitcher}>
         <TouchableOpacity
-          style={[styles.switchTab, activeTab === 'transit' && styles.switchTabActive]}
-          onPress={() => setActiveTab('transit')}
-        >
-          <Text style={[styles.switchTabText, activeTab === 'transit' && styles.switchTabTextActive]}>TRANSIT</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
           style={[styles.switchTab, activeTab === 'history' && styles.switchTabActive]}
           onPress={() => setActiveTab('history')}
         >
           <Text style={[styles.switchTabText, activeTab === 'history' && styles.switchTabTextActive]}>HISTORY</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.switchTab, activeTab === 'transit' && styles.switchTabActive]}
+          onPress={() => setActiveTab('transit')}
+        >
+          <Text style={[styles.switchTabText, activeTab === 'transit' && styles.switchTabTextActive]}>TRANSIT</Text>
         </TouchableOpacity>
       </View>
 
@@ -212,6 +216,64 @@ export default function RoutesScreen() {
                 })}
               </>
             )}
+          </View>
+        ) : user.commute_history && user.commute_history.length > 0 ? (
+          <View style={{ paddingTop: 0 }}>
+            <View style={{ gap: SPACING.cardGap }}>
+              {user.commute_history.map((item: any, index: number) => {
+                const targetName = `${item.origin?.name || 'Current Location'} to ${item.destination?.name || 'Unknown'}`;
+                const isSaved = user.saved_routes?.some((r: any) => 
+                  r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
+                );
+                return (
+                  <View key={item.id || index} style={styles.historyCard}>
+                    <View style={styles.historyCardTop}>
+                      <Text style={styles.historyRouteName} numberOfLines={1}>
+                        {item.origin?.name || 'Current Location'} to {item.destination?.name || 'Unknown'}
+                      </Text>
+                      <TouchableOpacity
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={() => {
+                          if (!isSaved) {
+                            saveRoute({
+                              id: Date.now(),
+                              name: targetName,
+                              legs: [{ mode: 'Custom Route', from: item.origin?.name || 'Current Location', to: item.destination?.name || 'Unknown', fromObj: item.origin || null, toObj: item.destination }],
+                              total_fare: item.fare || 0,
+                            });
+                            Alert.alert('Saved', 'Route has been added to your Saved page.');
+                          } else {
+                            const routeToRemove = user.saved_routes.find((r: any) => 
+                              r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
+                            );
+                            if (routeToRemove) {
+                               removeSavedRoute(routeToRemove.id);
+                            }
+                          }
+                        }}
+                      >
+                        <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={18} color={isSaved ? COLORS.primary : COLORS.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.historyLegSummary}>
+                      Recent Search • {item.timestamp ? new Date(item.timestamp).toLocaleDateString() : 'Recent'}
+                    </Text>
+                    <View style={[styles.historyCardBottom, { justifyContent: 'flex-end' }]}>
+                      <TouchableOpacity 
+                        style={styles.historyGhostButton} 
+                        activeOpacity={0.9} 
+                        onPress={() => {
+                          setPendingRouteSearch({ origin: item.origin || null, destination: item.destination });
+                          router.replace('/(tabs)/index');
+                        }}
+                      >
+                        <Text style={styles.historyGhostButtonText}>View</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
           </View>
         ) : (
           <View style={styles.emptyState}>
@@ -422,5 +484,50 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.card,
     marginBottom: 10,
     opacity: 0.6,
+  },
+  historyCard: {
+    borderRadius: RADIUS.card,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    padding: SPACING.cardPadding,
+  },
+  historyCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  historyRouteName: {
+    flex: 1,
+    marginRight: 8,
+    fontFamily: 'Inter',
+    fontWeight: '700',
+    fontSize: TYPOGRAPHY.body,
+    color: COLORS.textStrong,
+  },
+  historyLegSummary: {
+    marginTop: 6,
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.label,
+    color: COLORS.textMuted,
+  },
+  historyCardBottom: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  historyGhostButton: {
+    borderRadius: RADIUS.pill,
+    borderWidth: 1.2,
+    borderColor: COLORS.navy,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: COLORS.card,
+  },
+  historyGhostButtonText: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.label,
+    fontWeight: '600',
+    color: COLORS.navy,
   },
 });

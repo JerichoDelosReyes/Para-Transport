@@ -62,11 +62,6 @@ export default function ProfileScreen() {
                 <Text style={styles.quickStatValue}>{user?.points || 0}</Text>
                 <Text style={styles.quickStatLabel}>Points</Text>
               </View>
-              <View style={styles.quickStatDivider} />
-              <View style={styles.quickStat}>
-                <Text style={styles.quickStatValue}>{user?.streak_count || 0}</Text>
-                <Text style={styles.quickStatLabel}>Streak</Text>
-              </View>
             </View>
           </View>
 
@@ -76,7 +71,7 @@ export default function ProfileScreen() {
               <View style={styles.gridIconContainer}>
                 <Text style={styles.gridIconText}>🚗</Text>
               </View>
-              <Text style={styles.gridValue}>{(user as any)?.trips || 0}</Text>
+              <Text style={styles.gridValue}>{user?.trips || 0}</Text>
               <Text style={styles.gridLabel}>Total Trips</Text>
             </View>
             
@@ -84,7 +79,7 @@ export default function ProfileScreen() {
               <View style={styles.gridIconContainer}>
                 <Text style={styles.gridIconText}>📍</Text>
               </View>
-              <Text style={styles.gridValue}>{((user as any)?.distance || 0).toFixed(1)} <Text style={styles.gridValueSmall}>km</Text></Text>
+              <Text style={styles.gridValue}>{(user?.distance || 0).toFixed(1)} <Text style={styles.gridValueSmall}>km</Text></Text>
               <Text style={styles.gridLabel}>Distance</Text>
             </View>
             
@@ -92,7 +87,7 @@ export default function ProfileScreen() {
               <View style={styles.gridIconContainer}>
                 <Text style={styles.gridIconText}>💰</Text>
               </View>
-              <Text style={styles.gridValue}><Text style={styles.gridValueSmall}>₱</Text>{((user as any)?.spent || 0).toFixed(0)}</Text>
+              <Text style={styles.gridValue}><Text style={styles.gridValueSmall}>₱</Text>{(user?.spent || 0).toFixed(0)}</Text>
               <Text style={styles.gridLabel}>Total Fare</Text>
             </View>
 

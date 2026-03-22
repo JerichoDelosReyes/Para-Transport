@@ -366,10 +366,12 @@ export default function HomeScreen() {
   const pendingRouteSearch = useStore((state) => state.pendingRouteSearch);
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const addHistory = useStore((state) => state.addHistory);
+  const addTripStats = useStore((state) => state.addTripStats);
   const unlockBadge = useStore((state) => state.unlockBadge);
   const mapRef = useRef<MapView | null>(null);
   const [showRecommender, setShowRecommender] = useState(false);
   const [simAutoFollow, setSimAutoFollow] = useState(true);
+  const [hasAwardedStats, setHasAwardedStats] = useState(false);
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -618,11 +620,16 @@ export default function HomeScreen() {
       
       // Save this to commute history
       const h_origin = origin ? { name: origin.title, lat: origin.latitude, lon: origin.longitude } : null;
+      let historyFare = 0;
+      if (ordered.length > 0) {
+        historyFare = ordered[0].metrics?.farePhp || 0;
+      }
       addHistory({
         id: Date.now().toString(),
         origin: h_origin,
         destination: { name: destination.title, lat: destination.latitude, lon: destination.longitude },
         timestamp: Date.now(),
+        fare: historyFare,
       });
       
       // Achievement System integration 
@@ -799,6 +806,20 @@ export default function HomeScreen() {
       }, 200);
     }
   }, [sim.position, sim.state, simAutoFollow]);
+
+  // Award stats when simulation finishes
+  useEffect(() => {
+    if (sim.state === 'playing') {
+      setHasAwardedStats(false);
+    } else if (sim.state === 'finished' && !hasAwardedStats) {
+      setHasAwardedStats(true);
+      const totalFare = transitLegs.reduce((sum, leg) => sum + parseFareValue(leg.transitInfo?.fare), 0);
+      const dist = routeSummary?.distanceKm || 0;
+      const pts = 10 + Math.floor(dist * 2); // Example points logic
+      addTripStats({ distance: dist, fare: totalFare, points: pts });
+      // Show some alert or toast if desired (could be done via another state)
+    }
+  }, [sim.state, hasAwardedStats, transitLegs, routeSummary, addTripStats]);
 
   const handleRegionChangeComplete = (region: MapRegion) => {
     let newLat = region.latitude;

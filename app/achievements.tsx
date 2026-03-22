@@ -17,9 +17,9 @@ export default function AchievementsScreen() {
   const user = useStore((state) => state.user);
 
   const getProgress = (badgeId: string) => {
-    const trips = (user as any)?.trips || 0;
-    const distance = user?.total_km || (user as any)?.distance || 0;
-    const spent = user?.total_fare_spent || (user as any)?.spent || 0;
+    const trips = (user)?.trips || 0;
+    const distance = user?.distance || 0;
+    const spent = user?.spent || 0;
     const streak = user?.streak_count || 0;
 
     switch (badgeId) {

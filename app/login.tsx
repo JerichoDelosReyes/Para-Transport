@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import { supabase } from '../config/supabaseClient';
 import {
   loginWithEmailPassword,
   verifyEmailOtp,
@@ -79,16 +80,28 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       const data = await loginWithEmailPassword(email, password);
+      
+      let userStats: any = {};
+      try {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('points, streak_count, distance, trips, spent, badges')
+          .eq('email', email.trim().toLowerCase())
+          .single();
+        if (profile) userStats = profile;
+      } catch (err) {}
+
       // Construct a unified user to save in store
       beginAuthSession({
         name: data?.user?.user_metadata?.display_name || 'Commuter',
         email: data?.user?.email || email,
-        points: 0,
-        streak_count: 0,
-        total_km: 0,
-        total_fare_spent: 0,
+        points: userStats.points || 0,
+        streak_count: userStats.streak_count || 0,
+        distance: userStats.distance || 0,
+        trips: userStats.trips || 0,
+        spent: userStats.spent || 0,
         saved_routes: [],
-        badges: []
+        badges: userStats.badges || []
       });
       router.replace('/(tabs)');
     } catch (err: any) {
@@ -141,15 +154,26 @@ export default function LoginScreen() {
     try {
       const data = await verifyEmailOtp(email, otp);
       
+      let userStats: any = {};
+      try {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('points, streak_count, distance, trips, spent, badges')
+          .eq('email', email.trim().toLowerCase())
+          .single();
+        if (profile) userStats = profile;
+      } catch (err) {}
+      
       beginAuthSession({
         name: data?.user?.user_metadata?.display_name || 'Commuter',
         email: data?.user?.email || email,
-        points: 0,
-        streak_count: 0,
-        total_km: 0,
-        total_fare_spent: 0,
+        points: userStats.points || 0,
+        streak_count: userStats.streak_count || 0,
+        distance: userStats.distance || 0,
+        trips: userStats.trips || 0,
+        spent: userStats.spent || 0,
         saved_routes: [],
-        badges: []
+        badges: userStats.badges || []
       });
       setIsOtpPending(false);
       router.replace('/(tabs)');
