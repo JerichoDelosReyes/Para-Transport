@@ -52,7 +52,8 @@ Bringing clarity and confidence to your daily commute around the **Philippines**
 
 - Route datasets, GPX files, and local places data are treated as private/local working data and are gitignored for this repository.
 - Use placeholder templates in `data/placeholders/` when sharing the project publicly.
-- Full plotting/import instructions are documented in `data/README.md` (Maps.ie plotting -> GPX export -> JSON parse workflow).
+- Full plotting/import instructions are documented in [data/RouteGuide.md](data/RouteGuide.md) (Maps.ie plotting -> GPX export -> JSON parse workflow).
+- GPX-specific format and parsing instructions are in [data/gpx/README.md](data/gpx/GPXHelper.md).
 
 <br/>
 

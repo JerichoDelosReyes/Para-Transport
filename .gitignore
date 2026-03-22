@@ -49,4 +49,6 @@ client_*.plist
 data/routes.json
 data/tricycle_routes.json
 data/local_places.json
-data/gpx/
+data/gpx/*
+!data/gpx/README.md
+!data/gpx/.gitkeep
