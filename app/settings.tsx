@@ -122,32 +122,6 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.cardGroup}>
-          <TouchableOpacity
-            style={styles.settingRow}
-            activeOpacity={0.7}
-            onPress={() =>
-              Alert.alert(
-                'Reset Data',
-                'This will clear all your trip stats, points, badges, saved routes, and history. This cannot be undone.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Reset',
-                    style: 'destructive',
-                    onPress: () => { resetProgress(); clearRecents(); },
-                  },
-                ],
-              )
-            }
-          >
-            <View style={styles.rowLeft}>
-              <Feather name="trash-2" size={20} color="#FF3B30" style={styles.icon} />
-              <Text style={[styles.settingLabel, { color: '#FF3B30' }]}>Reset Data</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
