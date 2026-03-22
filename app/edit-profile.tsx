@@ -92,13 +92,18 @@ export default function EditProfileScreen() {
   };
 
   const handleConfirmResetProgress = async () => {
-    if (resetPasswordInput !== 'RESET') {
-      Alert.alert('Error', 'Please type RESET to confirm.');
+    if (!resetPasswordInput) {
+      Alert.alert('Error', 'Please enter your password to confirm.');
       return;
     }
 
     setIsResetting(true);
     try {
+      if (!isGuestAccount && user?.email) {
+        // verify password
+        await loginWithEmailPassword(user.email, resetPasswordInput);
+      }
+      
       resetProgress();
       
       setIsResetModalVisible(false);
@@ -106,7 +111,7 @@ export default function EditProfileScreen() {
       Alert.alert('Success', 'Your progress has been reset.');
     } catch (err: any) {
       console.error(err);
-      const errorMsg = err?.message || 'Failed to reset progress.';
+      const errorMsg = err?.message || 'Incorrect password or failed to reset progress.';
       Alert.alert('Error', errorMsg);
     } finally {
       setIsResetting(false);
@@ -209,16 +214,16 @@ export default function EditProfileScreen() {
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>Reset Progress</Text>
             <Text style={styles.modalDescription}>
-              This will permanently delete your scores, achievements, saved places, and history. Please type "RESET" to confirm.
+              This will permanently delete your scores, achievements, saved places, and history. Please enter your password to confirm.
             </Text>
             
             <TextInput
               style={styles.modalInput}
               value={resetPasswordInput}
               onChangeText={setResetPasswordInput}
-              placeholder="Type RESET"
+              placeholder="Enter password"
               placeholderTextColor={COLORS.textMuted}
-              autoCapitalize="characters"
+              secureTextEntry
             />
 
             <View style={styles.modalActions}>
