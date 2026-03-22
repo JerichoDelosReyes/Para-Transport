@@ -684,7 +684,6 @@ export default function HomeScreen() {
   const pendingRouteSearch = useStore((state) => state.pendingRouteSearch);
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const addHistory = useStore((state) => state.addHistory);
-  const unlockBadge = useStore((state) => state.unlockBadge);
   const addTripStats = useStore((state) => state.addTripStats);
   const mapRef = useRef<MapView | null>(null);
   const tripStatRecordedRef = useRef(false);
@@ -972,15 +971,6 @@ export default function HomeScreen() {
         timestamp: Date.now(),
       });
       
-      // Achievement System integration 
-      // Rule 2: 5 trips -> path_explorer
-      setTimeout(() => {
-        const badges = useStore.getState().user.badges || [];
-        if (!badges.includes('path_explorer') && useStore.getState().user.commute_history!.length >= 5) {
-          unlockBadge('path_explorer');
-        }
-      }, 1000);
-      
     } catch (error) {
       console.warn('[HomeScreen] Route search failed:', error);
       Alert.alert('Search Failed', 'Unable to fetch route right now. Please try again.');
@@ -1184,14 +1174,6 @@ export default function HomeScreen() {
       const distKm = activeOption?.distanceKm ?? (routeSummary?.distanceKm ?? 0);
       const fareAmt = activeOption?.farePhp ?? 0;
       addTripStats({ distance: distKm, fare: fareAmt, points: Math.max(1, Math.round(distKm * 2)) });
-      
-      // Achievement System: Complete your first route trip
-      setTimeout(() => {
-        const badges = useStore.getState().user.badges || [];
-        if (!badges.includes('route_rookie')) {
-          unlockBadge('route_rookie');
-        }
-      }, 1000);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim.state]);

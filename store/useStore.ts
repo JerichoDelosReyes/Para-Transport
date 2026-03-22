@@ -19,7 +19,7 @@ interface User {
 
 type SessionMode = 'guest' | 'auth' | null;
 
-const DEFAULT_GUEST_USER: User = {
+const createGuestUser = (): User => ({
   name: 'Komyuter',
   email: 'guest@para.ph',
   points: 0,
@@ -31,7 +31,7 @@ const DEFAULT_GUEST_USER: User = {
   saved_places: [],
   commute_history: [],
   badges: [],
-};
+});
 
 interface StoreState {
   user: User;
@@ -67,7 +67,7 @@ interface StoreState {
 export const useStore = create<StoreState>()(
   persist(
     (set) => ({
-      user: DEFAULT_GUEST_USER,
+      user: createGuestUser(),
       sessionMode: null,
       hasHydrated: false,
       insightDismissed: false,
@@ -77,8 +77,11 @@ export const useStore = create<StoreState>()(
       setUser: (user) => set({ user }),
       beginGuestSession: () =>
         set({
-          user: DEFAULT_GUEST_USER,
+          user: createGuestUser(),
           sessionMode: 'guest',
+          selectedTransitRoute: null,
+          pendingRouteSearch: null,
+          unlockedBadgeToShow: null,
         }),
       beginAuthSession: (user) =>
         set({
@@ -87,9 +90,11 @@ export const useStore = create<StoreState>()(
         }),
       clearSession: () =>
         set({
-          user: DEFAULT_GUEST_USER,
+          user: createGuestUser(),
           sessionMode: null,
           selectedTransitRoute: null,
+          pendingRouteSearch: null,
+          unlockedBadgeToShow: null,
         }),
       setHasHydrated: (value) => set({ hasHydrated: value }),
       dismissInsight: () => set({ insightDismissed: true }),
@@ -115,6 +120,7 @@ export const useStore = create<StoreState>()(
         };
 
         if (newUser.trips >= 1) tryUnlock('route_rookie');
+        if (newUser.trips >= 5) tryUnlock('path_explorer');
         if (newUser.trips >= 20) tryUnlock('urban_navigator');
         if (newUser.trips >= 50) tryUnlock('frequent_rider');
         if (newUser.trips >= 100) tryUnlock('ultimate_commuter');

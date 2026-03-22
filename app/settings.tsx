@@ -1,21 +1,39 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Alert, StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRouter, useNavigation } from 'expo-router';
 import { CommonActions } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
+import { useRecentSearches } from '../hooks/useRecentSearches';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
-import { mapResetPasswordError, sendPasswordResetEmail, signOut } from '../services/authService';
+import { signOut } from '../services/authService';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const user = useStore((state) => state.user);
   const clearSession = useStore((state) => state.clearSession);
+  const resetProgress = useStore((state) => state.resetProgress);
+  const { clearRecents } = useRecentSearches();
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
   const insets = useSafeAreaInsets();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  const handleResetGuestData = () => {
+    Alert.alert('Reset Data', 'Clear all guest progress, saved routes, and recent searches?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reset',
+        style: 'destructive',
+        onPress: () => {
+          clearRecents();
+          resetProgress();
+          Alert.alert('Done', 'Data has been reset.');
+        },
+      },
+    ]);
+  };
 
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -25,7 +43,13 @@ export default function SettingsScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await signOut();
+            if (!isGuestAccount) {
+              await signOut();
+            } else {
+              // Guest-mode data is local only; clear it on logout.
+              clearRecents();
+              resetProgress();
+            }
             clearSession();
             navigation.dispatch(
               CommonActions.reset({
@@ -118,6 +142,12 @@ export default function SettingsScreen() {
             <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
           </TouchableOpacity>
         </View>
+
+        {isGuestAccount && (
+          <TouchableOpacity style={styles.resetButton} onPress={handleResetGuestData}>
+            <Text style={styles.resetButtonText}>Reset Data</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log Out</Text>
@@ -221,5 +251,19 @@ const styles = StyleSheet.create({
     fontFamily: 'SFPro-Bold',
     fontSize: 16,
     color: '#FF3B30',
+  },
+  resetButton: {
+    marginTop: 10,
+    backgroundColor: '#FFF8E1',
+    borderRadius: RADIUS.card,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(232,160,32,0.4)',
+  },
+  resetButtonText: {
+    fontFamily: 'SFPro-Bold',
+    fontSize: 16,
+    color: '#A65F00',
   }
 });
