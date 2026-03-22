@@ -5,6 +5,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRouter, useNavigation } from 'expo-router';
 import { CommonActions } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
+import { useRecentSearches } from '../hooks/useRecentSearches';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { mapResetPasswordError, sendPasswordResetEmail, signOut } from '../services/authService';
 
@@ -13,6 +14,8 @@ export default function SettingsScreen() {
   const navigation = useNavigation();
   const user = useStore((state) => state.user);
   const clearSession = useStore((state) => state.clearSession);
+  const resetProgress = useStore((state) => state.resetProgress);
+  const { clearRecents } = useRecentSearches();
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
   const insets = useSafeAreaInsets();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -116,6 +119,32 @@ export default function SettingsScreen() {
               <Text style={styles.settingLabel}>Privacy Policy</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.cardGroup}>
+          <TouchableOpacity
+            style={styles.settingRow}
+            activeOpacity={0.7}
+            onPress={() =>
+              Alert.alert(
+                'Reset Data',
+                'This will clear all your trip stats, points, badges, saved routes, and history. This cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Reset',
+                    style: 'destructive',
+                    onPress: () => { resetProgress(); clearRecents(); },
+                  },
+                ],
+              )
+            }
+          >
+            <View style={styles.rowLeft}>
+              <Feather name="trash-2" size={20} color="#FF3B30" style={styles.icon} />
+              <Text style={[styles.settingLabel, { color: '#FF3B30' }]}>Reset Data</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
