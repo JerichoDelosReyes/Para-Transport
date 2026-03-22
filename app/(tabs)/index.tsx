@@ -196,6 +196,68 @@ const candidateHasMode = (candidate: RecommenderCandidate, mode: string): boolea
   return candidateModes(candidate).has(mode);
 };
 
+const isWalkOnlyCandidate = (candidate: RecommenderCandidate): boolean => {
+  return !candidate.legs.some((leg) => leg.onTransit);
+};
+
+/**
+ * Returns the dominant transit mode for a candidate — the mode covering the
+ * most distance. 'walk' when no transit legs exist.
+ */
+const dominantMode = (candidate: RecommenderCandidate): string => {
+  const modeDist: Record<string, number> = {};
+  for (const leg of candidate.legs) {
+    if (!leg.onTransit) continue;
+    const mode = getLegModeKey(leg);
+    modeDist[mode] = (modeDist[mode] || 0) + sumLegDistanceMeters([leg]);
+  }
+  let best = 'walk';
+  let bestDist = 0;
+  for (const [m, d] of Object.entries(modeDist)) {
+    if (d > bestDist) { bestDist = d; best = m; }
+  }
+  return best;
+};
+
+/**
+ * Returns true when the candidate uses ONLY the given mode for all its transit
+ * legs (no other transit type mixed in). Walk legs are always OK.
+ */
+const isExclusiveMode = (candidate: RecommenderCandidate, mode: string): boolean => {
+  return candidate.legs.every((leg) => !leg.onTransit || getLegModeKey(leg) === mode);
+};
+
+/**
+ * Pick a pool of candidates following a strict mode-priority chain.
+ *
+ * For each priority level we prefer candidates whose transit legs are
+ * *exclusively* that mode (e.g. a jeepney_only build). If none exist, we
+ * relax to candidates whose *dominant* mode matches.  Only when both filters
+ * return nothing do we fall through to the next priority.
+ */
+const pickPoolByPriority = (
+  candidates: RecommenderCandidate[],
+  priority: Array<'tricycle' | 'jeepney' | 'walk'>,
+): RecommenderCandidate[] => {
+  for (const mode of priority) {
+    if (mode === 'walk') {
+      const pool = candidates.filter(isWalkOnlyCandidate);
+      if (pool.length > 0) return pool;
+      continue;
+    }
+    // Prefer exclusive (single-mode) candidates first
+    const exclusive = candidates.filter((c) => candidateHasMode(c, mode) && isExclusiveMode(c, mode));
+    if (exclusive.length > 0) return exclusive;
+    // Fallback: dominant mode matches
+    const dominant = candidates.filter((c) => dominantMode(c) === mode);
+    if (dominant.length > 0) return dominant;
+    // Weaker fallback: at least has that mode
+    const has = candidates.filter((c) => candidateHasMode(c, mode));
+    if (has.length > 0) return has;
+  }
+  return candidates;
+};
+
 const isCvsuImusTarget = (destinationName?: string): boolean => {
   if (!destinationName) return false;
   const norm = destinationName.toLowerCase();
@@ -210,6 +272,10 @@ const buildRecommendationOptions = (
 ): RecommenderCandidate[] => {
   const candidates: RecommenderCandidate[] = [];
 
+  // Pre-filter transit routes by vehicle type so we can build mode-specific candidates
+  const jeepneyOnly = transitRoutes.filter((r: any) => r.type === 'jeepney');
+  const tricycleOnly = transitRoutes.filter((r: any) => r.type === 'tricycle');
+
   for (let i = 0; i < osrmRoutes.length; i++) {
     const route = osrmRoutes[i];
     if (!route?.geometry?.coordinates) continue;
@@ -217,14 +283,23 @@ const buildRecommendationOptions = (
     const baseDurationMin = route.duration / 60;
     const osrmDistanceKm = route.distance / 1000;
 
+    // Mixed variants (all transit types)
     const variants = [
-      { key: 'balanced', threshold: 55, minLeg: 120 },
-      { key: 'tricycle_plus', threshold: 95, minLeg: 70 },
-      { key: 'walk_fallback', threshold: 35, minLeg: 220 },
+      { key: 'balanced', threshold: 55, minLeg: 120, routes: transitRoutes },
+      { key: 'tricycle_plus', threshold: 95, minLeg: 70, routes: transitRoutes },
+      { key: 'walk_fallback', threshold: 35, minLeg: 220, routes: transitRoutes },
     ];
 
+    // Mode-exclusive variants: only match one vehicle type at a time
+    if (jeepneyOnly.length > 0) {
+      variants.push({ key: 'jeepney_only', threshold: 55, minLeg: 120, routes: jeepneyOnly });
+    }
+    if (tricycleOnly.length > 0) {
+      variants.push({ key: 'tricycle_only', threshold: 55, minLeg: 70, routes: tricycleOnly });
+    }
+
     for (const variant of variants) {
-      const legs = buildTransitLegs(coordinates, transitRoutes as any[], variant.threshold, variant.minLeg);
+      const legs = buildTransitLegs(coordinates, variant.routes as any[], variant.threshold, variant.minLeg);
       const metrics = computeMetrics(legs, baseDurationMin, osrmDistanceKm);
       candidates.push({
         id: `r${i}-${variant.key}`,
@@ -298,10 +373,10 @@ const toRecommenderOptions = (
     );
     if (routinePick && noUnnecessaryTransfer(routinePick.candidate)) picks.push(routinePick);
 
-    const fastTriPool = candidates.filter((c) => candidateHasMode(c, 'tricycle'));
+    const fastPriorityPool = pickPoolByPriority(candidates, ['tricycle', 'jeepney', 'walk']);
     const fastPick = pickBest(
       'fast_arrival',
-      fastTriPool.length ? fastTriPool : candidates,
+      fastPriorityPool,
       (c) => c.metrics.effectiveDurationMin + c.metrics.transferCount * 9 + c.metrics.walkMeters / 1600,
       ['Fastest'],
       'Fast Arrival',
@@ -309,10 +384,10 @@ const toRecommenderOptions = (
     );
     if (fastPick && noUnnecessaryTransfer(fastPick.candidate)) picks.push(fastPick);
 
-    const cheapWalkPool = candidates.filter((c) => candidateHasMode(c, 'jeepney'));
+    const cheapPriorityPool = pickPoolByPriority(candidates, ['jeepney', 'tricycle', 'walk']);
     const cheapPick = pickBest(
       'walk_then_jeep',
-      cheapWalkPool.length ? cheapWalkPool : candidates,
+      cheapPriorityPool,
       (c) => c.metrics.farePhp * 3 + c.metrics.effectiveDurationMin * 0.45 - c.metrics.walkMeters / 250 + c.metrics.transferCount * 18,
       ['Cheapest', 'Walk More'],
       'Walk Then Jeepney',
@@ -321,6 +396,9 @@ const toRecommenderOptions = (
     if (cheapPick && noUnnecessaryTransfer(cheapPick.candidate)) picks.push(cheapPick);
   }
 
+  const fastestPool = pickPoolByPriority(candidates, ['tricycle', 'jeepney', 'walk']);
+  const cheapestPool = pickPoolByPriority(candidates, ['jeepney', 'tricycle', 'walk']);
+
   const winners = {
     recommended: getBest((c) =>
       c.metrics.effectiveDurationMin * 0.45 +
@@ -328,8 +406,18 @@ const toRecommenderOptions = (
       c.metrics.transferCount * 6 +
       c.metrics.walkMeters / 200,
     ),
-    fastest: getBest((c) => c.metrics.effectiveDurationMin),
-    cheapest: getBest((c) => c.metrics.farePhp + c.metrics.walkMeters / 180),
+    fastest: fastestPool.reduce(
+      (best, curr) => (curr.metrics.effectiveDurationMin < best.metrics.effectiveDurationMin ? curr : best),
+      fastestPool[0],
+    ),
+    cheapest: cheapestPool.reduce(
+      (best, curr) => (
+        (curr.metrics.farePhp + curr.metrics.walkMeters / 180) < (best.metrics.farePhp + best.metrics.walkMeters / 180)
+          ? curr
+          : best
+      ),
+      cheapestPool[0],
+    ),
     leastTransfers: getBest((c) => c.metrics.transferCount * 100 + c.metrics.walkMeters / 300),
   };
 
@@ -378,13 +466,21 @@ const toRecommenderOptions = (
     winners.fastest,
     'Fastest',
     'Fastest',
-    'Quickest arrival time for this trip',
+    dominantMode(winners.fastest) === 'tricycle'
+      ? 'Tricycle route — fastest arrival'
+      : dominantMode(winners.fastest) === 'jeepney'
+        ? 'Jeepney route — fastest available'
+        : 'Quickest arrival time for this trip',
   );
   addPicked(
     winners.cheapest,
     'Cheapest',
     'Cheapest',
-    'Lowest overall fare route',
+    dominantMode(winners.cheapest) === 'jeepney'
+      ? 'Jeepney route — lowest fare'
+      : dominantMode(winners.cheapest) === 'tricycle'
+        ? 'Tricycle route — cheapest available'
+        : 'Lowest overall fare route',
   );
   addPicked(
     winners.leastTransfers,
