@@ -36,7 +36,7 @@ function toJeepneyRoute(
       code: row.route_code ?? '',
       name: row.name ?? '',
       description: row.description ?? '',
-      type: row.vehicle_type_id ?? 'jeepney',
+      type: row.vehicle_type ?? 'jeepney',
       fare: Number(row.fare_base) || 0,
       status: row.status ?? 'active',
       operator: row.operator ?? '',
