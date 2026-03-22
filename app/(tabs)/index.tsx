@@ -684,6 +684,7 @@ export default function HomeScreen() {
   const pendingRouteSearch = useStore((state) => state.pendingRouteSearch);
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const addHistory = useStore((state) => state.addHistory);
+  const updateLatestHistoryFare = useStore((state) => state.updateLatestHistoryFare);
   const unlockBadge = useStore((state) => state.unlockBadge);
   const addTripStats = useStore((state) => state.addTripStats);
   const mapRef = useRef<MapView | null>(null);
@@ -859,12 +860,15 @@ export default function HomeScreen() {
     setRouteCoordinates(chosen.coordinates);
     setRouteSummary(chosen.summary);
     setSelectedRouteLegs(chosen.legs);
+    if (chosen.metrics?.farePhp !== undefined) {
+      updateLatestHistoryFare(chosen.metrics.farePhp);
+    }
 
     mapRef.current?.fitToCoordinates(chosen.coordinates, {
       edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
       animated: true,
     });
-  }, [recommenderCandidates]);
+  }, [recommenderCandidates, updateLatestHistoryFare]);
 
   const handleSearchSelectRoute = useCallback(async (origin: PlaceResult | null, destination: PlaceResult) => {
     setIsSearchActive(false);
@@ -970,6 +974,7 @@ export default function HomeScreen() {
         origin: h_origin,
         destination: { name: destination.title, lat: destination.latitude, lon: destination.longitude },
         timestamp: Date.now(),
+        fare: ordered.length > 0 ? ordered[0].metrics?.farePhp : 0,
       });
       
       // Achievement System integration 

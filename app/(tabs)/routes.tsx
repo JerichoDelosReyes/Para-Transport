@@ -244,7 +244,7 @@ export default function RoutesScreen() {
                             });
                             Alert.alert('Saved', 'Route has been added to your Saved page.');
                           } else {
-                            const routeToRemove = user.saved_routes.find((r: any) => 
+                            const routeToRemove = user.saved_routes?.find((r: any) => 
                               r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
                             );
                             if (routeToRemove) {
