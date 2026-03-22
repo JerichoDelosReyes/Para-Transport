@@ -21,12 +21,12 @@ ALTER TABLE public.recent_searches ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view own recent searches"
     ON public.recent_searches FOR SELECT
-    USING (user_id = public.firebase_uid());
+    USING (user_id = public.auth_uid());
 
 CREATE POLICY "Users can insert own recent searches"
     ON public.recent_searches FOR INSERT
-    WITH CHECK (user_id = public.firebase_uid());
+    WITH CHECK (user_id = public.auth_uid());
 
 CREATE POLICY "Users can delete own recent searches"
     ON public.recent_searches FOR DELETE
-    USING (user_id = public.firebase_uid());
+    USING (user_id = public.auth_uid());
