@@ -56,6 +56,7 @@ interface StoreState {
   savePlace: (place: any) => void;
   removeSavedPlace: (placeId: string) => void;
   addHistory: (historyItem: any) => void;
+  updateLatestHistoryFare: (fare: number) => void;
   clearHistory: () => void;
   unlockedBadgeToShow: string | null;
   unlockBadge: (badgeId: string) => void;
@@ -235,6 +236,14 @@ export const useStore = create<StoreState>()(
           const currentHistory = state.user.commute_history || [];
           const newHistory = [item, ...currentHistory.filter((h: any) => h.id !== item.id)].slice(0, 20);
           return { user: { ...state.user, commute_history: newHistory } };
+        }),
+      updateLatestHistoryFare: (fare: number) =>
+        set((state) => {
+          const currentHistory = state.user.commute_history || [];
+          if (currentHistory.length === 0) return state;
+          const updatedHistory = [...currentHistory];
+          updatedHistory[0] = { ...updatedHistory[0], fare: fare };
+          return { user: { ...state.user, commute_history: updatedHistory } };
         }),
       clearHistory: () =>
         set((state) => ({
