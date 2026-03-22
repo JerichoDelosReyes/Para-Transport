@@ -103,6 +103,29 @@ export const useStore = create<StoreState>()(
           trips: (state.user.trips || 0) + 1,
         };
 
+        const newBadges = [...(newUser.badges || [])];
+        let nextBadgeToShow = state.unlockedBadgeToShow;
+
+        const tryUnlock = (badgeId: string) => {
+           if (!newBadges.includes(badgeId)) {
+               newBadges.push(badgeId);
+               if (!nextBadgeToShow) nextBadgeToShow = badgeId;
+           }
+        };
+
+        if (newUser.trips >= 1) tryUnlock('route_rookie');
+        if (newUser.trips >= 20) tryUnlock('urban_navigator');
+        if (newUser.trips >= 50) tryUnlock('frequent_rider');
+        if (newUser.trips >= 100) tryUnlock('ultimate_commuter');
+        if (newUser.distance >= 50) tryUnlock('long_hauler');
+        if (newUser.spent >= 100) tryUnlock('thrifty_commuter');
+        if (newUser.streak_count >= 14) tryUnlock('habit_builder');
+        if (newUser.streak_count >= 30) tryUnlock('dedicated_commuter');
+
+        if (newBadges.length > (newUser.badges?.length || 0)) {
+           newUser.badges = newBadges;
+        }
+
         if (state.sessionMode === 'auth' && state.user.email) {
           // optionally sync to supabase
           supabase
@@ -112,7 +135,8 @@ export const useStore = create<StoreState>()(
               streak_count: newUser.streak_count,
               distance: newUser.distance,
               spent: newUser.spent,
-              trips: newUser.trips
+              trips: newUser.trips,
+              ...(newUser.badges ? { badges: newUser.badges } : {})
             })
             .eq('email', state.user.email)
             .then(({ error }) => {
@@ -120,7 +144,7 @@ export const useStore = create<StoreState>()(
             });
         }
 
-        return { user: newUser };
+        return { user: newUser, unlockedBadgeToShow: nextBadgeToShow };
       }),
       resetStreak: () => set((state) => ({ user: { ...state.user, streak_count: 0 } })),
       setSelectedTransitRoute: (route) => set({ selectedTransitRoute: route }),
