@@ -57,10 +57,10 @@ export default function AchievementsScreen() {
         
         <View style={styles.grid}>
           {BADGES.map((badge, idx) => {
-            const currentValue = 0; // all badges locked initially due to no progress
-            const progressValue = Math.min(badge.goal, currentValue);
+            const isEarned = user?.badges?.includes(badge.id) || false;
+            const progressValue = isEarned ? badge.goal : Math.min(badge.goal, getProgress(badge.id));
             const fillWidth = `${(progressValue / badge.goal) * 100}%`;
-            const isLocked = progressValue === 0;
+            const isLocked = !isEarned;
 
             return (
               <View key={badge.id || idx} style={[styles.card, isLocked && { opacity: 0.6 }]}>

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { supabase } from '../config/supabaseClient';
 
 interface User {
   name: string;
@@ -10,6 +11,8 @@ interface User {
   total_km: number;
   total_fare_spent: number;
   saved_routes?: any[];
+  saved_places?: any[];
+  commute_history?: any[];
   badges?: string[];
 }
 
@@ -23,6 +26,8 @@ const DEFAULT_GUEST_USER: User = {
   total_km: 0,
   total_fare_spent: 0,
   saved_routes: [],
+  saved_places: [],
+  commute_history: [],
   badges: [],
 };
 
@@ -44,6 +49,13 @@ interface StoreState {
   setPendingRouteSearch: (search: { origin: any; destination: any } | null) => void;
   saveRoute: (route: any) => void;
   removeSavedRoute: (routeId: string | number) => void;
+  savePlace: (place: any) => void;
+  removeSavedPlace: (placeId: string) => void;
+  addHistory: (historyItem: any) => void;
+  clearHistory: () => void;
+  unlockedBadgeToShow: string | null;
+  unlockBadge: (badgeId: string) => void;
+  clearUnlockedBadge: () => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -55,6 +67,7 @@ export const useStore = create<StoreState>()(
       insightDismissed: false,
       selectedTransitRoute: null,
       pendingRouteSearch: null,
+      unlockedBadgeToShow: null,
       setUser: (user) => set({ user }),
       beginGuestSession: () =>
         set({
@@ -92,6 +105,55 @@ export const useStore = create<StoreState>()(
             saved_routes: (state.user.saved_routes || []).filter((r) => r.id !== routeId),
           },
         })),
+      savePlace: (place: any) =>
+        set((state) => {
+          const currentSaved = state.user.saved_places || [];
+          if (!currentSaved.find((p) => p.id === place.id)) {
+            return { user: { ...state.user, saved_places: [...currentSaved, place] } };
+          }
+          return state;
+        }),
+      removeSavedPlace: (placeId: string) =>
+        set((state) => ({
+          user: {
+            ...state.user,
+            saved_places: (state.user.saved_places || []).filter((p) => p.id !== placeId),
+          },
+        })),
+      addHistory: (item: any) =>
+        set((state) => {
+          const currentHistory = state.user.commute_history || [];
+          const newHistory = [item, ...currentHistory.filter((h: any) => h.id !== item.id)].slice(0, 20);
+          return { user: { ...state.user, commute_history: newHistory } };
+        }),
+      clearHistory: () =>
+        set((state) => ({
+          user: { ...state.user, commute_history: [] },
+        })),
+      unlockBadge: (badgeId: string) =>
+        set((state) => {
+          const currentBadges = state.user.badges || [];
+          if (currentBadges.includes(badgeId)) return state;
+          
+          const newBadges = [...currentBadges, badgeId];
+          
+          // update supabase if authenticated
+          if (state.sessionMode === 'auth' && state.user.email) {
+            supabase
+              .from('users')
+              .update({ badges: newBadges })
+              .eq('email', state.user.email)
+              .then(({ error }) => {
+                if (error) console.log('Failed to array-sync badge to Supabase:', error.message);
+              });
+          }
+          
+          return {
+            user: { ...state.user, badges: newBadges },
+            unlockedBadgeToShow: badgeId,
+          };
+        }),
+      clearUnlockedBadge: () => set({ unlockedBadgeToShow: null }),
     }),
     {
       name: 'para-store',

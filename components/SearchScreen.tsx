@@ -19,7 +19,6 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { fuzzyFilter } from '../utils/fuzzySearch';
 import { useRecentSearches, RecentSearch } from '../hooks/useRecentSearches';
 import { useStore } from '../store/useStore';
-import LOCAL_PLACES from '../data/local_places.json';
 
 const GEOCODING_BASE_URL =
   process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
@@ -57,12 +56,15 @@ export default function SearchScreen({
   const [originPlace, setOriginPlace] = useState<PlaceResult | null>(null);
   const [destinationText, setDestinationText] = useState('');
   const [usingCurrentLocation, setUsingCurrentLocation] = useState(true);
+  const [destinationPlace, setDestinationPlace] = useState<PlaceResult | null>(null);
+  const [activeTab, setActiveTab] = useState<'recent' | 'favorites'>('recent');
 
   const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
   const [isFetching, setIsFetching] = useState(false);
 
-  const { recents, addRecent, clearRecents } = useRecentSearches();
-  const { saveRoute, removeSavedRoute, user } = useStore();
+  const { recents, addRecent } = useRecentSearches();
+  const unlockBadge = useStore((state) => state.unlockBadge);
+  const { savePlace, removeSavedPlace, user } = useStore();
 
   const originRef = useRef<TextInput>(null);
   const destRef = useRef<TextInput>(null);
@@ -91,52 +93,30 @@ export default function SearchScreen({
   // Active query text
   const activeQuery = activeField === 'origin' ? originText : destinationText;
 
-  // Instant local search (local places + recents, no debounce)
+  // Geocoding + fuzzy local search
   useEffect(() => {
     const q = activeQuery.trim();
     if (q.length < 2) {
       setSuggestions([]);
-      return;
-    }
-    const recentMatches = fuzzyFilter(recents, q, (r) => [r.title, r.subtitle], 5).map(
-      (r) => r.item as PlaceResult,
-    );
-    const placeMatches: PlaceResult[] = fuzzyFilter(
-      LOCAL_PLACES,
-      q,
-      (p) => [p.title, p.subtitle],
-      20,
-    ).map((r) => r.item as PlaceResult);
-
-    // Merge: recents first, then local places (deduplicated)
-    const seenIds = new Set(recentMatches.map((r) => r.id));
-    const merged = [
-      ...recentMatches,
-      ...placeMatches.filter((p) => !seenIds.has(p.id)),
-    ];
-    setSuggestions(merged);
-  }, [activeQuery, recents]);
-
-  // Supplementary API search (debounced, merges with existing local results)
-  useEffect(() => {
-    const q = activeQuery.trim();
-    if (q.length < 3) {
       setIsFetching(false);
       return;
     }
 
     let cancelled = false;
-    setIsFetching(true);
-
     const timer = setTimeout(async () => {
+      setIsFetching(true);
+
+      // Local fuzzy match on recents first
+      const localMatches = fuzzyFilter(recents, q, (r) => [r.title, r.subtitle], 3).map(
+        (r) => r.item as PlaceResult,
+      );
+
       try {
         const params = new URLSearchParams({
-          q,
+          q: `${q}, Cavite, Philippines`,
           format: 'json',
-          limit: '10',
+          limit: '8',
           countrycodes: 'ph',
-          viewbox: '120.7,14.55,121.1,14.35',
-          bounded: '0',
           addressdetails: '0',
         });
 
@@ -162,23 +142,29 @@ export default function SearchScreen({
           })
           .filter((p: PlaceResult) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
 
-        // Merge current local results with new remote results
-        setSuggestions((prev) => {
-          const seenIds = new Set(prev.map((p) => p.id));
-          return [...prev, ...remote.filter((r) => !seenIds.has(r.id))];
-        });
+        // Merge: locals first (deduplicated), then remote
+        const seenIds = new Set(localMatches.map((l) => l.id));
+        const merged = [
+          ...localMatches,
+          ...remote.filter((r) => !seenIds.has(r.id)),
+        ].slice(0, 10);
+
+        setSuggestions(merged);
       } catch {
-        // Keep existing local results
+        if (!cancelled) {
+          // Fall back to local results only
+          setSuggestions(localMatches);
+        }
       } finally {
         if (!cancelled) setIsFetching(false);
       }
-    }, 300);
+    }, 350);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [activeQuery, activeField]);
+  }, [activeQuery, activeField, recents]);
 
   const handleSelectPlace = useCallback(
     (place: PlaceResult) => {
@@ -192,6 +178,7 @@ export default function SearchScreen({
         setTimeout(() => destRef.current?.focus(), 100);
       } else {
         setDestinationText(place.title);
+        setDestinationPlace(place);
         // Both fields filled → trigger route
         const origin = usingCurrentLocation ? null : originPlace;
         onSelectRoute(origin, place);
@@ -210,44 +197,55 @@ export default function SearchScreen({
 
   
 
-  const isRouteSaved = () => {
-    const org = usingCurrentLocation ? (currentLocationLabel || 'Current Location') : originText;
-    const dst = destinationText;
-    if (!org || !dst) return false;
-    const routeId = `${org} - ${dst}`;
-    return user.saved_routes?.some(r => r.id === routeId) || false;
-  };
+  const isPlaceSaved = useCallback((placeId: string) => {
+    return user.saved_places?.some((p) => p.id === placeId) || false;
+  }, [user.saved_places]);
 
-  const handleFavorite = () => {
-    const org = usingCurrentLocation ? (currentLocationLabel || 'Current Location') : originText;
-    const dst = destinationText;
-    
-    if (!org || !dst) {
-      Alert.alert('Missing Fields', 'Please enter both origin and destination to save the route.');
-      return;
-    }
-
-    const routeId = `${org} - ${dst}`;
-    
-    if (isRouteSaved()) {
-      removeSavedRoute(routeId);
-      Alert.alert('Removed', 'Route has been removed from your Saved page.');
+  const toggleFavorite = useCallback((place: PlaceResult) => {
+    if (isPlaceSaved(place.id)) {
+      removeSavedPlace(place.id);
     } else {
-      saveRoute({
-        id: routeId,
-        name: `${org} to ${dst}`,
-        legs: [{ mode: 'Custom Route', from: org, to: dst, fare: 0, km: 0, minutes: 0, instructions: 'Custom saved route' }],
-        total_fare: 0,
-        total_km: 0,
-        estimated_minutes: 0,
-      });
-      Alert.alert('Saved!', 'Route has been saved to your Saved page.');
+      savePlace(place);
     }
-  };
+  }, [isPlaceSaved, removeSavedPlace, savePlace]);
 
-  const displayOrigin = usingCurrentLocation
-    ? currentLocationLabel || 'Current Location'
-    : originText;
+  const handleSwap = useCallback(() => {
+    const tempUsingCurrent = usingCurrentLocation;
+    const tempOriginText = originText;
+    const tempOriginPlace = originPlace;
+
+    setOriginText(destinationText);
+    setOriginPlace(destinationPlace);
+
+    const newDestText = tempUsingCurrent && !tempOriginText 
+      ? (currentLocationLabel || 'Current Location') 
+      : tempOriginText;
+    setDestinationText(newDestText);
+    setDestinationPlace(tempOriginPlace);
+
+    if (tempUsingCurrent) {
+      setUsingCurrentLocation(false);
+    }
+    
+    // Switch active field to destination to encourage flow
+    setActiveField('destination');
+    
+    // Achievement System: Adaptive Commuter
+    setTimeout(() => {
+      const user = useStore.getState().user;
+      if (!user.badges?.includes('adaptive_commuter')) {
+        unlockBadge('adaptive_commuter');
+      }
+    }, 1000);
+  }, [
+    usingCurrentLocation, 
+    originText, 
+    originPlace,
+    destinationText, 
+    destinationPlace, 
+    currentLocationLabel,
+    unlockBadge
+  ]);
 
   return (
     <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>
@@ -259,13 +257,11 @@ export default function SearchScreen({
             <Ionicons name="arrow-back" size={24} color={COLORS.navy} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { flex: 1 }]}>Your Route</Text>
-          <TouchableOpacity onPress={handleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name={isRouteSaved() ? "heart" : "heart-outline"} size={24} color={isRouteSaved() ? COLORS.primary : COLORS.navy} />
-          </TouchableOpacity>
         </View>
 
         {/* Search Fields */}
-        <View style={styles.fieldsContainer}>
+        <View style={styles.fieldsContainerOuter}>
+          <View style={styles.fieldsContainer}>
           {/* Origin */}
           <View
             style={[
@@ -366,6 +362,20 @@ export default function SearchScreen({
           </View>
         </View>
 
+          <TouchableOpacity 
+            style={styles.swapBtn} 
+            onPress={handleSwap}
+            activeOpacity={0.7}
+          >
+            <View style={styles.swapBtnOuter}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="arrow-down-outline" size={20} color={COLORS.primary} style={{ marginRight: -4 }} />
+                <Ionicons name="arrow-up-outline" size={20} color={COLORS.primary} style={{ marginLeft: -4 }} />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Choose Current Location Button */}
         <TouchableOpacity
           style={styles.currentLocationBtn}
@@ -390,7 +400,8 @@ export default function SearchScreen({
         {/* Divider */}
         <View style={styles.divider} />
 
-        {/* Suggestions or Recents */}
+        
+        {/* Suggestions or Recents/Favorites */}
         {activeQuery.trim().length >= 2 ? (
           <>
             {isFetching && suggestions.length === 0 ? (
@@ -421,6 +432,9 @@ export default function SearchScreen({
                         {item.subtitle}
                       </Text>
                     </View>
+                    <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name={isPlaceSaved(item.id) ? "star" : "star-outline"} size={22} color={isPlaceSaved(item.id) ? '#E8A020' : COLORS.textMuted} />
+                    </TouchableOpacity>
                   </TouchableOpacity>
                 )}
                 ListEmptyComponent={
@@ -433,45 +447,83 @@ export default function SearchScreen({
           </>
         ) : (
           <>
-            {recents.length > 0 && (
-              <>
-                <View style={styles.sectionHeader}>
-                  <Ionicons name="time-outline" size={16} color={COLORS.navy} />
-                  <Text style={styles.sectionTitle}>Recent</Text>
+            <View style={styles.tabContainer}>
+              <TouchableOpacity 
+                style={[styles.tabBtn, activeTab === 'recent' && styles.tabBtnActive]} 
+                onPress={() => setActiveTab('recent')}
+              >
+                <Ionicons name="time" size={18} color={activeTab === 'recent' ? COLORS.primary : COLORS.textMuted} />
+                <Text style={[styles.tabText, activeTab === 'recent' && styles.tabTextActive]}>Recent</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.tabBtn, activeTab === 'favorites' && styles.tabBtnActive]} 
+                onPress={() => setActiveTab('favorites')}
+              >
+                <Ionicons name="star" size={18} color={activeTab === 'favorites' ? COLORS.primary : COLORS.textMuted} />
+                <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>Favorites</Text>
+              </TouchableOpacity>
+            </View>
+
+            {activeTab === 'recent' ? (
+              <FlatList
+                data={recents}
+                keyExtractor={(item) => item.id}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.listContent}
+                renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={styles.clearButton}
-                    onPress={clearRecents}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.resultRow}
+                    activeOpacity={0.7}
+                    onPress={() => handleRecentPress(item)}
                   >
-                    <Text style={styles.clearButtonText}>Clear</Text>
-                  </TouchableOpacity>
-                </View>
-                <FlatList
-                  data={recents}
-                  keyExtractor={(item) => item.id}
-                  keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={styles.listContent}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.resultRow}
-                      activeOpacity={0.7}
-                      onPress={() => handleRecentPress(item)}
-                    >
-                      <View style={styles.resultIcon}>
-                        <Ionicons name="location" size={18} color="#4A90D9" />
-                      </View>
-                      <View style={styles.resultTextWrap}>
-                        <Text style={styles.resultTitle} numberOfLines={1}>
-                          {item.title}
-                        </Text>
-                        <Text style={styles.resultSubtitle} numberOfLines={2}>
-                          {item.subtitle}
-                        </Text>
-                      </View>
+                    <View style={styles.resultIcon}>
+                      <Ionicons name="location" size={18} color="#4A90D9" />
+                    </View>
+                    <View style={styles.resultTextWrap}>
+                      <Text style={styles.resultTitle} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.resultSubtitle} numberOfLines={2}>
+                        {item.subtitle}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name={isPlaceSaved(item.id) ? "star" : "star-outline"} size={22} color={isPlaceSaved(item.id) ? '#E8A020' : COLORS.textMuted} />
                     </TouchableOpacity>
-                  )}
-                />
-              </>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={<Text style={styles.emptyText}>No recent searches.</Text>}
+              />
+            ) : (
+              <FlatList
+                data={user.saved_places || []}
+                keyExtractor={(item) => item.id}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.listContent}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.resultRow}
+                    activeOpacity={0.7}
+                    onPress={() => handleRecentPress(item)}
+                  >
+                    <View style={styles.resultIcon}>
+                      <Ionicons name="location" size={18} color="#4A90D9" />
+                    </View>
+                    <View style={styles.resultTextWrap}>
+                      <Text style={styles.resultTitle} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.resultSubtitle} numberOfLines={2}>
+                        {item.subtitle}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="star" size={22} color="#E8A020" />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={<Text style={styles.emptyText}>No favorite places yet.</Text>}
+              />
             )}
           </>
         )}
@@ -503,7 +555,61 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: COLORS.navy,
   },
+  fieldsContainerOuter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.screenX,
+    marginBottom: 4,
+  },
+  swapBtn: {
+    justifyContent: 'center',
+    paddingLeft: 12,
+  },
+  swapBtnOuter: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginHorizontal: SPACING.screenX,
+    marginTop: 12,
+    marginBottom: 8,
+    backgroundColor: '#F5F6F8',
+    borderRadius: 12,
+    padding: 4,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  tabBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  tabText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  tabTextActive: {
+    color: COLORS.primary,
+  },
   fieldsContainer: {
+    flex: 1,
     paddingHorizontal: SPACING.screenX,
     marginBottom: 4,
   },
@@ -576,19 +682,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: COLORS.navy,
-    flex: 1,
-  },
-  clearButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(10,22,40,0.06)',
-  },
-  clearButtonText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textMuted,
   },
   listContent: {
     paddingHorizontal: SPACING.screenX,

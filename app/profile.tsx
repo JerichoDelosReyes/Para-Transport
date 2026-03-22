@@ -114,8 +114,8 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.badgesWrapper}>
-            {BADGES.slice(0, 3).map((badge, index) => {
-              const isEarned = false; // explicitly locked instead of mock data
+            {BADGES.slice(0, 3).map((badge) => {
+              const isEarned = user?.badges?.includes(badge.id) || false;
               return (
                 <View key={badge.id} style={[styles.badgeCard, !isEarned && styles.badgeLocked]}>
                                     <View style={styles.profileIconWrapper}>

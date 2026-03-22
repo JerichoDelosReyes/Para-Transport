@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, Animated, StyleSheet, Easing, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
+import { AchievementPopup } from '../components/AchievementPopup';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -133,6 +134,9 @@ export default function RootLayout() {
         {showAnimatedSplash && (
           <CustomSplash onFinish={() => setShowAnimatedSplash(false)} />
         )}
+
+        {/* Global Achievement Popup Overlay */}
+        <AchievementPopup />
       </View>
     </SafeAreaProvider>
   );
