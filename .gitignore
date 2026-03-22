@@ -52,3 +52,4 @@ data/local_places.json
 data/gpx/*
 !data/gpx/README.md
 !data/gpx/.gitkeep
+!data/gpx/GPXHelper.md
