@@ -5,7 +5,6 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRouter, useNavigation } from 'expo-router';
 import { CommonActions } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
-import { useRecentSearches } from '../hooks/useRecentSearches';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { mapResetPasswordError, sendPasswordResetEmail, signOut } from '../services/authService';
 
@@ -14,8 +13,6 @@ export default function SettingsScreen() {
   const navigation = useNavigation();
   const user = useStore((state) => state.user);
   const clearSession = useStore((state) => state.clearSession);
-  const resetProgress = useStore((state) => state.resetProgress);
-  const { clearRecents } = useRecentSearches();
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
   const insets = useSafeAreaInsets();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
