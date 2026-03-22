@@ -1476,7 +1476,10 @@ export default function HomeScreen() {
       <View style={styles.mapControls}>
         <View style={styles.chatbotWrap}>
           <TouchableOpacity style={styles.locateButton} onPress={() => router.push('/ai-chatbot')} activeOpacity={0.8}>
-            <Ionicons name="sparkles" size={24} color={COLORS.navy} />
+            <Image 
+              source={require('../../assets/AIChatbot/IDLE.png')} 
+              style={{ width: 36, height: 36, resizeMode: 'contain' }} 
+            />
           </TouchableOpacity>
         </View>
 
@@ -1837,7 +1840,7 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#000000',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.14,
