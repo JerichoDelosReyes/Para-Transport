@@ -563,17 +563,15 @@ export default function HomeScreen() {
           const allMatchedCodes = new Set(matchedRoutes.flatMap(m => m.legs.map(l => l.route.properties.code)));
           const isMatched = allMatchedCodes.has(code);
 
-          // Master visibility toggle: hide every transit route overlay.
-          if (!showRoutes) return null;
-
-          // When a route is selected in search mode, only show that route
-          if (searchMode === 'results' && selectedRoute && !isSelected) return null;
+          // Determine if this route should be hidden
+          const isHidden = !showRoutes
+            || (searchMode === 'results' && selectedRoute && !isSelected);
 
           const dimmed = searchMode === 'results' && !isMatched && !isSelected;
 
           // Trim to boarding → alighting segment when selected in search mode
           let coords = route.coordinates;
-          if (isSelected && searchMode === 'results') {
+          if (!isHidden && isSelected && searchMode === 'results') {
             const matched = matchedRoutes.find(m =>
               m.legs.map(l => l.route.properties.code).join('+') === selectedRoute
             );
@@ -602,15 +600,17 @@ export default function HomeScreen() {
           return (
             <Polyline
               key={code}
-              coordinates={coords}
-              strokeColor={isSelected ? '#E8A020' : dimmed ? 'rgba(33,150,243,0.2)' : '#2196F3'}
-              strokeWidth={isSelected ? 5 : isMatched ? 4 : 3}
+              coordinates={isHidden ? [] : coords}
+              strokeColor={isHidden ? 'rgba(0,0,0,0)' : isSelected ? '#E8A020' : dimmed ? 'rgba(33,150,243,0.2)' : '#2196F3'}
+              strokeWidth={isHidden ? 0 : isSelected ? 5 : isMatched ? 4 : 3}
               lineCap="round"
               lineJoin="round"
               lineDashPattern={isSelected ? undefined : [1]}
-              tappable
+              tappable={!isHidden}
               onPress={() => {
-                setSelectedRoute(isSelected ? null : code);
+                if (!isHidden) {
+                  setSelectedRoute(isSelected ? null : code);
+                }
               }}
             />
           );
