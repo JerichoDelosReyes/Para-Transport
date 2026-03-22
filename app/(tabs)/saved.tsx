@@ -34,8 +34,8 @@ export default function SavedScreen() {
     if (selectedRoute) {
       setModalVisible(false);
       if (selectedRoute.legs && selectedRoute.legs[0]?.mode === 'Custom Route') {
-        const origin = selectedRoute.legs[0].from;
-        const destination = selectedRoute.legs[0].to;
+        const origin = selectedRoute.legs[0].fromObj || selectedRoute.legs[0].from;
+        const destination = selectedRoute.legs[0].toObj || selectedRoute.legs[0].to;
         setPendingRouteSearch({ origin, destination });
       } else {
         setSelectedTransitRoute(selectedRoute);
@@ -64,7 +64,7 @@ export default function SavedScreen() {
             <View style={styles.cardTop}>
               <Text style={styles.routeName}>{route.name}</Text>
               <TouchableOpacity onPress={() => confirmRemove(route.id)}>
-                <Ionicons name="heart" size={18} color={COLORS.primary} />
+                <Ionicons name="bookmark" size={18} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
             <Text style={styles.legSummary}>{route.legs.map((leg: any) => leg.mode).join(' • ')}</Text>
