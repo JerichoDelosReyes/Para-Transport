@@ -7,6 +7,7 @@ import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
 import { useStore } from '../../store/useStore';
+import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
 import { ROUTE_COLORS, ROUTE_LABELS } from '../../constants/routeVisuals';
 import { getRouteDisplayRef, MAP_ENABLED_ROUTE_CODES } from '../../constants/routeCatalog';
 
@@ -280,7 +281,8 @@ export default function RoutesScreen() {
           </View>
         ) : (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No history yet.</Text>
+            <JeepIllustration width={220} height={150} />
+            <Text style={styles.emptyTitle}>Wala pang history.</Text>
           </View>
         )}
       </ScrollView>
@@ -468,15 +470,17 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 60,
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: COLORS.card,
+    padding: SPACING.cardPadding,
   },
   emptyTitle: {
-    fontFamily: 'Inter',
-    fontSize: 18,
-    fontWeight: '700',
+    marginTop: 8,
+    fontFamily: 'Cubao',
+    fontSize: 24,
     color: COLORS.navy,
-    marginTop: 20,
   },
   skeletonContainer: {
     paddingTop: 10,

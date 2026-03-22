@@ -140,7 +140,7 @@ export const useStore = create<StoreState>()(
             })
             .eq('email', state.user.email)
             .then(({ error }) => {
-              if (error) console.log('Failed to sync trip stats to Supabase:', error.message);
+              if (error && error.code !== 'PGRST204') console.log('Failed to sync trip stats to Supabase:', error.message);
             });
         }
 
@@ -247,7 +247,7 @@ export const useStore = create<StoreState>()(
               .update({ badges: newBadges })
               .eq('email', state.user.email)
               .then(({ error }) => {
-                if (error) console.log('Failed to array-sync badge to Supabase:', error.message);
+                if (error && error.code !== 'PGRST204') console.log('Failed to array-sync badge to Supabase:', error.message);
               });
           }
           
