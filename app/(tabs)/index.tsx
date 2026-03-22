@@ -7,7 +7,7 @@ import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
-import { useJeepneyRoutes } from '../../hooks/useJeepneyRoutes';
+import { useRoutes } from '../../hooks/useRoutes';
 import { findRoutesForDestination, rankRoutes, MatchedRoute } from '../../services/routeSearch';
 import type { RankMode } from '../../services/routeSearch';
 import RouteResultCard from '../../components/RouteResultCard';
@@ -57,7 +57,7 @@ export default function HomeScreen() {
   const [destinationName, setDestinationName] = useState('');
   const [walkingPaths, setWalkingPaths] = useState<Record<string, MapCoordinate[]>>({});
   const [destinationMarkerKey, setDestinationMarkerKey] = useState(0);
-  const { routes: jeepneyRoutes } = useJeepneyRoutes();
+  const { routes: jeepneyRoutes } = useRoutes();
   const { rankTab, setRankTab } = useStore();
   const mapRef = useRef<MapView | null>(null);
 

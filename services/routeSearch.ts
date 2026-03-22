@@ -1,5 +1,5 @@
 import * as turf from '@turf/turf';
-import type { JeepneyRoute, RouteCoord } from '../hooks/useJeepneyRoutes';
+import type { JeepneyRoute, RouteCoord } from '../types/routes';
 
 /** A single leg of a transit journey */
 export type RouteLeg = {
