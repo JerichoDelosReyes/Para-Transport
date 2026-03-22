@@ -69,7 +69,7 @@ export default function SavedScreen() {
             </View>
             <Text style={styles.legSummary}>{route.legs.map((leg: any) => leg.mode).join(' • ')}</Text>
             <View style={styles.cardBottom}>
-              <Text style={styles.fare}>{route.total_fare ? `₱${route.total_fare.toFixed(2)}` : 'Varies'}</Text>
+              <Text style={styles.fare}>{route.total_fare ? `₱${route.total_fare.toFixed(2)}` : 'FARE VARIES'}</Text>
               <TouchableOpacity style={styles.ghostButton} activeOpacity={0.9} onPress={() => openModal(route)}>
                 <Text style={styles.ghostButtonText}>View</Text>
               </TouchableOpacity>
@@ -95,7 +95,7 @@ export default function SavedScreen() {
                 <View style={styles.modalBody}>
                   <View style={styles.modalRow}>
                     <Text style={styles.modalLabel}>Fare</Text>
-                    <Text style={styles.modalValue}>{selectedRoute?.total_fare ? `₱${selectedRoute.total_fare.toFixed(2)}` : 'Varies'}</Text>
+                    <Text style={styles.modalValue}>{selectedRoute?.total_fare ? `₱${selectedRoute.total_fare.toFixed(2)}` : 'FARE VARIES'}</Text>
                   </View>
                   <View style={styles.modalRow}>
                     <Text style={styles.modalLabel}>Estimated Time</Text>
