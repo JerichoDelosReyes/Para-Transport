@@ -74,6 +74,10 @@ type RecommenderCandidate = {
   metrics: RouteMetrics;
 };
 
+type RecommenderProfile = {
+  destinationName?: string;
+};
+
 const sumLegDistanceMeters = (legs: TransitLeg[]): number => {
   return legs.reduce((total, leg) => {
     let segmentMeters = 0;
@@ -180,6 +184,26 @@ const routeSignature = (legs: TransitLeg[]): string => {
     .join('|');
 };
 
+const candidateModes = (candidate: RecommenderCandidate): Set<string> => {
+  const modes = new Set<string>();
+  for (const leg of candidate.legs) {
+    modes.add(getLegModeKey(leg));
+  }
+  return modes;
+};
+
+const candidateHasMode = (candidate: RecommenderCandidate, mode: string): boolean => {
+  return candidateModes(candidate).has(mode);
+};
+
+const isCvsuImusTarget = (destinationName?: string): boolean => {
+  if (!destinationName) return false;
+  const norm = destinationName.toLowerCase();
+  const hasCvsu = norm.includes('cvsu') || norm.includes('cavite state university');
+  const hasImus = norm.includes('imus');
+  return hasCvsu || (hasCvsu && hasImus);
+};
+
 const buildRecommendationOptions = (
   osrmRoutes: any[],
   transitRoutes: any[],
@@ -229,12 +253,73 @@ const buildRecommendationOptions = (
 
 const toRecommenderOptions = (
   candidates: RecommenderCandidate[],
+  profile?: RecommenderProfile,
 ): { uiOptions: RouteRecommenderOption[]; ordered: RecommenderCandidate[] } => {
   if (candidates.length === 0) return { uiOptions: [], ordered: [] };
+
+  const cvsuImus = isCvsuImusTarget(profile?.destinationName);
 
   const getBest = (score: (candidate: RecommenderCandidate) => number) => {
     return candidates.reduce((best, curr) => (score(curr) < score(best) ? curr : best), candidates[0]);
   };
+
+  const pickBest = (
+    id: string,
+    pool: RecommenderCandidate[],
+    score: (candidate: RecommenderCandidate) => number,
+    tags: string[],
+    label: string,
+    description: string,
+  ) => {
+    if (pool.length === 0) return null;
+    const best = pool.reduce((a, b) => (score(b) < score(a) ? b : a));
+    return { id, candidate: best, tags, label, description };
+  };
+
+  const noUnnecessaryTransfer = (candidate: RecommenderCandidate) => candidate.metrics.transferCount <= 1;
+
+  const picks: Array<{
+    id: string;
+    candidate: RecommenderCandidate;
+    tags: string[];
+    label: string;
+    description: string;
+  }> = [];
+
+  if (cvsuImus) {
+    const triJeepPool = candidates.filter((c) => candidateHasMode(c, 'tricycle') && candidateHasMode(c, 'jeepney'));
+    const routinePick = pickBest(
+      'routine_mix',
+      triJeepPool,
+      (c) => Math.abs(c.metrics.farePhp - 53) + c.metrics.effectiveDurationMin * 0.55 + c.metrics.transferCount * 40 + c.metrics.walkMeters / 900,
+      ['Routine', 'Tricycle + Jeepney'],
+      'Routine Mix',
+      'Balanced routine: tricycle first, then jeepney for good time and cost balance',
+    );
+    if (routinePick && noUnnecessaryTransfer(routinePick.candidate)) picks.push(routinePick);
+
+    const fastTriPool = candidates.filter((c) => candidateHasMode(c, 'tricycle'));
+    const fastPick = pickBest(
+      'fast_arrival',
+      fastTriPool.length ? fastTriPool : candidates,
+      (c) => c.metrics.effectiveDurationMin + c.metrics.transferCount * 9 + c.metrics.walkMeters / 1600,
+      ['Fastest'],
+      'Fast Arrival',
+      'Prioritizes tricycle-heavy routing so you arrive sooner when running late',
+    );
+    if (fastPick && noUnnecessaryTransfer(fastPick.candidate)) picks.push(fastPick);
+
+    const cheapWalkPool = candidates.filter((c) => candidateHasMode(c, 'jeepney'));
+    const cheapPick = pickBest(
+      'walk_then_jeep',
+      cheapWalkPool.length ? cheapWalkPool : candidates,
+      (c) => c.metrics.farePhp * 3 + c.metrics.effectiveDurationMin * 0.45 - c.metrics.walkMeters / 250 + c.metrics.transferCount * 18,
+      ['Cheapest', 'Walk More'],
+      'Walk Then Jeepney',
+      'Lower fare route: walk longer first, then ride jeepney for minimal cost',
+    );
+    if (cheapPick && noUnnecessaryTransfer(cheapPick.candidate)) picks.push(cheapPick);
+  }
 
   const winners = {
     recommended: getBest((c) =>
@@ -248,21 +333,79 @@ const toRecommenderOptions = (
     leastTransfers: getBest((c) => c.metrics.transferCount * 100 + c.metrics.walkMeters / 300),
   };
 
-  const tagsById = new Map<string, string[]>();
-  const addTag = (id: string, tag: string) => {
-    const tags = tagsById.get(id) || [];
-    tags.push(tag);
-    tagsById.set(id, tags);
+  const pickedById = new Map<string, {
+    candidate: RecommenderCandidate;
+    tags: string[];
+    label: string;
+    description: string;
+  }>();
+
+  const addPicked = (
+    candidate: RecommenderCandidate,
+    tag: string,
+    fallbackLabel: string,
+    fallbackDescription: string,
+  ) => {
+    const curr = pickedById.get(candidate.id);
+    if (!curr) {
+      pickedById.set(candidate.id, {
+        candidate,
+        tags: [tag],
+        label: fallbackLabel,
+        description: fallbackDescription,
+      });
+      return;
+    }
+    if (!curr.tags.includes(tag)) curr.tags.push(tag);
   };
 
-  addTag(winners.recommended.id, 'Recommended');
-  addTag(winners.fastest.id, 'Fastest');
-  addTag(winners.cheapest.id, 'Cheapest');
-  addTag(winners.leastTransfers.id, 'Least Transfers');
+  for (const pick of picks) {
+    pickedById.set(pick.candidate.id, {
+      candidate: pick.candidate,
+      tags: [...pick.tags],
+      label: pick.label,
+      description: pick.description,
+    });
+  }
 
-  let ordered = Array.from(tagsById.keys())
-    .map((id) => candidates.find((c) => c.id === id))
-    .filter(Boolean) as RecommenderCandidate[];
+  addPicked(
+    winners.recommended,
+    'Recommended',
+    'Recommended',
+    'Best overall balance of speed, cost, and comfort',
+  );
+  addPicked(
+    winners.fastest,
+    'Fastest',
+    'Fastest',
+    'Quickest arrival time for this trip',
+  );
+  addPicked(
+    winners.cheapest,
+    'Cheapest',
+    'Cheapest',
+    'Lowest overall fare route',
+  );
+  addPicked(
+    winners.leastTransfers,
+    'Least Transfers',
+    'Least Transfers',
+    'Minimizes transfer friction',
+  );
+
+  let ordered = Array.from(pickedById.values())
+    .map((v) => v.candidate)
+    .filter((candidate) => noUnnecessaryTransfer(candidate));
+
+  if (ordered.length === 0) {
+    ordered = [winners.recommended];
+    addPicked(
+      winners.recommended,
+      'Recommended',
+      'Recommended',
+      'Best available route with current road and transit data',
+    );
+  }
 
   // If multiple categories collapse to one route, still include an explicit alternative.
   if (ordered.length === 1 && candidates.length > 1) {
@@ -276,27 +419,37 @@ const toRecommenderOptions = (
       })[0];
     if (alternative) {
       ordered = [primary, alternative];
-      addTag(alternative.id, 'Alternative');
+      addPicked(
+        alternative,
+        'Alternative',
+        'Alternative Route',
+        'A practical backup route if traffic or queue changes',
+      );
     }
   }
+
+  // Keep the list concise but provide enough practical choices.
+  ordered = ordered.slice(0, 4);
 
   const visuals = [
     { icon: 'star', accentColor: '#E8A020', bgColor: '#FFF8E1' },
     { icon: 'compass', accentColor: '#0EA5E9', bgColor: '#EEF9FF' },
     { icon: 'git-branch', accentColor: '#22C55E', bgColor: '#F0FDF4' },
+    { icon: 'walk', accentColor: '#475569', bgColor: '#F8FAFC' },
   ] as const;
 
   const uiOptions: RouteRecommenderOption[] = ordered.map((candidate, idx) => {
-    const tags = tagsById.get(candidate.id) || ['Alternative'];
-    const primaryTag = tags[0];
+    const picked = pickedById.get(candidate.id);
+    const tags = picked?.tags || ['Alternative'];
     const v = visuals[Math.min(idx, visuals.length - 1)];
     return {
       id: candidate.id,
-      label: tags.length > 1 ? `Best: ${tags.join(' + ')}` : primaryTag,
-      description:
+      label: picked?.label || (tags.length > 1 ? `Best: ${tags.join(' + ')}` : tags[0]),
+      description: picked?.description || (
         candidate.metrics.tricycleLegs > 0
           ? 'Includes tricycle options to reduce walk or replace jeepney sections'
-          : 'Connected route with practical transfer and walking flow',
+          : 'Connected route with practical transfer and walking flow'
+      ),
       icon: v.icon,
       accentColor: v.accentColor,
       bgColor: v.bgColor,
@@ -370,6 +523,11 @@ export default function HomeScreen() {
   const mapRef = useRef<MapView | null>(null);
   const [showRecommender, setShowRecommender] = useState(false);
   const [simAutoFollow, setSimAutoFollow] = useState(true);
+
+  const selectedOptionLabel = useMemo(() => {
+    if (!selectedRecommenderOptionId) return 'Current Route';
+    return recommenderOptions.find((opt) => opt.id === selectedRecommenderOptionId)?.label || 'Current Route';
+  }, [selectedRecommenderOptionId, recommenderOptions]);
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -570,12 +728,31 @@ export default function HomeScreen() {
     
     setIsRouting(true);
     try {
-      // Fetch multiple OSRM alternatives so we can pick the one with least walking
-      const routeResponse = await fetch(
-        `${ROUTING_BASE_URL}/${startPoint.longitude},${startPoint.latitude};${destinationPoint.longitude},${destinationPoint.latitude}?overview=full&geometries=geojson&alternatives=3`
-      );
-      if (!routeResponse.ok) throw new Error(`Routing failed (${routeResponse.status})`);
-      const routeResult = await routeResponse.json();
+      // Fetch OSRM route alternatives with graceful fallback.
+      // Some public OSRM deployments may reject high alternatives counts.
+      const baseRouteUrl = `${ROUTING_BASE_URL}/${startPoint.longitude},${startPoint.latitude};${destinationPoint.longitude},${destinationPoint.latitude}`;
+      const queryAttempts = [
+        'overview=full&geometries=geojson&alternatives=6',
+        'overview=full&geometries=geojson&alternatives=3',
+        'overview=full&geometries=geojson&alternatives=true',
+      ];
+
+      let routeResult: any = null;
+      let lastStatus = 0;
+
+      for (const query of queryAttempts) {
+        const response = await fetch(`${baseRouteUrl}?${query}`);
+        lastStatus = response.status;
+        if (!response.ok) continue;
+
+        const parsed = await response.json();
+        if (parsed?.routes?.length > 0 && parsed?.routes?.[0]?.geometry?.coordinates) {
+          routeResult = parsed;
+          break;
+        }
+      }
+
+      if (!routeResult) throw new Error(`Routing failed (${lastStatus || 'no-response'})`);
       const osrmRoutes = routeResult?.routes;
       if (!osrmRoutes || osrmRoutes.length === 0 || !osrmRoutes[0]?.geometry?.coordinates) {
         Alert.alert('Route Not Found', 'No drivable route found for this destination.');
@@ -583,7 +760,9 @@ export default function HomeScreen() {
       }
 
       const builtCandidates = buildRecommendationOptions(osrmRoutes, transitRoutes as any[]);
-      const { uiOptions, ordered } = toRecommenderOptions(builtCandidates);
+      const { uiOptions, ordered } = toRecommenderOptions(builtCandidates, {
+        destinationName: destination.title,
+      });
 
       if (ordered.length > 0) {
         const chosen = ordered[0];
@@ -1118,6 +1297,7 @@ export default function HomeScreen() {
               <ProfileButton />
             </TouchableOpacity>
         </View>
+
         {/* Transit layer controls */}
         <View style={styles.transitControlsRow}>
           <TouchableOpacity
@@ -1169,6 +1349,19 @@ export default function HomeScreen() {
               <Ionicons name="navigate" size={14} color={COLORS.navy} />
               <Text style={styles.nearestStopBtnText}>Nearest Stop</Text>
             </TouchableOpacity>
+          )}
+
+          {/* Live summary card — right side of the controls row */}
+          {routeSummary && (
+            <>
+              <View style={{ flex: 1 }} />
+              <View style={styles.topRightSummaryCard}>
+                <Text style={styles.topRightSummaryTitle} numberOfLines={1}>{selectedOptionLabel}</Text>
+                <Text style={styles.topRightSummaryValue}>
+                  {routeSummary.distanceKm.toFixed(1)} km • {Math.round(routeSummary.durationMin)} min
+                </Text>
+              </View>
+            </>
           )}
 
         </View>
@@ -1470,6 +1663,33 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontFamily: 'Inter',
     fontSize: TYPOGRAPHY.label,
+  },
+  topRightSummaryCard: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+    maxWidth: 200,
+  },
+  topRightSummaryTitle: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+  },
+  topRightSummaryValue: {
+    marginTop: 2,
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: COLORS.navy,
+    fontWeight: '700',
   },
   activeSearchInput: {
     flex: 1,
