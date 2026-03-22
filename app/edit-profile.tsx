@@ -43,7 +43,9 @@ export default function EditProfileScreen() {
           .update({ name: name.trim() })
           .eq('email', user.email);
 
-        if (error) console.log('Supabase update failed:', error.message);
+        if (error && error.code !== 'PGRST204' && !error.message.includes("Could not find")) {
+          console.log('Supabase update failed:', error.message);
+        }
       }
       
       setUser({ ...user, name: name.trim() } as any);
