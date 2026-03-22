@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import routeData from '../data/routes.json';
+import tricycleRouteData from '../data/tricycle_routes.json';
+import { getRouteDisplayName } from '../constants/routeCatalog';
 import transitData from '../data/transit.routes.generated.json';
 
 export type RouteCoord = {
@@ -37,6 +40,20 @@ export function useJeepneyRoutes() {
 
   useEffect(() => {
     try {
+      const baseData = routeData as any;
+      const trikeData = tricycleRouteData as any;
+      const mergedRoutes = [...(baseData.routes || []), ...(trikeData.routes || [])];
+
+      const byCode = new Map<string, any>();
+      for (const r of mergedRoutes) {
+        if (!r?.code) continue;
+        // Later source wins for same code (tricycle_routes overrides routes.json)
+        byCode.set(r.code, r);
+      }
+      const allRoutes = Array.from(byCode.values());
+
+      const parsed: JeepneyRoute[] = allRoutes
+        .filter((r: any) => r.status === 'active' && r.path?.length >= 2)
       const data = transitData as any;
       const codeCounts = new Map<string, number>();
       const parsed: JeepneyRoute[] = (data.routes || [])
@@ -70,6 +87,13 @@ export function useJeepneyRoutes() {
 
           return {
             properties: {
+              code: r.code,
+              name: getRouteDisplayName(r.code, r.name),
+              description: r.description,
+              type: r.type,
+              fare: r.fare,
+              status: r.status,
+              operator: r.operator || '',
               code,
               name: r.routeName,
               description: `${r.routeName} (${r.direction})`,

@@ -41,6 +41,10 @@ yarn-error.*
 /android
 .env
 
+# Google Auth Client Files
+client_*.json
+client_*.plist
+
 
 # Document Changelogs
 docs/*.txt

@@ -1,20 +1,33 @@
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import {
+  loginWithEmailPassword,
+  verifyEmailOtp,
+  isEmailValid,
+  mapLoginError,
+  mapResetPasswordError,
+  sendPasswordResetEmail,
+} from '../services/authService';
+import { useStore } from '../store/useStore';
+import OtpModal from '../components/OtpModal';
 
 type HeaderDoodle = {
   id: number;
@@ -36,13 +49,121 @@ const HEADER_DOODLES: HeaderDoodle[] = [
 
 export default function LoginScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const beginAuthSession = useStore((state) => state.beginAuthSession);
+  
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isForgotModalVisible, setIsForgotModalVisible] = useState(false);
+  const [resetEmailInput, setResetEmailInput] = useState('');
+  const [forgotErrorMsg, setForgotErrorMsg] = useState('');
+  const [isForgotSubmitting, setIsForgotSubmitting] = useState(false);
+  
+  const [isOtpPending, setIsOtpPending] = useState(false);
+  const [otp, setOtp] = useState('');
+
+  const handleLogin = async () => {
+    setErrorMsg('');
+    if (!email.trim() || !password) {
+      setErrorMsg('Please enter both email and password.');
+      return;
+    }
+    if (!isEmailValid(email)) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const data = await loginWithEmailPassword(email, password);
+      // Construct a unified user to save in store
+      beginAuthSession({
+        name: data?.user?.user_metadata?.display_name || 'Commuter',
+        email: data?.user?.email || email,
+        points: 0,
+        streak_count: 0,
+        total_km: 0,
+        total_fare_spent: 0,
+        saved_routes: [],
+        badges: []
+      });
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      if (err.message && err.message.toLowerCase().includes('email not confirmed')) {
+         setIsOtpPending(true);
+         setErrorMsg('');
+      } else {
+         setErrorMsg(mapLoginError(err.code || err.message));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openForgotPasswordPopup = () => {
+    setForgotErrorMsg('');
+    setResetEmailInput(email.trim());
+    setIsForgotModalVisible(true);
+  };
+
+  const handleForgotPasswordSubmit = async () => {
+    setForgotErrorMsg('');
+    const normalizedEmail = resetEmailInput.trim();
+    if (!isEmailValid(normalizedEmail)) {
+      setForgotErrorMsg('Please enter a valid email address.');
+      return;
+    }
+
+    setIsForgotSubmitting(true);
+    try {
+      await sendPasswordResetEmail(normalizedEmail);
+      setIsForgotModalVisible(false);
+      setResetEmailInput(normalizedEmail);
+      Alert.alert('Reset Email Sent', 'If this email is registered, a password reset link has been sent.');
+    } catch (err: any) {
+      setForgotErrorMsg(mapResetPasswordError(err?.code || err?.message));
+    } finally {
+      setIsForgotSubmitting(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    setErrorMsg('');
+    if (!otp.trim()) {
+      setErrorMsg('Please enter the verification code.');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const data = await verifyEmailOtp(email, otp);
+      
+      beginAuthSession({
+        name: data?.user?.user_metadata?.display_name || 'Commuter',
+        email: data?.user?.email || email,
+        points: 0,
+        streak_count: 0,
+        total_km: 0,
+        total_fare_spent: 0,
+        saved_routes: [],
+        badges: []
+      });
+      setIsOtpPending(false);
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      const msg = (err.message || '').includes('expired or is invalid') ? 'Invalid OTP' : err.message;
+      setErrorMsg(msg || 'Verification failed. Please check the code.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.primary} />
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
 
       <KeyboardAvoidingView
         style={styles.screen}
@@ -65,7 +186,7 @@ export default function LoginScreen() {
             </View>
           ))}
 
-          <SafeAreaView edges={['top']} style={styles.headerSafeContent}>
+          <View style={[styles.headerSafeContent, { paddingTop: insets.top }]}>
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
               <Ionicons name="chevron-back" size={20} color={COLORS.navy} />
             </TouchableOpacity>
@@ -75,23 +196,24 @@ export default function LoginScreen() {
               <Text style={styles.title}>LOG IN</Text>
               <Text style={styles.headerCopy}>Tuloy na, tara na sa byahe.</Text>
             </View>
-          </SafeAreaView>
+          </View>
         </View>
 
         <View style={styles.formArea}>
           <ScrollView
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.label}>Email / username</Text>
+            <Text style={styles.label}>Email</Text>
             <TextInput
               value={email}
               onChangeText={setEmail}
               style={styles.input}
-              placeholder="someone@gmail.com | username01"
+              placeholder="someone@gmail.com"
               placeholderTextColor={COLORS.textMuted}
               autoCapitalize="none"
+              keyboardType="email-address"
             />
 
             <Text style={[styles.label, styles.labelTop]}>Password</Text>
@@ -109,33 +231,95 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.primaryButton} onPress={() => router.replace('/(tabs)')} activeOpacity={0.9}>
-              <Text style={styles.primaryButtonText}>LOG IN</Text>
+            <TouchableOpacity
+              style={styles.forgotPasswordWrap}
+              onPress={openForgotPasswordPopup}
+              activeOpacity={0.8}
+              disabled={isLoading}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
 
-            <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.lightSocial} activeOpacity={0.9}>
-                <Text style={styles.googleMark}>G</Text>
-                <Text style={styles.lightSocialText}>Google</Text>
-              </TouchableOpacity>
+            {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
 
-              <TouchableOpacity style={styles.appleSocial} activeOpacity={0.9}>
-                <Ionicons name="logo-apple" size={16} color="#FFFFFF" style={{ marginRight: 5 }} />
-                <Text style={styles.appleSocialText}>Apple</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity style={styles.createAccountButton} onPress={() => router.push('/register')} activeOpacity={0.9}>
-              <Text style={styles.createAccountText}>Create account</Text>
+            <TouchableOpacity 
+              style={[styles.primaryButton, isLoading && styles.disabledButton]} 
+              onPress={handleLogin} 
+              activeOpacity={0.9}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>LOG IN</Text>
+              )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.linkWrap} onPress={() => router.replace('/(tabs)')}>
-              <Text style={styles.linkText}>Bypass Login</Text>
+            <TouchableOpacity style={styles.linkWrap} onPress={() => router.navigate('/register')} activeOpacity={0.8}>
+              <Text style={styles.linkText}>Create account</Text>
             </TouchableOpacity>
 
             <Text style={styles.footerText}>Privacy Policy. Terms of Service</Text>
           </ScrollView>
         </View>
+
+        {isOtpPending && (
+          <OtpModal 
+            visible={isOtpPending}
+            email={email}
+            otp={otp}
+            isLoading={isLoading}
+            errorMsg={errorMsg}
+            onOtpChange={setOtp}
+            onVerify={handleVerifyOtp}
+            onClose={() => setIsOtpPending(false)}
+          />
+        )}
+
+        <Modal
+          visible={isForgotModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsForgotModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Forgot Password</Text>
+              <Text style={styles.modalBody}>Enter your email and we will send a reset link.</Text>
+
+              <TextInput
+                value={resetEmailInput}
+                onChangeText={setResetEmailInput}
+                style={styles.modalInput}
+                placeholder="someone@gmail.com"
+                placeholderTextColor={COLORS.textMuted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+
+              {forgotErrorMsg ? <Text style={styles.modalErrorText}>{forgotErrorMsg}</Text> : null}
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalSecondaryButton}
+                  onPress={() => setIsForgotModalVisible(false)}
+                  activeOpacity={0.8}
+                  disabled={isForgotSubmitting}
+                >
+                  <Text style={styles.modalSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalPrimaryButton, isForgotSubmitting && styles.disabledButton]}
+                  onPress={handleForgotPasswordSubmit}
+                  activeOpacity={0.8}
+                  disabled={isForgotSubmitting}
+                >
+                  <Text style={styles.modalPrimaryText}>{isForgotSubmitting ? 'Sending...' : 'Send Email'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </View>
   );
@@ -149,8 +333,8 @@ const styles = StyleSheet.create({
   headerZone: {
     backgroundColor: COLORS.primary,
     minHeight: 290,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    borderBottomLeftRadius: 34,
+    borderBottomRightRadius: 34,
     overflow: 'hidden',
   },
   headerDoodle: {
@@ -206,6 +390,102 @@ const styles = StyleSheet.create({
   labelTop: {
     marginTop: 12,
   },
+  errorText: {
+    fontFamily: 'Inter',
+    color: '#ff4d4d',
+    fontSize: 13,
+    marginTop: 8,
+    marginBottom: -8,
+  },
+  forgotPasswordWrap: {
+    marginTop: 10,
+    alignSelf: 'flex-end',
+  },
+  forgotPasswordText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: COLORS.navy,
+    textDecorationLine: 'underline',
+    opacity: 0.9,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(10,22,40,0.35)',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.screenX,
+  },
+  modalCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.card,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  modalTitle: {
+    fontFamily: 'Cubao',
+    fontSize: 24,
+    color: COLORS.navy,
+  },
+  modalBody: {
+    marginTop: 6,
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLORS.textStrong,
+    opacity: 0.8,
+  },
+  modalInput: {
+    marginTop: 12,
+    height: 48,
+    borderRadius: RADIUS.input,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    fontFamily: 'Inter',
+    fontSize: 16,
+    color: COLORS.navy,
+  },
+  modalErrorText: {
+    marginTop: 8,
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: '#ff4d4d',
+  },
+  modalActions: {
+    marginTop: 14,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  modalSecondaryButton: {
+    height: 40,
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+  },
+  modalSecondaryText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLORS.navy,
+    fontWeight: '600',
+  },
+  modalPrimaryButton: {
+    height: 40,
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+  },
+  modalPrimaryText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLORS.navy,
+    fontWeight: '700',
+  },
   input: {
     height: 52,
     borderRadius: 12,
@@ -234,7 +514,7 @@ const styles = StyleSheet.create({
     color: COLORS.navy,
   },
   primaryButton: {
-    marginTop: 16,
+    marginTop: 24,
     height: 56,
     borderRadius: RADIUS.pill,
     backgroundColor: COLORS.primary,
@@ -247,70 +527,13 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
+  disabledButton: {
+    opacity: 0.7,
+  },
   primaryButtonText: {
     fontFamily: 'Inter',
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.navy,
-  },
-  socialRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  appleSocial: {
-    flex: 1,
-    height: 52,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  appleSocialText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  lightSocial: {
-    flex: 1,
-    height: 52,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1.5,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  lightSocialText: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.navy,
-  },
-  googleMark: {
-    fontFamily: 'Inter',
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#4285F4',
-    marginRight: 4,
-  },
-  createAccountButton: {
-    marginTop: 12,
-    height: 54,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1.5,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  createAccountText: {
-    fontFamily: 'Inter',
-    fontSize: 16,
-    fontWeight: '600',
     color: COLORS.navy,
   },
   linkWrap: {
@@ -319,8 +542,9 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontFamily: 'Inter',
-    fontSize: 14,
-    color: COLORS.textMuted,
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.navy,
     textDecorationLine: 'underline',
   },
   footerText: {
