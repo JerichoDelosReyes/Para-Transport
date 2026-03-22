@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenX,
-    paddingBottom: 60,
+    paddingBottom: 150,
     paddingTop: 4,
     gap: 8,
   },
