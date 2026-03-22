@@ -53,3 +53,7 @@ Each route entry should include these fields:
 
 - Keep sensitive/private GPX datasets local.
 - Commit only approved sample data or placeholders.
+
+## Next Step
+
+After preparing or parsing GPX files, continue in `data/RouteGuide.md` for the full dataset workflow and JSON templates.
