@@ -688,6 +688,7 @@ export default function HomeScreen() {
   const mapRef = useRef<MapView | null>(null);
   const [showRecommender, setShowRecommender] = useState(false);
   const [simAutoFollow, setSimAutoFollow] = useState(true);
+  const [simBlink, setSimBlink] = useState(true);
 
   const selectedOptionLabel = useMemo(() => {
     if (!selectedRecommenderOptionId) return 'Current Route';
@@ -1131,6 +1132,102 @@ export default function HomeScreen() {
   // Simulation — uses the actual searched route coordinates and transit legs
   const sim = useSimulation(routeCoordinates, transitLegs);
 
+  // During simulation, blink the vehicle/walk badge so the merged user marker
+  // alternates between identity and current travel mode.
+  useEffect(() => {
+    if (sim.state !== 'playing') {
+      setSimBlink(true);
+      return;
+    }
+    const id = setInterval(() => setSimBlink((v) => !v), 700);
+    return () => clearInterval(id);
+  }, [sim.state]);
+
+  const activeUserPosition = useMemo(() => {
+    if (sim.state !== 'idle' && sim.position) return sim.position;
+    return currentLocation;
+  }, [sim.state, sim.position, currentLocation]);
+
+  const simPointIndex = useMemo(() => {
+    if (!sim.position || sim.state === 'idle' || routeCoordinates.length < 2) return -1;
+    let bestIdx = 0;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < routeCoordinates.length; i++) {
+      const d = sqDistApprox(sim.position, routeCoordinates[i]);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    return bestIdx;
+  }, [sim.position, sim.state, routeCoordinates]);
+
+  const visibleTransitLegs = useMemo(() => {
+    if (simPointIndex < 0) return transitLegs;
+
+    let cursor = 0;
+    const pruned: TransitLeg[] = [];
+    for (const leg of transitLegs) {
+      const legLen = leg.coordinates.length;
+      const advance = Math.max(legLen - 1, 1);
+      const legStart = cursor;
+      const legEnd = cursor + advance;
+      cursor = legEnd;
+
+      // Already passed this whole leg
+      if (simPointIndex >= legEnd) continue;
+
+      // Entire leg is still ahead
+      if (simPointIndex <= legStart) {
+        pruned.push(leg);
+        continue;
+      }
+
+      // We are currently inside this leg; keep only the remaining tail.
+      const localStart = Math.min(legLen - 1, Math.max(0, simPointIndex - legStart));
+      const remainingCoords = leg.coordinates.slice(localStart);
+      if (remainingCoords.length >= 2) {
+        pruned.push({ ...leg, coordinates: remainingCoords });
+      }
+    }
+
+    return pruned;
+  }, [transitLegs, simPointIndex]);
+
+  const visibleTransitMarkers = useMemo(() => {
+    const markers: Array<{
+      leg: TransitLeg;
+      idx: number;
+      showBoard: boolean;
+      showDrop: boolean;
+    }> = [];
+
+    let cursor = 0;
+    for (let idx = 0; idx < transitLegs.length; idx++) {
+      const leg = transitLegs[idx];
+      const legLen = leg.coordinates.length;
+      const advance = Math.max(legLen - 1, 1);
+      const legStart = cursor;
+      const legEnd = cursor + advance;
+      cursor = legEnd;
+
+      if (!leg.onTransit) continue;
+
+      if (simPointIndex < 0) {
+        markers.push({ leg, idx, showBoard: true, showDrop: true });
+        continue;
+      }
+
+      const showBoard = simPointIndex < legStart;
+      const showDrop = simPointIndex < legEnd;
+      if (showBoard || showDrop) {
+        markers.push({ leg, idx, showBoard, showDrop });
+      }
+    }
+
+    return markers;
+  }, [transitLegs, simPointIndex]);
+
 
   // Auto-follow camera during simulation playback
   useEffect(() => {
@@ -1170,7 +1267,7 @@ export default function HomeScreen() {
         style={StyleSheet.absoluteFillObject}
         mapType="standard"
         initialRegion={INITIAL_REGION}
-        showsUserLocation={true}
+        showsUserLocation={false}
         showsMyLocationButton={false}
         showsCompass={false}
         onMapReady={() => setIsMapLoaded(true)}
@@ -1188,6 +1285,37 @@ export default function HomeScreen() {
       >
         
 
+        {activeUserPosition && (
+          <Marker
+            coordinate={activeUserPosition}
+            tracksViewChanges={sim.state !== 'idle'}
+            anchor={{ x: 0.5, y: 0.5 }}
+            flat={sim.state !== 'idle'}
+          >
+            <View style={styles.liveUserMarker}>
+              <View style={styles.liveUserCore}>
+                <Ionicons name="person" size={13} color="#FFFFFF" />
+              </View>
+              {sim.state !== 'idle' && simBlink && sim.currentSegInfo ? (
+                <View style={[
+                  styles.liveUserBadge,
+                  { backgroundColor: sim.currentSegInfo.color || '#E8A020' },
+                ]}>
+                  {sim.currentSegInfo?.vehicleType === 'jeepney' ? (
+                    <Image source={require('../../assets/icons/jeepney-icon.png')} style={styles.liveUserBadgeIcon} />
+                  ) : sim.currentSegInfo?.vehicleType === 'bus' ? (
+                    <Image source={require('../../assets/icons/bus-icon.png')} style={styles.liveUserBadgeIcon} />
+                  ) : sim.currentSegInfo?.vehicleType === 'tricycle' ? (
+                    <Image source={require('../../assets/icons/tricycle-icon.png')} style={styles.liveUserBadgeIcon} />
+                  ) : (
+                    <Ionicons name="walk" size={11} color="#FFFFFF" />
+                  )}
+                </View>
+              ) : null}
+            </View>
+          </Marker>
+        )}
+
         {destinationLocation && (
           <Marker
             coordinate={destinationLocation}
@@ -1198,7 +1326,7 @@ export default function HomeScreen() {
         )}
 
         {/* Render searched route: mode-colored for transit, dashed for walking */}
-        {transitLegs.map((leg, idx) => {
+        {visibleTransitLegs.map((leg, idx) => {
           const legType = String(leg.transitInfo?.type || '').toLowerCase();
           const transitColor = (ROUTE_COLORS as Record<string, string>)[legType] || '#E8A020';
           return (
@@ -1215,10 +1343,10 @@ export default function HomeScreen() {
         })}
 
         {/* Board & drop-off markers for each transit leg */}
-        {transitLegs.map((leg, idx) =>
-          leg.onTransit ? (
-            <React.Fragment key={`board-alight-${idx}`}>
-              {/* Board marker */}
+        {visibleTransitMarkers.map(({ leg, idx, showBoard, showDrop }) => (
+          <React.Fragment key={`board-alight-${idx}`}>
+            {/* Board marker */}
+            {showBoard ? (
               <Marker
                 coordinate={leg.boardAt}
                 tracksViewChanges={false}
@@ -1237,7 +1365,10 @@ export default function HomeScreen() {
                   </View>
                 </Callout>
               </Marker>
-              {/* Drop-off marker */}
+            ) : null}
+
+            {/* Drop-off marker */}
+            {showDrop ? (
               <Marker
                 coordinate={leg.alightAt}
                 tracksViewChanges={false}
@@ -1256,36 +1387,9 @@ export default function HomeScreen() {
                   </View>
                 </Callout>
               </Marker>
-            </React.Fragment>
-          ) : null
-        )}
-
-        {/* Simulation animated marker — moves along the actual searched route */}
-        {sim.position && sim.state !== 'idle' && (
-          <Marker
-            coordinate={sim.position}
-            tracksViewChanges={true}
-            anchor={{ x: 0.5, y: 0.5 }}
-            flat
-          >
-            <View style={styles.simMarker}>
-              <View style={[
-                styles.simMarkerInner,
-                sim.currentSegInfo && { backgroundColor: sim.currentSegInfo.color },
-              ]}>
-                {sim.currentSegInfo?.vehicleType === 'jeepney' ? (
-                  <Image source={require('../../assets/icons/jeepney-icon.png')} style={styles.simMarkerIcon} />
-                ) : sim.currentSegInfo?.vehicleType === 'bus' ? (
-                  <Image source={require('../../assets/icons/bus-icon.png')} style={styles.simMarkerIcon} />
-                ) : sim.currentSegInfo?.vehicleType === 'tricycle' ? (
-                  <Image source={require('../../assets/icons/tricycle-icon.png')} style={styles.simMarkerIcon} />
-                ) : (
-                  <Ionicons name="walk" size={16} color="#FFFFFF" />
-                )}
-              </View>
-            </View>
-          </Marker>
-        )}
+            ) : null}
+          </React.Fragment>
+        ))}
 
         {/* Transit route polylines (hidden when a search route is active) */}
         {!destinationLocation && visibleTransitRoutes.map((route: any) => (
@@ -2386,6 +2490,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.navy,
+  },
+  liveUserMarker: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(14,165,233,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveUserCore: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#0EA5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
+  },
+  liveUserBadge: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveUserBadgeIcon: {
+    width: 10,
+    height: 10,
+    resizeMode: 'contain',
+    tintColor: '#FFFFFF',
   },
   simMarker: {
     width: 36,
