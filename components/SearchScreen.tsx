@@ -62,7 +62,7 @@ export default function SearchScreen({
   const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
   const [isFetching, setIsFetching] = useState(false);
 
-  const { recents, addRecent } = useRecentSearches();
+  const { recents, addRecent, clearRecents } = useRecentSearches();
   const unlockBadge = useStore((state) => state.unlockBadge);
   const { savePlace, removeSavedPlace, user } = useStore();
 
@@ -465,35 +465,46 @@ export default function SearchScreen({
             </View>
 
             {activeTab === 'recent' ? (
-              <FlatList
-                data={recents}
-                keyExtractor={(item) => item.id}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.listContent}
-                renderItem={({ item }) => (
+              <>
+                {recents.length > 0 && (
                   <TouchableOpacity
-                    style={styles.resultRow}
-                    activeOpacity={0.7}
-                    onPress={() => handleRecentPress(item)}
+                    onPress={clearRecents}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ alignSelf: 'flex-end', paddingHorizontal: 16, paddingBottom: 6 }}
                   >
-                    <View style={styles.resultIcon}>
-                      <Ionicons name="location" size={18} color="#4A90D9" />
-                    </View>
-                    <View style={styles.resultTextWrap}>
-                      <Text style={styles.resultTitle} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.resultSubtitle} numberOfLines={2}>
-                        {item.subtitle}
-                      </Text>
-                    </View>
-                    <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <Ionicons name={isPlaceSaved(item.id) ? "star" : "star-outline"} size={22} color={isPlaceSaved(item.id) ? '#E8A020' : COLORS.textMuted} />
-                    </TouchableOpacity>
+                    <Text style={{ fontFamily: 'Inter', fontSize: 12, color: COLORS.textMuted }}>Clear</Text>
                   </TouchableOpacity>
                 )}
-                ListEmptyComponent={<Text style={styles.emptyText}>No recent searches.</Text>}
-              />
+                <FlatList
+                  data={recents}
+                  keyExtractor={(item) => item.id}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={styles.listContent}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.resultRow}
+                      activeOpacity={0.7}
+                      onPress={() => handleRecentPress(item)}
+                    >
+                      <View style={styles.resultIcon}>
+                        <Ionicons name="location" size={18} color="#4A90D9" />
+                      </View>
+                      <View style={styles.resultTextWrap}>
+                        <Text style={styles.resultTitle} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={styles.resultSubtitle} numberOfLines={2}>
+                          {item.subtitle}
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name={isPlaceSaved(item.id) ? "star" : "star-outline"} size={22} color={isPlaceSaved(item.id) ? '#E8A020' : COLORS.textMuted} />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={<Text style={styles.emptyText}>No recent searches.</Text>}
+                />
+              </>
             ) : (
               <FlatList
                 data={user.saved_places || []}
