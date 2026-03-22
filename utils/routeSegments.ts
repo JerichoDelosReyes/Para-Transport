@@ -183,7 +183,7 @@ function getRouteSpecificThresholdSq(
   // Keep tricycle matching strict so it stays close to the exact tricycle GPX.
   // This avoids overreaching tricycle legs on nearby parallel roads.
   if (routeType === 'tricycle') {
-    const strictMetres = Math.min(baseThresholdMetres, 35);
+    const strictMetres = Math.min(baseThresholdMetres, 25);
     return strictMetres * strictMetres;
   }
 
@@ -436,6 +436,8 @@ export function buildTransitLegs(
 
   for (const route of transitRoutes) {
     if (!route.coordinates || route.coordinates.length < 2) continue;
+    const routeType = String(route.type || '').toLowerCase();
+    if (routeType === 'tricycle') continue;
     const routeTerminal = route.coordinates[route.coordinates.length - 1];
     if (sqDistMetres(routeTerminal, destPt) > TERMINAL_DEST_SQ) continue;
 
@@ -477,10 +479,14 @@ export function buildTransitLegs(
   for (let k = 1; k < rawLegs.length; k++) {
     const prev = absorbed[absorbed.length - 1];
     const curr = rawLegs[k];
+    const prevRoute = prev.routeId ? routeMap.get(prev.routeId) : undefined;
+    const prevRouteType = String(prevRoute?.type || '').toLowerCase();
 
     // If prev is transit, curr is walking (short), and next is the SAME transit route — absorb
+    // Keep tricycle strict: do not bridge short walking gaps for tricycle legs.
     if (
       prev.routeId !== null &&
+      prevRouteType !== 'tricycle' &&
       curr.routeId === null &&
       k + 1 < rawLegs.length &&
       rawLegs[k + 1].routeId === prev.routeId
