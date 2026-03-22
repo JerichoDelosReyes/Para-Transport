@@ -298,6 +298,26 @@ const buildRecommendationOptions = (
       variants.push({ key: 'tricycle_only', threshold: 55, minLeg: 70, routes: tricycleOnly });
     }
 
+    // ── Hampton transfer variant: La Joya-Hampton tricycle → nearest jeepney ──
+    const hamptonRoute = transitRoutes.find((r: any) => r.id === 'LAJOYA-HAMPTON');
+    if (hamptonRoute && jeepneyOnly.length > 0) {
+      const hamptonEnd = hamptonRoute.coordinates[hamptonRoute.coordinates.length - 1];
+      let bestJeep: any = null;
+      let bestDistSq = 500 * 500; // 500m threshold (squared)
+      for (const jr of jeepneyOnly) {
+        for (let j = 0; j < jr.coordinates.length; j++) {
+          const dSq = sqDistApprox(hamptonEnd, jr.coordinates[j]);
+          if (dSq < bestDistSq) {
+            bestDistSq = dSq;
+            bestJeep = jr;
+          }
+        }
+      }
+      if (bestJeep) {
+        variants.push({ key: 'hampton_transfer', threshold: 55, minLeg: 70, routes: [hamptonRoute, bestJeep] });
+      }
+    }
+
     for (const variant of variants) {
       const legs = buildTransitLegs(coordinates, variant.routes as any[], variant.threshold, variant.minLeg);
       const metrics = computeMetrics(legs, baseDurationMin, osrmDistanceKm);
@@ -362,42 +382,56 @@ const toRecommenderOptions = (
   }> = [];
 
   if (cvsuImus) {
-    const triJeepPool = candidates.filter((c) => candidateHasMode(c, 'tricycle') && candidateHasMode(c, 'jeepney'));
-    const routinePick = pickBest(
-      'routine_mix',
-      triJeepPool,
-      (c) => Math.abs(c.metrics.farePhp - 53) + c.metrics.effectiveDurationMin * 0.55 + c.metrics.transferCount * 40 + c.metrics.walkMeters / 900,
-      ['Routine', 'Tricycle + Jeepney'],
-      'Routine Mix',
-      'Balanced routine: tricycle first, then jeepney for good time and cost balance',
-    );
-    if (routinePick && noUnnecessaryTransfer(routinePick.candidate)) picks.push(routinePick);
-
-    const fastPriorityPool = pickPoolByPriority(candidates, ['tricycle', 'jeepney', 'walk']);
-    const fastPick = pickBest(
-      'fast_arrival',
-      fastPriorityPool,
-      (c) => c.metrics.effectiveDurationMin + c.metrics.transferCount * 9 + c.metrics.walkMeters / 1600,
-      ['Fastest'],
-      'Fast Arrival',
-      'Prioritizes tricycle-heavy routing so you arrive sooner when running late',
-    );
-    if (fastPick && noUnnecessaryTransfer(fastPick.candidate)) picks.push(fastPick);
-
-    const cheapPriorityPool = pickPoolByPriority(candidates, ['jeepney', 'tricycle', 'walk']);
+    // ── Cheapest: jeepney-only candidates (walk to jeepney, no tricycle fare) ──
+    const jeepOnlyPool = candidates.filter((c) => candidateHasMode(c, 'jeepney') && !candidateHasMode(c, 'tricycle'));
+    const cheapFallback = candidates.filter((c) => candidateHasMode(c, 'jeepney'));
     const cheapPick = pickBest(
       'walk_then_jeep',
-      cheapPriorityPool,
-      (c) => c.metrics.farePhp * 3 + c.metrics.effectiveDurationMin * 0.45 - c.metrics.walkMeters / 250 + c.metrics.transferCount * 18,
-      ['Cheapest', 'Walk More'],
-      'Walk Then Jeepney',
-      'Lower fare route: walk longer first, then ride jeepney for minimal cost',
+      jeepOnlyPool.length > 0 ? jeepOnlyPool : cheapFallback.length > 0 ? cheapFallback : candidates,
+      (c) => c.metrics.farePhp * 3 + c.metrics.effectiveDurationMin * 0.4 + c.metrics.transferCount * 15,
+      ['Cheapest'],
+      'Cheapest',
+      'Jeepney fare only — requires a short walk to the route',
     );
-    if (cheapPick && noUnnecessaryTransfer(cheapPick.candidate)) picks.push(cheapPick);
+    if (cheapPick) picks.push(cheapPick);
+
+    // ── Balanced: La Joya-Hampton tricycle → transfer to jeepney at Hampton ──
+    // Prefer the hampton_transfer variant which specifically uses La Joya-Hampton + nearest jeepney
+    const hamptonPool = candidates.filter((c) => c.id.includes('hampton_transfer') && candidateHasMode(c, 'tricycle') && candidateHasMode(c, 'jeepney'));
+    const triJeepPool = candidates.filter((c) => candidateHasMode(c, 'tricycle') && candidateHasMode(c, 'jeepney'));
+    const balancedFallback = candidates.filter((c) => candidateHasMode(c, 'jeepney'));
+    const balancedPool = hamptonPool.length > 0
+      ? hamptonPool
+      : triJeepPool.length > 0
+        ? triJeepPool
+        : balancedFallback.length > 0 ? balancedFallback : candidates;
+    const balancedPick = pickBest(
+      'balanced_route',
+      balancedPool,
+      (c) => c.metrics.effectiveDurationMin * 0.5 + c.metrics.farePhp * 0.3 + c.metrics.transferCount * 5 + c.metrics.walkMeters / 200,
+      ['Balanced'],
+      'Balanced',
+      'La Joya-Hampton tricycle → transfer to jeepney — good balance of speed and cost',
+    );
+    if (balancedPick) picks.push(balancedPick);
+
+    // ── Least Transfers: tricycle all the way (point-to-point, 0 transfers) ──
+    const tricycleExclusive = candidates.filter((c) => candidateHasMode(c, 'tricycle') && isExclusiveMode(c, 'tricycle'));
+    const leastPick = pickBest(
+      'least_transfer_tri',
+      tricycleExclusive.length > 0 ? tricycleExclusive : candidates.filter((c) => candidateHasMode(c, 'tricycle')),
+      (c) => c.metrics.transferCount * 100 + c.metrics.effectiveDurationMin * 0.3 + c.metrics.walkMeters / 400,
+      ['Least Transfers'],
+      'Least Transfers',
+      'Tricycle all the way — no transfers needed',
+    );
+    if (leastPick) picks.push(leastPick);
   }
 
-  const fastestPool = pickPoolByPriority(candidates, ['tricycle', 'jeepney', 'walk']);
+  // For balanced globally: prioritize jeepney > tricycle > walk
+  const balancedGlobalPool = pickPoolByPriority(candidates, ['jeepney', 'tricycle', 'walk']);
   const cheapestPool = pickPoolByPriority(candidates, ['jeepney', 'tricycle', 'walk']);
+  const leastTransfersPool = pickPoolByPriority(candidates, ['tricycle', 'jeepney', 'walk']);
 
   const winners = {
     recommended: getBest((c) =>
@@ -406,9 +440,13 @@ const toRecommenderOptions = (
       c.metrics.transferCount * 6 +
       c.metrics.walkMeters / 200,
     ),
-    fastest: fastestPool.reduce(
-      (best, curr) => (curr.metrics.effectiveDurationMin < best.metrics.effectiveDurationMin ? curr : best),
-      fastestPool[0],
+    balanced: balancedGlobalPool.reduce(
+      (best, curr) => {
+        const scoreA = best.metrics.effectiveDurationMin * 0.5 + best.metrics.farePhp * 0.35 + best.metrics.transferCount * 5 + best.metrics.walkMeters / 300;
+        const scoreB = curr.metrics.effectiveDurationMin * 0.5 + curr.metrics.farePhp * 0.35 + curr.metrics.transferCount * 5 + curr.metrics.walkMeters / 300;
+        return scoreB < scoreA ? curr : best;
+      },
+      balancedGlobalPool[0],
     ),
     cheapest: cheapestPool.reduce(
       (best, curr) => (
@@ -418,7 +456,15 @@ const toRecommenderOptions = (
       ),
       cheapestPool[0],
     ),
-    leastTransfers: getBest((c) => c.metrics.transferCount * 100 + c.metrics.walkMeters / 300),
+    leastTransfers: leastTransfersPool.reduce(
+      (best, curr) => (
+        (curr.metrics.transferCount * 100 + curr.metrics.walkMeters / 300) <
+        (best.metrics.transferCount * 100 + best.metrics.walkMeters / 300)
+          ? curr
+          : best
+      ),
+      leastTransfersPool[0],
+    ),
   };
 
   const pickedById = new Map<string, {
@@ -447,6 +493,9 @@ const toRecommenderOptions = (
     if (!curr.tags.includes(tag)) curr.tags.push(tag);
   };
 
+  // Check which categories the CvSU picks already cover
+  const pickTags = new Set(picks.flatMap((p) => p.tags));
+
   for (const pick of picks) {
     pickedById.set(pick.candidate.id, {
       candidate: pick.candidate,
@@ -462,32 +511,41 @@ const toRecommenderOptions = (
     'Recommended',
     'Best overall balance of speed, cost, and comfort',
   );
-  addPicked(
-    winners.fastest,
-    'Fastest',
-    'Fastest',
-    dominantMode(winners.fastest) === 'tricycle'
-      ? 'Tricycle route — fastest arrival'
-      : dominantMode(winners.fastest) === 'jeepney'
-        ? 'Jeepney route — fastest available'
-        : 'Quickest arrival time for this trip',
-  );
-  addPicked(
-    winners.cheapest,
-    'Cheapest',
-    'Cheapest',
-    dominantMode(winners.cheapest) === 'jeepney'
-      ? 'Jeepney route — lowest fare'
-      : dominantMode(winners.cheapest) === 'tricycle'
-        ? 'Tricycle route — cheapest available'
-        : 'Lowest overall fare route',
-  );
-  addPicked(
-    winners.leastTransfers,
-    'Least Transfers',
-    'Least Transfers',
-    'Minimizes transfer friction',
-  );
+  // Only add global winners for categories not already covered by CvSU picks
+  if (!pickTags.has('Balanced')) {
+    addPicked(
+      winners.balanced,
+      'Balanced',
+      'Balanced',
+      dominantMode(winners.balanced) === 'jeepney'
+        ? 'Jeepney route — best mix of speed and cost'
+        : dominantMode(winners.balanced) === 'tricycle'
+          ? 'Tricycle route — balanced option'
+          : 'Best balance of speed and cost',
+    );
+  }
+  if (!pickTags.has('Cheapest')) {
+    addPicked(
+      winners.cheapest,
+      'Cheapest',
+      'Cheapest',
+      dominantMode(winners.cheapest) === 'jeepney'
+        ? 'Jeepney fare only — requires a short walk to the route'
+        : dominantMode(winners.cheapest) === 'tricycle'
+          ? 'Tricycle route — cheapest available'
+          : 'Walk to transit — lowest overall fare',
+    );
+  }
+  if (!pickTags.has('Least Transfers')) {
+    addPicked(
+      winners.leastTransfers,
+      'Least Transfers',
+      'Least Transfers',
+      dominantMode(winners.leastTransfers) === 'tricycle'
+        ? 'Tricycle all the way — no transfers needed'
+        : 'Fewest vehicle changes along the route',
+    );
+  }
 
   let ordered = Array.from(pickedById.values())
     .map((v) => v.candidate)
@@ -1204,46 +1262,6 @@ export default function HomeScreen() {
             </React.Fragment>
           ) : null
         )}
-
-        {/* Transfer point markers between transit legs */}
-        {transitLegs.map((leg, idx) => {
-          if (!leg.onTransit) return null;
-          const nextTransitLeg = transitLegs.slice(idx + 1).find(l => l.onTransit);
-          if (!nextTransitLeg) return null;
-
-          // Do not show transfer marker unless the next transit leg gives
-          // a meaningful destination-distance improvement.
-          const destinationPoint = routeCoordinates[routeCoordinates.length - 1];
-          if (!destinationPoint) return null;
-          const currentToDest = sqDistApprox(leg.alightAt, destinationPoint);
-          const nextToDest = sqDistApprox(nextTransitLeg.alightAt, destinationPoint);
-          const relativeGain = currentToDest > 0
-            ? (currentToDest - nextToDest) / currentToDest
-            : 0;
-          if (relativeGain < 0.15) return null;
-
-          // Show a transfer marker where this transit leg ends
-          return (
-            <Marker
-              key={`transfer-${idx}`}
-              coordinate={leg.alightAt}
-              tracksViewChanges={false}
-              anchor={{ x: 0.5, y: 0.5 }}
-            >
-              <View style={styles.transferMarker}>
-                <Ionicons name="swap-vertical" size={14} color="#FFFFFF" />
-              </View>
-              <Callout tooltip>
-                <View style={styles.stopCallout}>
-                  <Text style={styles.stopCalloutLabel}>Transfer Point</Text>
-                  <Text style={styles.stopCalloutType}>
-                    Get off at {leg.alightLabel}, then ride {nextTransitLeg.transitInfo?.ref || nextTransitLeg.transitInfo?.name || 'next transit'}
-                  </Text>
-                </View>
-              </Callout>
-            </Marker>
-          );
-        })}
 
         {/* Simulation animated marker — moves along the actual searched route */}
         {sim.position && sim.state !== 'idle' && (
