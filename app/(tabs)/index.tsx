@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert, StatusBar, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import MapView, { Marker, Polyline, Callout } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
@@ -1473,6 +1474,12 @@ export default function HomeScreen() {
 
       {/* Map Controls */}
       <View style={styles.mapControls}>
+        <View style={styles.chatbotWrap}>
+          <TouchableOpacity style={styles.locateButton} onPress={() => router.push('/ai-chatbot')} activeOpacity={0.8}>
+            <Ionicons name="sparkles" size={24} color={COLORS.navy} />
+          </TouchableOpacity>
+        </View>
+
         <BlurView intensity={35} tint="light" style={styles.locateGlassWrap}>
           <TouchableOpacity style={styles.locateButton} onPress={handleLocateUser} activeOpacity={0.8}>
             <Ionicons name="locate" size={21} color={COLORS.navy} />
@@ -1824,6 +1831,19 @@ const styles = StyleSheet.create({
     bottom: 90,
     zIndex: 10,
     alignItems: 'flex-end',
+  },
+  chatbotWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: COLORS.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 6,
+    marginBottom: 12,
   },
   locateGlassWrap: {
     width: 48,
