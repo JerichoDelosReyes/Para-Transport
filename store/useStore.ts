@@ -61,6 +61,7 @@ interface StoreState {
   unlockBadge: (badgeId: string) => void;
   clearUnlockedBadge: () => void;
   resetProgress: () => void;
+  syncWithSupabase: () => Promise<void>;
 }
 
 export const useStore = create<StoreState>()(
@@ -290,6 +291,34 @@ export const useStore = create<StoreState>()(
         
         return { user: resetUser };
       }),
+      syncWithSupabase: async () => {
+        const state = useStore.getState();
+        if (state.sessionMode === 'auth' && state.user?.email) {
+          try {
+            const { data, error } = await supabase
+              .from('users')
+              .select('points, streak_count, distance, trips, spent, badges')
+              .eq('email', state.user.email)
+              .single();
+              
+            if (data && !error) {
+              set((s) => ({
+                user: {
+                  ...s.user,
+                  points: data.points ?? s.user.points,
+                  streak_count: data.streak_count ?? s.user.streak_count,
+                  distance: data.distance ?? s.user.distance,
+                  trips: data.trips ?? s.user.trips,
+                  spent: data.spent ?? s.user.spent,
+                  badges: data.badges ?? s.user.badges,
+                }
+              }));
+            }
+          } catch (e) {
+            console.error('Failed to sync with Supabase', e);
+          }
+        }
+      },
     }),
     {
       name: 'para-store',

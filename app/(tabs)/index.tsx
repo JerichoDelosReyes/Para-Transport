@@ -973,14 +973,10 @@ export default function HomeScreen() {
       });
       
       // Achievement System integration 
-      // Rule 1: First route trip -> route_rookie
-      // Given addHistory was just called, if they haven't gotten it yet, this will trigger:
+      // Rule 2: 5 trips -> path_explorer
       setTimeout(() => {
         const badges = useStore.getState().user.badges || [];
-        if (!badges.includes('route_rookie')) {
-          unlockBadge('route_rookie');
-        } else if (!badges.includes('path_explorer') && useStore.getState().user.commute_history!.length >= 5) {
-          // Rule 2: 5 trips -> path_explorer
+        if (!badges.includes('path_explorer') && useStore.getState().user.commute_history!.length >= 5) {
           unlockBadge('path_explorer');
         }
       }, 1000);
@@ -1165,6 +1161,14 @@ export default function HomeScreen() {
       const distKm = activeOption?.distanceKm ?? (routeSummary?.distanceKm ?? 0);
       const fareAmt = activeOption?.farePhp ?? 0;
       addTripStats({ distance: distKm, fare: fareAmt, points: Math.max(1, Math.round(distKm * 2)) });
+      
+      // Achievement System: Complete your first route trip
+      setTimeout(() => {
+        const badges = useStore.getState().user.badges || [];
+        if (!badges.includes('route_rookie')) {
+          unlockBadge('route_rookie');
+        }
+      }, 1000);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim.state]);

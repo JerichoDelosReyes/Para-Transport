@@ -194,6 +194,14 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 export default function TabLayout() {
   const sessionMode = useStore((state) => state.sessionMode);
   const user = useStore((state) => state.user);
+  const syncWithSupabase = useStore((state) => state.syncWithSupabase);
+
+  useEffect(() => {
+    if (sessionMode === 'auth') {
+      syncWithSupabase();
+    }
+  }, [sessionMode]);
+
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
