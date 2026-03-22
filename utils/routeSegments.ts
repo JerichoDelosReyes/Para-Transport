@@ -174,6 +174,22 @@ type TransitRouteWithMeta = {
   stops?: { coordinate: Coord; name: string; type?: string }[];
 };
 
+function getRouteSpecificThresholdSq(
+  route: TransitRouteWithMeta,
+  baseThresholdMetres: number,
+): number {
+  const routeType = String(route.type || '').toLowerCase();
+
+  // Keep tricycle matching strict so it stays close to the exact tricycle GPX.
+  // This avoids overreaching tricycle legs on nearby parallel roads.
+  if (routeType === 'tricycle') {
+    const strictMetres = Math.min(baseThresholdMetres, 35);
+    return strictMetres * strictMetres;
+  }
+
+  return baseThresholdMetres * baseThresholdMetres;
+}
+
 /**
  * Find which specific transit route is nearest to a point, within threshold.
  * Returns the route id or null if no route is close enough.
@@ -288,7 +304,6 @@ export function buildTransitLegs(
     }];
   }
 
-  const thresholdSq = thresholdMetres * thresholdMetres;
   const routeMap = new Map(transitRoutes.map(r => [r.id, r]));
 
   // Step 1: For each route point, find ALL transit routes within threshold (not just nearest)
@@ -296,8 +311,9 @@ export function buildTransitLegs(
     const matches = new Set<string>();
     for (const route of transitRoutes) {
       if (!route.coordinates || route.coordinates.length < 2) continue;
+      const routeThresholdSq = getRouteSpecificThresholdSq(route, thresholdMetres);
       for (let i = 0; i < route.coordinates.length - 1; i++) {
-        if (sqDistToSegment(p, route.coordinates[i], route.coordinates[i + 1]) <= thresholdSq) {
+        if (sqDistToSegment(p, route.coordinates[i], route.coordinates[i + 1]) <= routeThresholdSq) {
           matches.add(route.id);
           break;
         }
@@ -349,7 +365,7 @@ export function buildTransitLegs(
   // a wider radius so the user walks a short distance to a nearby transit route
   // instead of walking the entire stretch.
   const LONG_WALK_THRESHOLD = 400; // metres
-  const expandedThresholdSq = (thresholdMetres * 3) * (thresholdMetres * 3);
+  const expandedThresholdMetres = thresholdMetres * 3;
 
   let walkStart = -1;
   for (let k = 0; k <= routePoints.length; k++) {
@@ -367,8 +383,9 @@ export function buildTransitLegs(
           const p = routePoints[j];
           for (const route of transitRoutes) {
             if (!route.coordinates || route.coordinates.length < 2) continue;
+            const routeThresholdSq = getRouteSpecificThresholdSq(route, expandedThresholdMetres);
             for (let s = 0; s < route.coordinates.length - 1; s++) {
-              if (sqDistToSegment(p, route.coordinates[s], route.coordinates[s + 1]) <= expandedThresholdSq) {
+              if (sqDistToSegment(p, route.coordinates[s], route.coordinates[s + 1]) <= routeThresholdSq) {
                 allMatches[j].add(route.id);
                 break;
               }

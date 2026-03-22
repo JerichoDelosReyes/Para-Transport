@@ -28,6 +28,22 @@ type RouteAlternative = {
   bgColor: string;
 };
 
+export type RouteRecommenderOption = {
+  id: string;
+  label: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  accentColor: string;
+  bgColor: string;
+  etaMin?: number;
+  distanceKm?: number;
+  farePhp?: number;
+  transferCount?: number;
+  walkMeters?: number;
+  tricycleLegs?: number;
+  tags?: string[];
+};
+
 const ROUTE_ALTERNATIVES: RouteAlternative[] = [
   {
     id: 'recommended',
@@ -75,6 +91,9 @@ type Props = {
   visible: boolean;
   routeSummary: { distanceKm: number; durationMin: number } | null;
   transitLegs: TransitLeg[];
+  options: RouteRecommenderOption[];
+  selectedOptionId: string | null;
+  onSelectOption: (optionId: string) => void;
   onClose: () => void;
 };
 
@@ -82,11 +101,19 @@ export default function RouteRecommenderPanel({
   visible,
   routeSummary,
   transitLegs,
+  options,
+  selectedOptionId,
+  onSelectOption,
   onClose,
 }: Props) {
   const panY = useRef(new Animated.Value(PANEL_VISIBLE)).current;
   const lastOffset = useRef(PANEL_VISIBLE);
   const [selectedAlt, setSelectedAlt] = useState<RouteAlternativeId>('recommended');
+
+  React.useEffect(() => {
+    if (options.length > 0) return;
+    if (!selectedOptionId) setSelectedAlt('recommended');
+  }, [options.length, selectedOptionId]);
 
   React.useEffect(() => {
     if (visible) {
@@ -175,13 +202,34 @@ export default function RouteRecommenderPanel({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {ROUTE_ALTERNATIVES.map((alt) => {
-          const isActive = selectedAlt === alt.id;
+        {(options.length > 0 ? options : ROUTE_ALTERNATIVES).map((alt: any) => {
+          const isActive = options.length > 0
+            ? selectedOptionId === alt.id
+            : selectedAlt === alt.id;
+
+          const walkKm = typeof alt.walkMeters === 'number' ? alt.walkMeters / 1000 : null;
+          const metrics = [
+            typeof alt.etaMin === 'number' ? `${Math.round(alt.etaMin)} min` : null,
+            typeof alt.distanceKm === 'number' ? `${alt.distanceKm.toFixed(1)} km` : null,
+            typeof alt.farePhp === 'number' ? `P${Math.round(alt.farePhp)}` : null,
+            typeof alt.transferCount === 'number' ? `${alt.transferCount} transfer${alt.transferCount === 1 ? '' : 's'}` : null,
+            walkKm !== null ? `${walkKm.toFixed(1)} km walk` : null,
+            typeof alt.tricycleLegs === 'number' && alt.tricycleLegs > 0
+              ? `${alt.tricycleLegs} tricycle leg${alt.tricycleLegs === 1 ? '' : 's'}`
+              : null,
+          ].filter(Boolean).join(' • ');
+
           return (
             <TouchableOpacity
               key={alt.id}
               activeOpacity={0.7}
-              onPress={() => setSelectedAlt(alt.id)}
+              onPress={() => {
+                if (options.length > 0) {
+                  onSelectOption(alt.id);
+                } else {
+                  setSelectedAlt(alt.id);
+                }
+              }}
               style={[
                 styles.altCard,
                 { backgroundColor: isActive ? alt.bgColor : '#FFFFFF' },
@@ -196,6 +244,16 @@ export default function RouteRecommenderPanel({
                   {alt.label}
                 </Text>
                 <Text style={styles.altDesc} numberOfLines={1}>{alt.description}</Text>
+                {!!metrics && <Text style={styles.altMetrics} numberOfLines={1}>{metrics}</Text>}
+                {Array.isArray(alt.tags) && alt.tags.length > 0 && (
+                  <View style={styles.tagRow}>
+                    {alt.tags.map((tag: string) => (
+                      <View key={`${alt.id}-${tag}`} style={styles.tagChip}>
+                        <Text style={styles.tagText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
               {isActive && (
                 <Ionicons name="checkmark-circle" size={22} color={alt.accentColor} />
@@ -293,5 +351,29 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 11,
     color: COLORS.textMuted,
+  },
+  altMetrics: {
+    marginTop: 2,
+    fontFamily: 'Inter',
+    fontSize: 10,
+    color: '#5A6472',
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  tagChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(10,22,40,0.08)',
+  },
+  tagText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.navy,
   },
 });

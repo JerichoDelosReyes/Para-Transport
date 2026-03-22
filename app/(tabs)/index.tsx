@@ -9,12 +9,12 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
 import { ROUTE_COLORS } from '../../constants/routeVisuals';
-import { getRouteDisplayRef, MAP_ENABLED_ROUTE_CODES } from '../../constants/routeCatalog';
+import { getRouteDisplayRef } from '../../constants/routeCatalog';
 import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
-import { splitRouteSegments, buildTransitLegs, scoreTransitLegs, TransitLeg } from '../../utils/routeSegments';
+import { splitRouteSegments, buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
-import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
+import RouteRecommenderPanel, { RouteRecommenderOption } from '../../components/RouteRecommenderPanel';
 import { useSimulation } from '../../hooks/useSimulation';
 import LOCAL_PLACES from '../../data/local_places.json';
 import { fuzzyFilter } from '../../utils/fuzzySearch';
@@ -56,6 +56,263 @@ const sqDistApprox = (a: MapCoordinate, b: MapCoordinate): number => {
   return dLat * dLat + dLng * dLng;
 };
 
+type RouteMetrics = {
+  durationMin: number;
+  distanceKm: number;
+  effectiveDurationMin: number;
+  farePhp: number;
+  walkMeters: number;
+  transferCount: number;
+  tricycleLegs: number;
+};
+
+type RecommenderCandidate = {
+  id: string;
+  coordinates: MapCoordinate[];
+  summary: { distanceKm: number; durationMin: number };
+  legs: TransitLeg[];
+  metrics: RouteMetrics;
+};
+
+const sumLegDistanceMeters = (legs: TransitLeg[]): number => {
+  return legs.reduce((total, leg) => {
+    let segmentMeters = 0;
+    for (let i = 1; i < leg.coordinates.length; i++) {
+      segmentMeters += Math.sqrt(sqDistApprox(leg.coordinates[i - 1], leg.coordinates[i]));
+    }
+    return total + segmentMeters;
+  }, 0);
+};
+
+const MODE_SPEED_KMPH: Record<string, number> = {
+  walk: 4.2,
+  tricycle: 24,
+  jeepney: 16,
+  bus: 18,
+  transit: 15,
+};
+
+const MODE_WAIT_MIN: Record<string, number> = {
+  walk: 0,
+  tricycle: 1.5,
+  jeepney: 3.5,
+  bus: 4.5,
+  transit: 3,
+};
+
+const getLegModeKey = (leg: TransitLeg): string => {
+  if (!leg.onTransit) return 'walk';
+  const t = String(leg.transitInfo?.type || '').toLowerCase();
+  if (t.includes('tricycle')) return 'tricycle';
+  if (t.includes('jeepney')) return 'jeepney';
+  if (t.includes('bus')) return 'bus';
+  return 'transit';
+};
+
+const computeModeAwareEtaMinutes = (legs: TransitLeg[]): number => {
+  let eta = 0;
+  let prevTransitMode: string | null = null;
+
+  for (const leg of legs) {
+    const mode = getLegModeKey(leg);
+    const speed = MODE_SPEED_KMPH[mode] || MODE_SPEED_KMPH.transit;
+    const distanceKm = sumLegDistanceMeters([leg]) / 1000;
+    eta += (distanceKm / Math.max(speed, 1)) * 60;
+
+    if (leg.onTransit) {
+      eta += MODE_WAIT_MIN[mode] || MODE_WAIT_MIN.transit;
+      if (prevTransitMode && prevTransitMode !== mode) {
+        eta += 1.5;
+      }
+      prevTransitMode = mode;
+    }
+  }
+
+  return eta;
+};
+
+const parseFareValue = (fare: unknown): number => {
+  if (typeof fare === 'number' && Number.isFinite(fare)) return fare;
+  if (typeof fare === 'string') {
+    const m = fare.match(/\d+(\.\d+)?/);
+    if (m) return Number(m[0]);
+  }
+  return 0;
+};
+
+const computeMetrics = (
+  legs: TransitLeg[],
+  durationMin: number,
+  distanceKm: number,
+): RouteMetrics => {
+  const transitLegs = legs.filter((leg) => leg.onTransit);
+  const walkLegs = legs.filter((leg) => !leg.onTransit);
+  const walkMeters = sumLegDistanceMeters(walkLegs);
+  const totalMeters = sumLegDistanceMeters(legs);
+  const totalDistanceKm = totalMeters > 0 ? totalMeters / 1000 : distanceKm;
+  const transferCount = Math.max(0, transitLegs.length - 1);
+  const tricycleLegs = transitLegs.filter((leg) => leg.transitInfo?.type === 'tricycle').length;
+  const farePhp = transitLegs.reduce((sum, leg) => sum + parseFareValue(leg.transitInfo?.fare), 0);
+
+  const modeAwareEtaMin = computeModeAwareEtaMinutes(legs);
+
+  // Blend algorithm ETA with OSRM baseline for stability while honoring mode speeds.
+  const effectiveDurationMin = Math.max(1, modeAwareEtaMin * 0.75 + durationMin * 0.25);
+
+  return {
+    durationMin: effectiveDurationMin,
+    distanceKm: totalDistanceKm,
+    effectiveDurationMin,
+    farePhp,
+    walkMeters,
+    transferCount,
+    tricycleLegs,
+  };
+};
+
+const routeSignature = (legs: TransitLeg[]): string => {
+  return legs
+    .map((leg) => {
+      const mode = leg.transitRouteId || 'walk';
+      const len = Math.round(sumLegDistanceMeters([leg]));
+      return `${mode}:${len}`;
+    })
+    .join('|');
+};
+
+const buildRecommendationOptions = (
+  osrmRoutes: any[],
+  transitRoutes: any[],
+): RecommenderCandidate[] => {
+  const candidates: RecommenderCandidate[] = [];
+
+  for (let i = 0; i < osrmRoutes.length; i++) {
+    const route = osrmRoutes[i];
+    if (!route?.geometry?.coordinates) continue;
+    const coordinates = toMapCoordinates(route.geometry.coordinates);
+    const baseDurationMin = route.duration / 60;
+    const osrmDistanceKm = route.distance / 1000;
+
+    const variants = [
+      { key: 'balanced', threshold: 55, minLeg: 120 },
+      { key: 'tricycle_plus', threshold: 95, minLeg: 70 },
+      { key: 'walk_fallback', threshold: 35, minLeg: 220 },
+    ];
+
+    for (const variant of variants) {
+      const legs = buildTransitLegs(coordinates, transitRoutes as any[], variant.threshold, variant.minLeg);
+      const metrics = computeMetrics(legs, baseDurationMin, osrmDistanceKm);
+      candidates.push({
+        id: `r${i}-${variant.key}`,
+        coordinates,
+        summary: {
+          distanceKm: metrics.distanceKm,
+          durationMin: metrics.effectiveDurationMin,
+        },
+        legs,
+        metrics,
+      });
+    }
+  }
+
+  const unique = new Map<string, RecommenderCandidate>();
+  for (const candidate of candidates) {
+    const sig = routeSignature(candidate.legs);
+    const existing = unique.get(sig);
+    if (!existing || candidate.metrics.effectiveDurationMin < existing.metrics.effectiveDurationMin) {
+      unique.set(sig, candidate);
+    }
+  }
+
+  return Array.from(unique.values());
+};
+
+const toRecommenderOptions = (
+  candidates: RecommenderCandidate[],
+): { uiOptions: RouteRecommenderOption[]; ordered: RecommenderCandidate[] } => {
+  if (candidates.length === 0) return { uiOptions: [], ordered: [] };
+
+  const getBest = (score: (candidate: RecommenderCandidate) => number) => {
+    return candidates.reduce((best, curr) => (score(curr) < score(best) ? curr : best), candidates[0]);
+  };
+
+  const winners = {
+    recommended: getBest((c) =>
+      c.metrics.effectiveDurationMin * 0.45 +
+      c.metrics.farePhp * 0.3 +
+      c.metrics.transferCount * 6 +
+      c.metrics.walkMeters / 200,
+    ),
+    fastest: getBest((c) => c.metrics.effectiveDurationMin),
+    cheapest: getBest((c) => c.metrics.farePhp + c.metrics.walkMeters / 180),
+    leastTransfers: getBest((c) => c.metrics.transferCount * 100 + c.metrics.walkMeters / 300),
+  };
+
+  const tagsById = new Map<string, string[]>();
+  const addTag = (id: string, tag: string) => {
+    const tags = tagsById.get(id) || [];
+    tags.push(tag);
+    tagsById.set(id, tags);
+  };
+
+  addTag(winners.recommended.id, 'Recommended');
+  addTag(winners.fastest.id, 'Fastest');
+  addTag(winners.cheapest.id, 'Cheapest');
+  addTag(winners.leastTransfers.id, 'Least Transfers');
+
+  let ordered = Array.from(tagsById.keys())
+    .map((id) => candidates.find((c) => c.id === id))
+    .filter(Boolean) as RecommenderCandidate[];
+
+  // If multiple categories collapse to one route, still include an explicit alternative.
+  if (ordered.length === 1 && candidates.length > 1) {
+    const primary = ordered[0];
+    const alternative = [...candidates]
+      .filter((c) => c.id !== primary.id)
+      .sort((a, b) => {
+        const scoreA = a.metrics.effectiveDurationMin * 0.5 + a.metrics.walkMeters / 180 + a.metrics.transferCount * 5;
+        const scoreB = b.metrics.effectiveDurationMin * 0.5 + b.metrics.walkMeters / 180 + b.metrics.transferCount * 5;
+        return scoreA - scoreB;
+      })[0];
+    if (alternative) {
+      ordered = [primary, alternative];
+      addTag(alternative.id, 'Alternative');
+    }
+  }
+
+  const visuals = [
+    { icon: 'star', accentColor: '#E8A020', bgColor: '#FFF8E1' },
+    { icon: 'compass', accentColor: '#0EA5E9', bgColor: '#EEF9FF' },
+    { icon: 'git-branch', accentColor: '#22C55E', bgColor: '#F0FDF4' },
+  ] as const;
+
+  const uiOptions: RouteRecommenderOption[] = ordered.map((candidate, idx) => {
+    const tags = tagsById.get(candidate.id) || ['Alternative'];
+    const primaryTag = tags[0];
+    const v = visuals[Math.min(idx, visuals.length - 1)];
+    return {
+      id: candidate.id,
+      label: tags.length > 1 ? `Best: ${tags.join(' + ')}` : primaryTag,
+      description:
+        candidate.metrics.tricycleLegs > 0
+          ? 'Includes tricycle options to reduce walk or replace jeepney sections'
+          : 'Connected route with practical transfer and walking flow',
+      icon: v.icon,
+      accentColor: v.accentColor,
+      bgColor: v.bgColor,
+      etaMin: candidate.metrics.effectiveDurationMin,
+      distanceKm: candidate.metrics.distanceKm,
+      farePhp: candidate.metrics.farePhp,
+      transferCount: candidate.metrics.transferCount,
+      walkMeters: candidate.metrics.walkMeters,
+      tricycleLegs: candidate.metrics.tricycleLegs,
+      tags,
+    };
+  });
+
+  return { uiOptions, ordered };
+};
+
 export default function HomeScreen() {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
@@ -67,16 +324,16 @@ export default function HomeScreen() {
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
+  const [recommenderCandidates, setRecommenderCandidates] = useState<RecommenderCandidate[]>([]);
+  const [recommenderOptions, setRecommenderOptions] = useState<RouteRecommenderOption[]>([]);
+  const [selectedRecommenderOptionId, setSelectedRecommenderOptionId] = useState<string | null>(null);
+  const [selectedRouteLegs, setSelectedRouteLegs] = useState<TransitLeg[]>([]);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
   const { routes: gpxRoutes } = useJeepneyRoutes();
 
   // Normalize GPX routes to a unified transit shape
   const transitRoutes = useMemo(() => {
-    const mapReadyRoutes = gpxRoutes.filter((r: JeepneyRoute) =>
-      MAP_ENABLED_ROUTE_CODES.includes(r.properties.code as any)
-    );
-
-    const normalized = mapReadyRoutes.map((r: JeepneyRoute) => ({
+    const normalized = gpxRoutes.map((r: JeepneyRoute) => ({
       id: r.properties.code,
       type: r.properties.type,
       color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
@@ -240,6 +497,10 @@ export default function HomeScreen() {
       setRouteCoordinates([]);
       setDestinationLocation(null);
       setRouteSummary(null);
+      setRecommenderCandidates([]);
+      setRecommenderOptions([]);
+      setSelectedRecommenderOptionId(null);
+      setSelectedRouteLegs([]);
 
       mapRef.current?.fitToCoordinates(allCoords, {
         edgePadding: { top: 140, right: 40, bottom: 220, left: 40 },
@@ -256,9 +517,28 @@ export default function HomeScreen() {
     setDestinationLocation(null);
     setRouteCoordinates([]);
     setRouteSummary(null);
+    setRecommenderCandidates([]);
+    setRecommenderOptions([]);
+    setSelectedRecommenderOptionId(null);
+    setSelectedRouteLegs([]);
     setPendingRouteSearch(null);
     setSelectedTransitRoute(null);
   }, [setPendingRouteSearch, setSelectedTransitRoute]);
+
+  const handleSelectRecommenderOption = useCallback((optionId: string) => {
+    const chosen = recommenderCandidates.find((c) => c.id === optionId);
+    if (!chosen) return;
+
+    setSelectedRecommenderOptionId(optionId);
+    setRouteCoordinates(chosen.coordinates);
+    setRouteSummary(chosen.summary);
+    setSelectedRouteLegs(chosen.legs);
+
+    mapRef.current?.fitToCoordinates(chosen.coordinates, {
+      edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
+      animated: true,
+    });
+  }, [recommenderCandidates]);
 
   const handleSearchSelectRoute = useCallback(async (origin: PlaceResult | null, destination: PlaceResult) => {
     setIsSearchActive(false);
@@ -302,33 +582,38 @@ export default function HomeScreen() {
         return;
       }
 
-      // Score each alternative by transit coverage (less walking = better)
-      let bestIdx = 0;
-      let bestScore = Infinity;
+      const builtCandidates = buildRecommendationOptions(osrmRoutes, transitRoutes as any[]);
+      const { uiOptions, ordered } = toRecommenderOptions(builtCandidates);
 
-      for (let i = 0; i < osrmRoutes.length; i++) {
-        const route = osrmRoutes[i];
-        if (!route?.geometry?.coordinates) continue;
-        const coords = toMapCoordinates(route.geometry.coordinates);
-        const legs = buildTransitLegs(coords, transitRoutes as any[], 50, 150);
-        const score = scoreTransitLegs(legs, 300);
-        if (score < bestScore) {
-          bestScore = score;
-          bestIdx = i;
-        }
+      if (ordered.length > 0) {
+        const chosen = ordered[0];
+        setRecommenderCandidates(ordered);
+        setRecommenderOptions(uiOptions);
+        setSelectedRecommenderOptionId(chosen.id);
+        setRouteCoordinates(chosen.coordinates);
+        setRouteSummary(chosen.summary);
+        setSelectedRouteLegs(chosen.legs);
+        mapRef.current?.fitToCoordinates(chosen.coordinates, {
+          edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
+          animated: true,
+        });
+      } else {
+        const fallback = osrmRoutes[0];
+        const fallbackCoordinates = toMapCoordinates(fallback.geometry.coordinates);
+        setRecommenderCandidates([]);
+        setRecommenderOptions([]);
+        setSelectedRecommenderOptionId(null);
+        setRouteCoordinates(fallbackCoordinates);
+        setRouteSummary({
+          distanceKm: fallback.distance / 1000,
+          durationMin: fallback.duration / 60,
+        });
+        setSelectedRouteLegs(buildTransitLegs(fallbackCoordinates, transitRoutes as any[], 55, 120));
+        mapRef.current?.fitToCoordinates(fallbackCoordinates, {
+          edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
+          animated: true,
+        });
       }
-
-      const chosenRoute = osrmRoutes[bestIdx];
-      const mappedCoordinates = toMapCoordinates(chosenRoute.geometry.coordinates);
-      setRouteCoordinates(mappedCoordinates);
-      setRouteSummary({
-        distanceKm: chosenRoute.distance / 1000,
-        durationMin: chosenRoute.duration / 60,
-      });
-      mapRef.current?.fitToCoordinates(mappedCoordinates, {
-        edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
-        animated: true,
-      });
       setShowRecommender(true);
       
       // Save this to commute history
@@ -494,9 +779,10 @@ export default function HomeScreen() {
 
   // Build multi-leg transit journey plan
   const transitLegs = useMemo((): TransitLeg[] => {
+    if (selectedRouteLegs.length > 0) return selectedRouteLegs;
     if (routeCoordinates.length < 2) return [];
-    return buildTransitLegs(routeCoordinates, transitRoutes as any[], 50, 150);
-  }, [routeCoordinates, transitRoutes]);
+    return buildTransitLegs(routeCoordinates, transitRoutes as any[], 55, 120);
+  }, [selectedRouteLegs, routeCoordinates, transitRoutes]);
 
   // Simulation — uses the actual searched route coordinates and transit legs
   const sim = useSimulation(routeCoordinates, transitLegs);
@@ -567,25 +853,29 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* Render searched route: solid for transit, dashed for walking */}
-        {routeSegments.map((seg, idx) => (
-          <Polyline
-            key={`route-seg-${idx}`}
-            coordinates={seg.coordinates}
-            strokeColor={seg.onTransit ? '#E8A020' : '#999999'}
-            strokeWidth={seg.onTransit ? 5 : 3}
-            lineDashPattern={seg.onTransit ? undefined : [10, 6]}
-            lineCap="round"
-            lineJoin="round"
-          />
-        ))}
+        {/* Render searched route: mode-colored for transit, dashed for walking */}
+        {transitLegs.map((leg, idx) => {
+          const legType = String(leg.transitInfo?.type || '').toLowerCase();
+          const transitColor = (ROUTE_COLORS as Record<string, string>)[legType] || '#E8A020';
+          return (
+            <Polyline
+              key={`route-seg-${idx}`}
+              coordinates={leg.coordinates}
+              strokeColor={leg.onTransit ? transitColor : '#999999'}
+              strokeWidth={leg.onTransit ? 5 : 3}
+              lineDashPattern={leg.onTransit ? undefined : [10, 6]}
+              lineCap="round"
+              lineJoin="round"
+            />
+          );
+        })}
 
         {/* Walking indicator markers at transition points */}
-        {routeSegments.map((seg, idx) =>
-          !seg.onTransit && seg.coordinates.length >= 2 ? (
+        {transitLegs.map((leg, idx) =>
+          !leg.onTransit && leg.coordinates.length >= 2 ? (
             <Marker
               key={`walk-marker-${idx}`}
-              coordinate={seg.coordinates[0]}
+              coordinate={leg.coordinates[0]}
               tracksViewChanges={false}
               anchor={{ x: 0.5, y: 0.5 }}
             >
@@ -1027,6 +1317,9 @@ export default function HomeScreen() {
         visible={showRecommender}
         routeSummary={routeSummary}
         transitLegs={transitLegs}
+        options={recommenderOptions}
+        selectedOptionId={selectedRecommenderOptionId}
+        onSelectOption={handleSelectRecommenderOption}
         onClose={() => setShowRecommender(false)}
       />
 
