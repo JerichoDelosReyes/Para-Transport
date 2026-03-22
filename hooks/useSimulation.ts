@@ -53,7 +53,7 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
   const [state, setState] = useState<SimulationState>('idle');
   const [position, setPosition] = useState<Coord | null>(null);
   const [currentSegInfo, setCurrentSegInfo] = useState<SimSegmentInfo | null>(null);
-  const [speed, setSpeed] = useState(2); // default 2x
+  const [speed, setSpeed] = useState(0.8); // default 0.8x
   const [progress, setProgress] = useState(0); // 0..1
 
   const distanceTravelled = useRef(0);

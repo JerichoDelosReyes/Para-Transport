@@ -685,7 +685,9 @@ export default function HomeScreen() {
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const addHistory = useStore((state) => state.addHistory);
   const unlockBadge = useStore((state) => state.unlockBadge);
+  const addTripStats = useStore((state) => state.addTripStats);
   const mapRef = useRef<MapView | null>(null);
+  const tripStatRecordedRef = useRef(false);
   const [showRecommender, setShowRecommender] = useState(false);
   const [simAutoFollow, setSimAutoFollow] = useState(true);
   const [simBlink, setSimBlink] = useState(true);
@@ -1141,6 +1143,22 @@ export default function HomeScreen() {
     }
     const id = setInterval(() => setSimBlink((v) => !v), 700);
     return () => clearInterval(id);
+  }, [sim.state]);
+
+  // Record trip stats when simulation finishes (once per run)
+  useEffect(() => {
+    if (sim.state === 'idle') {
+      tripStatRecordedRef.current = false;
+      return;
+    }
+    if (sim.state === 'finished' && !tripStatRecordedRef.current) {
+      tripStatRecordedRef.current = true;
+      const activeOption = recommenderOptions.find((o) => o.id === selectedRecommenderOptionId);
+      const distKm = activeOption?.distanceKm ?? (routeSummary?.distanceKm ?? 0);
+      const fareAmt = activeOption?.farePhp ?? 0;
+      addTripStats({ distance: distKm, fare: fareAmt, points: Math.max(1, Math.round(distKm * 2)) });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim.state]);
 
   const activeUserPosition = useMemo(() => {
@@ -1694,7 +1712,7 @@ export default function HomeScreen() {
           {/* Speed selector row */}
           <View style={styles.simSpeedRow}>
             <Text style={styles.simSpeedLabel}>Speed:</Text>
-            {[1, 2, 3, 5].map((s) => (
+            {[0.8, 1, 2, 3].map((s) => (
               <TouchableOpacity
                 key={`banner-speed-${s}`}
                 style={[styles.simSpeedChip, sim.speed === s && styles.simSpeedChipActive]}
