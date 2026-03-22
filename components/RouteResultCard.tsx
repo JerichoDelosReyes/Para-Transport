@@ -8,9 +8,10 @@ type Props = {
   matched: MatchedRoute;
   isSelected: boolean;
   onPress: (id: string) => void;
+  badgeLabel?: string;
 };
 
-export default function RouteResultCard({ matched, isSelected, onPress }: Props) {
+export default function RouteResultCard({ matched, isSelected, onPress, badgeLabel }: Props) {
   const { legs, distanceKm, estimatedFare, estimatedMinutes } = matched;
   const isTransfer = legs.length > 1;
   const id = legs.map(l => l.route.properties.code).join('+');
@@ -24,6 +25,12 @@ export default function RouteResultCard({ matched, isSelected, onPress }: Props)
       {/* Top row: badges + ETA */}
       <View style={styles.topRow}>
         <View style={styles.badgeRow}>
+          {badgeLabel && (
+            <View style={styles.rankBadge}>
+              <Ionicons name="trophy" size={10} color="#FFFFFF" />
+              <Text style={styles.rankBadgeText}>{badgeLabel}</Text>
+            </View>
+          )}
           {legs.map((leg, i) => (
             <React.Fragment key={leg.route.properties.code}>
               {i > 0 && (
@@ -212,5 +219,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#FF9800',
+  },
+  rankBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#E8A020',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  rankBadgeText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

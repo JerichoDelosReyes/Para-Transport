@@ -20,11 +20,41 @@ export type MatchedRoute = {
   estimatedFare: number;
   /** Total time including walking between transfers */
   estimatedMinutes: number;
+  /** Number of transfers (legs.length - 1) for ranking */
+  transferCount: number;
   // -- kept for backward-compat with single-leg consumers --
   route: JeepneyRoute;
   boardingPoint: { latitude: number; longitude: number };
   alightingPoint: { latitude: number; longitude: number };
 };
+
+export type RankMode = 'easiest' | 'fastest' | 'cheapest';
+
+/** Rank routes by the selected mode without mutating the input array */
+export function rankRoutes(routes: MatchedRoute[], mode: RankMode): MatchedRoute[] {
+  return [...routes].sort((a, b) => {
+    switch (mode) {
+      case 'easiest':
+        return (
+          a.transferCount - b.transferCount ||
+          a.estimatedMinutes - b.estimatedMinutes ||
+          a.estimatedFare - b.estimatedFare
+        );
+      case 'fastest':
+        return (
+          a.estimatedMinutes - b.estimatedMinutes ||
+          a.transferCount - b.transferCount ||
+          a.estimatedFare - b.estimatedFare
+        );
+      case 'cheapest':
+        return (
+          a.estimatedFare - b.estimatedFare ||
+          a.estimatedMinutes - b.estimatedMinutes ||
+          a.transferCount - b.transferCount
+        );
+    }
+  });
+}
 
 const BUFFER_DISTANCE = 1000; // meters
 const TRANSFER_WALK_DISTANCE = 800; // max meters to walk between two routes for a transfer
@@ -172,6 +202,7 @@ export function findRoutesForDestination(
       distanceKm: leg.distanceKm,
       estimatedFare: leg.estimatedFare,
       estimatedMinutes: leg.estimatedMinutes,
+      transferCount: 0,
       route: leg.route,
       boardingPoint: leg.boardingPoint,
       alightingPoint: leg.alightingPoint,
@@ -207,6 +238,7 @@ export function findRoutesForDestination(
         distanceKm: totalDistance,
         estimatedFare: totalFare,
         estimatedMinutes: totalMinutes,
+        transferCount: 1,
         // backward-compat: use first leg's boarding and last leg's alighting
         route: leg1.route,
         boardingPoint: leg1.boardingPoint,

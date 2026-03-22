@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Animated, PanResponder, Dimensions, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,8 +8,10 @@ import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useJeepneyRoutes } from '../../hooks/useJeepneyRoutes';
-import { findRoutesForDestination, MatchedRoute } from '../../services/routeSearch';
+import { findRoutesForDestination, rankRoutes, MatchedRoute } from '../../services/routeSearch';
+import type { RankMode } from '../../services/routeSearch';
 import RouteResultCard from '../../components/RouteResultCard';
+import { useStore } from '../../store/useStore';
 
 const { height, width } = Dimensions.get('window');
 
@@ -56,7 +58,19 @@ export default function HomeScreen() {
   const [walkingPaths, setWalkingPaths] = useState<Record<string, MapCoordinate[]>>({});
   const [destinationMarkerKey, setDestinationMarkerKey] = useState(0);
   const { routes: jeepneyRoutes } = useJeepneyRoutes();
+  const { rankTab, setRankTab } = useStore();
   const mapRef = useRef<MapView | null>(null);
+
+  const RANK_TABS: { key: RankMode; label: string }[] = [
+    { key: 'easiest', label: 'Easiest' },
+    { key: 'fastest', label: 'Fastest' },
+    { key: 'cheapest', label: 'Cheapest' },
+  ];
+
+  const rankedRoutes = useMemo(
+    () => rankRoutes(matchedRoutes, rankTab),
+    [matchedRoutes, rankTab],
+  );
 
   // Bottom Sheet Animation state
   const sheetHeight = height * 0.5; // max height of bottom sheet
@@ -480,6 +494,18 @@ export default function HomeScreen() {
     }
   };
 
+  const toggleTransitVisuals = () => {
+    setShowRoutes((prev) => {
+      const next = !prev;
+      if (!next) {
+        setSelectedRoute(null);
+        setWalkingPaths({});
+        setRouteCoordinates([]);
+      }
+      return next;
+    });
+  };
+
   return (
     <View style={styles.screen}>
       <MapView
@@ -519,7 +545,7 @@ export default function HomeScreen() {
           />
         )}
 
-        {routeCoordinates.length > 1 && (
+        {showRoutes && routeCoordinates.length > 1 && (
           <Polyline
             coordinates={routeCoordinates}
             strokeColor="#E8A020"
@@ -591,7 +617,7 @@ export default function HomeScreen() {
         })}
 
         {/* Boarding guide markers along the selected route(s) */}
-        {selectedRoute && (() => {
+        {showRoutes && selectedRoute && (() => {
           const selectedCodes = selectedRoute.split('+');
           return selectedCodes.flatMap((code) => {
             const route = jeepneyRoutes.find(r => r.properties.code === code);
@@ -627,7 +653,7 @@ export default function HomeScreen() {
         })()}
 
         {/* Walking paths: user → board leg1 → (alight leg1 → walk → board leg2 →) → alight → destination */}
-        {searchMode === 'results' && selectedRoute && currentLocation && (() => {
+        {showRoutes && searchMode === 'results' && selectedRoute && currentLocation && (() => {
           const matched = matchedRoutes.find(m =>
             m.legs.map(l => l.route.properties.code).join('+') === selectedRoute
           );
@@ -897,7 +923,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={styles.routeToggleBtn}
             activeOpacity={0.8}
-            onPress={() => setShowRoutes(prev => !prev)}
+            onPress={toggleTransitVisuals}
           >
             <Ionicons
               name={showRoutes ? 'bus' : 'bus-outline'}
@@ -1012,14 +1038,37 @@ export default function HomeScreen() {
                   {matchedRoutes.length} route{matchedRoutes.length !== 1 ? 's' : ''} to {destinationName}
                 </Text>
               ) : null}
+
+              {/* Ranking Tabs */}
+              {matchedRoutes.length > 1 && (
+                <View style={styles.rankTabsRow}>
+                  {RANK_TABS.map((tab) => (
+                    <TouchableOpacity
+                      key={tab.key}
+                      style={[styles.rankTab, rankTab === tab.key && styles.rankTabActive]}
+                      activeOpacity={0.8}
+                      onPress={() => setRankTab(tab.key)}
+                    >
+                      <Text style={[styles.rankTabText, rankTab === tab.key && styles.rankTabTextActive]}>
+                        {tab.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
               {matchedRoutes.length > 0 ? (
-                matchedRoutes.map((matched) => {
+                rankedRoutes.map((matched, index) => {
                   const id = matched.legs.map(l => l.route.properties.code).join('+');
+                  const badgeLabel = index === 0 && rankedRoutes.length > 1
+                    ? RANK_TABS.find(t => t.key === rankTab)!.label
+                    : undefined;
                   return (
                     <RouteResultCard
                       key={id}
                       matched={matched}
                       isSelected={selectedRoute === id}
+                      badgeLabel={badgeLabel}
                       onPress={(pressedId) => {
                         setSelectedRoute(selectedRoute === pressedId ? null : pressedId);
                       }}
@@ -1571,5 +1620,32 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  rankTabsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 4,
+  },
+  rankTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    alignItems: 'center',
+  },
+  rankTabActive: {
+    backgroundColor: '#E8A020',
+    borderColor: '#E8A020',
+  },
+  rankTabText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  rankTabTextActive: {
+    color: '#FFFFFF',
   },
 });

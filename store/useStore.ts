@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import type { RankMode } from '../services/routeSearch';
 
 interface User {
   name: string;
@@ -33,6 +34,7 @@ interface StoreState {
   insightDismissed: boolean;
   selectedTransitRoute: any | null;
   pendingRouteSearch: { origin: any; destination: any } | null;
+  rankTab: RankMode;
   setUser: (user: User) => void;
   beginGuestSession: () => void;
   beginAuthSession: (user: User) => void;
@@ -42,6 +44,7 @@ interface StoreState {
   addPoints: (points: number) => void;
   setSelectedTransitRoute: (route: any | null) => void;
   setPendingRouteSearch: (search: { origin: any; destination: any } | null) => void;
+  setRankTab: (tab: RankMode) => void;
   saveRoute: (route: any) => void;
   removeSavedRoute: (routeId: string | number) => void;
 }
@@ -55,6 +58,7 @@ export const useStore = create<StoreState>()(
       insightDismissed: false,
       selectedTransitRoute: null,
       pendingRouteSearch: null,
+      rankTab: 'easiest' as RankMode,
       setUser: (user) => set({ user }),
       beginGuestSession: () =>
         set({
@@ -77,6 +81,7 @@ export const useStore = create<StoreState>()(
       addPoints: (points) => set((state) => ({ user: { ...state.user, points: state.user.points + points } })),
       setSelectedTransitRoute: (route) => set({ selectedTransitRoute: route }),
       setPendingRouteSearch: (search) => set({ pendingRouteSearch: search }),
+      setRankTab: (tab) => set({ rankTab: tab }),
       saveRoute: (route: any) =>
         set((state) => {
           const currentSaved = state.user.saved_routes || [];
@@ -101,6 +106,7 @@ export const useStore = create<StoreState>()(
         sessionMode: state.sessionMode,
         insightDismissed: state.insightDismissed,
         selectedTransitRoute: state.selectedTransitRoute,
+        rankTab: state.rankTab,
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
