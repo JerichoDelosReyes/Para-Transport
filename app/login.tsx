@@ -85,7 +85,7 @@ export default function LoginScreen() {
       try {
         const { data: profile } = await supabase
           .from('users')
-          .select('points, streak_count, distance, trips, spent, badges')
+          .select('points, streak_count, distance, trips, spent, badges, saved_routes, saved_places')
           .eq('email', email.trim().toLowerCase())
           .single();
         if (profile) userStats = profile;
@@ -100,7 +100,8 @@ export default function LoginScreen() {
         distance: userStats.distance || 0,
         trips: userStats.trips || 0,
         spent: userStats.spent || 0,
-        saved_routes: [],
+        saved_routes: userStats.saved_routes || [],
+        saved_places: userStats.saved_places || [],
         badges: userStats.badges || []
       });
       router.replace('/(tabs)');
@@ -158,7 +159,7 @@ export default function LoginScreen() {
       try {
         const { data: profile } = await supabase
           .from('users')
-          .select('points, streak_count, distance, trips, spent, badges')
+          .select('points, streak_count, distance, trips, spent, badges, saved_routes, saved_places')
           .eq('email', email.trim().toLowerCase())
           .single();
         if (profile) userStats = profile;
@@ -172,7 +173,8 @@ export default function LoginScreen() {
         distance: userStats.distance || 0,
         trips: userStats.trips || 0,
         spent: userStats.spent || 0,
-        saved_routes: [],
+        saved_routes: userStats.saved_routes || [],
+        saved_places: userStats.saved_places || [],
         badges: userStats.badges || []
       });
       setIsOtpPending(false);

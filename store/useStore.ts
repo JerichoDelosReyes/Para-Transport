@@ -85,10 +85,15 @@ export const useStore = create<StoreState>()(
           unlockedBadgeToShow: null,
         }),
       beginAuthSession: (user) =>
-        set({
-          user,
+        set((state) => ({
+          user: {
+            ...user,
+            commute_history: user.commute_history || state.user?.commute_history || [],
+            saved_routes: user.saved_routes || state.user?.saved_routes || [],
+            saved_places: user.saved_places || state.user?.saved_places || [],
+          },
           sessionMode: 'auth',
-        }),
+        })),
       clearSession: () =>
         set({
           user: createGuestUser(),
@@ -320,12 +325,15 @@ export const useStore = create<StoreState>()(
               set((s) => ({
                 user: {
                   ...s.user,
-                  points: data.points ?? s.user.points,
-                  streak_count: data.streak_count ?? s.user.streak_count,
-                  distance: data.distance ?? s.user.distance,
-                  trips: data.trips ?? s.user.trips,
-                  spent: data.spent ?? s.user.spent,
-                  badges: data.badges ?? s.user.badges,
+                  points: data.points ?? s.user.points ?? 0,
+                  streak_count: data.streak_count ?? s.user.streak_count ?? 0,
+                  distance: data.distance ?? s.user.distance ?? 0,
+                  trips: data.trips ?? s.user.trips ?? 0,
+                  spent: data.spent ?? s.user.spent ?? 0,
+                  badges: data.badges ?? s.user.badges ?? [],
+                  commute_history: s.user.commute_history || [],
+                  saved_routes: s.user.saved_routes || [],
+                  saved_places: s.user.saved_places || [],
                 }
               }));
             }
@@ -344,6 +352,20 @@ export const useStore = create<StoreState>()(
         insightDismissed: state.insightDismissed,
         selectedTransitRoute: state.selectedTransitRoute,
       }),
+      merge: (persistedState: any, currentState: StoreState) => {
+        if (!persistedState) return currentState;
+        return {
+          ...currentState,
+          ...persistedState,
+          user: {
+            ...currentState.user,
+            ...(persistedState.user || {}),
+            commute_history: persistedState.user?.commute_history || currentState.user?.commute_history || [],
+            saved_routes: persistedState.user?.saved_routes || currentState.user?.saved_routes || [],
+            saved_places: persistedState.user?.saved_places || currentState.user?.saved_places || [],
+          }
+        };
+      },
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },

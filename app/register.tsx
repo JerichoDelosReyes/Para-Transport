@@ -103,6 +103,7 @@ export default function RegisterScreen() {
         trips: 0,
           spent: 0,
           saved_routes: [],
+          saved_places: [],
           badges: []
         });
         router.replace('/(tabs)');
@@ -134,6 +135,7 @@ export default function RegisterScreen() {
         trips: 0,
         spent: 0,
         saved_routes: [],
+        saved_places: [],
         badges: []
       });
       router.replace('/(tabs)');
