@@ -298,23 +298,34 @@ const buildRecommendationOptions = (
       variants.push({ key: 'tricycle_only', threshold: 55, minLeg: 70, routes: tricycleOnly });
     }
 
-    // ── Hampton transfer variant: La Joya-Hampton tricycle → nearest jeepney ──
-    const hamptonRoute = transitRoutes.find((r: any) => r.id === 'LAJOYA-HAMPTON');
-    if (hamptonRoute && jeepneyOnly.length > 0) {
-      const hamptonEnd = hamptonRoute.coordinates[hamptonRoute.coordinates.length - 1];
+    // ── Tricycle→jeepney transfer variants ──
+    // For each La Joya tricycle route, find the earliest point where it intersects
+    // a jeepney route (within 500m) so the passenger can drop off and transfer.
+    const balancedTricycleIds = ['LAJOYA-HAMPTON', 'LAJOYA-BRIDG-01'];
+    const thresholdSq = 500 * 500;
+    for (const triId of balancedTricycleIds) {
+      const triRoute = transitRoutes.find((r: any) => r.id === triId);
+      if (!triRoute || jeepneyOnly.length === 0) continue;
+      // Walk along the tricycle path and find the earliest point near a jeepney route
       let bestJeep: any = null;
-      let bestDistSq = 500 * 500; // 500m threshold (squared)
+      let bestTriIdx = triRoute.coordinates.length; // sentinel: past end
+      let bestDistSq = thresholdSq;
       for (const jr of jeepneyOnly) {
-        for (let j = 0; j < jr.coordinates.length; j++) {
-          const dSq = sqDistApprox(hamptonEnd, jr.coordinates[j]);
-          if (dSq < bestDistSq) {
-            bestDistSq = dSq;
-            bestJeep = jr;
+        for (let ti = 0; ti < triRoute.coordinates.length; ti++) {
+          for (let ji = 0; ji < jr.coordinates.length; ji++) {
+            const dSq = sqDistApprox(triRoute.coordinates[ti], jr.coordinates[ji]);
+            if (dSq < bestDistSq || (dSq < thresholdSq && ti < bestTriIdx)) {
+              bestDistSq = dSq;
+              bestTriIdx = ti;
+              bestJeep = jr;
+            }
           }
+          // Once we found an early intersection, no need to check later points on same jeepney
+          if (bestTriIdx <= ti) break;
         }
       }
       if (bestJeep) {
-        variants.push({ key: 'hampton_transfer', threshold: 55, minLeg: 70, routes: [hamptonRoute, bestJeep] });
+        variants.push({ key: `balanced_${triId}`, threshold: 55, minLeg: 70, routes: [triRoute, bestJeep] });
       }
     }
 
@@ -395,13 +406,13 @@ const toRecommenderOptions = (
     );
     if (cheapPick) picks.push(cheapPick);
 
-    // ── Balanced: La Joya-Hampton tricycle → transfer to jeepney at Hampton ──
-    // Prefer the hampton_transfer variant which specifically uses La Joya-Hampton + nearest jeepney
-    const hamptonPool = candidates.filter((c) => c.id.includes('hampton_transfer') && candidateHasMode(c, 'tricycle') && candidateHasMode(c, 'jeepney'));
+    // ── Balanced: ride tricycle from La Joya, drop off at jeepney intersection ──
+    // Prefer balanced_ variants (tricycle→jeepney at intersection point)
+    const balancedTransferPool = candidates.filter((c) => c.id.includes('balanced_LAJOYA') && candidateHasMode(c, 'tricycle') && candidateHasMode(c, 'jeepney'));
     const triJeepPool = candidates.filter((c) => candidateHasMode(c, 'tricycle') && candidateHasMode(c, 'jeepney'));
     const balancedFallback = candidates.filter((c) => candidateHasMode(c, 'jeepney'));
-    const balancedPool = hamptonPool.length > 0
-      ? hamptonPool
+    const balancedPool = balancedTransferPool.length > 0
+      ? balancedTransferPool
       : triJeepPool.length > 0
         ? triJeepPool
         : balancedFallback.length > 0 ? balancedFallback : candidates;
@@ -411,7 +422,7 @@ const toRecommenderOptions = (
       (c) => c.metrics.effectiveDurationMin * 0.5 + c.metrics.farePhp * 0.3 + c.metrics.transferCount * 5 + c.metrics.walkMeters / 200,
       ['Balanced'],
       'Balanced',
-      'La Joya-Hampton tricycle → transfer to jeepney — good balance of speed and cost',
+      'Tricycle from La Joya → drop off at jeepney intersection → ride jeepney',
     );
     if (balancedPick) picks.push(balancedPick);
 
@@ -1203,22 +1214,6 @@ export default function HomeScreen() {
           );
         })}
 
-        {/* Walking indicator markers at transition points */}
-        {transitLegs.map((leg, idx) =>
-          !leg.onTransit && leg.coordinates.length >= 2 ? (
-            <Marker
-              key={`walk-marker-${idx}`}
-              coordinate={leg.coordinates[0]}
-              tracksViewChanges={false}
-              anchor={{ x: 0.5, y: 0.5 }}
-            >
-              <View style={styles.walkMarker}>
-                <Ionicons name="walk" size={14} color="#FFFFFF" />
-              </View>
-            </Marker>
-          ) : null
-        )}
-
         {/* Board & drop-off markers for each transit leg */}
         {transitLegs.map((leg, idx) =>
           leg.onTransit ? (
@@ -1228,6 +1223,7 @@ export default function HomeScreen() {
                 coordinate={leg.boardAt}
                 tracksViewChanges={false}
                 anchor={{ x: 0.5, y: 0.5 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <View style={styles.boardMarker}>
                   <Ionicons name="arrow-up-circle" size={14} color="#FFFFFF" />
@@ -1236,7 +1232,7 @@ export default function HomeScreen() {
                   <View style={styles.stopCallout}>
                     <Text style={styles.stopCalloutLabel}>Board Here</Text>
                     <Text style={styles.stopCalloutType}>
-                      Ride {leg.transitInfo?.type || 'transit'} heading to {leg.transitInfo?.to || leg.alightLabel}
+                      Ride {leg.transitInfo?.type || 'transit'}
                     </Text>
                   </View>
                 </Callout>
@@ -1246,6 +1242,7 @@ export default function HomeScreen() {
                 coordinate={leg.alightAt}
                 tracksViewChanges={false}
                 anchor={{ x: 0.5, y: 0.5 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <View style={styles.alightMarker}>
                   <Ionicons name="arrow-down-circle" size={14} color="#FFFFFF" />
@@ -1254,7 +1251,7 @@ export default function HomeScreen() {
                   <View style={styles.stopCallout}>
                     <Text style={styles.stopCalloutLabel}>Drop-off Point</Text>
                     <Text style={styles.stopCalloutType}>
-                      Get off near {leg.alightLabel}
+                      Drop off here
                     </Text>
                   </View>
                 </Callout>
@@ -2124,30 +2121,32 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   stopCallout: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minWidth: 120,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minWidth: 160,
+    maxWidth: 260,
     shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
     borderWidth: 1,
-    borderColor: 'rgba(10,22,40,0.08)',
+    borderColor: 'rgba(10,22,40,0.1)',
   },
   stopCalloutLabel: {
     fontFamily: 'Inter',
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
     color: COLORS.navy,
   },
   stopCalloutType: {
     fontFamily: 'Inter',
-    fontSize: 11,
+    fontSize: 13,
     color: COLORS.textMuted,
-    marginTop: 2,
+    marginTop: 3,
+    lineHeight: 18,
   },
   // Transit layer styles
   transitStopMarker: {
