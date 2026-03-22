@@ -14,7 +14,7 @@ import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import type { TransitLeg } from '../utils/routeSegments';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const PANEL_VISIBLE = 540;
+const PANEL_VISIBLE = 380;
 const PANEL_HEIGHT = PANEL_VISIBLE + 300;
 
 export type RouteAlternativeId = 'recommended' | 'least_transfers' | 'fastest' | 'cheapest' | 'shortest';
