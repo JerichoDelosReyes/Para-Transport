@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, Image, TouchableOpacity, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BADGES } from '../constants/badges';
@@ -45,36 +45,40 @@ export function AchievementPopup() {
   if (!badge) return null;
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          transform: [{ translateY: slideAnim }],
-        },
-      ]}
-    >
-      <View style={styles.content}>
-        <View style={styles.iconContainer}>
-          {BADGE_IMAGES[badge.id] ? (
-            <Image 
-              source={BADGE_IMAGES[badge.id]} 
-              style={styles.badgeImage} 
-              resizeMode="contain" 
-            />
-          ) : (
-            <Text style={styles.iconTxt}>{badge.icon}</Text>
-          )}
-        </View>
-        <View style={styles.textContainer}>
-          <Text style={styles.title}>ACHIEVEMENT UNLOCKED!</Text>
-          <Text style={styles.name}>{badge.name}</Text>
-          <Text style={styles.desc}>{badge.description}</Text>
-        </View>
-        <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-          <Ionicons name="close" size={20} color="#6B7280" />
-        </TouchableOpacity>
+    <Modal visible={true} transparent={true} animationType="fade" onRequestClose={handleClose}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <Animated.View
+          style={[
+            styles.container,
+            {
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <View style={styles.content}>
+            <View style={styles.iconContainer}>
+              {BADGE_IMAGES[badge.id] ? (
+                <Image 
+                  source={BADGE_IMAGES[badge.id]} 
+                  style={styles.badgeImage} 
+                  resizeMode="contain" 
+                />
+              ) : (
+                <Text style={styles.iconTxt}>{badge.icon}</Text>
+              )}
+            </View>
+            <View style={styles.textContainer}>
+              <Text style={styles.title}>ACHIEVEMENT UNLOCKED!</Text>
+              <Text style={styles.name}>{badge.name}</Text>
+              <Text style={styles.desc}>{badge.description}</Text>
+            </View>
+            <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
+              <Ionicons name="close" size={20} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
       </View>
-    </Animated.View>
+    </Modal>
   );
 }
 

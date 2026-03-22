@@ -130,13 +130,15 @@ export default function RootLayout() {
           <Stack.Screen name="journey-summary" />
         </Stack>
 
-        {/* Custom Animated Splash Screen Overlay */}
-        {showAnimatedSplash && (
-          <CustomSplash onFinish={() => setShowAnimatedSplash(false)} />
-        )}
+        <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 99999, elevation: 99999 }} pointerEvents="box-none">
+          {/* Custom Animated Splash Screen Overlay */}
+          {showAnimatedSplash && (
+            <CustomSplash onFinish={() => setShowAnimatedSplash(false)} />
+          )}
 
-        {/* Global Achievement Popup Overlay */}
-        <AchievementPopup />
+          {/* Global Achievement Popup Overlay */}
+          <AchievementPopup />
+        </View>
       </View>
     </SafeAreaProvider>
   );
