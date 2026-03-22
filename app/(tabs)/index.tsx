@@ -684,6 +684,7 @@ export default function HomeScreen() {
   const pendingRouteSearch = useStore((state) => state.pendingRouteSearch);
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const addHistory = useStore((state) => state.addHistory);
+  const updateLatestHistoryFare = useStore((state) => state.updateLatestHistoryFare);
   const addTripStats = useStore((state) => state.addTripStats);
   const mapRef = useRef<MapView | null>(null);
   const tripStatRecordedRef = useRef(false);
@@ -854,6 +855,10 @@ export default function HomeScreen() {
     const chosen = recommenderCandidates.find((c) => c.id === optionId);
     if (!chosen) return;
 
+    if (chosen.metrics?.farePhp) {
+      updateLatestHistoryFare(chosen.metrics.farePhp);
+    }
+
     setSelectedRecommenderOptionId(optionId);
     setRouteCoordinates(chosen.coordinates);
     setRouteSummary(chosen.summary);
@@ -964,10 +969,12 @@ export default function HomeScreen() {
       
       // Save this to commute history
       const h_origin = origin ? { name: origin.title, lat: origin.latitude, lon: origin.longitude } : null;
+      const initialFare = ordered.length > 0 ? ordered[0].metrics?.farePhp : 0;
       addHistory({
         id: Date.now().toString(),
         origin: h_origin,
         destination: { name: destination.title, lat: destination.latitude, lon: destination.longitude },
+        fare: initialFare,
         timestamp: Date.now(),
       });
       
