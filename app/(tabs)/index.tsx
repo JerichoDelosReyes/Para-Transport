@@ -696,12 +696,29 @@ export default function HomeScreen() {
         let originPlace: PlaceResult | null = null;
         
         // 1. Resolve origin if it's not our current location
-        if (origin && origin.toLowerCase() !== 'current location' && origin.toLowerCase() !== 'your location') {
+        if (origin && typeof origin === 'object' && origin.lat && origin.lon) {
+          originPlace = {
+            id: Math.random().toString(),
+            title: origin.name || 'Selected Origin',
+            latitude: origin.lat,
+            longitude: origin.lon,
+          };
+        } else if (typeof origin === 'string' && origin.toLowerCase() !== 'current location' && origin.toLowerCase() !== 'your location') {
           originPlace = await resolvePlace(origin);
         }
 
         // 2. Resolve destination
-        const destPlace = await resolvePlace(destination);
+        let destPlace: PlaceResult | null = null;
+        if (destination && typeof destination === 'object' && destination.lat && destination.lon) {
+          destPlace = {
+            id: Math.random().toString(),
+            title: destination.name || 'Selected Destination',
+            latitude: destination.lat,
+            longitude: destination.lon,
+          };
+        } else if (typeof destination === 'string') {
+          destPlace = await resolvePlace(destination);
+        }
 
         if (!destPlace) {
           Alert.alert('Route Error', 'Could not locate the destination for this route.');

@@ -136,7 +136,7 @@ export const useStore = create<StoreState>()(
                 .update({ saved_routes: newSavedRoutes })
                 .eq('email', state.user.email)
                 .then(({ error }) => {
-                  if (error) console.log('Failed to save route to Supabase:', error);
+                  if (error && error.code !== 'PGRST204') console.log('Failed to save route to Supabase:', error);
                 });
             }
             return { user: { ...state.user, saved_routes: newSavedRoutes } };
@@ -152,7 +152,7 @@ export const useStore = create<StoreState>()(
               .update({ saved_routes: newSavedRoutes })
               .eq('email', state.user.email)
               .then(({ error }) => {
-                if (error) console.log('Failed to remove saved route in Supabase:', error);
+                if (error && error.code !== 'PGRST204') console.log('Failed to save route to Supabase:', error);
               });
           }
           return {
@@ -173,7 +173,7 @@ export const useStore = create<StoreState>()(
                 .update({ saved_places: newSavedPlaces })
                 .eq('email', state.user.email)
                 .then(({ error }) => {
-                  if (error) console.log('Failed to save place to Supabase:', error);
+                  if (error && error.code !== 'PGRST204') console.log('Failed to save place to Supabase:', error);
                 });
             }
             return { user: { ...state.user, saved_places: newSavedPlaces } };
@@ -189,7 +189,7 @@ export const useStore = create<StoreState>()(
               .update({ saved_places: newSavedPlaces })
               .eq('email', state.user.email)
               .then(({ error }) => {
-                if (error) console.log('Failed to remove saved place in Supabase:', error);
+                if (error && error.code !== 'PGRST204') console.log('Failed to remove saved route in Supabase:', error);
               });
           }
           return {

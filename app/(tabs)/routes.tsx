@@ -229,7 +229,7 @@ export default function RoutesScreen() {
                   <View key={item.id || index} style={styles.historyCard}>
                     <View style={styles.historyCardTop}>
                       <Text style={styles.historyRouteName} numberOfLines={1}>
-                        {item.origin?.name || 'Current Location'} to {item.destination?.name || 'Unknown'}
+                        {targetName}
                       </Text>
                       <TouchableOpacity
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -255,16 +255,19 @@ export default function RoutesScreen() {
                         <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={18} color={isSaved ? COLORS.primary : COLORS.textMuted} />
                       </TouchableOpacity>
                     </View>
-                    <Text style={styles.historyLegSummary}>
-                      Recent Search • {item.timestamp ? new Date(item.timestamp).toLocaleDateString() : 'Recent'}
-                    </Text>
+                    <View>
+                      <Text style={styles.historyLegSummary}>Recent Search</Text>
+                      <Text style={[styles.historyLegSummary, { marginTop: 2, fontSize: 10, color: '#9CA3AF' }]}>
+                        {item.timestamp ? (new Date(item.timestamp).toLocaleDateString() + ' at ' + new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'Recent'}
+                      </Text>
+                    </View>
                     <View style={[styles.historyCardBottom, { justifyContent: 'flex-end' }]}>
                       <TouchableOpacity 
                         style={styles.historyGhostButton} 
                         activeOpacity={0.9} 
                         onPress={() => {
                           setPendingRouteSearch({ origin: item.origin || null, destination: item.destination });
-                          router.replace('/(tabs)/index');
+                          router.navigate('/(tabs)');
                         }}
                       >
                         <Text style={styles.historyGhostButtonText}>View</Text>
@@ -490,7 +493,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.06)',
-    padding: SPACING.cardPadding,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   historyCardTop: {
     flexDirection: 'row',
@@ -502,31 +506,32 @@ const styles = StyleSheet.create({
     marginRight: 8,
     fontFamily: 'Inter',
     fontWeight: '700',
-    fontSize: TYPOGRAPHY.body,
+    fontSize: 15,
     color: COLORS.textStrong,
   },
   historyLegSummary: {
-    marginTop: 6,
+    marginTop: 4,
     fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.label,
+    fontSize: 12,
     color: COLORS.textMuted,
   },
   historyCardBottom: {
-    marginTop: 12,
+    marginTop: 6,
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     alignItems: 'center',
   },
   historyGhostButton: {
     borderRadius: RADIUS.pill,
-    borderWidth: 1.2,
+    borderWidth: 1,
     borderColor: COLORS.navy,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
     backgroundColor: COLORS.card,
   },
   historyGhostButtonText: {
     fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.label,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.navy,
   },

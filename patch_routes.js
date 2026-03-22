@@ -19,7 +19,7 @@ const replacement = `        ) : user.commute_history && user.commute_history.le
                     activeOpacity={0.7}
                     onPress={() => {
                         useStore.getState().setPendingRouteSearch({ origin: item.origin || null, destination: item.destination });
-                        router.replace('/(tabs)/index');
+                        router.navigate('/(tabs)');
                     }}
                   >
                     <View style={{ backgroundColor: '#F0F9FF', padding: 8, borderRadius: 12 }}>
