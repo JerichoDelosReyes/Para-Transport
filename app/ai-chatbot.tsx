@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Animated, KeyboardAvoidingView, Platform, Dimensions } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Animated, KeyboardAvoidingView, Platform, Dimensions, FlatList } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -22,7 +22,10 @@ const CHATBOT_STATES = {
 
 export default function AIChatbotScreen() {
   const [currentState, setCurrentState] = useState("IDLE");
+  const [inputText, setInputText] = useState("");
+  const [messages, setMessages] = useState<any[]>([]);
   const floatAnim = useRef(new Animated.Value(0)).current;
+  const flatListRef = useRef<FlatList>(null);
   const user = useStore((state: any) => state.user);
   const firstName = user?.full_name?.split(" ")[0] || "Commuter";
 
@@ -53,6 +56,29 @@ export default function AIChatbotScreen() {
     }, 1200);
   };
 
+  const handleSend = () => {
+    if (!inputText.trim()) return;
+
+    const userMessage = { id: Date.now().toString(), text: inputText.trim(), isUser: true };
+    setMessages((prev) => [...prev, userMessage]);
+    setInputText("");
+    setCurrentState("PROCESSING");
+
+    setTimeout(() => {
+      const aiResponse = { 
+        id: (Date.now() + 1).toString(), 
+        text: "I am a placeholder AI response. I will be able to help you route and navigate soon!", 
+        isUser: false 
+      };
+      setMessages((prev) => [...prev, aiResponse]);
+      setCurrentState("SUCCESS");
+
+      setTimeout(() => {
+        setCurrentState("IDLE");
+      }, 2000);
+    }, 1500);
+  };
+
   return (
     <LinearGradient
       colors={[COLORS.background, "#FDE8A8", "#D7F3DE"]}
@@ -65,41 +91,62 @@ export default function AIChatbotScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.greetingContainer}>
-          <Text style={styles.greetingTitle}>Hello, {firstName}!</Text>
-          <Text style={styles.greetingSubtitle}>How can I help you today?</Text>
-        </View>
-
-        <View style={styles.aiContainer}>
-          <Animated.View style={[styles.aiGlowWrap, { transform: [{ translateY: floatAnim }] }]}>
-            <View style={styles.aiImagePortal}>
-              <Image 
-                source={CHATBOT_STATES[currentState]}
-                style={styles.chatbotImage}
-              />
+        {messages.length === 0 ? (
+          <>
+            <View style={styles.greetingContainer}>
+              <Text style={styles.greetingTitle}>Hello, {firstName}!</Text>
+              <Text style={styles.greetingSubtitle}>How can I help you today?</Text>
             </View>
-          </Animated.View>
-          <View style={styles.aiShadow} />
-        </View>
 
-        <View style={styles.actionsGrid}>
-          <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("NAVIGATION")}>
-            <Ionicons name="map" size={20} color={COLORS.navy} />
-            <Text style={styles.actionText}>Find a route</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("ASK")}>
-            <Ionicons name="bulb" size={20} color={COLORS.navy} />
-            <Text style={styles.actionText}>Nearest places</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("PAYMENT")}>
-            <Ionicons name="wallet" size={20} color={COLORS.navy} />
-            <Text style={styles.actionText}>Check fares</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("SUCCESS")}>
-            <Ionicons name="scan" size={20} color={COLORS.navy} />
-            <Text style={styles.actionText}>Scan signboard</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.aiContainer}>
+              <Animated.View style={[styles.aiGlowWrap, { transform: [{ translateY: floatAnim }] }]}>
+                <View style={styles.aiImagePortal}>
+                  <Image 
+                    source={CHATBOT_STATES[currentState]}
+                    style={styles.chatbotImage}
+                  />
+                </View>
+              </Animated.View>
+              <View style={styles.aiShadow} />
+            </View>
+
+            <View style={styles.actionsGrid}>
+              <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("NAVIGATION")}>
+                <Ionicons name="map" size={20} color={COLORS.navy} />
+                <Text style={styles.actionText}>Find a route</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("ASK")}>
+                <Ionicons name="bulb" size={20} color={COLORS.navy} />
+                <Text style={styles.actionText}>Nearest places</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("PAYMENT")}>
+                <Ionicons name="wallet" size={20} color={COLORS.navy} />
+                <Text style={styles.actionText}>Check fares</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("SUCCESS")}>
+                <Ionicons name="scan" size={20} color={COLORS.navy} />
+                <Text style={styles.actionText}>Scan signboard</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.chatContainer}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            renderItem={({ item }) => (
+              <View style={[styles.messageBubble, item.isUser ? styles.userBubble : styles.aiBubble]}>
+                <Text style={[styles.messageText, item.isUser ? styles.userMessageText : styles.aiMessageText]}>
+                  {item.text}
+                </Text>
+              </View>
+            )}
+            style={{ flex: 1 }}
+          />
+        )}
 
         <KeyboardAvoidingView 
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -110,10 +157,18 @@ export default function AIChatbotScreen() {
               style={styles.textInput}
               placeholder="Ask me anything..."
               placeholderTextColor={COLORS.textMuted}
+              value={inputText}
+              onChangeText={setInputText}
+              onSubmitEditing={handleSend}
             />
 
-            <TouchableOpacity style={styles.micButton}>
-              <Ionicons name="mic" size={24} color={COLORS.navy} />
+            <TouchableOpacity style={styles.micButton} onPress={handleSend}>
+              <Ionicons 
+                name={inputText.trim() ? "send" : "mic"} 
+                size={22} 
+                color={"#FFFFFF"} 
+                style={inputText.trim() ? { transform: [{ translateX: 2 }, { translateY: -1 }] } : {}}
+              />
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -138,9 +193,15 @@ const styles = StyleSheet.create({
   actionsGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", paddingHorizontal: 24, marginBottom: 30 },
   actionCard: { width: (width - 64) / 2, flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255, 255, 255, 0.85)", paddingVertical: 14, paddingHorizontal: 12, borderRadius: 16, marginBottom: 12, gap: 8 },
   actionText: { fontSize: 14, fontWeight: "500", color: COLORS.navy },
+  chatContainer: { paddingHorizontal: 24, paddingVertical: 20, gap: 16 },
+  messageBubble: { maxWidth: "80%", padding: 14, borderRadius: 20 },
+  userBubble: { backgroundColor: COLORS.primary, alignSelf: "flex-end", borderBottomRightRadius: 4 },
+  aiBubble: { backgroundColor: "rgba(255,255,255,0.85)", alignSelf: "flex-start", borderBottomLeftRadius: 4, borderWidth: 1, borderColor: "rgba(255,255,255,0.5)" },
+  messageText: { fontSize: 16, lineHeight: 22 },
+  userMessageText: { color: "#FFFFFF" },
+  aiMessageText: { color: COLORS.navy },
   inputContainer: { paddingHorizontal: 24, paddingBottom: 20 },
-  inputWrapper: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255, 255, 255, 0.85)", borderRadius: 999, padding: 8, borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.8)" },
-  plusButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(107, 82, 174, 0.1)", alignItems: "center", justifyContent: "center" },
-  textInput: { flex: 1, height: 40, paddingHorizontal: 12, fontSize: 16, color: COLORS.navy },
-  micButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center", shadowColor: "transparent", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 }
+  inputWrapper: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255, 255, 255, 0.85)", borderRadius: 999, paddingLeft: 20, paddingRight: 8, paddingVertical: 8, borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.8)" },
+  textInput: { flex: 1, height: 40, fontSize: 16, color: COLORS.navy },
+  micButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center", shadowColor: "transparent", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 }
 });
