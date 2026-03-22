@@ -50,24 +50,9 @@ Bringing clarity and confidence to your daily commute around the **Philippines**
 
 ## 🗂️ Data Availability Note
 
-- Route data files are currently tracked in this repository for development (`data/routes.json`, `data/tricycle_routes.json`).
-- For private deployments, full raw/field datasets can be kept out of Git and replaced with placeholders like the examples below.
-
-`data/routes.json`
-```json
-{
-   "routes": []
-}
-```
-
-`data/tricycle_routes.json`
-```json
-{
-   "routes": []
-}
-```
-
-- Included sample/processed route files are enough to run and evaluate the core routing experience locally.
+- Route datasets, GPX files, and local places data are treated as private/local working data and are gitignored for this repository.
+- Use placeholder templates in `data/placeholders/` when sharing the project publicly.
+- Full plotting/import instructions are documented in `data/README.md` (Maps.ie plotting -> GPX export -> JSON parse workflow).
 
 <br/>
 

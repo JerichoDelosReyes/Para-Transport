@@ -48,3 +48,5 @@ client_*.plist
 # Private/local route datasets
 data/routes.json
 data/tricycle_routes.json
+data/local_places.json
+data/gpx/
