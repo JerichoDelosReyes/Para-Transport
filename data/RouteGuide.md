@@ -4,6 +4,8 @@ This folder contains transit datasets used by the app. Sensitive or large mappin
 
 ## Recommended Workflow (Maps.ie -> GPX -> JSON)
 
+GPX-specific helper instructions are documented in `data/gpx/GPXHelper.md`.
+
 1. Plot the route manually in Maps.ie.
 2. Export/download the route as a GPX file.
 3. Save the GPX file locally (for example, under `data/gpx/` on your machine).
