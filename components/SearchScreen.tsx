@@ -60,7 +60,7 @@ export default function SearchScreen({
   const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
   const [isFetching, setIsFetching] = useState(false);
 
-  const { recents, addRecent } = useRecentSearches();
+  const { recents, addRecent, clearRecents } = useRecentSearches();
   const { saveRoute, removeSavedRoute, user } = useStore();
 
   const originRef = useRef<TextInput>(null);
@@ -421,6 +421,13 @@ export default function SearchScreen({
                 <View style={styles.sectionHeader}>
                   <Ionicons name="time-outline" size={16} color={COLORS.navy} />
                   <Text style={styles.sectionTitle}>Recent</Text>
+                  <TouchableOpacity
+                    style={styles.clearButton}
+                    onPress={clearRecents}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.clearButtonText}>Clear</Text>
+                  </TouchableOpacity>
                 </View>
                 <FlatList
                   data={recents}
@@ -552,6 +559,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: COLORS.navy,
+    flex: 1,
+  },
+  clearButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(10,22,40,0.06)',
+  },
+  clearButtonText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted,
   },
   listContent: {
     paddingHorizontal: SPACING.screenX,
