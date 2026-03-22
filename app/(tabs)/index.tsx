@@ -1592,7 +1592,7 @@ export default function HomeScreen() {
               activeOpacity={0.85}
             >
               <Ionicons
-                name={sim.state === 'playing' ? 'pause' : sim.state === 'finished' ? 'reload' : 'play'}
+                name={'car'}
                 size={20}
                 color={COLORS.navy}
               />
