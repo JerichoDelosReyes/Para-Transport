@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
+import { findRoutesForDestination, MatchedRoute } from '../../services/routeSearch';
 import { ROUTE_COLORS } from '../../constants/routeVisuals';
 import { getRouteDisplayRef } from '../../constants/routeCatalog';
 import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
@@ -355,6 +356,42 @@ const buildRecommendationOptions = (
   }
 
   return Array.from(unique.values());
+};
+
+const matchToCandidates = (matches: MatchedRoute[]): RecommenderCandidate[] => {
+  return matches.map((m, i) => {
+    const coordinates = m.legs.flatMap(l => l.route.coordinates);
+    const transitLegs: TransitLeg[] = m.legs.map(l => ({
+      transitRouteId: l.route.properties.code,
+      transitInfo: {
+        id: l.route.properties.code,
+        name: l.route.properties.name,
+        type: l.route.properties.type,
+      },
+      boardAt: l.boardingPoint,
+      alightAt: l.alightingPoint,
+      boardLabel: "Board",
+      alightLabel: "Alight",
+      coordinates: l.route.coordinates,
+      onTransit: true,
+    }));
+
+    return {
+      id: "matched-" + i,
+      coordinates,
+      summary: { distanceKm: m.distanceKm, durationMin: m.estimatedMinutes },
+      legs: transitLegs,
+      metrics: {
+        durationMin: m.estimatedMinutes,
+        distanceKm: m.distanceKm,
+        effectiveDurationMin: m.estimatedMinutes,
+        farePhp: m.estimatedFare,
+        walkMeters: 0,
+        transferCount: m.transferCount,
+        tricycleLegs: m.legs.filter(l => l.route.properties.type === 'tricycle').length
+      }
+    };
+  });
 };
 
 const toRecommenderOptions = (
@@ -900,38 +937,16 @@ export default function HomeScreen() {
     
     setIsRouting(true);
     try {
-      // Fetch OSRM route alternatives with graceful fallback.
-      // Some public OSRM deployments may reject high alternatives counts.
-      const baseRouteUrl = `${ROUTING_BASE_URL}/${startPoint.longitude},${startPoint.latitude};${destinationPoint.longitude},${destinationPoint.latitude}`;
-      const queryAttempts = [
-        'overview=full&geometries=geojson&alternatives=6',
-        'overview=full&geometries=geojson&alternatives=3',
-        'overview=full&geometries=geojson&alternatives=true',
-      ];
-
-      let routeResult: any = null;
-      let lastStatus = 0;
-
-      for (const query of queryAttempts) {
-        const response = await fetch(`${baseRouteUrl}?${query}`);
-        lastStatus = response.status;
-        if (!response.ok) continue;
-
-        const parsed = await response.json();
-        if (parsed?.routes?.length > 0 && parsed?.routes?.[0]?.geometry?.coordinates) {
-          routeResult = parsed;
-          break;
-        }
-      }
-
-      if (!routeResult) throw new Error(`Routing failed (${lastStatus || 'no-response'})`);
-      const osrmRoutes = routeResult?.routes;
-      if (!osrmRoutes || osrmRoutes.length === 0 || !osrmRoutes[0]?.geometry?.coordinates) {
-        Alert.alert('Route Not Found', 'No drivable route found for this destination.');
+      const matchResults = findRoutesForDestination(startPoint, destinationPoint, gpxRoutes as any[]);
+      let builtCandidates: RecommenderCandidate[] = [];
+      if (matchResults && matchResults.length > 0) {
+        builtCandidates = matchToCandidates(matchResults);
+      } else {
+        Alert.alert('Route Not Found', 'No transit routes found for this destination.');
+        setIsRouting(false);
         return;
       }
-
-      const builtCandidates = buildRecommendationOptions(osrmRoutes, transitRoutes as any[]);
+      
       const { uiOptions, ordered } = toRecommenderOptions(builtCandidates, {
         destinationName: destination.title,
       });
@@ -949,21 +964,9 @@ export default function HomeScreen() {
           animated: true,
         });
       } else {
-        const fallback = osrmRoutes[0];
-        const fallbackCoordinates = toMapCoordinates(fallback.geometry.coordinates);
-        setRecommenderCandidates([]);
-        setRecommenderOptions([]);
-        setSelectedRecommenderOptionId(null);
-        setRouteCoordinates(fallbackCoordinates);
-        setRouteSummary({
-          distanceKm: fallback.distance / 1000,
-          durationMin: fallback.duration / 60,
-        });
-        setSelectedRouteLegs(buildTransitLegs(fallbackCoordinates, transitRoutes as any[], 55, 120));
-        mapRef.current?.fitToCoordinates(fallbackCoordinates, {
-          edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
-          animated: true,
-        });
+        Alert.alert('Route Not Found', 'No route found for this destination.');
+        setIsRouting(false);
+        return;
       }
       setShowRecommender(true);
       
