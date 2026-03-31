@@ -1,11 +1,15 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from "react-native";
+import React, { useRef, useEffect, useState, useMemo } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated, PanResponder } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS, RADIUS, TYPOGRAPHY } from "../constants/theme";
 import type { MatchedRoute, RankMode } from "../services/routeSearch";
 import RouteResultCard from "./RouteResultCard";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+// Pre-compute expansion snap states
+const FULL_HEIGHT = SCREEN_HEIGHT * 0.8;
+const HALF_HEIGHT = SCREEN_HEIGHT * 0.45;
 
 type Props = {
   visible: boolean;
@@ -36,20 +40,98 @@ export default function RouteRecommenderPanel({
   onClose,
   destinationName
 }: Props) {
-  if (!visible) return null;
+  // Start off-screen at 0 (bound safely behind bottom edge)
+  const panY = useRef(new Animated.Value(0)).current; 
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // 1. Enter / Exit animations
+  useEffect(() => {
+    if (visible) {
+      setIsExpanded(false);
+      Animated.spring(panY, {
+        toValue: -HALF_HEIGHT,
+        tension: 60,
+        friction: 12,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(panY, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible, panY]);
+
+  const toggleExpand = () => {
+    const nextY = isExpanded ? -HALF_HEIGHT : -FULL_HEIGHT;
+    Animated.spring(panY, {
+      toValue: nextY,
+      tension: 60,
+      friction: 12,
+      useNativeDriver: true,
+    }).start(() => setIsExpanded(!isExpanded));
+  };
+
+  const handleDismissSpring = () => {
+    Animated.timing(panY, {
+      toValue: 0, // Slide totally off-screen
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      onClose(); // Triggers state wipe upstream
+    });
+  };
+
+  // 2. Gesture Handling
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 10,
+        onPanResponderGrant: () => {
+          panY.extractOffset();
+        },
+        onPanResponderMove: Animated.event([null, { dy: panY }], { useNativeDriver: false }),
+        onPanResponderRelease: (_, gestureState) => {
+          panY.flattenOffset();
+          
+          if (gestureState.dy > 80) {
+            handleDismissSpring();
+          } else if (gestureState.dy < -50) {
+            Animated.spring(panY, {
+              toValue: -FULL_HEIGHT,
+              tension: 60,
+              friction: 12,
+              useNativeDriver: true,
+            }).start(() => setIsExpanded(true));
+          } else {
+             // Revert snap to closest interval
+            Animated.spring(panY, {
+              toValue: isExpanded ? -FULL_HEIGHT : -HALF_HEIGHT,
+              tension: 60,
+              friction: 12,
+              useNativeDriver: true,
+            }).start();
+          }
+        },
+      }),
+    [isExpanded, panY]
+  );
 
   return (
-    <View style={styles.sheetContainer}>
-      <View style={styles.sheetHeader}>
+    <Animated.View 
+      style={[
+        styles.sheetContainer, 
+        { transform: [{ translateY: panY }] }
+      ]}
+      pointerEvents={visible ? 'auto' : 'none'}
+    >
+      <View style={styles.sheetHeader} {...panResponder.panHandlers}>
+        <TouchableOpacity style={styles.dragHandleWrap} onPress={toggleExpand} activeOpacity={0.9}>
+          <View style={styles.dragHandle} />
+        </TouchableOpacity>
         <View style={styles.sheetHeaderRow}>
           <Text style={styles.sheetHeaderTitle}>AVAILABLE ROUTES</Text>
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={onClose}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="close-circle" size={22} color={COLORS.textMuted} />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -111,17 +193,17 @@ export default function RouteRecommenderPanel({
           )}
         </View>
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   sheetContainer: {
     position: "absolute",
-    bottom: 0,
     left: 0,
     right: 0,
-    height: SCREEN_HEIGHT * 0.45,
+    bottom: -FULL_HEIGHT,
+    height: FULL_HEIGHT,
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -135,23 +217,33 @@ const styles = StyleSheet.create({
   },
   sheetHeader: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(10,22,40,0.06)",
+    backgroundColor: "transparent", 
   },
   sheetHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
+  dragHandleWrap: {
+    alignItems: 'center',
+    paddingBottom: 12,
+    paddingTop: 8,
+    width: '100%',
+  },
+  dragHandle: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "rgba(10,22,40,0.2)",
+  },
   sheetHeaderTitle: {
     fontFamily: "Cubao",
     fontSize: 24,
     color: COLORS.navy,
     letterSpacing: 0.5,
-  },
-  clearButton: {
-    padding: 4,
   },
   sheetContent: {
     paddingHorizontal: 20,

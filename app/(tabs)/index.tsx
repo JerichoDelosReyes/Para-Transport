@@ -459,6 +459,15 @@ export default function HomeScreen() {
           edgePadding: { top: 160, right: 50, bottom: 300, left: 50 },
           animated: true,
         });
+
+        // Delay route highlight by 300ms to allow bottom sheet intro animation to pop smoothly
+        setTimeout(() => {
+           const firstRanked = rankRoutes(results, 'easiest')[0];
+           if (firstRanked) {
+             const firstId = firstRanked.legs.map((l: any) => l.route.properties.code).join('+');
+             setSelectedRouteId(firstId);
+           }
+        }, 300);
       } else {
         mapRef.current?.animateToRegion({...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01}, 600);
       }
@@ -636,26 +645,80 @@ export default function HomeScreen() {
     return splitRouteSegments(routeCoordinates, transitRoutes, 50);
   }, [routeCoordinates, transitRoutes]);
 
-  // Build multi-leg transit journey plan
+  // Build multi-leg transit journey plan (Fixes: Walk lines, transfer segments + correct plotting)
   const transitLegs = useMemo((): TransitLeg[] => {
     if (selectedRoute?.legs && selectedRoute.legs.length > 0) {
-      return selectedRoute.legs.map((leg: any, idx): TransitLeg => {
+      const legs: TransitLeg[] = [];
+      const originPoint = currentLocation; 
+
+      selectedRoute.legs.forEach((leg: any, idx: number) => {
+        const fullCoords = leg.route.coordinates;
+        let bIdx = 0; let aIdx = fullCoords.length - 1;
+        let minDistB = Infinity; let minDistA = Infinity;
+        
+        for (let i = 0; i < fullCoords.length; i++) {
+          const db = sqDistApprox(fullCoords[i], leg.boardingPoint);
+          if (db < minDistB) { minDistB = db; bIdx = i; }
+          const da = sqDistApprox(fullCoords[i], leg.alightingPoint);
+          if (da < minDistA) { minDistA = da; aIdx = i; }
+        }
+        
+        // Isolate transit polyline between board and alight points
+        const segment = [];
+        if (bIdx <= aIdx) {
+          for (let i = bIdx; i <= aIdx; i++) segment.push(fullCoords[i]);
+        } else {
+          for (let i = bIdx; i >= aIdx; i--) segment.push(fullCoords[i]);
+        }
+
+        // 1. Walk from start or prev stop to this board
+        const prevPoint = idx === 0 ? originPoint : selectedRoute.legs[idx-1].alightingPoint;
+        if (prevPoint) {
+           legs.push({
+             transitRouteId: 'walk',
+             coordinates: [prevPoint, leg.boardingPoint],
+             onTransit: false,
+             transitInfo: null,
+             boardAt: prevPoint,
+             alightAt: leg.boardingPoint,
+             boardLabel: '', alightLabel: ''
+           });
+        }
+
+        // 2. Focused Transit segment 
         const meta = (transitRoutes as any[]).find((r) => r.id === leg.route.properties.code);
-        return {
+        legs.push({
           transitRouteId: leg.route.properties.code,
-          coordinates: leg.route.coordinates,
+          coordinates: segment,
           onTransit: true,
           transitInfo: meta || null,
-          boardAt: leg.boardingPoint || leg.route.coordinates[0],
-          alightAt: leg.alightingPoint || leg.route.coordinates[leg.route.coordinates.length - 1],
+          boardAt: leg.boardingPoint,
+          alightAt: leg.alightingPoint,
           boardLabel: '',
           alightLabel: ''
-        };
+        });
       });
+
+      // 3. Walk from last alight to destination
+      if (destinationLocation && selectedRoute.legs.length > 0) {
+         const lastAlight = selectedRoute.legs[selectedRoute.legs.length - 1].alightingPoint;
+         legs.push({
+           transitRouteId: 'walk',
+           coordinates: [lastAlight, destinationLocation],
+           onTransit: false,
+           transitInfo: null,
+           boardAt: lastAlight,
+           alightAt: destinationLocation,
+           boardLabel: '', alightLabel: ''
+         });
+      }
+
+      return legs;
     }
+    
     if (routeCoordinates.length < 2) return [];
     return buildTransitLegs(routeCoordinates, transitRoutes as any[], 55, 120);
-  }, [selectedRoute, routeCoordinates, transitRoutes]);
+  }, [selectedRoute, routeCoordinates, transitRoutes, currentLocation, destinationLocation]);
 
   // Simulation — uses the actual searched route coordinates and transit legs
   const sim = useSimulation(routeCoordinates, transitLegs);
@@ -878,13 +941,11 @@ export default function HomeScreen() {
 
         {/* Render searched route: mode-colored for transit, dashed for walking */}
         {visibleTransitLegs.map((leg, idx) => {
-          const legType = String(leg.transitInfo?.type || '').toLowerCase();
-          const transitColor = (ROUTE_COLORS as Record<string, string>)[legType] || '#E8A020';
           return (
             <Polyline
               key={`route-seg-${idx}`}
               coordinates={leg.coordinates}
-              strokeColor={leg.onTransit ? transitColor : '#999999'}
+              strokeColor={leg.onTransit ? '#E8A020' : '#888888'}
               strokeWidth={leg.onTransit ? 5 : 3}
               lineDashPattern={leg.onTransit ? undefined : [10, 6]}
               lineCap="round"
@@ -1178,7 +1239,16 @@ export default function HomeScreen() {
         selectedRoute={selectedRouteId}
         setSelectedRoute={(id: string | null) => setSelectedRouteId(id)}
         destinationName={destinationQuery}
-        onClose={() => setShowRecommender(false)}
+        onClose={() => {
+          setShowRecommender(false);
+          // Wait briefly for slide-out dismissal logic before clearing polylines to prevent visual pop
+          setTimeout(() => {
+            setSelectedRouteId(null);
+            setRouteCoordinates([]);
+            setMatchedRoutes([]);
+            setDestinationLocation(null);
+          }, 300);
+        }}
       />
 
       {/* Full-screen search */}
