@@ -10,7 +10,6 @@
  *   --code  <CODE>       Route code (e.g. IMUS-DASMA-02). Auto-generated if omitted.
  *   --type  <TYPE>       Vehicle type: jeepney | bus | uv | trike  (default: jeepney)
  *   --fare  <NUMBER>     Base fare in PHP                          (default: 13)
- *   --output <FILE>      Output JSON file (default: data/routes.json)
  *   --force              Overwrite if route code already exists
  *   --simplify <METERS>  Simplify path with tolerance in meters (uses @turf/simplify)
  *
@@ -34,7 +33,6 @@ function parseArgs(argv) {
       case '--code':     opts.code = args[++i]; break;
       case '--type':     opts.type = args[++i]; break;
       case '--fare':     opts.fare = Number(args[++i]); break;
-      case '--output':   opts.output = args[++i]; break;
       case '--force':    opts.force = true; break;
       case '--simplify': opts.simplify = Number(args[++i]); break;
       default:
@@ -187,9 +185,7 @@ function main() {
   const route = buildRoute(routeName, points, opts);
 
   // Read existing routes.json
-  const routesPath = opts.output
-    ? path.resolve(opts.output)
-    : path.join(__dirname, '..', 'data', 'routes.json');
+  const routesPath = path.join(__dirname, '..', 'data', 'routes.json');
   let data = { routes: [] };
 
   if (fs.existsSync(routesPath)) {

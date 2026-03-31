@@ -15,9 +15,7 @@ import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
 import { splitRouteSegments, buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
-import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
-import { findRoutesForDestination, rankRoutes, MatchedRoute, RankMode } from '../../services/routeSearch';
-import { useRoutes } from '../../hooks/useRoutes';
+import RouteRecommenderPanel, { RouteRecommenderOption } from '../../components/RouteRecommenderPanel';
 import { useSimulation } from '../../hooks/useSimulation';
 import LOCAL_PLACES from '../../data/local_places.json';
 import { fuzzyFilter } from '../../utils/fuzzySearch';
@@ -199,6 +197,441 @@ const candidateHasMode = (candidate: RecommenderCandidate, mode: string): boolea
   return candidateModes(candidate).has(mode);
 };
 
+const isWalkOnlyCandidate = (candidate: RecommenderCandidate): boolean => {
+  return !candidate.legs.some((leg) => leg.onTransit);
+};
+
+/**
+ * Returns the dominant transit mode for a candidate — the mode covering the
+ * most distance. 'walk' when no transit legs exist.
+ */
+const dominantMode = (candidate: RecommenderCandidate): string => {
+  const modeDist: Record<string, number> = {};
+  for (const leg of candidate.legs) {
+    if (!leg.onTransit) continue;
+    const mode = getLegModeKey(leg);
+    modeDist[mode] = (modeDist[mode] || 0) + sumLegDistanceMeters([leg]);
+  }
+  let best = 'walk';
+  let bestDist = 0;
+  for (const [m, d] of Object.entries(modeDist)) {
+    if (d > bestDist) { bestDist = d; best = m; }
+  }
+  return best;
+};
+
+/**
+ * Returns true when the candidate uses ONLY the given mode for all its transit
+ * legs (no other transit type mixed in). Walk legs are always OK.
+ */
+const isExclusiveMode = (candidate: RecommenderCandidate, mode: string): boolean => {
+  return candidate.legs.every((leg) => !leg.onTransit || getLegModeKey(leg) === mode);
+};
+
+/**
+ * Pick a pool of candidates following a strict mode-priority chain.
+ *
+ * For each priority level we prefer candidates whose transit legs are
+ * *exclusively* that mode (e.g. a jeepney_only build). If none exist, we
+ * relax to candidates whose *dominant* mode matches.  Only when both filters
+ * return nothing do we fall through to the next priority.
+ */
+const pickPoolByPriority = (
+  candidates: RecommenderCandidate[],
+  priority: Array<'tricycle' | 'jeepney' | 'walk'>,
+): RecommenderCandidate[] => {
+  for (const mode of priority) {
+    if (mode === 'walk') {
+      const pool = candidates.filter(isWalkOnlyCandidate);
+      if (pool.length > 0) return pool;
+      continue;
+    }
+    // Prefer exclusive (single-mode) candidates first
+    const exclusive = candidates.filter((c) => candidateHasMode(c, mode) && isExclusiveMode(c, mode));
+    if (exclusive.length > 0) return exclusive;
+    // Fallback: dominant mode matches
+    const dominant = candidates.filter((c) => dominantMode(c) === mode);
+    if (dominant.length > 0) return dominant;
+    // Weaker fallback: at least has that mode
+    const has = candidates.filter((c) => candidateHasMode(c, mode));
+    if (has.length > 0) return has;
+  }
+  return candidates;
+};
+
+const isCvsuImusTarget = (destinationName?: string): boolean => {
+  if (!destinationName) return false;
+  const norm = destinationName.toLowerCase();
+  const hasCvsu = norm.includes('cvsu') || norm.includes('cavite state university');
+  const hasImus = norm.includes('imus');
+  return hasCvsu || (hasCvsu && hasImus);
+};
+
+const buildRecommendationOptions = (
+  osrmRoutes: any[],
+  transitRoutes: any[],
+): RecommenderCandidate[] => {
+  const candidates: RecommenderCandidate[] = [];
+
+  // Pre-filter transit routes by vehicle type so we can build mode-specific candidates
+  const jeepneyOnly = transitRoutes.filter((r: any) => r.type === 'jeepney');
+  const tricycleOnly = transitRoutes.filter((r: any) => r.type === 'tricycle');
+
+  for (let i = 0; i < osrmRoutes.length; i++) {
+    const route = osrmRoutes[i];
+    if (!route?.geometry?.coordinates) continue;
+    const coordinates = toMapCoordinates(route.geometry.coordinates);
+    const baseDurationMin = route.duration / 60;
+    const osrmDistanceKm = route.distance / 1000;
+
+    // Mixed variants (all transit types)
+    const variants = [
+      { key: 'balanced', threshold: 55, minLeg: 120, routes: transitRoutes },
+      { key: 'tricycle_plus', threshold: 95, minLeg: 70, routes: transitRoutes },
+      { key: 'walk_fallback', threshold: 35, minLeg: 220, routes: transitRoutes },
+    ];
+
+    // Mode-exclusive variants: only match one vehicle type at a time
+    if (jeepneyOnly.length > 0) {
+      variants.push({ key: 'jeepney_only', threshold: 55, minLeg: 120, routes: jeepneyOnly });
+    }
+    if (tricycleOnly.length > 0) {
+      variants.push({ key: 'tricycle_only', threshold: 55, minLeg: 70, routes: tricycleOnly });
+    }
+
+    // ── Tricycle→jeepney transfer variants ──
+    // For each La Joya tricycle route, find the earliest point where it intersects
+    // a jeepney route (within 500m) so the passenger can drop off and transfer.
+    const balancedTricycleIds = ['LAJOYA-HAMPTON', 'LAJOYA-BRIDG-01'];
+    const thresholdSq = 500 * 500;
+    for (const triId of balancedTricycleIds) {
+      const triRoute = transitRoutes.find((r: any) => r.id === triId);
+      if (!triRoute || jeepneyOnly.length === 0) continue;
+      // Walk along the tricycle path and find the earliest point near a jeepney route
+      let bestJeep: any = null;
+      let bestTriIdx = triRoute.coordinates.length; // sentinel: past end
+      let bestDistSq = thresholdSq;
+      for (const jr of jeepneyOnly) {
+        for (let ti = 0; ti < triRoute.coordinates.length; ti++) {
+          for (let ji = 0; ji < jr.coordinates.length; ji++) {
+            const dSq = sqDistApprox(triRoute.coordinates[ti], jr.coordinates[ji]);
+            if (dSq < bestDistSq || (dSq < thresholdSq && ti < bestTriIdx)) {
+              bestDistSq = dSq;
+              bestTriIdx = ti;
+              bestJeep = jr;
+            }
+          }
+          // Once we found an early intersection, no need to check later points on same jeepney
+          if (bestTriIdx <= ti) break;
+        }
+      }
+      if (bestJeep) {
+        variants.push({ key: `balanced_${triId}`, threshold: 55, minLeg: 70, routes: [triRoute, bestJeep] });
+      }
+    }
+
+    for (const variant of variants) {
+      const legs = buildTransitLegs(coordinates, variant.routes as any[], variant.threshold, variant.minLeg);
+      const metrics = computeMetrics(legs, baseDurationMin, osrmDistanceKm);
+      candidates.push({
+        id: `r${i}-${variant.key}`,
+        coordinates,
+        summary: {
+          distanceKm: metrics.distanceKm,
+          durationMin: metrics.effectiveDurationMin,
+        },
+        legs,
+        metrics,
+      });
+    }
+  }
+
+  const unique = new Map<string, RecommenderCandidate>();
+  for (const candidate of candidates) {
+    const sig = routeSignature(candidate.legs);
+    const existing = unique.get(sig);
+    if (!existing || candidate.metrics.effectiveDurationMin < existing.metrics.effectiveDurationMin) {
+      unique.set(sig, candidate);
+    }
+  }
+
+  return Array.from(unique.values());
+};
+
+const toRecommenderOptions = (
+  candidates: RecommenderCandidate[],
+  profile?: RecommenderProfile,
+): { uiOptions: RouteRecommenderOption[]; ordered: RecommenderCandidate[] } => {
+  if (candidates.length === 0) return { uiOptions: [], ordered: [] };
+
+  const cvsuImus = isCvsuImusTarget(profile?.destinationName);
+
+  const getBest = (score: (candidate: RecommenderCandidate) => number) => {
+    return candidates.reduce((best, curr) => (score(curr) < score(best) ? curr : best), candidates[0]);
+  };
+
+  const pickBest = (
+    id: string,
+    pool: RecommenderCandidate[],
+    score: (candidate: RecommenderCandidate) => number,
+    tags: string[],
+    label: string,
+    description: string,
+  ) => {
+    if (pool.length === 0) return null;
+    const best = pool.reduce((a, b) => (score(b) < score(a) ? b : a));
+    return { id, candidate: best, tags, label, description };
+  };
+
+  const noUnnecessaryTransfer = (candidate: RecommenderCandidate) => candidate.metrics.transferCount <= 1;
+
+  const picks: Array<{
+    id: string;
+    candidate: RecommenderCandidate;
+    tags: string[];
+    label: string;
+    description: string;
+  }> = [];
+
+  if (cvsuImus) {
+    // ── Cheapest: jeepney-only candidates (walk to jeepney, no tricycle fare) ──
+    const jeepOnlyPool = candidates.filter((c) => candidateHasMode(c, 'jeepney') && !candidateHasMode(c, 'tricycle'));
+    const cheapFallback = candidates.filter((c) => candidateHasMode(c, 'jeepney'));
+    const cheapPick = pickBest(
+      'walk_then_jeep',
+      jeepOnlyPool.length > 0 ? jeepOnlyPool : cheapFallback.length > 0 ? cheapFallback : candidates,
+      (c) => c.metrics.farePhp * 3 + c.metrics.effectiveDurationMin * 0.4 + c.metrics.transferCount * 15,
+      ['Cheapest'],
+      'Cheapest',
+      'Jeepney fare only — requires a short walk to the route',
+    );
+    if (cheapPick) picks.push(cheapPick);
+
+    // ── Balanced: ride tricycle from La Joya, drop off at jeepney intersection ──
+    // Prefer balanced_ variants (tricycle→jeepney at intersection point)
+    const balancedTransferPool = candidates.filter((c) => c.id.includes('balanced_LAJOYA') && candidateHasMode(c, 'tricycle') && candidateHasMode(c, 'jeepney'));
+    const triJeepPool = candidates.filter((c) => candidateHasMode(c, 'tricycle') && candidateHasMode(c, 'jeepney'));
+    const balancedFallback = candidates.filter((c) => candidateHasMode(c, 'jeepney'));
+    const balancedPool = balancedTransferPool.length > 0
+      ? balancedTransferPool
+      : triJeepPool.length > 0
+        ? triJeepPool
+        : balancedFallback.length > 0 ? balancedFallback : candidates;
+    const balancedPick = pickBest(
+      'balanced_route',
+      balancedPool,
+      (c) => c.metrics.effectiveDurationMin * 0.5 + c.metrics.farePhp * 0.3 + c.metrics.transferCount * 5 + c.metrics.walkMeters / 200,
+      ['Balanced'],
+      'Balanced',
+      'Tricycle from La Joya → drop off at jeepney intersection → ride jeepney',
+    );
+    if (balancedPick) picks.push(balancedPick);
+
+    // ── Least Transfers: tricycle all the way (point-to-point, 0 transfers) ──
+    const tricycleExclusive = candidates.filter((c) => candidateHasMode(c, 'tricycle') && isExclusiveMode(c, 'tricycle'));
+    const leastPick = pickBest(
+      'least_transfer_tri',
+      tricycleExclusive.length > 0 ? tricycleExclusive : candidates.filter((c) => candidateHasMode(c, 'tricycle')),
+      (c) => c.metrics.transferCount * 100 + c.metrics.effectiveDurationMin * 0.3 + c.metrics.walkMeters / 400,
+      ['Least Transfers'],
+      'Least Transfers',
+      'Tricycle all the way — no transfers needed',
+    );
+    if (leastPick) picks.push(leastPick);
+  }
+
+  // For balanced globally: prioritize jeepney > tricycle > walk
+  const balancedGlobalPool = pickPoolByPriority(candidates, ['jeepney', 'tricycle', 'walk']);
+  const cheapestPool = pickPoolByPriority(candidates, ['jeepney', 'tricycle', 'walk']);
+  const leastTransfersPool = pickPoolByPriority(candidates, ['tricycle', 'jeepney', 'walk']);
+
+  const winners = {
+    recommended: getBest((c) =>
+      c.metrics.effectiveDurationMin * 0.45 +
+      c.metrics.farePhp * 0.3 +
+      c.metrics.transferCount * 6 +
+      c.metrics.walkMeters / 200,
+    ),
+    balanced: balancedGlobalPool.reduce(
+      (best, curr) => {
+        const scoreA = best.metrics.effectiveDurationMin * 0.5 + best.metrics.farePhp * 0.35 + best.metrics.transferCount * 5 + best.metrics.walkMeters / 300;
+        const scoreB = curr.metrics.effectiveDurationMin * 0.5 + curr.metrics.farePhp * 0.35 + curr.metrics.transferCount * 5 + curr.metrics.walkMeters / 300;
+        return scoreB < scoreA ? curr : best;
+      },
+      balancedGlobalPool[0],
+    ),
+    cheapest: cheapestPool.reduce(
+      (best, curr) => (
+        (curr.metrics.farePhp + curr.metrics.walkMeters / 180) < (best.metrics.farePhp + best.metrics.walkMeters / 180)
+          ? curr
+          : best
+      ),
+      cheapestPool[0],
+    ),
+    leastTransfers: leastTransfersPool.reduce(
+      (best, curr) => (
+        (curr.metrics.transferCount * 100 + curr.metrics.walkMeters / 300) <
+        (best.metrics.transferCount * 100 + best.metrics.walkMeters / 300)
+          ? curr
+          : best
+      ),
+      leastTransfersPool[0],
+    ),
+  };
+
+  const pickedById = new Map<string, {
+    candidate: RecommenderCandidate;
+    tags: string[];
+    label: string;
+    description: string;
+  }>();
+
+  const addPicked = (
+    candidate: RecommenderCandidate,
+    tag: string,
+    fallbackLabel: string,
+    fallbackDescription: string,
+  ) => {
+    const curr = pickedById.get(candidate.id);
+    if (!curr) {
+      pickedById.set(candidate.id, {
+        candidate,
+        tags: [tag],
+        label: fallbackLabel,
+        description: fallbackDescription,
+      });
+      return;
+    }
+    if (!curr.tags.includes(tag)) curr.tags.push(tag);
+  };
+
+  // Check which categories the CvSU picks already cover
+  const pickTags = new Set(picks.flatMap((p) => p.tags));
+
+  for (const pick of picks) {
+    pickedById.set(pick.candidate.id, {
+      candidate: pick.candidate,
+      tags: [...pick.tags],
+      label: pick.label,
+      description: pick.description,
+    });
+  }
+
+  addPicked(
+    winners.recommended,
+    'Recommended',
+    'Recommended',
+    'Best overall balance of speed, cost, and comfort',
+  );
+  // Only add global winners for categories not already covered by CvSU picks
+  if (!pickTags.has('Balanced')) {
+    addPicked(
+      winners.balanced,
+      'Balanced',
+      'Balanced',
+      dominantMode(winners.balanced) === 'jeepney'
+        ? 'Jeepney route — best mix of speed and cost'
+        : dominantMode(winners.balanced) === 'tricycle'
+          ? 'Tricycle route — balanced option'
+          : 'Best balance of speed and cost',
+    );
+  }
+  if (!pickTags.has('Cheapest')) {
+    addPicked(
+      winners.cheapest,
+      'Cheapest',
+      'Cheapest',
+      dominantMode(winners.cheapest) === 'jeepney'
+        ? 'Jeepney fare only — requires a short walk to the route'
+        : dominantMode(winners.cheapest) === 'tricycle'
+          ? 'Tricycle route — cheapest available'
+          : 'Walk to transit — lowest overall fare',
+    );
+  }
+  if (!pickTags.has('Least Transfers')) {
+    addPicked(
+      winners.leastTransfers,
+      'Least Transfers',
+      'Least Transfers',
+      dominantMode(winners.leastTransfers) === 'tricycle'
+        ? 'Tricycle all the way — no transfers needed'
+        : 'Fewest vehicle changes along the route',
+    );
+  }
+
+  let ordered = Array.from(pickedById.values())
+    .map((v) => v.candidate)
+    .filter((candidate) => noUnnecessaryTransfer(candidate));
+
+  if (ordered.length === 0) {
+    ordered = [winners.recommended];
+    addPicked(
+      winners.recommended,
+      'Recommended',
+      'Recommended',
+      'Best available route with current road and transit data',
+    );
+  }
+
+  // If multiple categories collapse to one route, still include an explicit alternative.
+  if (ordered.length === 1 && candidates.length > 1) {
+    const primary = ordered[0];
+    const alternative = [...candidates]
+      .filter((c) => c.id !== primary.id)
+      .sort((a, b) => {
+        const scoreA = a.metrics.effectiveDurationMin * 0.5 + a.metrics.walkMeters / 180 + a.metrics.transferCount * 5;
+        const scoreB = b.metrics.effectiveDurationMin * 0.5 + b.metrics.walkMeters / 180 + b.metrics.transferCount * 5;
+        return scoreA - scoreB;
+      })[0];
+    if (alternative) {
+      ordered = [primary, alternative];
+      addPicked(
+        alternative,
+        'Alternative',
+        'Alternative Route',
+        'A practical backup route if traffic or queue changes',
+      );
+    }
+  }
+
+  // Keep the list concise but provide enough practical choices.
+  ordered = ordered.slice(0, 4);
+
+  const visuals = [
+    { icon: 'star', accentColor: '#E8A020', bgColor: '#FFF8E1' },
+    { icon: 'compass', accentColor: '#0EA5E9', bgColor: '#EEF9FF' },
+    { icon: 'git-branch', accentColor: '#22C55E', bgColor: '#F0FDF4' },
+    { icon: 'walk', accentColor: '#475569', bgColor: '#F8FAFC' },
+  ] as const;
+
+  const uiOptions: RouteRecommenderOption[] = ordered.map((candidate, idx) => {
+    const picked = pickedById.get(candidate.id);
+    const tags = picked?.tags || ['Alternative'];
+    const v = visuals[Math.min(idx, visuals.length - 1)];
+    return {
+      id: candidate.id,
+      label: picked?.label || (tags.length > 1 ? `Best: ${tags.join(' + ')}` : tags[0]),
+      description: picked?.description || (
+        candidate.metrics.tricycleLegs > 0
+          ? 'Includes tricycle options to reduce walk or replace jeepney sections'
+          : 'Connected route with practical transfer and walking flow'
+      ),
+      icon: v.icon,
+      accentColor: v.accentColor,
+      bgColor: v.bgColor,
+      etaMin: candidate.metrics.effectiveDurationMin,
+      distanceKm: candidate.metrics.distanceKm,
+      farePhp: candidate.metrics.farePhp,
+      transferCount: candidate.metrics.transferCount,
+      walkMeters: candidate.metrics.walkMeters,
+      tricycleLegs: candidate.metrics.tricycleLegs,
+      tags,
+    };
+  });
+
+  return { uiOptions, ordered };
+};
+
 export default function HomeScreen() {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
@@ -210,34 +643,12 @@ export default function HomeScreen() {
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
-  const [matchedRoutes, setMatchedRoutes] = useState<MatchedRoute[]>([]);
-  const [rankTab, setRankTab] = useState<RankMode>('easiest');
-  const [rankedRoutes, setRankedRoutes] = useState<MatchedRoute[]>([]);
-  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
-  const [selectedRoute, setSelectedRoute] = useState<MatchedRoute | null>(null);
+  const [recommenderCandidates, setRecommenderCandidates] = useState<RecommenderCandidate[]>([]);
+  const [recommenderOptions, setRecommenderOptions] = useState<RouteRecommenderOption[]>([]);
+  const [selectedRecommenderOptionId, setSelectedRecommenderOptionId] = useState<string | null>(null);
+  const [selectedRouteLegs, setSelectedRouteLegs] = useState<TransitLeg[]>([]);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
-  const { routes: gpxRoutes } = useRoutes();
-
-  useEffect(() => {
-    setRankedRoutes(rankRoutes(matchedRoutes, rankTab));
-  }, [matchedRoutes, rankTab]);
-
-  useEffect(() => {
-    const route = matchedRoutes.find(m => m.legs.map((l: any) => l.route.properties.code).join('+') === selectedRouteId) || null;
-    setSelectedRoute(route);
-    if (route) {
-      setRouteSummary({ distanceKm: route.distanceKm || 0, durationMin: route.estimatedMinutes || Math.round((route.distanceKm || 0) * 12) });
-      const newCoords = route.legs.flatMap((leg: any) => leg.route.coordinates);
-      if (newCoords && newCoords.length >= 2) {
-        setRouteCoordinates(newCoords);
-      } else {
-        setRouteCoordinates([]);
-      }
-    } else {
-      setRouteSummary(null);
-      setRouteCoordinates([]);
-    }
-  }, [selectedRouteId, matchedRoutes]);
+  const { routes: gpxRoutes } = useJeepneyRoutes();
 
   // Normalize GPX routes to a unified transit shape
   const transitRoutes = useMemo(() => {
@@ -283,9 +694,9 @@ export default function HomeScreen() {
   const [simBlink, setSimBlink] = useState(true);
 
   const selectedOptionLabel = useMemo(() => {
-    if (!selectedRouteId) return 'Current Route';
-    return selectedRoute?.legs.map((l: any) => l.route.properties.code).join('+') || 'Current Route';
-  }, [selectedRouteId, selectedRoute]);
+    if (!selectedRecommenderOptionId) return 'Current Route';
+    return recommenderOptions.find((opt) => opt.id === selectedRecommenderOptionId)?.label || 'Current Route';
+  }, [selectedRecommenderOptionId, recommenderOptions]);
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -405,7 +816,25 @@ export default function HomeScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!selectedTransitRoute?.coordinates?.length) return;
 
+    const allCoords = selectedTransitRoute.coordinates;
+    if (allCoords.length > 1) {
+      setRouteCoordinates([]);
+      setDestinationLocation(null);
+      setRouteSummary(null);
+      setRecommenderCandidates([]);
+      setRecommenderOptions([]);
+      setSelectedRecommenderOptionId(null);
+      setSelectedRouteLegs([]);
+
+      mapRef.current?.fitToCoordinates(allCoords, {
+        edgePadding: { top: 140, right: 40, bottom: 220, left: 40 },
+        animated: true,
+      });
+    }
+  }, [selectedTransitRoute]);
 
   // Find the nearest stop to the user's current location
 
@@ -413,15 +842,36 @@ export default function HomeScreen() {
     if (clearDestination) setDestinationQuery('');
     if (clearOrigin) setOriginQuery('');
     setDestinationLocation(null);
-    setMatchedRoutes([]);
-    setSelectedRouteId(null);
+    setRouteCoordinates([]);
+    setRouteSummary(null);
+    setRecommenderCandidates([]);
+    setRecommenderOptions([]);
+    setSelectedRecommenderOptionId(null);
+    setSelectedRouteLegs([]);
     setPendingRouteSearch(null);
     setSelectedTransitRoute(null);
   }, [setPendingRouteSearch, setSelectedTransitRoute]);
 
+  const handleSelectRecommenderOption = useCallback((optionId: string) => {
+    const chosen = recommenderCandidates.find((c) => c.id === optionId);
+    if (!chosen) return;
 
+    if (chosen.metrics?.farePhp) {
+      updateLatestHistoryFare(chosen.metrics.farePhp);
+    }
 
-  const handleSearchSelectRoute = useCallback((origin: PlaceResult | null, destination: PlaceResult) => {
+    setSelectedRecommenderOptionId(optionId);
+    setRouteCoordinates(chosen.coordinates);
+    setRouteSummary(chosen.summary);
+    setSelectedRouteLegs(chosen.legs);
+
+    mapRef.current?.fitToCoordinates(chosen.coordinates, {
+      edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
+      animated: true,
+    });
+  }, [recommenderCandidates]);
+
+  const handleSearchSelectRoute = useCallback(async (origin: PlaceResult | null, destination: PlaceResult) => {
     setIsSearchActive(false);
     setDestinationQuery(destination.title);
     setOriginQuery(origin?.title || '');
@@ -437,36 +887,90 @@ export default function HomeScreen() {
       : currentLocation;
       
     if (!startPoint) {
-      mapRef.current?.animateToRegion({...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01}, 600);
+      mapRef.current?.animateToRegion({
+        ...destinationPoint,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 600);
       return;
     }
-
+    
+    if (origin) {
+      setOriginQuery(origin.title);
+    }
+    
+    setIsRouting(true);
     try {
-      setIsRouting(true);
-      const results = findRoutesForDestination(
-        startPoint,
-        destinationPoint,
-        gpxRoutes,
-      );
+      // Fetch OSRM route alternatives with graceful fallback.
+      // Some public OSRM deployments may reject high alternatives counts.
+      const baseRouteUrl = `${ROUTING_BASE_URL}/${startPoint.longitude},${startPoint.latitude};${destinationPoint.longitude},${destinationPoint.latitude}`;
+      const queryAttempts = [
+        'overview=full&geometries=geojson&alternatives=6',
+        'overview=full&geometries=geojson&alternatives=3',
+        'overview=full&geometries=geojson&alternatives=true',
+      ];
 
-      setMatchedRoutes(results);
-      setSelectedRouteId(null);
-      setShowRecommender(true);
+      let routeResult: any = null;
+      let lastStatus = 0;
 
-      if (results.length > 0) {
-        const allCoords = results.flatMap(m => m.legs.flatMap((l: any) => l.route.coordinates));
-        mapRef.current?.fitToCoordinates(allCoords, {
-          edgePadding: { top: 160, right: 50, bottom: 300, left: 50 },
+      for (const query of queryAttempts) {
+        const response = await fetch(`${baseRouteUrl}?${query}`);
+        lastStatus = response.status;
+        if (!response.ok) continue;
+
+        const parsed = await response.json();
+        if (parsed?.routes?.length > 0 && parsed?.routes?.[0]?.geometry?.coordinates) {
+          routeResult = parsed;
+          break;
+        }
+      }
+
+      if (!routeResult) throw new Error(`Routing failed (${lastStatus || 'no-response'})`);
+      const osrmRoutes = routeResult?.routes;
+      if (!osrmRoutes || osrmRoutes.length === 0 || !osrmRoutes[0]?.geometry?.coordinates) {
+        Alert.alert('Route Not Found', 'No drivable route found for this destination.');
+        return;
+      }
+
+      const builtCandidates = buildRecommendationOptions(osrmRoutes, transitRoutes as any[]);
+      const { uiOptions, ordered } = toRecommenderOptions(builtCandidates, {
+        destinationName: destination.title,
+      });
+
+      if (ordered.length > 0) {
+        const chosen = ordered[0];
+        setRecommenderCandidates(ordered);
+        setRecommenderOptions(uiOptions);
+        setSelectedRecommenderOptionId(chosen.id);
+        setRouteCoordinates(chosen.coordinates);
+        setRouteSummary(chosen.summary);
+        setSelectedRouteLegs(chosen.legs);
+        mapRef.current?.fitToCoordinates(chosen.coordinates, {
+          edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
           animated: true,
         });
       } else {
-        mapRef.current?.animateToRegion({...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01}, 600);
+        const fallback = osrmRoutes[0];
+        const fallbackCoordinates = toMapCoordinates(fallback.geometry.coordinates);
+        setRecommenderCandidates([]);
+        setRecommenderOptions([]);
+        setSelectedRecommenderOptionId(null);
+        setRouteCoordinates(fallbackCoordinates);
+        setRouteSummary({
+          distanceKm: fallback.distance / 1000,
+          durationMin: fallback.duration / 60,
+        });
+        setSelectedRouteLegs(buildTransitLegs(fallbackCoordinates, transitRoutes as any[], 55, 120));
+        mapRef.current?.fitToCoordinates(fallbackCoordinates, {
+          edgePadding: { top: 120, right: 40, bottom: 220, left: 40 },
+          animated: true,
+        });
       }
-
-      Keyboard.dismiss();
+      setShowRecommender(true);
       
+      // Save this to commute history
       const h_origin = origin ? { name: origin.title, lat: origin.latitude, lon: origin.longitude } : null;
-      const initialFare = results.length > 0 ? (results[0].estimatedFare || 0) : 0;
+      const initialFare = ordered.length > 0 ? ordered[0].metrics?.farePhp : 0;
       addHistory({
         id: Date.now().toString(),
         origin: h_origin,
@@ -477,10 +981,11 @@ export default function HomeScreen() {
       
     } catch (error) {
       console.warn('[HomeScreen] Route search failed:', error);
+      Alert.alert('Search Failed', 'Unable to fetch route right now. Please try again.');
     } finally {
       setIsRouting(false);
     }
-  }, [currentLocation, gpxRoutes]);
+  }, [currentLocation, transitRoutes]);
 
   // Automatically process pending route searches (e.g. from Saved routes page)
   useEffect(() => {
@@ -638,24 +1143,10 @@ export default function HomeScreen() {
 
   // Build multi-leg transit journey plan
   const transitLegs = useMemo((): TransitLeg[] => {
-    if (selectedRoute?.legs && selectedRoute.legs.length > 0) {
-      return selectedRoute.legs.map((leg: any, idx): TransitLeg => {
-        const meta = (transitRoutes as any[]).find((r) => r.id === leg.route.properties.code);
-        return {
-          transitRouteId: leg.route.properties.code,
-          coordinates: leg.route.coordinates,
-          onTransit: true,
-          transitInfo: meta || null,
-          boardAt: leg.boardingPoint || leg.route.coordinates[0],
-          alightAt: leg.alightingPoint || leg.route.coordinates[leg.route.coordinates.length - 1],
-          boardLabel: '',
-          alightLabel: ''
-        };
-      });
-    }
+    if (selectedRouteLegs.length > 0) return selectedRouteLegs;
     if (routeCoordinates.length < 2) return [];
     return buildTransitLegs(routeCoordinates, transitRoutes as any[], 55, 120);
-  }, [selectedRoute, routeCoordinates, transitRoutes]);
+  }, [selectedRouteLegs, routeCoordinates, transitRoutes]);
 
   // Simulation — uses the actual searched route coordinates and transit legs
   const sim = useSimulation(routeCoordinates, transitLegs);
@@ -687,8 +1178,9 @@ export default function HomeScreen() {
     }
     if (sim.state === 'finished' && !tripStatRecordedRef.current) {
       tripStatRecordedRef.current = true;
-      const distKm = routeSummary?.distanceKm ?? 0;
-      const fareAmt = selectedRoute?.estimatedFare ?? 0;
+      const activeOption = recommenderOptions.find((o) => o.id === selectedRecommenderOptionId);
+      const distKm = activeOption?.distanceKm ?? (routeSummary?.distanceKm ?? 0);
+      const fareAmt = activeOption?.farePhp ?? 0;
       addTripStats({ distance: distKm, fare: fareAmt, points: Math.max(1, Math.round(distKm * 2)) });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1171,13 +1663,11 @@ export default function HomeScreen() {
       {/* Route Recommender Panel */}
       <RouteRecommenderPanel
         visible={showRecommender}
-        matchedRoutes={matchedRoutes}
-        rankedRoutes={rankedRoutes}
-        rankTab={rankTab}
-        setRankTab={setRankTab}
-        selectedRoute={selectedRouteId}
-        setSelectedRoute={(id: string | null) => setSelectedRouteId(id)}
-        destinationName={destinationQuery}
+        routeSummary={routeSummary}
+        transitLegs={transitLegs}
+        options={recommenderOptions}
+        selectedOptionId={selectedRecommenderOptionId}
+        onSelectOption={handleSelectRecommenderOption}
         onClose={() => setShowRecommender(false)}
       />
 

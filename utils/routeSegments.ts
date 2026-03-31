@@ -171,24 +171,8 @@ type TransitRouteWithMeta = {
   to?: string;
   verified?: boolean;
   coordinates: Coord[];
-  stops?: { coordinate: Coord; name: string; type?: string }[];
+  stops?: { coordinate: Coord; name: string }[];
 };
-
-function getRouteSpecificThresholdSq(
-  route: TransitRouteWithMeta,
-  baseThresholdMetres: number,
-): number {
-  const routeType = String(route.type || '').toLowerCase();
-
-  // Keep tricycle matching strict so it stays close to the exact tricycle GPX.
-  // This avoids overreaching tricycle legs on nearby parallel roads.
-  if (routeType === 'tricycle') {
-    const strictMetres = Math.min(baseThresholdMetres, 35);
-    return strictMetres * strictMetres;
-  }
-
-  return baseThresholdMetres * baseThresholdMetres;
-}
 
 /**
  * Find which specific transit route is nearest to a point, within threshold.
@@ -218,61 +202,23 @@ function findNearestTransitRoute(
 /**
  * Find the nearest named stop on a specific transit route to a given point.
  */
-function isCodeLikeLabel(label: string): boolean {
-  const trimmed = label.trim();
-  if (!trimmed) return true;
-  if (trimmed.length <= 4) return true;
-  if (/^[A-Z0-9\-]+$/.test(trimmed)) return true;
-  return false;
-}
-
-function isTerminalName(label: string, route: TransitRouteWithMeta): boolean {
-  const upper = label.trim().toUpperCase();
-  const tokens = [route.from, route.to, route.ref, route.name]
-    .filter(Boolean)
-    .map((v) => String(v).trim().toUpperCase());
-  return tokens.includes(upper);
-}
-
 function findNearestStop(
   point: Coord,
   route: TransitRouteWithMeta,
-  purpose: 'board' | 'alight',
 ): string {
-  const fallback = purpose === 'board' ? 'Nearest pickup point' : 'Nearest drop-off point';
-
   if (!route.stops || route.stops.length === 0) {
-    return fallback;
+    return route.from || route.name || 'Transit stop';
   }
-
-  const hasIntermediateStops = route.stops.some((s) => s.type === 'stop');
-
-  // Prefer non-terminal stops when we have proper stop data.
-  const candidateStops = hasIntermediateStops
-    ? route.stops.filter((s) => s.type !== 'terminal')
-    : route.stops;
-
-  if (candidateStops.length === 0) return fallback;
-
-  let best = candidateStops[0];
+  let best = route.stops[0];
   let bestDist = sqDistMetres(point, best.coordinate);
-  for (let i = 1; i < candidateStops.length; i++) {
-    const d = sqDistMetres(point, candidateStops[i].coordinate);
+  for (let i = 1; i < route.stops.length; i++) {
+    const d = sqDistMetres(point, route.stops[i].coordinate);
     if (d < bestDist) {
       bestDist = d;
-      best = candidateStops[i];
+      best = route.stops[i];
     }
   }
-
-  const bestName = best.name || '';
-
-  // If the route only has terminal-like labels (e.g., BDO, SMMOLINO), avoid
-  // presenting those as mandatory alight instructions.
-  if (!hasIntermediateStops && (isCodeLikeLabel(bestName) || isTerminalName(bestName, route))) {
-    return fallback;
-  }
-
-  return bestName;
+  return best.name;
 }
 
 /**
@@ -304,6 +250,7 @@ export function buildTransitLegs(
     }];
   }
 
+  const thresholdSq = thresholdMetres * thresholdMetres;
   const routeMap = new Map(transitRoutes.map(r => [r.id, r]));
 
   // Step 1: For each route point, find ALL transit routes within threshold (not just nearest)
@@ -311,9 +258,8 @@ export function buildTransitLegs(
     const matches = new Set<string>();
     for (const route of transitRoutes) {
       if (!route.coordinates || route.coordinates.length < 2) continue;
-      const routeThresholdSq = getRouteSpecificThresholdSq(route, thresholdMetres);
       for (let i = 0; i < route.coordinates.length - 1; i++) {
-        if (sqDistToSegment(p, route.coordinates[i], route.coordinates[i + 1]) <= routeThresholdSq) {
+        if (sqDistToSegment(p, route.coordinates[i], route.coordinates[i + 1]) <= thresholdSq) {
           matches.add(route.id);
           break;
         }
@@ -365,7 +311,7 @@ export function buildTransitLegs(
   // a wider radius so the user walks a short distance to a nearby transit route
   // instead of walking the entire stretch.
   const LONG_WALK_THRESHOLD = 400; // metres
-  const expandedThresholdMetres = thresholdMetres * 3;
+  const expandedThresholdSq = (thresholdMetres * 3) * (thresholdMetres * 3);
 
   let walkStart = -1;
   for (let k = 0; k <= routePoints.length; k++) {
@@ -383,9 +329,8 @@ export function buildTransitLegs(
           const p = routePoints[j];
           for (const route of transitRoutes) {
             if (!route.coordinates || route.coordinates.length < 2) continue;
-            const routeThresholdSq = getRouteSpecificThresholdSq(route, expandedThresholdMetres);
             for (let s = 0; s < route.coordinates.length - 1; s++) {
-              if (sqDistToSegment(p, route.coordinates[s], route.coordinates[s + 1]) <= routeThresholdSq) {
+              if (sqDistToSegment(p, route.coordinates[s], route.coordinates[s + 1]) <= expandedThresholdSq) {
                 allMatches[j].add(route.id);
                 break;
               }
@@ -424,35 +369,6 @@ export function buildTransitLegs(
         }
       }
       walkStart = -1;
-    }
-  }
-
-  // Step 2.7: If a transit route's terminal is near the user's destination,
-  // extend that route's tag to cover all trailing unmatched (walking) points.
-  // This handles the case where the jeepney goes all the way to the user's
-  // destination but the OSRM walking route diverges onto different streets.
-  const TERMINAL_DEST_SQ = 500 * 500; // 500 m
-  const destPt = routePoints[routePoints.length - 1];
-
-  for (const route of transitRoutes) {
-    if (!route.coordinates || route.coordinates.length < 2) continue;
-    const routeTerminal = route.coordinates[route.coordinates.length - 1];
-    if (sqDistMetres(routeTerminal, destPt) > TERMINAL_DEST_SQ) continue;
-
-    // This route ends near the destination — find the last point tagged with it
-    let lastTaggedIdx = -1;
-    for (let k = tags.length - 1; k >= 0; k--) {
-      if (tags[k] === route.id) { lastTaggedIdx = k; break; }
-    }
-    if (lastTaggedIdx === -1) continue;
-
-    // Extend: tag all trailing unmatched points as this route
-    for (let k = lastTaggedIdx + 1; k < tags.length; k++) {
-      if (tags[k] === null) {
-        tags[k] = route.id;
-      } else {
-        break; // another transit route — stop
-      }
     }
   }
 
@@ -522,59 +438,8 @@ export function buildTransitLegs(
     }
   }
 
-  // Step 5.5: Avoid unnecessary final transfer near destination without
-  // using a fixed metre threshold.
-  // Keep future transit only when it provides a meaningful relative
-  // improvement in distance-to-destination, not just a tiny geometric gain.
-  const nearDestOptimized: RawLeg[] = merged.map((l) => ({ ...l }));
-  const destinationPoint = routePoints[routePoints.length - 1];
-  const MIN_RELATIVE_GAIN = 0.15; // requires at least 15% improvement
-
-  for (let k = 0; k < nearDestOptimized.length - 1; k++) {
-    const leg = nearDestOptimized[k];
-    if (leg.routeId === null) continue;
-
-    const currentAlight = routePoints[leg.endIdx];
-    const currentToDest = sqDistMetres(currentAlight, destinationPoint);
-
-    // Find the best future transit alight point.
-    let bestFutureToDest = Number.POSITIVE_INFINITY;
-    for (let j = k + 1; j < nearDestOptimized.length; j++) {
-      const future = nearDestOptimized[j];
-      if (future.routeId === null) continue;
-      const futureAlight = routePoints[future.endIdx];
-      const futureToDest = sqDistMetres(futureAlight, destinationPoint);
-      if (futureToDest < bestFutureToDest) bestFutureToDest = futureToDest;
-    }
-
-    const hasFutureTransit = Number.isFinite(bestFutureToDest);
-    if (!hasFutureTransit) continue;
-
-    const relativeGain = currentToDest > 0
-      ? (currentToDest - bestFutureToDest) / currentToDest
-      : 0;
-
-    if (relativeGain < MIN_RELATIVE_GAIN) {
-      for (let j = k + 1; j < nearDestOptimized.length; j++) {
-        nearDestOptimized[j].routeId = null;
-      }
-      break;
-    }
-  }
-
-  // Re-merge after near-destination optimization
-  const finalMerged: RawLeg[] = [nearDestOptimized[0]];
-  for (let k = 1; k < nearDestOptimized.length; k++) {
-    const last = finalMerged[finalMerged.length - 1];
-    if (last.routeId === nearDestOptimized[k].routeId) {
-      last.endIdx = nearDestOptimized[k].endIdx;
-    } else {
-      finalMerged.push({ ...nearDestOptimized[k] });
-    }
-  }
-
   // Step 6: Build TransitLeg objects
-  return finalMerged.map((raw): TransitLeg => {
+  return merged.map((raw): TransitLeg => {
     const coords = routePoints.slice(raw.startIdx, raw.endIdx + 1);
     const board = coords[0];
     const alight = coords[coords.length - 1];
@@ -585,8 +450,8 @@ export function buildTransitLegs(
     let alightLabel = 'Walk';
 
     if (route) {
-      boardLabel = findNearestStop(board, route, 'board');
-      alightLabel = findNearestStop(alight, route, 'alight');
+      boardLabel = findNearestStop(board, route);
+      alightLabel = findNearestStop(alight, route);
     }
 
     return {

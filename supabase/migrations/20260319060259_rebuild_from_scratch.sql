@@ -10,14 +10,14 @@ DROP TABLE IF EXISTS public.vehicle_types CASCADE;
 DROP TABLE IF EXISTS public.users CASCADE;
 
 -- 1. Helper function
-CREATE OR REPLACE FUNCTION public.auth_uid() 
+CREATE OR REPLACE FUNCTION public.firebase_uid() 
 RETURNS TEXT AS $$
   SELECT NULLIF(current_setting('request.jwt.claims', true)::json->>'sub', '')::text;
 $$ LANGUAGE sql STABLE;
 
 -- 2. USERS TABLE
 CREATE TABLE public.users (
-    id TEXT PRIMARY KEY, -- Auth provider UID
+    id TEXT PRIMARY KEY, -- Firebase UID
     display_name TEXT,
     email TEXT,
     avatar_url TEXT,
@@ -159,24 +159,24 @@ CREATE POLICY "Public read access on route_stops" ON public.route_stops FOR SELE
 CREATE POLICY "Public read access on badges" ON public.badges FOR SELECT USING (true);
 
 -- users table policies
-CREATE POLICY "Users can insert their own profile" ON public.users FOR INSERT WITH CHECK (id = public.auth_uid());
-CREATE POLICY "Users can read their own profile" ON public.users FOR SELECT USING (id = public.auth_uid());
-CREATE POLICY "Users can update their own profile" ON public.users FOR UPDATE USING (id = public.auth_uid());
+CREATE POLICY "Users can insert their own profile" ON public.users FOR INSERT WITH CHECK (id = public.firebase_uid());
+CREATE POLICY "Users can read their own profile" ON public.users FOR SELECT USING (id = public.firebase_uid());
+CREATE POLICY "Users can update their own profile" ON public.users FOR UPDATE USING (id = public.firebase_uid());
 
 -- saved_routes policies
-CREATE POLICY "Users can read own saved routes" ON public.saved_routes FOR SELECT USING (user_id = public.auth_uid());
-CREATE POLICY "Users can insert own saved routes" ON public.saved_routes FOR INSERT WITH CHECK (user_id = public.auth_uid());
-CREATE POLICY "Users can update own saved routes" ON public.saved_routes FOR UPDATE USING (user_id = public.auth_uid());
-CREATE POLICY "Users can delete own saved routes" ON public.saved_routes FOR DELETE USING (user_id = public.auth_uid());
+CREATE POLICY "Users can read own saved routes" ON public.saved_routes FOR SELECT USING (user_id = public.firebase_uid());
+CREATE POLICY "Users can insert own saved routes" ON public.saved_routes FOR INSERT WITH CHECK (user_id = public.firebase_uid());
+CREATE POLICY "Users can update own saved routes" ON public.saved_routes FOR UPDATE USING (user_id = public.firebase_uid());
+CREATE POLICY "Users can delete own saved routes" ON public.saved_routes FOR DELETE USING (user_id = public.firebase_uid());
 
 -- trips policies
-CREATE POLICY "Users can read own trips" ON public.trips FOR SELECT USING (user_id = public.auth_uid());
-CREATE POLICY "Users can insert own trips" ON public.trips FOR INSERT WITH CHECK (user_id = public.auth_uid());
-CREATE POLICY "Users can update own trips" ON public.trips FOR UPDATE USING (user_id = public.auth_uid());
-CREATE POLICY "Users can delete own trips" ON public.trips FOR DELETE USING (user_id = public.auth_uid());
+CREATE POLICY "Users can read own trips" ON public.trips FOR SELECT USING (user_id = public.firebase_uid());
+CREATE POLICY "Users can insert own trips" ON public.trips FOR INSERT WITH CHECK (user_id = public.firebase_uid());
+CREATE POLICY "Users can update own trips" ON public.trips FOR UPDATE USING (user_id = public.firebase_uid());
+CREATE POLICY "Users can delete own trips" ON public.trips FOR DELETE USING (user_id = public.firebase_uid());
 
 -- user_badges policies
-CREATE POLICY "Users can read own badges" ON public.user_badges FOR SELECT USING (user_id = public.auth_uid());
+CREATE POLICY "Users can read own badges" ON public.user_badges FOR SELECT USING (user_id = public.firebase_uid());
 
 -- 13. SEEDING ROUTES & STOPS
 DO $$

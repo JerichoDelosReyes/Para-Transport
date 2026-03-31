@@ -21,7 +21,7 @@ const CHATBOT_STATES = {
 };
 
 export default function AIChatbotScreen() {
-  const [currentState, setCurrentState] = useState("IDLE");
+  const [currentState, setCurrentState] = useState<keyof typeof CHATBOT_STATES>("IDLE");
   const [inputText, setInputText] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
   const floatAnim = useRef(new Animated.Value(0)).current;
@@ -46,7 +46,7 @@ export default function AIChatbotScreen() {
     ).start();
   }, [floatAnim]);
 
-  const handleAction = (nextState) => {
+  const handleAction = (nextState: keyof typeof CHATBOT_STATES) => {
     setCurrentState("PROCESSING");
     setTimeout(() => {
       setCurrentState(nextState);
