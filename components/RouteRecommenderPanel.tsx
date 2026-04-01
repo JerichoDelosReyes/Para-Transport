@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   },
   sheetHeaderRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "center",
     alignItems: "center",
   },
   dragHandleWrap: {
