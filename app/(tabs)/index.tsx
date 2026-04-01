@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert, StatusBar, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert, StatusBar, Image, InteractionManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -11,7 +11,7 @@ import { MAP_CONFIG } from '../../constants/map';
 import type { JeepneyRoute } from '../../types/routes';
 import { ROUTE_COLORS } from '../../constants/routeVisuals';
 import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
-import { splitRouteSegments, buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
+import { buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
@@ -45,6 +45,19 @@ const PH_BOUNDS = MAP_CONFIG.PHILIPPINES_BOUNDS;
 
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
+
+const sampleCoordinates = (coordinates: MapCoordinate[], maxPoints: number): MapCoordinate[] => {
+  if (coordinates.length <= maxPoints) return coordinates;
+  const step = (coordinates.length - 1) / (maxPoints - 1);
+  const sampled: MapCoordinate[] = [];
+
+  for (let i = 0; i < maxPoints - 1; i++) {
+    sampled.push(coordinates[Math.round(i * step)]);
+  }
+
+  sampled.push(coordinates[coordinates.length - 1]);
+  return sampled;
+};
 
 const sqDistApprox = (a: MapCoordinate, b: MapCoordinate): number => {
   const DEG = 111_320;
@@ -226,7 +239,7 @@ export default function HomeScreen() {
       setRouteSummary({ distanceKm: route.distanceKm || 0, durationMin: route.estimatedMinutes || Math.round((route.distanceKm || 0) * 12) });
       const newCoords = route.legs.flatMap((leg: any) => leg.route.coordinates);
       if (newCoords && newCoords.length >= 2) {
-        setRouteCoordinates(newCoords);
+        setRouteCoordinates(sampleCoordinates(newCoords, 700));
       } else {
         setRouteCoordinates([]);
       }
@@ -247,7 +260,7 @@ export default function HomeScreen() {
       from: r.stops[0]?.label || '',
       to: r.stops[r.stops.length - 1]?.label || '',
       operator: r.properties.operator || '',
-      coordinates: r.coordinates,
+      coordinates: sampleCoordinates(r.coordinates, 320),
       stops: r.stops.map((s, idx) => ({
         id: `${r.properties.code}-stop-${idx}`,
         coordinate: s.coordinate,
@@ -418,7 +431,7 @@ export default function HomeScreen() {
 
 
 
-  const handleSearchSelectRoute = useCallback((origin: PlaceResult | null, destination: PlaceResult) => {
+  const handleSearchSelectRoute = useCallback(async (origin: PlaceResult | null, destination: PlaceResult) => {
     setIsSearchActive(false);
     setDestinationQuery(destination.title);
     setOriginQuery(origin?.title || '');
@@ -440,6 +453,12 @@ export default function HomeScreen() {
 
     try {
       setIsRouting(true);
+
+      // Yield one frame before heavy matching so the search UI can settle.
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => resolve());
+      });
+
       const results = findRoutesForDestination(
         startPoint,
         destinationPoint,
@@ -451,7 +470,9 @@ export default function HomeScreen() {
       setShowRecommender(true);
 
       if (results.length > 0) {
-        const allCoords = results.flatMap(m => m.legs.flatMap((l: any) => l.route.coordinates));
+        const allCoords = results.flatMap(m =>
+          m.legs.flatMap((l: any) => sampleCoordinates(l.route.coordinates, 40))
+        );
         mapRef.current?.fitToCoordinates(allCoords, {
           edgePadding: { top: 160, right: 50, bottom: 300, left: 50 },
           animated: true,
@@ -630,12 +651,6 @@ export default function HomeScreen() {
     if (!showTransitLayer) return [];
     return transitStops;
   }, [showTransitLayer, selectedTransitRoute, transitStops]);
-
-  // Split searched route into on-transit (solid) and walking (dashed) segments
-  const routeSegments = useMemo(() => {
-    if (routeCoordinates.length < 2) return [];
-    return splitRouteSegments(routeCoordinates, transitRoutes, 50);
-  }, [routeCoordinates, transitRoutes]);
 
   // Build multi-leg transit journey plan (Fixes: Walk lines, transfer segments + correct plotting)
   const transitLegs = useMemo((): TransitLeg[] => {

@@ -31,10 +31,10 @@ function toJeepneyRoute(
 
   return {
     properties: {
-      code: row.route_code ?? '',
-      name: row.name ?? '',
+      code: row.route_code ?? row.source_relation_id ?? '',
+      name: row.label ?? row.name ?? '',
       description: row.description ?? '',
-      type: row.vehicle_type ?? 'jeepney',
+      type: 'jeepney',
       fare: Number(row.fare_base) || 0,
       status: row.status ?? 'active',
       operator: row.operator ?? '',
@@ -50,10 +50,10 @@ type RouteSource = 'supabase' | 'cache';
 export async function fetchRoutesFromSupabase(): Promise<JeepneyRoute[]> {
   // 1. Fetch routes
   const { data: routeRows, error: routeErr } = await supabase
-    .from('routes')
+    .from('jeepney_routes')
     .select('*')
     .eq('is_active', true)
-    .order('name');
+    .order('label');
 
   if (routeErr) throw routeErr;
   if (!routeRows || routeRows.length === 0) return [];
@@ -61,7 +61,7 @@ export async function fetchRoutesFromSupabase(): Promise<JeepneyRoute[]> {
   // 2. Fetch all stops for these routes in one query
   const routeIds = routeRows.map((r: any) => r.id);
   const { data: stopRows, error: stopErr } = await supabase
-    .from('route_stops')
+    .from('jeepney_route_stops')
     .select('*')
     .in('route_id', routeIds)
     .order('stop_order');
