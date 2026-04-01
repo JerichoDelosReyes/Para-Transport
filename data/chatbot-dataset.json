@@ -76,7 +76,13 @@
     "gps",
     "trivia",
     "fun fact",
-    "did you know"
+    "did you know",
+    "what can you do",
+    "anong kaya mo",
+    "route list",
+    "available routes",
+    "base fare",
+    "discounted fare"
   ],
   "places": [
     {
@@ -272,8 +278,8 @@
       ],
       "tl": [
         "Kumusta! Ako si Jeepie, ang customer support assistant mo sa Para. Nandito ako para tumulong sa pamasahe, ruta, transit tips, at commuting questions. Paano kita matutulungan ngayon?",
-        "Hi! Si Jeepie ito. Salamat sa pag-message. Pwede kitang tulungan sa fare estimate, jeepney routes, destination guidance, at transport tips.",
-        "Hello! Ako si Jeepie. Kaya kitang gabayan sa pagplano ng biyahe, pag-compute ng pamasahe, at paghanap ng tamang transit options."
+        "Kamusta! Si Jeepie ito. Salamat sa pag-message. Pwede kitang tulungan sa pagtatantiya ng pamasahe, jeepney routes, gabay sa destinasyon, at transport tips.",
+        "Kamusta! Ako si Jeepie. Kaya kitang gabayan sa pagplano ng biyahe, pag-compute ng pamasahe, at paghanap ng tamang transit options."
       ]
     },
     "thanks": {
@@ -514,6 +520,20 @@
         "Pwede kang makipag-chat kay Jeepie tungkol sa pamasahe, ruta, transit tips, destinations, at app features. Kung kailangan, ibigay ang origin o pinned location mo para mas accurate.",
         "Para gamitin si Jeepie, i-type lang ang tanong sa chat box. Pwede kang magtanong ng route directions, fare estimates, at app navigation help.",
         "Mag-chat ka lang kay Jeepie nang natural. Mas okay kung may destination at current location o nearby landmark ka."
+      ]
+    },
+    {
+      "id": "jeepie_capabilities",
+      "intents": ["what can you do", "what can jeepie do", "capabilities", "features", "anong kaya mo", "ano kaya mo", "anong pwede mong gawin", "help options"],
+      "en": [
+        "I can help with fare estimates, route guidance, available route and stop lists, achievement unlock tips, and app usage navigation like Saved, Profile, and Settings.",
+        "You can ask me about regular/discounted fares, route planning from origin to destination, landmarks or stops, and how to unlock badges such as Route Rookie.",
+        "I support commute questions in English or Tagalog, including fare policy info, route options, app guidance, and jeepney/tricycle trivia."
+      ],
+      "tl": [
+        "Kaya kitang tulungan sa fare estimates, route guidance, listahan ng available routes/stops, achievement unlock tips, at app navigation gaya ng Saved, Profile, at Settings.",
+        "Pwede mo akong tanungin tungkol sa regular/discounted fares, route planning mula origin hanggang destination, landmarks o stops, at kung paano makuha ang badges tulad ng Route Rookie.",
+        "Suportado ko ang commute questions sa English o Tagalog, kasama ang fare policy info, route options, app guidance, at jeepney/tricycle trivia."
       ]
     },
     {

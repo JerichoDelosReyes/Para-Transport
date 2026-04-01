@@ -239,6 +239,12 @@ function normalizeText(text: string): string {
 
 function detectLanguage(message: string): BotLanguage {
   const normalized = normalizeText(message);
+
+  // Treat common kamusta/kumusta greetings as strong Tagalog intent.
+  if (/\b(kamusta|kumusta|kamutsa|kumutsa|musta)\b/.test(normalized)) {
+    return 'tl';
+  }
+
   const tlScore = scoreHintMatches(normalized, TAGALOG_HINTS);
   const enScore = scoreHintMatches(normalized, ENGLISH_HINTS);
 
@@ -281,6 +287,17 @@ function formatForChatDisplay(text: string): string {
   if (sentences.length < 2) return cleaned;
 
   const firstSentence = sentences[0];
+  const firstWords = firstSentence.split(/\s+/).filter(Boolean).length;
+  const startsWithShortGreeting = firstWords <= 2 && firstSentence.length <= 16;
+
+  if (startsWithShortGreeting && sentences.length >= 3) {
+    const greetingBlock = `${firstSentence} ${sentences[1]}`.trim();
+    const remainingAfterGreeting = sentences.slice(2).join(' ').trim();
+    if (remainingAfterGreeting) {
+      return `${greetingBlock}\n\n${remainingAfterGreeting}`;
+    }
+  }
+
   const remaining = sentences.slice(1).join(' ').trim();
   if (!remaining) return cleaned;
 
@@ -456,6 +473,18 @@ function hasLandmarkIntent(normalized: string): boolean {
   return /(landmark|landmarks|stops|stop list|terminal list|hintuan|palatandaan|anong stop|anong landmark|available stops)/.test(normalized);
 }
 
+function hasRouteListIntent(normalized: string): boolean {
+  return /(route list|list of routes|list routes|available routes|what routes are available|which routes are available|mga ruta|anong mga ruta|ano mga ruta|lista ng ruta|available na ruta)/.test(normalized);
+}
+
+function hasFarePolicyIntent(normalized: string): boolean {
+  return /(base fare|minimum fare|regular fare|discounted fare|discount fare|student fare|senior fare|pwd fare|fare policy|fare rules|magkano base|magkano minimum|magkano student|magkano senior|magkano pwd|pamasahe ngayon|base pamasahe|discount sa pamasahe)/.test(normalized);
+}
+
+function hasCapabilityIntent(normalized: string): boolean {
+  return /(what can you do|what can jeepie do|how can you help|capabilities|features|functionality|help menu|anong kaya mo|ano kaya mo|anong pwede mong gawin|paano kita gamitin|pano kita gamitin|tulong mo|help options)/.test(normalized);
+}
+
 function hasAchievementIntent(normalized: string): boolean {
   return /(achievement|achievements|badge|badges|unlock|how to get|paano makuha|route rookie|path explorer|urban navigator|streak)/.test(normalized);
 }
@@ -495,7 +524,7 @@ function hasAcknowledgementIntent(normalized: string): boolean {
 }
 
 function hasCommuteTaskIntent(normalized: string): boolean {
-  return /(fare|pamasahe|route|ruta|destination|papunta|where|saan|how to go|paano pumunta|terminal|stop|transit|jeepney|tricycle|from|mula|galing|to |going to|trivia|fun fact|did you know|alam mo ba|app|application|saved|achievements|profile|settings|pinpoint|pinned|drop pin)/.test(normalized);
+  return /(fare|pamasahe|route|ruta|destination|papunta|where|saan|how to go|paano pumunta|terminal|stop|transit|jeepney|tricycle|from|mula|galing|to |going to|trivia|fun fact|did you know|alam mo ba|app|application|saved|achievements|profile|settings|pinpoint|pinned|drop pin|base fare|discounted fare|what can you do|anong kaya mo|mga ruta|route list)/.test(normalized);
 }
 
 function findAppGuide(normalized: string): DatasetAppGuide | null {
@@ -737,6 +766,117 @@ function buildLandmarkReply(language: BotLanguage, normalized: string, routes: J
     routeResponseText(language, 'landmarkListIntro'),
     `${numbered}${more}`,
     routeResponseText(language, 'landmarkListOutro'),
+  ].join('\n\n');
+}
+
+function routeContainsPlace(route: JeepneyRoute, place: DatasetPlace): boolean {
+  const stopLabels = (route.stops || []).map((stop) => normalizeText(stop.label));
+  if (stopLabels.length === 0) return false;
+
+  const names = uniqueText([place.name, ...place.aliases])
+    .map((value) => normalizeText(value))
+    .filter((value) => value.length >= 4);
+
+  if (names.length === 0) return false;
+
+  return names.some((name) => stopLabels.some((label) => label.includes(name)));
+}
+
+function buildRouteListReply(language: BotLanguage, routes: JeepneyRoute[], destination?: DatasetPlace): string {
+  if (routes.length === 0) {
+    return language === 'tl'
+      ? 'Wala pang loaded route data ngayon. Subukan ulit mamaya o magtanong gamit ang exact destination para makapagbigay ako ng best available guidance.'
+      : 'There is no loaded route data right now. Please try again later, or ask using an exact destination so I can provide the best available guidance.';
+  }
+
+  const filtered = destination ? routes.filter((route) => routeContainsPlace(route, destination)) : routes;
+  const candidates = filtered.length > 0 ? filtered : routes;
+  const labels = uniqueText(candidates.map((route) => routeLabel(route)));
+
+  const shown = labels.slice(0, 16);
+  const rest = labels.length - shown.length;
+  const numbered = shown.map((label, index) => `${index + 1}. ${label}`).join('\n');
+  const more = rest > 0
+    ? (language === 'tl' ? `\n... at ${rest} pang routes.` : `\n... and ${rest} more routes.`)
+    : '';
+
+  if (language === 'tl') {
+    const intro = destination
+      ? `Ito ang mga available routes na may stop/landmark na tumutugma sa ${destination.name}:`
+      : 'Narito ang available routes na loaded ngayon:';
+
+    const note = destination && filtered.length === 0
+      ? `Wala akong eksaktong route-stop match para sa ${destination.name}, kaya nilista ko muna ang lahat ng available routes.`
+      : 'Kung gusto mo, pwede kong i-filter pa ito batay sa origin at destination mo.';
+
+    return [intro, `${numbered}${more}`, note].join('\n\n');
+  }
+
+  const intro = destination
+    ? `Here are available routes with stop/landmark matches for ${destination.name}:`
+    : 'Here are the available routes currently loaded:';
+
+  const note = destination && filtered.length === 0
+    ? `I could not find an exact route-stop match for ${destination.name}, so I listed all currently available routes first.`
+    : 'If you want, I can filter this further based on your exact origin and destination.';
+
+  return [intro, `${numbered}${more}`, note].join('\n\n');
+}
+
+function buildFarePolicyReply(language: BotLanguage): string {
+  const baseFare = dataset.farePolicy.baseFarePhp;
+  const baseDistance = dataset.farePolicy.baseDistanceKm;
+  const additionalPerKm = dataset.farePolicy.additionalPerKmPhp;
+  const discountRate = dataset.farePolicy.discountRate;
+  const discountedBase = Number((baseFare * (1 - discountRate)).toFixed(2));
+  const hasQuarterRounding = dataset.farePolicy.roundToNearestQuarter;
+
+  if (language === 'tl') {
+    return [
+      'Narito ang current fare policy sa dataset ni Jeepie:',
+      `1. Base fare: ${formatPhp(baseFare)} para sa unang ${baseDistance} km.`,
+      `2. Additional fare: +${formatPhp(additionalPerKm)} kada dagdag na 1 km.`,
+      `3. Discounted fare (student/senior/PWD): ${Math.round(discountRate * 100)}% off. Halimbawa, base discounted fare ay ${formatPhp(discountedBase)}.`,
+      hasQuarterRounding
+        ? '4. Ang regular fare estimate ay niroround up sa pinakamalapit na 0.25 para mas realistic ang fare simulation.'
+        : '4. Ang fare estimate ay hindi gumagamit ng quarter-step rounding.',
+    ].join('\n\n');
+  }
+
+  return [
+    'Here is Jeepie\'s current fare policy from the dataset:',
+    `1. Base fare: ${formatPhp(baseFare)} for the first ${baseDistance} km.`,
+    `2. Additional fare: +${formatPhp(additionalPerKm)} for every extra 1 km.`,
+    `3. Discounted fare (student/senior/PWD): ${Math.round(discountRate * 100)}% off. Example base discounted fare is ${formatPhp(discountedBase)}.`,
+    hasQuarterRounding
+      ? '4. Regular fare estimates are rounded up to the nearest 0.25 for a more realistic fare simulation.'
+      : '4. Fare estimates are not using quarter-step rounding.',
+  ].join('\n\n');
+}
+
+function buildCapabilitiesReply(language: BotLanguage): string {
+  if (language === 'tl') {
+    return [
+      'Ito ang mga kaya kong gawin ngayon bilang Jeepie:',
+      '1. Mag-estimate ng regular at discounted fare (student/senior/PWD).',
+      '2. Mag-suggest ng route flow gamit ang origin, destination, at GPS/pinned location kung available.',
+      '3. Maglista ng available routes, landmarks, at stops mula sa loaded route data.',
+      '4. Magpaliwanag kung paano i-unlock ang specific achievement badges (hal. Route Rookie).',
+      '5. Mag-guide sa app usage: Saved, Profile, Settings, Search/Pin, at Achievements.',
+      '6. Magbigay ng jeepney/tricycle trivia at fare-news context kapag tinanong.',
+      'Subukan mo: "Magkano from Imus Crossing to PITX", "Anong routes available", o "Paano makuha ang Route Rookie".',
+    ].join('\n\n');
+  }
+
+  return [
+    'Here is what I can do right now as Jeepie:',
+    '1. Estimate regular and discounted fares (student/senior/PWD).',
+    '2. Suggest route flow using origin, destination, and GPS/pinned location when available.',
+    '3. List available routes, landmarks, and stops from loaded route data.',
+    '4. Explain how to unlock specific achievement badges (for example, Route Rookie).',
+    '5. Guide app usage: Saved, Profile, Settings, Search/Pin, and Achievements.',
+    '6. Share jeepney/tricycle trivia and fare-news context when asked.',
+    'Try asking: "How much from Imus Crossing to PITX", "What routes are available", or "How to unlock Route Rookie".',
   ].join('\n\n');
 }
 
@@ -1057,6 +1197,37 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
+  if (hasCapabilityIntent(normalized)) {
+    return {
+      text: composeSupportReply(language, buildCapabilitiesReply(language), { includeClosing: true }),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasFarePolicyIntent(normalized)) {
+    return {
+      text: composeSupportReply(language, buildFarePolicyReply(language), { includeClosing: true }),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasRouteListIntent(normalized)) {
+    return {
+      text: composeSupportReply(
+        language,
+        buildRouteListReply(language, routes, parsed.destination),
+        { includeClosing: true },
+      ),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
   if (hasAchievementIntent(normalized)) {
     const mentionedBadge = findBadgeMention(normalized);
     return {
@@ -1276,17 +1447,17 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     // ignore and fall through to local unknown fallback
   }
 
-    if (!inScope) {
-      return {
-        text: composeSupportReply(language, fallbackText(language, 'outOfScope')),
-        language,
-        state: {},
-        usedGroq: false,
-      };
-    }
+  if (!inScope) {
+    return {
+      text: composeSupportReply(language, fallbackText(language, 'outOfScope')),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
 
   return {
-      text: composeSupportReply(language, fallbackText(language, 'unknown')),
+    text: composeSupportReply(language, fallbackText(language, 'unknown')),
     language,
     state: {},
     usedGroq: false,
