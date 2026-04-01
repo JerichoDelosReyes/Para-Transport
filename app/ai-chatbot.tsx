@@ -8,6 +8,7 @@ import * as Location from "expo-location";
 import { COLORS } from "../constants/theme";
 import { useRoutes } from "../hooks/useRoutes";
 import { getChatbotReply, type ChatbotConversationState } from "../services/chatbotService";
+import { useStore } from "../store/useStore";
 
 const CHATBOT_STATES = {
   IDLE: require("../assets/AIChatbot/IDLE.png"),
@@ -36,6 +37,13 @@ export default function AIChatbotScreen() {
   const greetingOpacity = useRef(new Animated.Value(1)).current;
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const { routes } = useRoutes();
+  const user = useStore((state: any) => state.user);
+  const sessionMode = useStore((state: any) => state.sessionMode);
+
+  const authName = typeof user?.name === "string" ? user.name.trim() : "";
+  const preferredName = sessionMode === "auth" && authName.length > 0
+    ? authName.split(" ")[0]
+    : null;
 
   useEffect(() => {
     Animated.loop(
@@ -192,7 +200,9 @@ export default function AIChatbotScreen() {
           <>
             <Animated.View style={[styles.greetingContainer, { opacity: greetingOpacity }]}>
               <Text style={styles.greetingTitle}>
-                {isTagalogGreeting ? "Kumusta, Komyuter!" : "Hello, Commuter!"}
+                {isTagalogGreeting
+                  ? `Kumusta, ${preferredName || "Komyuter"}!`
+                  : `Hello, ${preferredName || "Commuter"}!`}
               </Text>
               <Text style={styles.greetingSubtitle}>
                 {isTagalogGreeting ? "Ano ang maitutulong ko sa'yo ngayon?" : "How can I help you today?"}
