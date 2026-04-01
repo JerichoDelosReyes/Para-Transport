@@ -64,8 +64,7 @@ export default function ProfileScreen() {
                 onPress={() => router.navigate('/broadcasts')}
                 activeOpacity={0.7}
               >
-                <Ionicons name="radio" size={24} color={COLORS.primary} />
-                <Text style={styles.quickStatLabel}>Broadcasts</Text>
+                <Text style={styles.quickStatValue}>Broadcasts</Text>
               </TouchableOpacity>
 
               <View style={styles.quickStatDivider} />
