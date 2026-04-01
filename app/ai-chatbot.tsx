@@ -1,26 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Animated, KeyboardAvoidingView, Platform, Dimensions, FlatList } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Animated, KeyboardAvoidingView, Platform, FlatList, Keyboard } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
-import { useStore } from "../store/useStore";
 import { COLORS } from "../constants/theme";
 import { useRoutes } from "../hooks/useRoutes";
 import { getChatbotReply, type ChatbotConversationState } from "../services/chatbotService";
 
-const { width } = Dimensions.get("window");
-
 const CHATBOT_STATES = {
   IDLE: require("../assets/AIChatbot/IDLE.png"),
-  ASK: require("../assets/AIChatbot/ASK.png"),
   PROCESSING: require("../assets/AIChatbot/PROCESSING.png"),
   SUCCESS: require("../assets/AIChatbot/SUCCESS.png"),
   ERROR: require("../assets/AIChatbot/ERROR.png"),
-  NAVIGATION: require("../assets/AIChatbot/NAVIGATION.png"),
-  PAYMENT: require("../assets/AIChatbot/PAYMENT.png"),
-  POWER_OFF: require("../assets/AIChatbot/POWER OFF.png"),
 };
 
 type ChatMessage = {
@@ -37,11 +30,12 @@ export default function AIChatbotScreen() {
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [currentLocationLabel, setCurrentLocationLabel] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [isTagalogGreeting, setIsTagalogGreeting] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const floatAnim = useRef(new Animated.Value(0)).current;
+  const greetingOpacity = useRef(new Animated.Value(1)).current;
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const { routes } = useRoutes();
-  const user = useStore((state: any) => state.user);
-  const firstName = user?.full_name?.split(" ")[0] || "Commuter";
 
   useEffect(() => {
     Animated.loop(
@@ -59,6 +53,40 @@ export default function AIChatbotScreen() {
       ])
     ).start();
   }, [floatAnim]);
+
+  useEffect(() => {
+    if (messages.length > 0) return;
+
+    const interval = setInterval(() => {
+      Animated.timing(greetingOpacity, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start(() => {
+        setIsTagalogGreeting((prev) => !prev);
+        Animated.timing(greetingOpacity, {
+          toValue: 1,
+          duration: 260,
+          useNativeDriver: true,
+        }).start();
+      });
+    }, 3800);
+
+    return () => clearInterval(interval);
+  }, [greetingOpacity, messages.length]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -100,16 +128,6 @@ export default function AIChatbotScreen() {
       mounted = false;
     };
   }, []);
-
-  const handleAction = (nextState: keyof typeof CHATBOT_STATES) => {
-    setCurrentState("PROCESSING");
-    setTimeout(() => {
-      setCurrentState(nextState);
-      setTimeout(() => {
-        if(nextState !== "POWER_OFF") setCurrentState("IDLE");
-      }, 3000);
-    }, 1200);
-  };
 
   const handleSend = async () => {
     if (!inputText.trim() || isSending) return;
@@ -172,40 +190,31 @@ export default function AIChatbotScreen() {
 
         {messages.length === 0 ? (
           <>
-            <View style={styles.greetingContainer}>
-              <Text style={styles.greetingTitle}>Hello, {firstName}!</Text>
-              <Text style={styles.greetingSubtitle}>How can I help you today?</Text>
-            </View>
+            <Animated.View style={[styles.greetingContainer, { opacity: greetingOpacity }]}>
+              <Text style={styles.greetingTitle}>
+                {isTagalogGreeting ? "Kumusta, Komyuter!" : "Hello, Commuter!"}
+              </Text>
+              <Text style={styles.greetingSubtitle}>
+                {isTagalogGreeting ? "Ano ang maitutulong ko sa'yo ngayon?" : "How can I help you today?"}
+              </Text>
+            </Animated.View>
 
-            <View style={styles.aiContainer}>
-              <Animated.View style={[styles.aiGlowWrap, { transform: [{ translateY: floatAnim }] }]}>
-                <View style={styles.aiImagePortal}>
+            <View style={[styles.aiContainer, isKeyboardVisible ? styles.aiContainerKeyboard : null]}>
+              <Animated.View
+                style={[
+                  styles.aiGlowWrap,
+                  isKeyboardVisible ? styles.aiGlowWrapKeyboard : null,
+                  { transform: [{ translateY: isKeyboardVisible ? 0 : floatAnim }] },
+                ]}
+              >
+                <View style={[styles.aiImagePortal, isKeyboardVisible ? styles.aiImagePortalKeyboard : null]}>
                   <Image 
                     source={CHATBOT_STATES[currentState]}
                     style={styles.chatbotImage}
                   />
                 </View>
               </Animated.View>
-              <View style={styles.aiShadow} />
-            </View>
-
-            <View style={styles.actionsGrid}>
-              <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("NAVIGATION")}>
-                <Ionicons name="map" size={20} color={COLORS.navy} />
-                <Text style={styles.actionText}>Find a route</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("ASK")}>
-                <Ionicons name="bulb" size={20} color={COLORS.navy} />
-                <Text style={styles.actionText}>Nearest places</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("PAYMENT")}>
-                <Ionicons name="wallet" size={20} color={COLORS.navy} />
-                <Text style={styles.actionText}>Check fares</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionCard} onPress={() => handleAction("SUCCESS")}>
-                <Ionicons name="scan" size={20} color={COLORS.navy} />
-                <Text style={styles.actionText}>Scan signboard</Text>
-              </TouchableOpacity>
+              {!isKeyboardVisible && <View style={styles.aiShadow} />}
             </View>
           </>
         ) : (
@@ -261,17 +270,17 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, justifyContent: "space-between" },
   header: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 24, paddingTop: 10 },
   iconButton: { width: 44, height: 44, backgroundColor: "#FFFFFF", borderRadius: 22, alignItems: "center", justifyContent: "center", shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
-  greetingContainer: { alignItems: "center", marginTop: 20 },
+  greetingContainer: { alignItems: "center", marginTop: 20, paddingHorizontal: 24 },
   greetingTitle: { fontSize: 24, fontWeight: "400", color: COLORS.navy, marginBottom: 8 },
-  greetingSubtitle: { fontSize: 26, fontWeight: "500", color: COLORS.navy },
-  aiContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
+  greetingSubtitle: { fontSize: 26, fontWeight: "500", color: COLORS.navy, textAlign: "center" },
+  aiContainer: { flex: 1, alignItems: "center", justifyContent: "center", marginTop: 10 },
+  aiContainerKeyboard: { flex: 0, marginTop: 18, marginBottom: 14 },
   aiGlowWrap: { width: 250, height: 250, borderRadius: 125, backgroundColor: "rgba(255,255,255,0.5)", alignItems: "center", justifyContent: "center", shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 30, elevation: 20, borderWidth: 2, borderColor: "rgba(255,255,255,0.8)" },
+  aiGlowWrapKeyboard: { width: 180, height: 180, borderRadius: 90, shadowOpacity: 0.3, shadowRadius: 16 },
   aiImagePortal: { width: 220, height: 220, borderRadius: 110, overflow: "hidden", backgroundColor: "#CBA962", alignItems: "center", justifyContent: "center" },
+  aiImagePortalKeyboard: { width: 160, height: 160, borderRadius: 80 },
   chatbotImage: { width: "100%", height: "100%", resizeMode: "contain" },
   aiShadow: { width: 120, height: 12, borderRadius: 6, backgroundColor: "rgba(10, 22, 40, 0.1)", marginTop: 30, transform: [{ scaleX: 2 }] },
-  actionsGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", paddingHorizontal: 24, marginBottom: 30 },
-  actionCard: { width: (width - 64) / 2, flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255, 255, 255, 0.85)", paddingVertical: 14, paddingHorizontal: 12, borderRadius: 16, marginBottom: 12, gap: 8 },
-  actionText: { fontSize: 14, fontWeight: "500", color: COLORS.navy },
   chatContainer: { paddingHorizontal: 24, paddingVertical: 20, gap: 16 },
   messageBubble: { maxWidth: "80%", padding: 14, borderRadius: 20 },
   userBubble: { backgroundColor: COLORS.primary, alignSelf: "flex-end", borderBottomRightRadius: 4 },
