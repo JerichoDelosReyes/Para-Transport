@@ -201,7 +201,7 @@ export default function RouteRecommenderPanel({
           <View style={styles.dragHandle} />
         </TouchableOpacity>
         <View style={styles.sheetHeaderRow}>
-          <Text style={styles.sheetHeaderTitle}>AVAILABLE ROUTES</Text>
+          <Text style={styles.sheetHeaderTitle}>ROUTES</Text>
         </View>
       </View>
 
