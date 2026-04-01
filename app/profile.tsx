@@ -58,17 +58,28 @@ export default function ProfileScreen() {
               <Text style={styles.name}>{user?.full_name || 'Passenger'}</Text>
             </View>
 
-            <TouchableOpacity 
-              style={[styles.quickStatsRow, isGuestAccount && { opacity: 0.5 }]}
-              onPress={() => isGuestAccount && Alert.alert('Guest Mode', 'Points feature is not available for guest mode.')}
-              activeOpacity={isGuestAccount ? 0.8 : 1}
-              disabled={!isGuestAccount}
-            >
-              <View style={styles.quickStat}>
+            <View style={styles.quickStatsRow}>
+              <TouchableOpacity 
+                style={styles.quickStat}
+                onPress={() => router.navigate('/broadcasts')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="radio" size={24} color={COLORS.primary} />
+                <Text style={styles.quickStatLabel}>Broadcasts</Text>
+              </TouchableOpacity>
+
+              <View style={styles.quickStatDivider} />
+
+              <TouchableOpacity 
+                style={[styles.quickStat, isGuestAccount && { opacity: 0.5 }]}
+                onPress={() => isGuestAccount && Alert.alert('Guest Mode', 'Points feature is not available for guest mode.')}
+                activeOpacity={isGuestAccount ? 0.8 : 1}
+                disabled={!isGuestAccount}
+              >
                 <Text style={styles.quickStatValue}>{user?.points || 0}</Text>
                 <Text style={styles.quickStatLabel}>Points</Text>
-              </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Grid Stats */}
@@ -146,19 +157,6 @@ export default function ProfileScreen() {
               );
             })}
           </View>
-
-          {/* Broadcasts Link */}
-          <TouchableOpacity 
-            style={[styles.sectionHeaderContainer, { marginTop: 24, marginBottom: 10 }]} 
-            onPress={() => router.navigate('/broadcasts')}
-            activeOpacity={0.7}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="radio" size={24} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.sectionTitle}>Recent Broadcasts</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color={COLORS.textMuted} />
-          </TouchableOpacity>
 
         </ScrollView>
       </View>

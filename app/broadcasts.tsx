@@ -48,7 +48,7 @@ export default function BroadcastsScreen() {
     info: 'information-circle',
     warning: 'warning',
     alert: 'alert-circle',
-    critical: 'skull',
+    critical: 'warning',
   };
 
   return (
