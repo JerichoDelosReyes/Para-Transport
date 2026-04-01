@@ -45,6 +45,27 @@
     "terminal",
     "stop",
     "landmark",
+    "navigate",
+    "navigation",
+    "direction",
+    "directions",
+    "how to go",
+    "paano pumunta",
+    "pin",
+    "pinned",
+    "pinpoint",
+    "drop pin",
+    "saved",
+    "bookmark",
+    "achievement",
+    "achievements",
+    "profile",
+    "settings",
+    "search",
+    "map",
+    "home",
+    "chatbot",
+    "ai chatbot",
     "sakay",
     "baba",
     "lipat",
@@ -245,14 +266,14 @@
   "socialResponses": {
     "greetings": {
       "en": [
-        "Hey there! I am Jeepie, your friendly commute buddy in Para. I can help you with fares, routes, transit tips, and even quick trivia while you travel.",
-        "Hi! Jeepie here. Glad you dropped by. Ask me about fares, jeepney routes, destinations, or transit tips, and I will happily help.",
-        "Hello! I am Jeepie, your jolly transport assistant. I can estimate fares, suggest route options, and share fun commuting facts too."
+        "Hi! I am Jeepie, your customer support assistant for Para. I am here to help with fares, routes, transit tips, and quick commuting questions. How may I assist you today?",
+        "Hello! Jeepie here. Thanks for reaching out. I can assist you with fare estimates, jeepney routes, destination guidance, and transport tips.",
+        "Hey there! I am Jeepie. I can help you plan your trip, estimate your fare, and answer transit concerns in a clear and friendly way."
       ],
       "tl": [
-        "Uy, hello! Ako si Jeepie, ang friendly mong commute buddy sa Para. Pwede kitang tulungan sa pamasahe, ruta, transit tips, at kahit quick trivia.",
-        "Hi! Si Jeepie ito. Masaya akong makatulong. Tanong ka lang tungkol sa pamasahe, jeepney routes, destination, o transit tips.",
-        "Kumusta! Ako si Jeepie, ang jolly mong transport assistant. Kaya kitang tulungan sa fare estimate, route options, at mga fun commuting facts."
+        "Kumusta! Ako si Jeepie, ang customer support assistant mo sa Para. Nandito ako para tumulong sa pamasahe, ruta, transit tips, at commuting questions. Paano kita matutulungan ngayon?",
+        "Hi! Si Jeepie ito. Salamat sa pag-message. Pwede kitang tulungan sa fare estimate, jeepney routes, destination guidance, at transport tips.",
+        "Hello! Ako si Jeepie. Kaya kitang gabayan sa pagplano ng biyahe, pag-compute ng pamasahe, at paghanap ng tamang transit options."
       ]
     },
     "thanks": {
@@ -316,6 +337,166 @@
       "Sa ngayon, malaki ang epekto ng pagtaas ng presyo ng langis sa pamasahe. Dahil sa war-related disruptions at mas mahal na fuel, tumaas ang operating cost kaya naging 14 na ang base mula 13. Ingat palagi habang bumibiyahe."
     ]
   },
+  "routeResponses": {
+    "askDestination": {
+      "en": [
+        "I can check route options for you. What destination do you want to go to?",
+        "Sure, I can help you navigate. Where is your destination?",
+        "I can find the best route. Please tell me your destination first."
+      ],
+      "tl": [
+        "Sige, matutulungan kita sa ruta. Saan ang destination mo?",
+        "Pwede kitang i-guide sa biyahe. Saan ka papunta?",
+        "Kaya kong mag-check ng route options. Pakisabi muna ang destination mo."
+      ]
+    },
+    "askOrigin": {
+      "en": [
+        "I can guide you to {destination}. May I know your current location or starting point?",
+        "I can check the route to {destination}. Where are you coming from?",
+        "I can help you navigate to {destination}. Please share your origin point first."
+      ],
+      "tl": [
+        "Matutulungan kita papuntang {destination}. Saan ka manggagaling ngayon?",
+        "Pwede kong i-check ang ruta papuntang {destination}. Nasaan ka ngayon?",
+        "Kaya kitang i-guide papuntang {destination}. Pakisabi muna ang starting point mo."
+      ]
+    },
+    "noRouteFound": {
+      "en": [
+        "I could not find a clear jeepney route for that yet. Please share a nearby landmark, terminal, or pinned location so I can retry.",
+        "I am not seeing a strong route match yet. Try sending a nearby stop or more specific destination.",
+        "I could not map a reliable route yet. You can provide a nearby terminal so I can refine the route check."
+      ],
+      "tl": [
+        "Wala pa akong malinaw na jeepney route para diyan sa ngayon. Paki-share ang malapit na landmark, terminal, o pinned location para ma-check ko ulit.",
+        "Hindi ko pa mahanap ang pinaka-tugmang ruta. Subukan mong magbigay ng mas specific na destination o nearby stop.",
+        "Hindi ko pa ma-map nang maayos ang ruta. Pakisabi ang malapit na terminal para ma-refine ko ang route check."
+      ]
+    },
+    "pinAcknowledgement": {
+      "en": [
+        "Thanks, I received your pinned location.",
+        "Great, I can see you are asking using a pinned location.",
+        "Noted, I got your pin reference."
+      ],
+      "tl": [
+        "Salamat, nakuha ko ang pinned location mo.",
+        "Ayos, nakita ko na pin-based ang request mo.",
+        "Noted, nakuha ko ang pin reference mo."
+      ]
+    },
+    "routeFoundIntro": {
+      "en": [
+        "I checked the best route option for you.",
+        "I found a route plan you can follow.",
+        "I reviewed the available route and here is the best match."
+      ],
+      "tl": [
+        "Na-check ko na ang pinaka-okay na route option para sa'yo.",
+        "May nahanap akong route plan na pwede mong sundan.",
+        "Na-review ko ang available routes at eto ang best match."
+      ]
+    },
+    "routeSummaryOutro": {
+      "en": [
+        "If you want, I can also estimate the fare for this exact route.",
+        "I can also compute your expected fare for this route if you want.",
+        "If helpful, I can give fare and transfer tips for this route next."
+      ],
+      "tl": [
+        "Kung gusto mo, pwede ko ring i-estimate ang pamasahe para sa exact route na ito.",
+        "Pwede ko ring i-compute ang expected fare mo para sa rutang ito.",
+        "Kung kailangan, mabibigyan din kita ng fare at transfer tips para dito."
+      ]
+    }
+  },
+  "appGuides": [
+    {
+      "id": "find_route",
+      "intents": ["how to find route", "find route", "how to navigate", "paano pumunta", "how to go", "route function", "paano gamitin route"],
+      "en": [
+        "To find a route, go to the Home map screen and set your origin and destination in Search. Then review the suggested route options and choose one to view full details.",
+        "You can plan a trip from the main map screen. Enter your destination, confirm your origin, and pick from the recommended routes based on time, fare, or ease.",
+        "Open the map tab, search your destination, and select a suggested route. You can inspect fare estimate, transfer count, and stop details before traveling."
+      ],
+      "tl": [
+        "Para maghanap ng ruta, pumunta sa Home map screen at ilagay ang origin at destination sa Search. Pagkatapos, i-review ang suggested routes at piliin ang gusto mo.",
+        "Pwede kang magplano ng biyahe sa main map screen. I-enter ang destination, i-confirm ang origin, tapos pumili sa recommended routes ayon sa oras, fare, o ease.",
+        "Buksan ang map tab, i-search ang destination, at pumili ng suggested route. Makikita mo ang fare estimate, transfer count, at stop details bago bumiyahe."
+      ]
+    },
+    {
+      "id": "saved",
+      "intents": ["how to go to saved", "saved", "saved routes", "bookmark", "where is saved", "paano pumunta sa saved", "saan makikita saved"],
+      "en": [
+        "Open the Saved tab from the bottom navigation to view bookmarked routes. You can open route details there and remove saved items anytime.",
+        "To check saved routes, tap Saved on the bottom tabs. It shows your bookmarked trips and lets you quickly reopen them.",
+        "Go to the Saved screen from the tabs below. Your saved routes are listed there with quick View actions."
+      ],
+      "tl": [
+        "Buksan ang Saved tab sa bottom navigation para makita ang mga na-bookmark mong ruta. Pwede mo ring i-open o alisin ang saved items doon.",
+        "Para i-check ang saved routes, i-tap ang Saved sa ibabang tabs. Nandoon ang mga naka-bookmark mong biyahe.",
+        "Pumunta sa Saved screen mula sa tabs sa ibaba. Makikita mo roon ang listahan ng saved routes at quick View actions."
+      ]
+    },
+    {
+      "id": "achievements",
+      "intents": ["achievements", "achievement", "how to check achievements", "where achievements", "badges", "points", "streak"],
+      "en": [
+        "To check achievements, open your profile or achievements screen from the app menu. You can view earned badges, trip milestones, and progress there.",
+        "Your achievements are shown in the Achievements area, including badges, points, and streak progress.",
+        "Go to the Achievements page to track milestones like routes completed, distance traveled, and streaks."
+      ],
+      "tl": [
+        "Para i-check ang achievements, buksan ang profile o achievements screen mula sa app menu. Makikita mo doon ang badges, milestones, at progress mo.",
+        "Makikita ang achievements mo sa Achievements area, kasama ang badges, points, at streak progress.",
+        "Pumunta sa Achievements page para makita ang milestones gaya ng completed routes, distance traveled, at streaks."
+      ]
+    },
+    {
+      "id": "chatbot_help",
+      "intents": ["how to use chatbot", "how to use jeepie", "chatbot help", "paano gamitin si jeepie", "paano gamitin chatbot"],
+      "en": [
+        "You can chat with Jeepie by asking about fares, routes, transit tips, destinations, and app features. If needed, share your origin or pinned location for better route guidance.",
+        "To use Jeepie, type your question in the chat box. You can ask route directions, fare estimates, app navigation help, and commute trivia.",
+        "Just message Jeepie naturally. For best results, include your destination and current location or nearby landmark."
+      ],
+      "tl": [
+        "Pwede kang makipag-chat kay Jeepie tungkol sa pamasahe, ruta, transit tips, destinations, at app features. Kung kailangan, ibigay ang origin o pinned location mo para mas accurate.",
+        "Para gamitin si Jeepie, i-type lang ang tanong sa chat box. Pwede kang magtanong ng route directions, fare estimates, at app navigation help.",
+        "Mag-chat ka lang kay Jeepie nang natural. Mas okay kung may destination at current location o nearby landmark ka."
+      ]
+    },
+    {
+      "id": "profile_settings",
+      "intents": ["profile", "settings", "edit profile", "how to edit profile", "account settings", "paano mag edit profile", "saan settings"],
+      "en": [
+        "Open Profile to view your account details, then go to Edit Profile or Settings to update your information and app preferences.",
+        "For account changes, visit your Profile screen and tap Edit Profile. For app preferences, open Settings.",
+        "You can manage personal info in Profile and adjust behavior options in Settings."
+      ],
+      "tl": [
+        "Buksan ang Profile para makita ang account details mo, tapos pumunta sa Edit Profile o Settings para mag-update ng impormasyon at preferences.",
+        "Para sa account changes, pumunta sa Profile screen at i-tap ang Edit Profile. Para sa app preferences, buksan ang Settings.",
+        "Pwede mong i-manage ang personal info sa Profile at i-adjust ang options sa Settings."
+      ]
+    },
+    {
+      "id": "search_and_pin",
+      "intents": ["pin location", "pinned location", "pinpoint", "drop pin", "search destination", "how to search place", "paano mag search ng lugar"],
+      "en": [
+        "Use the Search field on the map to find your destination or drop a pin. Once selected, Jeepie can help suggest route and fare guidance.",
+        "You can search a place name or use a pinned location on the map. Then ask Jeepie to compute route or fare from your current point.",
+        "To use pin or pinpoint flow, set a destination on the map first, then ask Jeepie for route steps or estimated fare."
+      ],
+      "tl": [
+        "Gamitin ang Search field sa map para hanapin ang destination o mag-drop ng pin. Kapag na-set na, tutulungan ka ni Jeepie sa route at fare guidance.",
+        "Pwede kang mag-search ng place name o gumamit ng pinned location sa map. Pagkatapos, tanungin si Jeepie para sa route o fare estimate.",
+        "Para sa pin o pinpoint flow, i-set muna ang destination sa map, tapos tanungin si Jeepie para sa route steps o estimated fare."
+      ]
+    }
+  ],
   "builderAnswer": "The 'Para' application's idea was proposed by Christian Valenzuela himself, this current version that you are seeing was built during a Hackathon competition, with:\n\nAcal, Lance Adrian\nDelos Reyes, Jericho\nNorona, Lee Adrian\nOrdiales, Cristian Gabriel\nValenzuela, Christian",
   "fallbackMessages": {
     "outOfScope": {

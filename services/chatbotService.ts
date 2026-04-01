@@ -11,6 +11,7 @@ export type Coordinate = {
 
 export type ChatbotConversationState = {
   awaitingOriginForDestinationId?: string;
+  awaitingOriginIntent?: 'fare' | 'route';
 };
 
 export type ChatbotRequest = {
@@ -53,6 +54,13 @@ type LocalizedVariants = {
   tl: string[];
 };
 
+type DatasetAppGuide = {
+  id: string;
+  intents: string[];
+  en: string[];
+  tl: string[];
+};
+
 type DatasetShape = {
   farePolicy: {
     baseFarePhp: number;
@@ -74,6 +82,15 @@ type DatasetShape = {
     acknowledgement: LocalizedVariants;
   };
   fareNews: LocalizedVariants;
+  routeResponses: {
+    askDestination: LocalizedVariants;
+    askOrigin: LocalizedVariants;
+    noRouteFound: LocalizedVariants;
+    pinAcknowledgement: LocalizedVariants;
+    routeFoundIntro: LocalizedVariants;
+    routeSummaryOutro: LocalizedVariants;
+  };
+  appGuides: DatasetAppGuide[];
   builderAnswer: string;
   fallbackMessages: {
     outOfScope: LocalizedVariants;
@@ -94,6 +111,13 @@ type EstimateResult = {
   normalFare: number;
   discountedFare: number;
   routeHint: string;
+};
+
+type RoutePlanResult = {
+  routeNames: string[];
+  distanceKm: number;
+  estimatedMinutes: number;
+  estimatedFare: number;
 };
 
 const dataset = datasetJson as DatasetShape;
@@ -227,6 +251,31 @@ function pickLocalized(variants: LocalizedVariants, language: BotLanguage): stri
   return pickRandom(options);
 }
 
+function formatForChatDisplay(text: string): string {
+  const cleaned = text
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  if (!cleaned) return '';
+  if (cleaned.includes('\n\n')) return cleaned;
+  if (cleaned.includes('\n')) return cleaned;
+
+  const sentences = cleaned
+    .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
+    ?.map((s) => s.trim())
+    .filter(Boolean) || [];
+
+  if (sentences.length < 2) return cleaned;
+
+  const firstSentence = sentences[0];
+  const remaining = sentences.slice(1).join(' ').trim();
+  if (!remaining) return cleaned;
+
+  return `${firstSentence}\n\n${remaining}`;
+}
+
 const SUPPORT_ACK_OPENERS: LocalizedVariants = {
   en: [
     'Thanks for reaching out. I understand what you need.',
@@ -258,9 +307,14 @@ function composeSupportReply(
   content: string,
   options?: { includeClosing?: boolean },
 ): string {
-  const opener = pickLocalized(SUPPORT_ACK_OPENERS, language);
-  const closing = options?.includeClosing ? ` ${pickLocalized(SUPPORT_CLOSERS, language)}` : '';
-  return `${opener} ${content}${closing}`.trim();
+  const opener = formatForChatDisplay(pickLocalized(SUPPORT_ACK_OPENERS, language));
+  const body = formatForChatDisplay(content);
+  const closing = options?.includeClosing
+    ? formatForChatDisplay(pickLocalized(SUPPORT_CLOSERS, language))
+    : '';
+
+  const chunks = [opener, body, closing].filter(Boolean);
+  return chunks.join('\n\n');
 }
 
 function template(message: string, replacements: Record<string, string>): string {
@@ -379,6 +433,14 @@ function hasFareIntent(normalized: string): boolean {
   return /(fare|pamasahe|magkano|bayad|how much|magkan[o0]|magkano po|how much fare|fare estimate|estimate fare|pamasahe papunta|pamasahe mula|how much should i pay)/.test(normalized);
 }
 
+function hasRouteIntent(normalized: string): boolean {
+  return /(route|ruta|navigate|navigation|directions|papunta|paano pumunta|how to go|get there|go to|dalhin|sakay papunta|how do i get|pinpoint|pinned|drop pin|pin location)/.test(normalized);
+}
+
+function hasPinIntent(normalized: string): boolean {
+  return /(pin|pinned|pinpoint|drop pin|pin location)/.test(normalized);
+}
+
 function hasTriviaIntent(normalized: string): boolean {
   return /(trivia|fun fact|did you know|alam mo ba|fact tungkol|fact about|random fact|kwento trivia|trivia naman)/.test(normalized);
 }
@@ -414,7 +476,40 @@ function hasAcknowledgementIntent(normalized: string): boolean {
 }
 
 function hasCommuteTaskIntent(normalized: string): boolean {
-  return /(fare|pamasahe|route|ruta|destination|papunta|where|saan|how to go|paano pumunta|terminal|stop|transit|jeepney|tricycle|from|mula|galing|to |going to|trivia|fun fact|did you know|alam mo ba|app|application)/.test(normalized);
+  return /(fare|pamasahe|route|ruta|destination|papunta|where|saan|how to go|paano pumunta|terminal|stop|transit|jeepney|tricycle|from|mula|galing|to |going to|trivia|fun fact|did you know|alam mo ba|app|application|saved|achievements|profile|settings|pinpoint|pinned|drop pin)/.test(normalized);
+}
+
+function findAppGuide(normalized: string): DatasetAppGuide | null {
+  let bestGuide: DatasetAppGuide | null = null;
+  let bestScore = 0;
+
+  for (const guide of dataset.appGuides || []) {
+    for (const rawIntent of guide.intents || []) {
+      const intent = normalizeText(rawIntent);
+      if (!intent) continue;
+      if (!hintMatches(normalized, intent)) continue;
+
+      const score = intent.length;
+      if (score > bestScore) {
+        bestScore = score;
+        bestGuide = guide;
+      }
+    }
+  }
+
+  return bestGuide;
+}
+
+function pickAppGuideReply(guide: DatasetAppGuide, language: BotLanguage): string {
+  const options = language === 'tl' ? guide.tl : guide.en;
+  return formatForChatDisplay(pickRandom(options));
+}
+
+function routeResponseText(
+  language: BotLanguage,
+  key: keyof DatasetShape['routeResponses'],
+): string {
+  return formatForChatDisplay(pickLocalized(dataset.routeResponses[key], language));
 }
 
 function isInScope(normalized: string): boolean {
@@ -486,6 +581,96 @@ function estimateFare(
   };
 }
 
+function findRoutePlan(
+  origin: Coordinate,
+  destination: DatasetPlace,
+  routes: JeepneyRoute[],
+  originPlace?: DatasetPlace,
+): RoutePlanResult | null {
+  if (routes.length > 0) {
+    const matched = rankRoutes(
+      findRoutesForDestination(origin, destination.coordinate, routes),
+      'easiest',
+    );
+
+    const best = matched[0];
+    if (best && best.legs.length > 0) {
+      const routeNames = best.legs.map((leg) => leg.route.properties.code || leg.route.properties.name || 'Jeepney route');
+      const distanceKm = best.legs.reduce((sum, leg) => sum + leg.distanceKm, 0);
+      const estimatedFare = Number(
+        best.legs
+          .reduce((sum, leg) => sum + calculateNormalFare(Math.max(leg.distanceKm, 0.05)), 0)
+          .toFixed(2),
+      );
+
+      return {
+        routeNames,
+        distanceKm,
+        estimatedMinutes: Math.max(1, Math.round(best.estimatedMinutes)),
+        estimatedFare,
+      };
+    }
+  }
+
+  if (originPlace) {
+    const pair = getFarePair(originPlace.id, destination.id);
+    if (pair) {
+      return {
+        routeNames: [pair.jeepneyRouteHint],
+        distanceKm: pair.distanceKm,
+        estimatedMinutes: Math.max(5, Math.round((pair.distanceKm / 15) * 60)),
+        estimatedFare: calculateNormalFare(pair.distanceKm),
+      };
+    }
+  }
+
+  return null;
+}
+
+function buildRouteReply(params: {
+  language: BotLanguage;
+  originLabel: string;
+  destinationLabel: string;
+  plan: RoutePlanResult;
+  hasPinReference: boolean;
+}): string {
+  const { language, originLabel, destinationLabel, plan, hasPinReference } = params;
+
+  const intro = hasPinReference
+    ? `${routeResponseText(language, 'pinAcknowledgement')}\n\n${routeResponseText(language, 'routeFoundIntro')}`
+    : routeResponseText(language, 'routeFoundIntro');
+
+  const steps = plan.routeNames.map((routeName, index) => {
+    if (language === 'tl') {
+      return index === 0
+        ? `${index + 1}. Sumakay sa ${routeName}`
+        : `${index + 1}. Pagkatapos, lumipat sa ${routeName}`;
+    }
+
+    return index === 0
+      ? `${index + 1}. Ride ${routeName}`
+      : `${index + 1}. Then transfer to ${routeName}`;
+  });
+
+  if (language === 'tl') {
+    return [
+      intro,
+      `Mula ${originLabel} papuntang ${destinationLabel}, ito ang suggested route:`,
+      steps.join('\n'),
+      `Tantyang biyahe: mga ${plan.estimatedMinutes} minuto | Tantyang layo: ${plan.distanceKm.toFixed(1)} km | Tantyang fare: ${formatPhp(plan.estimatedFare)} (regular)`,
+      routeResponseText(language, 'routeSummaryOutro'),
+    ].join('\n\n');
+  }
+
+  return [
+    intro,
+    `From ${originLabel} to ${destinationLabel}, here is the suggested route:`,
+    steps.join('\n'),
+    `Estimated trip: around ${plan.estimatedMinutes} minutes | Estimated distance: ${plan.distanceKm.toFixed(1)} km | Estimated fare: ${formatPhp(plan.estimatedFare)} (regular)`,
+    routeResponseText(language, 'routeSummaryOutro'),
+  ].join('\n\n');
+}
+
 function buildFareReply(params: {
   language: BotLanguage;
   originLabel: string;
@@ -526,15 +711,16 @@ function pickTrivia(language: BotLanguage): string {
       'Just say the word if you want more trivia.',
     ]);
 
-  return `${leadIn} ${fact} ${ending}`;
+  const triviaBody = formatForChatDisplay(`${leadIn} ${fact}`);
+  return `${triviaBody}\n\n${ending}`;
 }
 
 function pickSocialReply(language: BotLanguage, key: keyof DatasetShape['socialResponses']): string {
-  return pickLocalized(dataset.socialResponses[key], language);
+  return formatForChatDisplay(pickLocalized(dataset.socialResponses[key], language));
 }
 
 function pickFareNewsReply(language: BotLanguage): string {
-  return pickLocalized(dataset.fareNews, language);
+  return formatForChatDisplay(pickLocalized(dataset.fareNews, language));
 }
 
 async function callGroqFallback(message: string, language: BotLanguage): Promise<string | null> {
@@ -589,6 +775,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const language = detectLanguage(message);
   const normalized = normalizeText(message);
   const isTaskLikeMessage = hasCommuteTaskIntent(normalized);
+  const hasPinReference = hasPinIntent(normalized);
   const currentState: ChatbotConversationState = request.state ?? {};
   const routes = request.routes ?? [];
 
@@ -631,9 +818,21 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const mentions = findPlaceMentions(message);
   const parsed = parseFareEndpoints(normalized, mentions);
 
-  const fareIntentActive = hasFareIntent(normalized) || Boolean(currentState.awaitingOriginForDestinationId);
+  const matchedGuide = findAppGuide(normalized);
+  const hasDestinationMention = Boolean(parsed.destination);
+  if (matchedGuide && (!hasRouteIntent(normalized) || !hasDestinationMention) && !hasFareIntent(normalized)) {
+    return {
+      text: composeSupportReply(language, pickAppGuideReply(matchedGuide, language), { includeClosing: true }),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  const fareIntentActive = hasFareIntent(normalized)
+    || (currentState.awaitingOriginIntent === 'fare' && Boolean(currentState.awaitingOriginForDestinationId));
   if (fareIntentActive) {
-    const destinationFromState = currentState.awaitingOriginForDestinationId
+    const destinationFromState = currentState.awaitingOriginIntent === 'fare' && currentState.awaitingOriginForDestinationId
       ? placeById.get(currentState.awaitingOriginForDestinationId)
       : undefined;
 
@@ -660,7 +859,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
           template(fallbackText(language, 'askOrigin'), { destination: destination.name }),
         ),
         language,
-        state: { awaitingOriginForDestinationId: destination.id },
+        state: { awaitingOriginForDestinationId: destination.id, awaitingOriginIntent: 'fare' },
         usedGroq: false,
       };
     }
@@ -692,6 +891,74 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
           destinationLabel: destination.name,
           estimate,
           usedGpsLocation: useGpsAsOrigin,
+        }),
+        { includeClosing: true },
+      ),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  const routeIntentActive = hasRouteIntent(normalized)
+    || (currentState.awaitingOriginIntent === 'route' && Boolean(currentState.awaitingOriginForDestinationId));
+  if (routeIntentActive) {
+    const destinationFromState = currentState.awaitingOriginIntent === 'route' && currentState.awaitingOriginForDestinationId
+      ? placeById.get(currentState.awaitingOriginForDestinationId)
+      : undefined;
+
+    const destination = parsed.destination ?? destinationFromState;
+    if (!destination) {
+      return {
+        text: composeSupportReply(language, routeResponseText(language, 'askDestination')),
+        language,
+        state: {},
+        usedGroq: false,
+      };
+    }
+
+    const originFromMessage = parsed.origin;
+    const originCoordinate = originFromMessage?.coordinate ?? request.currentLocation ?? null;
+    const nearestFromGps = request.currentLocation ? findNearestKnownPlace(request.currentLocation) : null;
+
+    if (!originCoordinate) {
+      return {
+        text: composeSupportReply(
+          language,
+          template(routeResponseText(language, 'askOrigin'), { destination: destination.name }),
+        ),
+        language,
+        state: { awaitingOriginForDestinationId: destination.id, awaitingOriginIntent: 'route' },
+        usedGroq: false,
+      };
+    }
+
+    const originLabel = originFromMessage?.name
+      || request.currentLocationLabel
+      || nearestFromGps?.name
+      || (language === 'tl' ? 'kasalukuyang lokasyon mo' : 'your current location');
+
+    const resolvedOriginPlace = originFromMessage || nearestFromGps || null;
+    const routePlan = findRoutePlan(originCoordinate, destination, routes, resolvedOriginPlace || undefined);
+
+    if (!routePlan) {
+      return {
+        text: composeSupportReply(language, routeResponseText(language, 'noRouteFound')),
+        language,
+        state: {},
+        usedGroq: false,
+      };
+    }
+
+    return {
+      text: composeSupportReply(
+        language,
+        buildRouteReply({
+          language,
+          originLabel,
+          destinationLabel: destination.name,
+          plan: routePlan,
+          hasPinReference,
         }),
         { includeClosing: true },
       ),
