@@ -27,6 +27,9 @@ type ChatbotPersistState = {
   awaitingOriginForDestinationId?: string;
   awaitingOriginIntent?: 'fare' | 'route';
   awaitingDestinationIntent?: 'fare' | 'route';
+  pendingDestinationName?: string;
+  pendingDestinationCoordinate?: { latitude: number; longitude: number };
+  pendingDestinationPlaceId?: string;
 };
 
 type SessionMode = 'guest' | 'auth' | null;

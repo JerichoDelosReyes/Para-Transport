@@ -14,6 +14,9 @@ export type ChatbotConversationState = {
   awaitingOriginForDestinationId?: string;
   awaitingOriginIntent?: 'fare' | 'route';
   awaitingDestinationIntent?: 'fare' | 'route';
+  pendingDestinationName?: string;
+  pendingDestinationCoordinate?: Coordinate;
+  pendingDestinationPlaceId?: string;
 };
 
 export type ChatbotRequest = {
@@ -609,6 +612,63 @@ function buildClarificationAck(language: BotLanguage): string {
     'Nice, I understand it now. Thanks for the correction.',
     'Perfect, that makes it clearer. Thanks for clarifying.',
   ]);
+}
+
+function statePendingDestination(currentState: ChatbotConversationState): DestinationPoint | null {
+  if (!currentState.pendingDestinationName || !currentState.pendingDestinationCoordinate) return null;
+
+  return {
+    name: currentState.pendingDestinationName,
+    coordinate: currentState.pendingDestinationCoordinate,
+    placeId: currentState.pendingDestinationPlaceId,
+  };
+}
+
+function buildDestinationClarifyingQuestion(language: BotLanguage, destinationName: string): string {
+  if (language === 'tl') {
+    return [
+      `Nakuha ko ang destination na ${destinationName}.`,
+      'Quick clarify lang: gusto mo ba ng route roadmap o fare estimate?',
+      'Kung hindi ka magbigay ng origin, current location mo ang gagamitin ko bilang simula.',
+    ].join('\n\n');
+  }
+
+  return [
+    `I got your destination as ${destinationName}.`,
+    'Quick clarification: do you want a route roadmap or a fare estimate?',
+    'If you do not provide an origin, I will use your current location as the default start point.',
+  ].join('\n\n');
+}
+
+function buildGeneralClarifyingQuestion(language: BotLanguage): string {
+  if (language === 'tl') {
+    return [
+      'Medyo kulang o putol ang details, kaya gusto ko munang mag-clarify.',
+      'Pwede mong sabihin kung alin ang kailangan mo: route roadmap, fare estimate, o app guide.',
+      'Tip: mas mabilis kung may destination ka, at optional ang origin dahil pwede kong gamitin ang current location mo.',
+    ].join('\n\n');
+  }
+
+  return [
+    'Your message looks a bit short or incomplete, so I want to clarify first.',
+    'Please tell me what you need: a route roadmap, a fare estimate, or app guidance.',
+    'Tip: sharing a destination helps a lot, and origin is optional because I can default to your current location.',
+  ].join('\n\n');
+}
+
+function looksCutOffInput(normalized: string): boolean {
+  return /(to|from|sa|papunta|papuntang|mula|galing|towards?|destination|origin)$/.test(normalized)
+    || /(i want to go|gusto ko pumunta|gusto ko magpunta|help me|patulong|route to|paano pumunta)$/.test(normalized);
+}
+
+function shouldAskGeneralClarification(normalized: string): boolean {
+  const words = normalized.split(' ').filter(Boolean);
+  if (words.length === 0) return false;
+  if (looksCutOffInput(normalized)) return true;
+
+  const tooShortSingleWord = words.length === 1 && words[0].length <= 4;
+  const tooShortTwoWords = words.length === 2 && normalized.length <= 10;
+  return tooShortSingleWord || tooShortTwoWords;
 }
 
 function hasFareIntent(normalized: string): boolean {
@@ -1376,6 +1436,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   const mentions = findPlaceMentions(message);
   const parsed = parseFareEndpoints(normalized, mentions);
+  const pendingDestination = statePendingDestination(currentState);
 
   const matchedGuide = findAppGuide(normalized);
   if (matchedGuide && !hasRouteIntent(normalized) && !hasFareIntent(normalized) && !hasRouteListIntent(normalized)) {
@@ -1437,6 +1498,29 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
+  const destinationHint = parsed.destination
+    ? toDestinationPoint(parsed.destination)
+    : findStopDestinationByHints(normalized, routes);
+
+  if (
+    destinationHint
+    && !hasRouteIntent(normalized)
+    && !hasFareIntent(normalized)
+    && !currentState.awaitingDestinationIntent
+    && !currentState.awaitingOriginIntent
+  ) {
+    return {
+      text: composeSupportReply(language, buildDestinationClarifyingQuestion(language, destinationHint.name)),
+      language,
+      state: {
+        pendingDestinationName: destinationHint.name,
+        pendingDestinationCoordinate: destinationHint.coordinate,
+        pendingDestinationPlaceId: destinationHint.placeId,
+      },
+      usedGroq: false,
+    };
+  }
+
   const fareIntentActive = hasFareIntent(normalized)
     || (currentState.awaitingOriginIntent === 'fare' && Boolean(currentState.awaitingOriginForDestinationId))
     || currentState.awaitingDestinationIntent === 'fare';
@@ -1446,10 +1530,14 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       ? placeById.get(currentState.awaitingOriginForDestinationId)
       : undefined;
 
-    const destinationPlace = parsed.destination ?? destinationFromState;
+    const pendingDestinationPlace = pendingDestination?.placeId
+      ? placeById.get(pendingDestination.placeId)
+      : undefined;
+
+    const destinationPlace = parsed.destination ?? destinationFromState ?? pendingDestinationPlace;
     const destinationPoint = destinationPlace
       ? toDestinationPoint(destinationPlace)
-      : findStopDestinationByHints(normalized, routes);
+      : pendingDestination ?? findStopDestinationByHints(normalized, routes);
 
     if (!destinationPoint) {
       return {
@@ -1475,6 +1563,9 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
         state: {
           awaitingOriginForDestinationId: destinationPlace?.id,
           awaitingOriginIntent: 'fare',
+          pendingDestinationName: destinationPoint.name,
+          pendingDestinationCoordinate: destinationPoint.coordinate,
+          pendingDestinationPlaceId: destinationPoint.placeId,
         },
         usedGroq: false,
       };
@@ -1537,10 +1628,14 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       ? placeById.get(currentState.awaitingOriginForDestinationId)
       : undefined;
 
-    const destinationPlace = parsed.destination ?? destinationFromState;
+    const pendingDestinationPlace = pendingDestination?.placeId
+      ? placeById.get(pendingDestination.placeId)
+      : undefined;
+
+    const destinationPlace = parsed.destination ?? destinationFromState ?? pendingDestinationPlace;
     const destinationPoint = destinationPlace
       ? toDestinationPoint(destinationPlace)
-      : findStopDestinationByHints(normalized, routes);
+      : pendingDestination ?? findStopDestinationByHints(normalized, routes);
 
     if (!destinationPoint) {
       return {
@@ -1565,6 +1660,9 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
         state: {
           awaitingOriginForDestinationId: destinationPlace?.id,
           awaitingOriginIntent: 'route',
+          pendingDestinationName: destinationPoint.name,
+          pendingDestinationCoordinate: destinationPoint.coordinate,
+          pendingDestinationPlaceId: destinationPoint.placeId,
         },
         usedGroq: false,
       };
@@ -1672,6 +1770,15 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
+  if (shouldAskGeneralClarification(normalized)) {
+    return {
+      text: composeSupportReply(language, buildGeneralClarifyingQuestion(language)),
+      language,
+      state: currentState,
+      usedGroq: false,
+    };
+  }
+
   const inScope = isInScope(normalized);
 
   try {
@@ -1698,9 +1805,9 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   }
 
   return {
-    text: composeSupportReply(language, fallbackText(language, 'unknown')),
+    text: composeSupportReply(language, buildGeneralClarifyingQuestion(language)),
     language,
-    state: {},
+    state: currentState,
     usedGroq: false,
   };
 }
