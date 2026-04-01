@@ -4,8 +4,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Location from "expo-location";
 import { useStore } from "../store/useStore";
 import { COLORS } from "../constants/theme";
+import { useRoutes } from "../hooks/useRoutes";
+import { getChatbotReply, type ChatbotConversationState } from "../services/chatbotService";
 
 const { width } = Dimensions.get("window");
 
@@ -20,12 +23,23 @@ const CHATBOT_STATES = {
   POWER_OFF: require("../assets/AIChatbot/POWER OFF.png"),
 };
 
+type ChatMessage = {
+  id: string;
+  text: string;
+  isUser: boolean;
+};
+
 export default function AIChatbotScreen() {
   const [currentState, setCurrentState] = useState<keyof typeof CHATBOT_STATES>("IDLE");
   const [inputText, setInputText] = useState("");
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversationState, setConversationState] = useState<ChatbotConversationState>({});
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [currentLocationLabel, setCurrentLocationLabel] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
   const floatAnim = useRef(new Animated.Value(0)).current;
-  const flatListRef = useRef<FlatList>(null);
+  const flatListRef = useRef<FlatList<ChatMessage>>(null);
+  const { routes } = useRoutes();
   const user = useStore((state: any) => state.user);
   const firstName = user?.full_name?.split(" ")[0] || "Commuter";
 
@@ -46,6 +60,47 @@ export default function AIChatbotScreen() {
     ).start();
   }, [floatAnim]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadLocation = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted" || !mounted) return;
+
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+        if (!mounted) return;
+
+        const coord = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+
+        setCurrentLocation(coord);
+
+        const geocoded = await Location.reverseGeocodeAsync(coord);
+        if (!mounted || geocoded.length === 0) return;
+
+        const top = geocoded[0];
+        const parts = [top.name, top.district, top.city].filter(Boolean);
+        if (parts.length > 0) {
+          setCurrentLocationLabel(parts.join(", "));
+        }
+      } catch {
+        // Location is optional for chatbot flow.
+      }
+    };
+
+    loadLocation();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const handleAction = (nextState: keyof typeof CHATBOT_STATES) => {
     setCurrentState("PROCESSING");
     setTimeout(() => {
@@ -56,27 +111,51 @@ export default function AIChatbotScreen() {
     }, 1200);
   };
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
+  const handleSend = async () => {
+    if (!inputText.trim() || isSending) return;
 
-    const userMessage = { id: Date.now().toString(), text: inputText.trim(), isUser: true };
+    const messageText = inputText.trim();
+    const userMessage: ChatMessage = { id: Date.now().toString(), text: messageText, isUser: true };
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
     setCurrentState("PROCESSING");
+    setIsSending(true);
 
-    setTimeout(() => {
-      const aiResponse = { 
-        id: (Date.now() + 1).toString(), 
-        text: "I am a placeholder AI response. I will be able to help you route and navigate soon!", 
-        isUser: false 
+    try {
+      const response = await getChatbotReply({
+        message: messageText,
+        state: conversationState,
+        routes,
+        currentLocation,
+        currentLocationLabel,
+      });
+
+      setConversationState(response.state);
+
+      const aiResponse: ChatMessage = {
+        id: `${Date.now()}-ai`,
+        text: response.text,
+        isUser: false,
       };
+
       setMessages((prev) => [...prev, aiResponse]);
       setCurrentState("SUCCESS");
-
+    } catch {
+      setCurrentState("ERROR");
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-error`,
+          text: "Sorry, I ran into an error while processing your request. Please try again.",
+          isUser: false,
+        },
+      ]);
+    } finally {
+      setIsSending(false);
       setTimeout(() => {
         setCurrentState("IDLE");
       }, 2000);
-    }, 1500);
+    }
   };
 
   return (
@@ -155,14 +234,14 @@ export default function AIChatbotScreen() {
           <View style={styles.inputWrapper}>
             <TextInput 
               style={styles.textInput}
-              placeholder="Ask me anything..."
+              placeholder="Ask about fares, routes, or jeepney trivia..."
               placeholderTextColor={COLORS.textMuted}
               value={inputText}
               onChangeText={setInputText}
               onSubmitEditing={handleSend}
             />
 
-            <TouchableOpacity style={styles.micButton} onPress={handleSend}>
+            <TouchableOpacity style={[styles.micButton, isSending ? { opacity: 0.6 } : null]} onPress={handleSend} disabled={isSending}>
               <Ionicons 
                 name={inputText.trim() ? "send" : "mic"} 
                 size={22} 

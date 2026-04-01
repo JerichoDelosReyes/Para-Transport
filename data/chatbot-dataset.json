@@ -1,0 +1,215 @@
+{
+  "version": "2026-04-01",
+  "farePolicy": {
+    "currency": "PHP",
+    "baseFarePhp": 14,
+    "baseDistanceKm": 4,
+    "additionalPerKmPhp": 1.8,
+    "discountRate": 0.2,
+    "roundToNearestQuarter": true
+  },
+  "topicKeywords": [
+    "para",
+    "app",
+    "application",
+    "transport",
+    "transportation",
+    "commute",
+    "commuting",
+    "jeep",
+    "jeepney",
+    "tricycle",
+    "fare",
+    "pamasahe",
+    "route",
+    "ruta",
+    "transit",
+    "destination",
+    "sakay",
+    "baba",
+    "student",
+    "senior",
+    "pwd",
+    "location",
+    "gps"
+  ],
+  "places": [
+    {
+      "id": "imus_crossing",
+      "name": "Imus Crossing",
+      "aliases": ["imus crossing", "crossing imus", "imus kanto"],
+      "coordinate": { "latitude": 14.4251, "longitude": 120.9404 }
+    },
+    {
+      "id": "bacoor_boulevard",
+      "name": "Bacoor Boulevard",
+      "aliases": ["bacoor boulevard", "bacoor blvd"],
+      "coordinate": { "latitude": 14.4578, "longitude": 120.949 }
+    },
+    {
+      "id": "imus_centrum",
+      "name": "Imus Centrum",
+      "aliases": ["imus centrum", "centrum imus"],
+      "coordinate": { "latitude": 14.43, "longitude": 120.941 }
+    },
+    {
+      "id": "dasmarinas_burol",
+      "name": "Dasmarinas Burol",
+      "aliases": ["dasmarinas burol", "burol", "dasma burol"],
+      "coordinate": { "latitude": 14.3275, "longitude": 120.946 }
+    },
+    {
+      "id": "bacoor_terminal",
+      "name": "Bacoor Terminal",
+      "aliases": ["bacoor terminal", "terminal bacoor"],
+      "coordinate": { "latitude": 14.46, "longitude": 120.95 }
+    },
+    {
+      "id": "mall_of_asia_terminal",
+      "name": "Mall of Asia Terminal",
+      "aliases": ["mall of asia", "moa", "moa terminal"],
+      "coordinate": { "latitude": 14.5323, "longitude": 120.9822 }
+    },
+    {
+      "id": "imus_public_market",
+      "name": "Imus Public Market",
+      "aliases": ["imus public market", "public market imus", "imus palengke"],
+      "coordinate": { "latitude": 14.426, "longitude": 120.9415 }
+    },
+    {
+      "id": "kawit_poblacion",
+      "name": "Kawit Poblacion",
+      "aliases": ["kawit poblacion", "poblacion kawit"],
+      "coordinate": { "latitude": 14.4468, "longitude": 120.9026 }
+    },
+    {
+      "id": "dasmarinas_terminal",
+      "name": "Dasmarinas Terminal",
+      "aliases": ["dasmarinas terminal", "dasma terminal"],
+      "coordinate": { "latitude": 14.32, "longitude": 120.94 }
+    },
+    {
+      "id": "district_imus",
+      "name": "District Imus",
+      "aliases": ["district imus", "the district imus"],
+      "coordinate": { "latitude": 14.38, "longitude": 120.943 }
+    },
+    {
+      "id": "pitx",
+      "name": "PITX",
+      "aliases": ["pitx", "paranaque integrated terminal exchange"],
+      "coordinate": { "latitude": 14.53, "longitude": 120.98 }
+    },
+    {
+      "id": "salitran",
+      "name": "Salitran",
+      "aliases": ["salitran"],
+      "coordinate": { "latitude": 14.35, "longitude": 120.942 }
+    }
+  ],
+  "farePairs": [
+    {
+      "originId": "imus_crossing",
+      "destinationId": "bacoor_boulevard",
+      "distanceKm": 5.2,
+      "jeepneyRouteHint": "J-01 Imus Crossing to Bacoor Boulevard"
+    },
+    {
+      "originId": "imus_centrum",
+      "destinationId": "dasmarinas_burol",
+      "distanceKm": 11.5,
+      "jeepneyRouteHint": "U-01 Imus Centrum to Dasmarinas Burol"
+    },
+    {
+      "originId": "dasmarinas_terminal",
+      "destinationId": "imus_crossing",
+      "distanceKm": 10.5,
+      "jeepneyRouteHint": "J-02 Dasmarinas to Imus Crossing"
+    },
+    {
+      "originId": "imus_public_market",
+      "destinationId": "kawit_poblacion",
+      "distanceKm": 4.8,
+      "jeepneyRouteHint": "T-01 Imus Public Market to Kawit Poblacion"
+    },
+    {
+      "originId": "bacoor_terminal",
+      "destinationId": "mall_of_asia_terminal",
+      "distanceKm": 14.2,
+      "jeepneyRouteHint": "B-01 Bacoor to Mall of Asia"
+    },
+    {
+      "originId": "imus_crossing",
+      "destinationId": "district_imus",
+      "distanceKm": 5,
+      "jeepneyRouteHint": "J-01 via MCI/Nomad"
+    },
+    {
+      "originId": "imus_crossing",
+      "destinationId": "pitx",
+      "distanceKm": 16.4,
+      "jeepneyRouteHint": "J-01 then transfer to B-01"
+    },
+    {
+      "originId": "dasmarinas_terminal",
+      "destinationId": "salitran",
+      "distanceKm": 3.3,
+      "jeepneyRouteHint": "J-02 Dasmarinas to Imus Crossing"
+    }
+  ],
+  "trivia": [
+    {
+      "id": "jeepney_1",
+      "en": "Jeepneys began as surplus military jeeps after World War II and were redesigned by Filipinos for public transport.",
+      "tl": "Nagsimula ang jeepney mula sa surplus military jeeps pagkatapos ng World War II at inangkop ito ng mga Pilipino bilang pampublikong sasakyan."
+    },
+    {
+      "id": "jeepney_2",
+      "en": "Traditional jeepneys are known for colorful hand-painted art, chrome details, and personalized route signboards.",
+      "tl": "Kilala ang traditional jeepney sa makukulay na hand-painted art, chrome details, at personalized na signboard ng ruta."
+    },
+    {
+      "id": "jeepney_3",
+      "en": "The phrase 'Bayad po' is common inside jeepneys when passing fare to the driver.",
+      "tl": "Karaniwan ang salitang 'Bayad po' sa loob ng jeepney kapag inaabot ang pamasahe sa driver."
+    },
+    {
+      "id": "tricycle_1",
+      "en": "Tricycles are often used for short neighborhood trips and first-mile or last-mile connections.",
+      "tl": "Madalas gamitin ang tricycle para sa maiikling biyahe sa barangay at bilang first-mile o last-mile na sakay."
+    },
+    {
+      "id": "tricycle_2",
+      "en": "In many towns, tricycle routes and fare ranges are coordinated by local government units.",
+      "tl": "Sa maraming bayan, ang ruta at fare range ng tricycle ay inaayos ng local government units."
+    },
+    {
+      "id": "culture_1",
+      "en": "Jeepney route signboards usually list major landmarks so commuters can quickly check if it matches their destination.",
+      "tl": "Karaniwang nakalista sa signboard ng jeepney ang mga pangunahing landmark para madaling ma-check ng commuter kung tugma sa destination."
+    }
+  ],
+  "builderAnswer": "The 'Para' application's idea was proposed by Christian Valenzuela himself, this current version that you are seeing was built during a Hackathon competition, with:\n\nAcal, Lance Adrian\nDelos Reyes, Jericho\nNorona, Lee Adrian\nOrdiales, Cristian Gabriel\nValenzuela, Christian",
+  "fallbackMessages": {
+    "outOfScope": {
+      "en": "Sorry, I can only help with the Para app, fares, routes, transit, and commuting questions.",
+      "tl": "Pasensya na, sa Para app, pamasahe, ruta, transit, at commuting na tanong lang ako makakatulong."
+    },
+    "unknown": {
+      "en": "Sorry, I do not know that yet. Please ask about fares, routes, transit, or app features.",
+      "tl": "Pasensya na, hindi ko pa alam iyon. Subukan mong magtanong tungkol sa pamasahe, ruta, transit, o features ng app."
+    },
+    "missingDestination": {
+      "en": "I can calculate your fare. What destination are you going to?",
+      "tl": "Pwede kitang tulungan sa pamasahe. Saan ang destination mo?"
+    },
+    "askOrigin": {
+      "en": "I can estimate the fare to {destination}, but I am not sure where you are right now. Where are you coming from?",
+      "tl": "Kaya kong i-estimate ang pamasahe papuntang {destination}, pero hindi ko pa alam kung nasaan ka ngayon. Saan ka manggagaling?"
+    },
+    "unknownOrigin": {
+      "en": "I could not match your current location to my fare dataset yet. Please share a nearby known place.",
+      "tl": "Hindi ko pa ma-match ang location mo sa fare dataset ko. Paki-share ang malapit na kilalang lugar."
+    }
+  }
+}
