@@ -1255,13 +1255,30 @@ export default function HomeScreen() {
       {/* Route Options toggle button — only visible when a route is active */}
       {routeSummary && !showRecommender && (
         <View style={styles.recommenderToggle}>
-          <BlurView intensity={35} tint="light" style={styles.recommenderGlassWrap}>
+          <BlurView intensity={35} tint="light" style={[styles.recommenderGlassWrap, { marginBottom: 12 }]}>
             <TouchableOpacity
               style={styles.recommenderButton}
               onPress={() => setShowRecommender(true)}
               activeOpacity={0.8}
             >
-              <Ionicons name="options" size={21} color={COLORS.navy} />
+              <Ionicons name="list" size={21} color={COLORS.navy} />
+            </TouchableOpacity>
+          </BlurView>
+          
+          <BlurView intensity={35} tint="light" style={styles.recommenderGlassWrap}>
+            <TouchableOpacity
+              style={styles.recommenderButton}
+              onPress={() => {
+                setSelectedRouteId(null);
+                setRouteCoordinates([]);
+                setMatchedRoutes([]);
+                setDestinationLocation(null);
+                setRouteSummary(null);
+                sim.reset();
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={24} color={COLORS.navy} />
             </TouchableOpacity>
           </BlurView>
         </View>
@@ -1424,13 +1441,6 @@ export default function HomeScreen() {
         destinationName={destinationQuery}
         onClose={() => {
           setShowRecommender(false);
-          // Wait briefly for slide-out dismissal logic before clearing polylines to prevent visual pop
-          setTimeout(() => {
-            setSelectedRouteId(null);
-            setRouteCoordinates([]);
-            setMatchedRoutes([]);
-            setDestinationLocation(null);
-          }, 300);
         }}
       />
 
