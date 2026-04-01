@@ -145,12 +145,19 @@ export default function RouteRecommenderPanel({
     []
   );
 
+  const shownCount = rankedRoutes.length;
+  const totalCount = matchedRoutes.length;
+  const routeSubtitle =
+    totalCount > shownCount
+      ? `Top ${shownCount} of ${totalCount} routes${destinationName ? ` to ${destinationName}` : ''}`
+      : `${shownCount} route${shownCount !== 1 ? 's' : ''}${destinationName ? ` to ${destinationName}` : ''}`;
+
   const listHeader = useMemo(
     () => (
       <>
-        {destinationName ? (
+        {destinationName || totalCount > 0 ? (
           <Text style={styles.routeResultSubtitle}>
-            {matchedRoutes.length} route{matchedRoutes.length !== 1 ? "s" : ""} to {destinationName}
+            {routeSubtitle}
           </Text>
         ) : null}
 
@@ -172,7 +179,7 @@ export default function RouteRecommenderPanel({
         )}
       </>
     ),
-    [destinationName, matchedRoutes.length, rankTab, setRankTab]
+    [destinationName, matchedRoutes.length, rankTab, routeSubtitle, setRankTab, totalCount]
   );
 
   const emptyList = useMemo(

@@ -24,6 +24,7 @@ const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
 const MAX_WALK_PATH_POINTS = 140;
 const WALK_PATH_CACHE_LIMIT = 400;
 const MAX_WALK_DETOUR_RATIO = 1.9;
+const MAX_RANKED_ROUTE_OPTIONS = 5;
 
 type MapCoordinate = {
   latitude: number;
@@ -283,7 +284,7 @@ export default function HomeScreen() {
   const { routes: transitDataRoutes } = useRoutes();
 
   useEffect(() => {
-    setRankedRoutes(rankRoutes(matchedRoutes, rankTab));
+    setRankedRoutes(rankRoutes(matchedRoutes, rankTab).slice(0, MAX_RANKED_ROUTE_OPTIONS));
   }, [matchedRoutes, rankTab]);
 
   useEffect(() => {
