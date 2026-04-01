@@ -16,6 +16,7 @@ const TABLES = [
 const MAX_SOURCE_POINTS = 280;
 const MAX_MATCH_INPUT_POINTS = 90;
 const REQUEST_DELAY_MS = 90;
+const MAX_CONTIGUOUS_GAP_METERS = 180;
 
 function loadDotEnv(envPath) {
   if (!fs.existsSync(envPath)) return;
@@ -89,6 +90,65 @@ function mergePathParts(parts) {
     }
   }
   return merged;
+}
+
+function distMeters(a, b) {
+  const [lon1, lat1] = a;
+  const [lon2, lat2] = b;
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const p1 = toRad(lat1);
+  const p2 = toRad(lat2);
+
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function splitByGap(coords, maxGapMeters) {
+  if (!Array.isArray(coords) || coords.length < 2) return [];
+
+  const segments = [];
+  let current = [coords[0]];
+
+  for (let i = 1; i < coords.length; i++) {
+    const prev = coords[i - 1];
+    const next = coords[i];
+    if (distMeters(prev, next) > maxGapMeters) {
+      if (current.length >= 2) segments.push(current);
+      current = [next];
+      continue;
+    }
+    current.push(next);
+  }
+
+  if (current.length >= 2) segments.push(current);
+  return segments;
+}
+
+function pathLengthMeters(coords) {
+  if (!Array.isArray(coords) || coords.length < 2) return 0;
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    total += distMeters(coords[i - 1], coords[i]);
+  }
+  return total;
+}
+
+function pickLongestSegment(segments) {
+  if (!Array.isArray(segments) || segments.length === 0) return null;
+
+  let best = segments[0];
+  let bestLen = pathLengthMeters(best);
+  for (let i = 1; i < segments.length; i++) {
+    const len = pathLengthMeters(segments[i]);
+    if (len > bestLen) {
+      best = segments[i];
+      bestLen = len;
+    }
+  }
+  return best;
 }
 
 async function osrmMatch(coords) {
@@ -165,12 +225,10 @@ async function snapPathToRoads(rawCoords) {
   }
 
   const merged = mergePathParts(snappedParts);
-  if (merged.length < 2) return null;
-
-  // Preserve exact route endpoints from source to keep terminals stable.
-  merged[0] = cleaned[0];
-  merged[merged.length - 1] = cleaned[cleaned.length - 1];
-  return merged;
+  const contiguous = splitByGap(merged, MAX_CONTIGUOUS_GAP_METERS);
+  const bestSegment = pickLongestSegment(contiguous);
+  if (!bestSegment || bestSegment.length < 2) return null;
+  return bestSegment;
 }
 
 async function main() {
