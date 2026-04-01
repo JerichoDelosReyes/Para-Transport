@@ -8,9 +8,8 @@ import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
-import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
+import type { JeepneyRoute } from '../../types/routes';
 import { ROUTE_COLORS } from '../../constants/routeVisuals';
-import { getRouteDisplayRef } from '../../constants/routeCatalog';
 import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
 import { splitRouteSegments, buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
@@ -19,8 +18,6 @@ import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
 import { findRoutesForDestination, rankRoutes, MatchedRoute, RankMode } from '../../services/routeSearch';
 import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
-import LOCAL_PLACES from '../../data/local_places.json';
-import { fuzzyFilter } from '../../utils/fuzzySearch';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
@@ -216,7 +213,7 @@ export default function HomeScreen() {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<MatchedRoute | null>(null);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
-  const { routes: gpxRoutes } = useRoutes();
+  const { routes: transitDataRoutes } = useRoutes();
 
   useEffect(() => {
     setRankedRoutes(rankRoutes(matchedRoutes, rankTab));
@@ -239,13 +236,13 @@ export default function HomeScreen() {
     }
   }, [selectedRouteId, matchedRoutes]);
 
-  // Normalize GPX routes to a unified transit shape
+  // Normalize route data to a unified transit shape
   const transitRoutes = useMemo(() => {
-    const normalized = gpxRoutes.map((r: JeepneyRoute) => ({
+    const normalized = transitDataRoutes.map((r: JeepneyRoute) => ({
       id: r.properties.code,
       type: r.properties.type,
       color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
-      ref: getRouteDisplayRef(r.properties.code, r.properties.code),
+      ref: r.properties.code,
       name: r.properties.name,
       from: r.stops[0]?.label || '',
       to: r.stops[r.stops.length - 1]?.label || '',
@@ -262,7 +259,7 @@ export default function HomeScreen() {
       fare: r.properties.fare,
     }));
     return normalized;
-  }, [gpxRoutes]);
+  }, [transitDataRoutes]);
   const transitStops = useMemo(() => {
     return transitRoutes.flatMap((route: any) => route.stops || []);
   }, [transitRoutes]);
@@ -446,7 +443,7 @@ export default function HomeScreen() {
       const results = findRoutesForDestination(
         startPoint,
         destinationPoint,
-        gpxRoutes,
+        transitDataRoutes,
       );
 
       setMatchedRoutes(results);
@@ -489,7 +486,7 @@ export default function HomeScreen() {
     } finally {
       setIsRouting(false);
     }
-  }, [currentLocation, gpxRoutes]);
+  }, [currentLocation, transitDataRoutes]);
 
   // Automatically process pending route searches (e.g. from Saved routes page)
   useEffect(() => {
@@ -499,13 +496,8 @@ export default function HomeScreen() {
       const { origin, destination } = pendingRouteSearch;
       setIsRouting(true);
 
-      // Helper: resolve a place name — check local places first, then Nominatim
+      // Helper: resolve a place name with Nominatim geocoding
       const resolvePlace = async (name: string): Promise<PlaceResult | null> => {
-        const localHit = fuzzyFilter(LOCAL_PLACES, name, (p) => [p.title, p.subtitle], 1);
-        if (localHit.length > 0) {
-          const p = localHit[0].item;
-          return { id: p.id, title: p.title, subtitle: p.subtitle, latitude: p.latitude, longitude: p.longitude };
-        }
         const params = new URLSearchParams({
           q: name,
           format: 'json',

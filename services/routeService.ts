@@ -5,8 +5,6 @@ import type { JeepneyRoute, RouteCoord, StopPoint } from '../types/routes';
 const CACHE_KEY = '@para_routes_cache';
 const CACHE_TTL_MS = 1000 * 60 * 60; // 1 hour
 
-type RouteSource = 'supabase' | 'cache' | 'bundled';
-
 interface CachedData {
   routes: JeepneyRoute[];
   cachedAt: number;
@@ -46,37 +44,7 @@ function toJeepneyRoute(
   };
 }
 
-/** Parse bundled JSON the same way the old hooks did. */
-function parseBundledRoutes(data: any): JeepneyRoute[] {
-  return (data.routes || [])
-    .filter((r: any) => r.path?.length >= 2)
-    .map((r: any) => {
-      const coordinates: RouteCoord[] = r.path.map(([lng, lat]: [number, number]) => ({
-        latitude: lat,
-        longitude: lng,
-      }));
-
-      const stops: StopPoint[] = (r.stops || []).map((s: any, idx: number) => ({
-        coordinate: { latitude: s.lat, longitude: s.lng },
-        type: idx === 0 || idx === (r.stops.length - 1) ? 'terminal' as const : 'stop' as const,
-        label: s.name,
-      }));
-
-      return {
-        properties: {
-          code: r.code,
-          name: r.name,
-          description: r.description,
-          type: r.type,
-          fare: r.fare,
-          status: r.status,
-          operator: r.operator || '',
-        },
-        coordinates,
-        stops,
-      };
-    });
-}
+type RouteSource = 'supabase' | 'cache';
 
 /** Fetch all active routes + their stops from Supabase. */
 export async function fetchRoutesFromSupabase(): Promise<JeepneyRoute[]> {
@@ -140,10 +108,9 @@ export async function cacheRoutes(routes: JeepneyRoute[]): Promise<void> {
 }
 
 /**
- * Load routes with a 3-tier fallback strategy:
+ * Load routes with a 2-tier fallback strategy:
  *   1. Supabase (live data)
  *   2. AsyncStorage cache (offline / Supabase down)
- *   3. Bundled routes.json (first launch with no network)
  */
 export async function loadRoutes(): Promise<{ routes: JeepneyRoute[]; source: RouteSource }> {
   // 1. Try Supabase
@@ -169,14 +136,6 @@ export async function loadRoutes(): Promise<{ routes: JeepneyRoute[]; source: Ro
     // fall through
   }
 
-  // 3. Fallback to bundled JSON
-  try {
-    const bundled = require('../data/routes.json');
-    const routes = parseBundledRoutes(bundled);
-    console.log(`[routeService] Loaded ${routes.length} routes from bundled JSON`);
-    return { routes, source: 'bundled' };
-  } catch (err) {
-    console.warn('[routeService] Bundled JSON fallback failed:', err);
-    return { routes: [], source: 'bundled' };
-  }
+  console.warn('[routeService] No routes available from Supabase or cache');
+  return { routes: [], source: 'cache' };
 }

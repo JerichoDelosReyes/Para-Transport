@@ -5,11 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
-import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
+import { useRoutes } from '../../hooks/useRoutes';
+import type { JeepneyRoute } from '../../types/routes';
 import { useStore } from '../../store/useStore';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
 import { ROUTE_COLORS, ROUTE_LABELS } from '../../constants/routeVisuals';
-import { getRouteDisplayRef, MAP_ENABLED_ROUTE_CODES } from '../../constants/routeCatalog';
 
 const FILTER_MODES = ['All', 'Jeepney', 'Tricycle', 'Bus'] as const;
 const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> = {
@@ -31,7 +31,7 @@ function normalizeGpxRoute(r: JeepneyRoute) {
     id: r.properties.code,
     type: r.properties.type,
     color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
-    ref: getRouteDisplayRef(r.properties.code, r.properties.code),
+    ref: r.properties.code,
     name: r.properties.name,
     from: r.stops[0]?.label || '',
     to: r.stops[r.stops.length - 1]?.label || '',
@@ -69,11 +69,11 @@ export default function RoutesScreen() {
     return () => task.cancel();
   }, []);
 
-  const { routes: gpxRoutes, loading: gpxLoading } = useJeepneyRoutes();
+  const { routes: transitDataRoutes, loading: routesLoading } = useRoutes();
 
   const verifiedRoutes = useMemo(
-    () => gpxRoutes.map(normalizeGpxRoute),
-    [gpxRoutes]
+    () => transitDataRoutes.map(normalizeGpxRoute),
+    [transitDataRoutes]
   );
 
   const filteredVerifiedRoutes = useMemo(() => {
@@ -98,11 +98,6 @@ export default function RoutesScreen() {
   const totalTransitCount = filteredVerifiedRoutes.length;
 
   const handleTransitRoutePress = (route: any) => {
-    const isMapEnabled = MAP_ENABLED_ROUTE_CODES.includes(route.id as any);
-    if (!isMapEnabled) {
-      Alert.alert('UI Only', 'This route is visible in Routes, but map implementation is not enabled yet.');
-      return;
-    }
     setSelectedTransitRoute(route);
     router.navigate('/(tabs)');
   };
@@ -157,7 +152,7 @@ export default function RoutesScreen() {
               </ScrollView>
             </View>
 
-            {(!isReady || gpxLoading) ? (
+            {(!isReady || routesLoading) ? (
               <View style={styles.skeletonContainer}>
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <View key={i} style={styles.skeletonCard} />

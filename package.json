@@ -7,7 +7,6 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "import-gpx": "node scripts/importGpx.js",
     "supabase:types": "supabase gen types typescript --project-id $PROJECT_ID > types/supabase.ts"
   },
   "dependencies": {
@@ -56,7 +55,6 @@
     "@svgr/plugin-jsx": "^8.1.0",
     "@types/react": "~19.1.10",
     "babel-preset-expo": "~54.0.10",
-    "fast-xml-parser": "^5.5.6",
     "react-native-svg-transformer": "^1.5.3",
     "supabase": "^2.81.3",
     "typescript": "~5.9.2"
