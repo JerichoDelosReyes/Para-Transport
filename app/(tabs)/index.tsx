@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import MapView, { Marker, Polyline, Callout } from 'react-native-maps';
+import MapView, { Marker, Polyline, Callout, LongPressEvent } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
@@ -555,6 +555,31 @@ export default function HomeScreen() {
     }
   }, [currentLocation, transitDataRoutes]);
 
+  const handleMapLongPress = useCallback(async (event: LongPressEvent) => {
+    if (isRouting) return;
+
+    const { coordinate } = event.nativeEvent;
+    if (
+      coordinate.latitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLatitude ||
+      coordinate.latitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLatitude ||
+      coordinate.longitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLongitude ||
+      coordinate.longitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLongitude
+    ) {
+      Alert.alert('Out of Range', 'Please choose a destination inside the Philippines map area.');
+      return;
+    }
+
+    const destinationPlace: PlaceResult = {
+      id: `pin-${Date.now()}`,
+      title: 'Dropped Pin',
+      subtitle: `${coordinate.latitude.toFixed(5)}, ${coordinate.longitude.toFixed(5)}`,
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude,
+    };
+
+    await handleSearchSelectRoute(null, destinationPlace);
+  }, [handleSearchSelectRoute, isRouting]);
+
   // Automatically process pending route searches (e.g. from Saved routes page)
   useEffect(() => {
     const processPendingSearch = async () => {
@@ -1038,6 +1063,7 @@ export default function HomeScreen() {
         showsCompass={false}
         onMapReady={() => setIsMapLoaded(true)}
         onRegionChangeComplete={handleRegionChangeComplete}
+        onLongPress={handleMapLongPress}
         onTouchStart={() => {
           setIsMapInteracted(true);
           // Disable auto-follow when user touches map during simulation
