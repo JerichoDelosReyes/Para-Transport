@@ -11,7 +11,7 @@ type BroadcastMessage = {
   id: string;
   title: string;
   message: string;
-  type: 'info' | 'warning' | 'alert';
+  type: 'info' | 'warning' | 'alert' | 'critical';
   is_active: boolean;
 };
 
@@ -125,13 +125,15 @@ export function GlobalBroadcast() {
   const bgColors: Record<string, string> = {
     info: 'rgba(10, 34, 64, 0.6)', // COLORS.navy with opacity
     warning: 'rgba(245, 158, 11, 0.65)',
-    alert: 'rgba(239, 68, 68, 0.65)',
+    alert: 'rgba(220, 38, 38, 0.65)',
+    critical: 'rgba(185, 28, 28, 0.75)',
   };
 
   const icons: Record<string, any> = {
     info: 'information-circle',
     warning: 'warning',
     alert: 'alert-circle',
+    critical: 'skull',
   };
 
   return (

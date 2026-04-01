@@ -11,7 +11,7 @@ type BroadcastMessage = {
   id: string;
   title: string;
   message: string;
-  type: 'info' | 'warning' | 'alert';
+  type: 'info' | 'warning' | 'alert' | 'critical';
   is_active: boolean;
   created_at: string;
 };
@@ -40,13 +40,15 @@ export default function BroadcastsScreen() {
   const bgColors: Record<string, string> = {
     info: 'rgba(10, 34, 64, 0.6)',
     warning: 'rgba(245, 158, 11, 0.65)',
-    alert: 'rgba(239, 68, 68, 0.65)',
+    alert: 'rgba(220, 38, 38, 0.65)',
+    critical: 'rgba(185, 28, 28, 0.75)',
   };
 
   const icons: Record<string, any> = {
     info: 'information-circle',
     warning: 'warning',
     alert: 'alert-circle',
+    critical: 'skull',
   };
 
   return (
@@ -55,7 +57,7 @@ export default function BroadcastsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
         </TouchableOpacity>
-        <Text style={styles.title}>RECENT BROADCASTS</Text>
+        <Text style={styles.title}>BROADCASTS</Text>
         <View style={{ width: 44 }} />
       </View>
 
