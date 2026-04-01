@@ -409,6 +409,54 @@
         "Pwede ko ring i-compute ang expected fare mo para sa rutang ito.",
         "Kung kailangan, mabibigyan din kita ng fare at transfer tips para dito."
       ]
+    },
+    "landmarkListIntro": {
+      "en": [
+        "Here are the landmarks and stops currently available in the route data:",
+        "I checked the loaded routes, and these are the available landmarks/stops:",
+        "Great question. These are the landmarks and stops I can see right now:"
+      ],
+      "tl": [
+        "Narito ang mga landmark at stops na available ngayon sa route data:",
+        "Na-check ko ang loaded routes, at ito ang mga available na landmarks/stops:",
+        "Magandang tanong. Ito ang mga landmark at stop na nakikita ko ngayon:"
+      ]
+    },
+    "landmarkRouteIntro": {
+      "en": [
+        "For route {route}, these are the landmarks/stops I can see:",
+        "On route {route}, here are the available stops and landmarks:",
+        "I checked route {route}. These are the listed landmarks/stops:"
+      ],
+      "tl": [
+        "Para sa route {route}, ito ang mga landmark/stops na nakikita ko:",
+        "Sa route {route}, narito ang available na stops at landmarks:",
+        "Na-check ko ang route {route}. Ito ang listed na landmarks/stops:"
+      ]
+    },
+    "landmarkNoData": {
+      "en": [
+        "I do not have enough landmark data for that route yet. Try asking for all available landmarks so I can list what is loaded now.",
+        "I am not seeing stop/landmark entries for that exact route yet. You can ask me for currently available landmarks.",
+        "No clear landmark records yet for that route. I can show all loaded landmarks instead."
+      ],
+      "tl": [
+        "Wala pa akong sapat na landmark data para sa route na yan. Pwede mong hingin ang lahat ng available landmarks para ma-list ko ang loaded ngayon.",
+        "Hindi ko pa makita ang eksaktong stop/landmark entries para sa route na yan. Pwede kitang bigyan ng currently available landmarks.",
+        "Wala pang malinaw na landmark records para sa route na yan. Pero pwede kong ipakita ang lahat ng loaded landmarks."
+      ]
+    },
+    "landmarkListOutro": {
+      "en": [
+        "If you want, I can filter this list by a specific route code or destination.",
+        "I can narrow this down for a specific route if you share the route name or code.",
+        "You can send a destination next, and I will align landmarks with route guidance."
+      ],
+      "tl": [
+        "Kung gusto mo, pwede kong i-filter ang list na ito gamit ang specific route code o destination.",
+        "Pwede ko itong paliitin sa isang route lang kung ibibigay mo ang route name o code.",
+        "Pwede kang mag-send ng destination next para mai-align ko ang landmarks sa route guidance."
+      ]
     }
   },
   "appGuides": [

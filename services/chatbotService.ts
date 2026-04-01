@@ -1,6 +1,7 @@
 import datasetJson from '../data/chatbot-dataset.json';
 import type { JeepneyRoute } from '../types/routes';
 import { findRoutesForDestination, rankRoutes } from './routeSearch';
+import { BADGES, type Badge } from '../constants/badges';
 
 export type BotLanguage = 'en' | 'tl';
 
@@ -89,6 +90,10 @@ type DatasetShape = {
     pinAcknowledgement: LocalizedVariants;
     routeFoundIntro: LocalizedVariants;
     routeSummaryOutro: LocalizedVariants;
+    landmarkListIntro: LocalizedVariants;
+    landmarkRouteIntro: LocalizedVariants;
+    landmarkNoData: LocalizedVariants;
+    landmarkListOutro: LocalizedVariants;
   };
   appGuides: DatasetAppGuide[];
   builderAnswer: string;
@@ -129,6 +134,12 @@ for (const place of dataset.places) {
   for (const alias of place.aliases) {
     aliasIndex.push({ alias: normalizeText(alias), place });
   }
+}
+
+const badgeAliasIndex: Array<{ alias: string; badge: Badge }> = [];
+for (const badge of BADGES) {
+  badgeAliasIndex.push({ alias: normalizeText(badge.name), badge });
+  badgeAliasIndex.push({ alias: normalizeText(badge.id.replace(/_/g, ' ')), badge });
 }
 
 const TAGALOG_HINTS = [
@@ -441,6 +452,14 @@ function hasPinIntent(normalized: string): boolean {
   return /(pin|pinned|pinpoint|drop pin|pin location)/.test(normalized);
 }
 
+function hasLandmarkIntent(normalized: string): boolean {
+  return /(landmark|landmarks|stops|stop list|terminal list|hintuan|palatandaan|anong stop|anong landmark|available stops)/.test(normalized);
+}
+
+function hasAchievementIntent(normalized: string): boolean {
+  return /(achievement|achievements|badge|badges|unlock|how to get|paano makuha|route rookie|path explorer|urban navigator|streak)/.test(normalized);
+}
+
 function hasTriviaIntent(normalized: string): boolean {
   return /(trivia|fun fact|did you know|alam mo ba|fact tungkol|fact about|random fact|kwento trivia|trivia naman)/.test(normalized);
 }
@@ -510,6 +529,215 @@ function routeResponseText(
   key: keyof DatasetShape['routeResponses'],
 ): string {
   return formatForChatDisplay(pickLocalized(dataset.routeResponses[key], language));
+}
+
+function findBadgeMention(normalized: string): Badge | null {
+  let bestBadge: Badge | null = null;
+  let bestScore = 0;
+
+  for (const item of badgeAliasIndex) {
+    if (!item.alias) continue;
+    if (!hintMatches(normalized, item.alias)) continue;
+
+    const score = item.alias.length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestBadge = item.badge;
+    }
+  }
+
+  return bestBadge;
+}
+
+function badgeRequirementTl(badge: Badge): string {
+  const desc = badge.description.toLowerCase();
+  let m: RegExpMatchArray | null;
+
+  if (desc.includes('complete your first route trip')) return 'Kumpletuhin ang unang route trip mo.';
+  m = desc.match(/^use (\d+) different routes/);
+  if (m) return `Gumamit ng ${m[1]} na magkakaibang ruta.`;
+  m = desc.match(/^complete (\d+) trips?/);
+  if (m) return `Kumpletuhin ang ${m[1]} na trips.`;
+  m = desc.match(/^travel across (\d+) different cities/);
+  if (m) return `Makabiyahe sa ${m[1]} magkakaibang lungsod.`;
+  m = desc.match(/^travel a total of (\d+) km/);
+  if (m) return `Umabot sa kabuuang ${m[1]} km na biyahe.`;
+  m = desc.match(/^save .*?(\d+)/);
+  if (m) return `Makapag-ipon o makatipid ng total na ${m[1]}.`;
+  m = desc.match(/^maintain a (\d+)-day streak/);
+  if (m) return `Panatilihin ang ${m[1]}-day streak.`;
+  if (desc.includes('consecutive days')) return 'Gamitin ang app nang sunod-sunod na araw ayon sa requirement.';
+  if (desc.includes('fare calculator')) return 'Gamitin ang fare calculator ayon sa target count.';
+  if (desc.includes('compare')) return 'Mag-compare ng routes sa iisang session ayon sa target count.';
+  if (desc.includes('terminals')) return 'Bumisita sa required na bilang ng magkakaibang terminals.';
+  if (desc.includes('stops')) return 'Bumisita sa required na bilang ng unique stops.';
+  return `Sundin ang requirement na ito: ${badge.description}`;
+}
+
+function badgeTip(language: BotLanguage, badge: Badge): string {
+  const d = badge.description.toLowerCase();
+
+  if (language === 'tl') {
+    if (d.includes('streak') || d.includes('consecutive days')) {
+      return 'Tip: Mag-open at gumamit ng app araw-araw para tuloy-tuloy ang streak progress.';
+    }
+    if (d.includes('distance') || d.includes('km')) {
+      return 'Tip: Pumili ng mas mahahabang ruta para mas mabilis umakyat ang distance progress.';
+    }
+    if (d.includes('fare') || d.includes('budget') || d.includes('save')) {
+      return 'Tip: Gamitin ang fare tools at cheapest route options para ma-hit ang finance-related badges.';
+    }
+    if (d.includes('map')) {
+      return 'Tip: Buksan ang map screen nang mas madalas habang nagpa-plano ng biyahe.';
+    }
+    if (d.includes('compare') || d.includes('details')) {
+      return 'Tip: I-review muna ang route options/details bago pumili para ma-track ang badge na ito.';
+    }
+    return 'Tip: Sundin lang ang required activity sa bawat biyahe at regular na gamitin ang app.';
+  }
+
+  if (d.includes('streak') || d.includes('consecutive days')) {
+    return 'Tip: Open and use the app daily to keep your streak progress active.';
+  }
+  if (d.includes('distance') || d.includes('km')) {
+    return 'Tip: Pick longer routes to increase distance progress faster.';
+  }
+  if (d.includes('fare') || d.includes('budget') || d.includes('save')) {
+    return 'Tip: Use fare tools and cheapest-route options to progress finance-related badges.';
+  }
+  if (d.includes('map')) {
+    return 'Tip: Open the map screen more often while planning trips.';
+  }
+  if (d.includes('compare') || d.includes('details')) {
+    return 'Tip: Review route options/details before selecting to progress this badge faster.';
+  }
+  return 'Tip: Keep completing the required activity consistently during your trips.';
+}
+
+function buildAchievementReply(language: BotLanguage, badge: Badge | null): string {
+  if (!badge) {
+    const sample = BADGES.slice(0, 8).map((b) => b.name).join(', ');
+    if (language === 'tl') {
+      return [
+        'Pwede kitang tulungan sa badge achievements.',
+        `Halimbawa ng pwede mong itanong: ${sample}.`,
+        'Sabihin mo lang ang exact badge name (hal. Route Rookie) para ma-explain ko kung paano ito makuha.',
+      ].join('\n\n');
+    }
+
+    return [
+      'I can help explain badge achievements.',
+      `Examples you can ask: ${sample}.`,
+      'Just send the exact badge name (for example, Route Rookie), and I will explain how to unlock it.',
+    ].join('\n\n');
+  }
+
+  if (language === 'tl') {
+    return [
+      `Para ma-unlock ang ${badge.name}, ito ang kailangan mong gawin:`,
+      `Requirement: ${badgeRequirementTl(badge)}`,
+      `Target: ${badge.goal}`,
+      badgeTip(language, badge),
+    ].join('\n\n');
+  }
+
+  return [
+    `To unlock ${badge.name}, here is the requirement:`,
+    `Requirement: ${badge.description}`,
+    `Target: ${badge.goal}`,
+    badgeTip(language, badge),
+  ].join('\n\n');
+}
+
+function uniqueText(values: string[]): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const raw of values) {
+    const value = raw.trim();
+    if (!value) continue;
+    const key = normalizeText(value);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(value);
+  }
+
+  return output;
+}
+
+function routeLabel(route: JeepneyRoute): string {
+  const code = route.properties.code?.trim();
+  const name = route.properties.name?.trim();
+  if (code && name) return `${code} (${name})`;
+  return code || name || 'Selected route';
+}
+
+function findMentionedRoute(normalized: string, routes: JeepneyRoute[]): JeepneyRoute | null {
+  let best: JeepneyRoute | null = null;
+  let bestScore = 0;
+
+  for (const route of routes) {
+    const candidates = [route.properties.code, route.properties.name]
+      .filter((value): value is string => Boolean(value && value.trim()))
+      .map((value) => normalizeText(value));
+
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      if (!hintMatches(normalized, candidate)) continue;
+      if (candidate.length > bestScore) {
+        bestScore = candidate.length;
+        best = route;
+      }
+    }
+  }
+
+  return best;
+}
+
+function buildLandmarkReply(language: BotLanguage, normalized: string, routes: JeepneyRoute[]): string {
+  const mentionedRoute = findMentionedRoute(normalized, routes);
+
+  if (mentionedRoute) {
+    const routeStops = uniqueText((mentionedRoute.stops || []).map((stop) => stop.label));
+    if (routeStops.length === 0) {
+      return routeResponseText(language, 'landmarkNoData');
+    }
+
+    const intro = template(routeResponseText(language, 'landmarkRouteIntro'), {
+      route: routeLabel(mentionedRoute),
+    });
+    const shown = routeStops.slice(0, 18);
+    const rest = routeStops.length - shown.length;
+    const numbered = shown.map((name, index) => `${index + 1}. ${name}`).join('\n');
+    const more = rest > 0
+      ? (language === 'tl' ? `\n... at ${rest} pang stops.` : `\n... and ${rest} more stops.`)
+      : '';
+
+    return [intro, `${numbered}${more}`, routeResponseText(language, 'landmarkListOutro')].join('\n\n');
+  }
+
+  const routeStops = uniqueText(
+    routes.flatMap((route) => (route.stops || []).map((stop) => stop.label)),
+  );
+  const fallbackPlaces = uniqueText(dataset.places.map((place) => place.name));
+  const allLandmarks = routeStops.length > 0 ? routeStops : fallbackPlaces;
+
+  if (allLandmarks.length === 0) {
+    return routeResponseText(language, 'landmarkNoData');
+  }
+
+  const shown = allLandmarks.slice(0, 20);
+  const rest = allLandmarks.length - shown.length;
+  const numbered = shown.map((name, index) => `${index + 1}. ${name}`).join('\n');
+  const more = rest > 0
+    ? (language === 'tl' ? `\n... at ${rest} pang landmarks/stops.` : `\n... and ${rest} more landmarks/stops.`)
+    : '';
+
+  return [
+    routeResponseText(language, 'landmarkListIntro'),
+    `${numbered}${more}`,
+    routeResponseText(language, 'landmarkListOutro'),
+  ].join('\n\n');
 }
 
 function isInScope(normalized: string): boolean {
@@ -746,7 +974,7 @@ async function callGroqFallback(message: string, language: BotLanguage): Promise
         {
           role: 'system',
           content:
-            `You are Jeepie, Para app's customer support assistant. Only answer about commuting, fares, jeepneys, tricycles, transit routes, destinations, and app usage. Always acknowledge the user's request first in one short sentence, then provide the resolution or next best step. If question is outside this scope, respond exactly with: ${outOfScopeMsg}. Respond in ${requestedLanguage}. Keep responses friendly, practical, and concise.`,
+            `You are Jeepie, Para app's customer support assistant. Only answer about commuting, fares, jeepneys, tricycles, transit routes, destinations, and app usage. If question is outside this scope, respond exactly with: ${outOfScopeMsg}. Respond in ${requestedLanguage}. Keep responses friendly, practical, concise, and focused on practical next steps. Return only the response body in 1-2 short paragraphs with no greeting and no sign-off because the app wraps your output.`,
         },
         {
           role: 'user',
@@ -823,6 +1051,25 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   if (matchedGuide && (!hasRouteIntent(normalized) || !hasDestinationMention) && !hasFareIntent(normalized)) {
     return {
       text: composeSupportReply(language, pickAppGuideReply(matchedGuide, language), { includeClosing: true }),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasAchievementIntent(normalized)) {
+    const mentionedBadge = findBadgeMention(normalized);
+    return {
+      text: composeSupportReply(language, buildAchievementReply(language, mentionedBadge), { includeClosing: true }),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasLandmarkIntent(normalized)) {
+    return {
+      text: composeSupportReply(language, buildLandmarkReply(language, normalized, routes), { includeClosing: true }),
       language,
       state: {},
       usedGroq: false,
@@ -1019,7 +1266,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     const groqReply = await callGroqFallback(message, language);
     if (groqReply) {
       return {
-        text: groqReply,
+        text: composeSupportReply(language, formatForChatDisplay(groqReply), { includeClosing: true }),
         language,
         state: {},
         usedGroq: true,
