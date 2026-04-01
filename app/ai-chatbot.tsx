@@ -9,6 +9,7 @@ import { COLORS } from "../constants/theme";
 import { useRoutes } from "../hooks/useRoutes";
 import { getChatbotReply, type ChatbotConversationState } from "../services/chatbotService";
 import { useStore } from "../store/useStore";
+import { supabase } from '../config/supabaseClient';
 
 const CHATBOT_STATES = {
   IDLE: require("../assets/AIChatbot/IDLE.png"),
@@ -203,6 +204,23 @@ export default function AIChatbotScreen() {
 
       setMessages((prev) => [...prev, aiResponse]);
       setCurrentState("SUCCESS");
+
+      // Phase 3: Insert log into Supabase if user is authenticated
+      // Wrapped in an async IIFE to prevent ANY database errors from crashing the UI response
+      if (sessionMode === "auth" && user?.id) {
+        (async () => {
+          try {
+            const { error } = await supabase.from("chatbot_logs").insert({
+              user_id: user.id,
+              query: messageText, // <-- updated from 'message' to 'query'
+              response: response.text,
+            });
+            if (error) console.log("Failed to log chatbot interaction:", error);
+          } catch (e) {
+            console.log("Exception logging chatbot interaction:", e);
+          }
+        })();
+      }
     } catch {
       setCurrentState("ERROR");
       setMessages((prev) => [

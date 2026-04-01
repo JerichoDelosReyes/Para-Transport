@@ -7,7 +7,7 @@ import { CommonActions } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { useRecentSearches } from '../hooks/useRecentSearches';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
-import { signOut } from '../services/authService';
+import { signOut, logUserAction } from '../services/authService';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -44,6 +44,7 @@ export default function SettingsScreen() {
         onPress: async () => {
           try {
             if (!isGuestAccount) {
+              if (user?.id) await logUserAction(user.id, 'Logged out');
               await signOut();
             } else {
               // Guest-mode data is local only; clear it on logout.

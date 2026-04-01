@@ -59,6 +59,8 @@ interface StoreState {
   hasHydrated: boolean;
   badgesData: BadgeData[];
   setBadgesData: (badges: BadgeData[]) => void;
+  fareMatrices: any[];
+  setFareMatrices: (fares: any[]) => void;
   insightDismissed: boolean;
   selectedTransitRoute: any | null;
   pendingRouteSearch: { origin: any; destination: any } | null;
@@ -100,6 +102,8 @@ export const useStore = create<StoreState>()(
       hasHydrated: false,
       badgesData: [],
       setBadgesData: (badgesData) => set({ badgesData }),
+      fareMatrices: [],
+      setFareMatrices: (fareMatrices) => set({ fareMatrices }),
       insightDismissed: false,
       selectedTransitRoute: null,
       pendingRouteSearch: null,

@@ -23,7 +23,8 @@ import {
   isEmailValid,
   isPasswordStrong,
   passwordValidationMessage,
-  mapRegisterError
+  mapRegisterError,
+  logUserAction
 } from '../services/authService';
 import { useStore } from '../store/useStore';
 
@@ -127,6 +128,10 @@ export default function RegisterScreen() {
     try {
       const data = await verifyEmailOtp(email, otp);
       
+      if (data?.user?.id) {
+        await logUserAction(data.user.id, 'Registered new account');
+      }
+
       beginAuthSession({
         id: data?.user?.id,
           full_name: data?.user?.user_metadata?.display_name || name,

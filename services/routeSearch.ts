@@ -1,3 +1,4 @@
+import { useStore } from '../store/useStore';
 import type { JeepneyRoute, RouteCoord } from '../types/routes';
 
 /** A single leg of a transit journey */
@@ -78,44 +79,28 @@ const MAX_NEIGHBOR_CANDIDATES = 28;
 const MIN_LEG_DISTANCE_KM = 0.05;
 const MAX_TOTAL_WALK_KM = 3.2;
 
-/**
- * LTFRB Jeepney Fare Matrix (PUJ – Traditional)
- * First 4 km = P13.00, then P1.80 per succeeding km
- */
-const FARE_TABLE: [number, number][] = [
-  [4, 13.0],
-  [5, 14.75],
-  [6, 16.5],
-  [7, 18.25],
-  [8, 20.0],
-  [9, 21.75],
-  [10, 23.5],
-  [11, 25.25],
-  [12, 27.0],
-  [13, 28.75],
-  [14, 30.5],
-  [15, 32.25],
-  [16, 34.0],
-  [17, 35.75],
-  [18, 37.5],
-  [19, 39.25],
-  [20, 41.0],
-  [21, 42.75],
-  [22, 44.5],
-  [23, 46.25],
-  [24, 48.0],
-  [25, 49.75],
-];
+function calculateFare(distanceKm: number, vehicleType: string = 'jeepney'): number {
+  const fareMatrices = useStore.getState().fareMatrices || [];
+  let baseFare = 13.0;
+  let baseDistance = 4.0;
+  let perKmRate = 1.8;
 
-function calculateFare(distanceKm: number): number {
-  if (distanceKm <= 4) return 13.0;
+  // Map 'uv' to 'uv_express' if needed based on the Supabase payload
+  const normalizedType = vehicleType === 'uv' ? 'uv_express' : vehicleType;
+  
+  const matrix = fareMatrices.find((m: any) => m.vehicle_type === normalizedType);
+  if (matrix) {
+    baseFare = Number(matrix.base_fare) || baseFare;
+    baseDistance = Number(matrix.base_distance) || baseDistance;
+    perKmRate = Number(matrix.per_km_rate) || perKmRate;
+  }
 
-  const rounded = Math.ceil(distanceKm);
-  const entry = FARE_TABLE.find(([km]) => km === rounded);
-  if (entry) return entry[1];
+  if (distanceKm <= baseDistance) return baseFare;
 
-  const extraKm = distanceKm - 4;
-  const raw = 13.0 + extraKm * 1.8;
+  const extraKm = distanceKm - baseDistance;
+  const raw = baseFare + extraKm * perKmRate;
+
+  // Round up to nearest 0.25 (standard Philippine fare rounding)
   return Math.ceil(raw * 4) / 4;
 }
 
@@ -376,7 +361,7 @@ function buildLegFromAlong(route: JeepneyRoute, from: AlongPoint, to: AlongPoint
     boardingPoint: { latitude: from.latitude, longitude: from.longitude },
     alightingPoint: { latitude: to.latitude, longitude: to.longitude },
     distanceKm,
-    estimatedFare: calculateFare(distanceKm),
+    estimatedFare: calculateFare(distanceKm, route?.properties?.type || 'jeepney'),
     estimatedMinutes: Math.ceil((distanceKm / AVG_SPEED_KMH) * 60),
   };
 }
