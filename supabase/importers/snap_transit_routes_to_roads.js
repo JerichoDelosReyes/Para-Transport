@@ -13,10 +13,10 @@ const TABLES = [
   { routeTable: 'uv_express_routes', idCol: 'id', pathCol: 'path_data', labelCol: 'label' },
 ];
 
-const MAX_SOURCE_POINTS = 280;
 const MAX_MATCH_INPUT_POINTS = 90;
 const REQUEST_DELAY_MS = 90;
-const MAX_CONTIGUOUS_GAP_METERS = 180;
+const MIN_MATCH_CONFIDENCE = 0.28;
+const MAX_SAFE_JUMP_METERS = 420;
 
 function loadDotEnv(envPath) {
   if (!fs.existsSync(envPath)) return;
@@ -51,18 +51,6 @@ function sanitizePath(rawCoords) {
     if (!prev || prev[0] !== lon || prev[1] !== lat) out.push([lon, lat]);
   }
   return out;
-}
-
-function sampleCoordinates(coords, maxPoints) {
-  if (coords.length <= maxPoints) return coords;
-
-  const sampled = [];
-  const step = (coords.length - 1) / (maxPoints - 1);
-  for (let i = 0; i < maxPoints - 1; i++) {
-    sampled.push(coords[Math.round(i * step)]);
-  }
-  sampled.push(coords[coords.length - 1]);
-  return sampled;
 }
 
 function chunkWithOverlap(coords, chunkSize) {
@@ -106,27 +94,6 @@ function distMeters(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-function splitByGap(coords, maxGapMeters) {
-  if (!Array.isArray(coords) || coords.length < 2) return [];
-
-  const segments = [];
-  let current = [coords[0]];
-
-  for (let i = 1; i < coords.length; i++) {
-    const prev = coords[i - 1];
-    const next = coords[i];
-    if (distMeters(prev, next) > maxGapMeters) {
-      if (current.length >= 2) segments.push(current);
-      current = [next];
-      continue;
-    }
-    current.push(next);
-  }
-
-  if (current.length >= 2) segments.push(current);
-  return segments;
-}
-
 function pathLengthMeters(coords) {
   if (!Array.isArray(coords) || coords.length < 2) return 0;
   let total = 0;
@@ -134,6 +101,16 @@ function pathLengthMeters(coords) {
     total += distMeters(coords[i - 1], coords[i]);
   }
   return total;
+}
+
+function maxStepMeters(coords) {
+  if (!Array.isArray(coords) || coords.length < 2) return 0;
+  let max = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const d = distMeters(coords[i - 1], coords[i]);
+    if (d > max) max = d;
+  }
+  return max;
 }
 
 function pickLongestSegment(segments) {
@@ -182,53 +159,57 @@ async function osrmMatch(coords) {
     return null;
   }
 
-  return sanitizePath(best.geometry.coordinates);
-}
-
-async function osrmRoute(coords) {
-  if (coords.length < 2) return null;
-
-  const anchors = sampleCoordinates(coords, Math.min(24, coords.length));
-  const coordStr = anchors.map((c) => `${c[0]},${c[1]}`).join(';');
-  const params = new URLSearchParams({
-    geometries: 'geojson',
-    overview: 'full',
-    alternatives: 'false',
-    steps: 'false',
-  });
-
-  const url = `${OSRM_BASE}/route/v1/driving/${coordStr}?${params.toString()}`;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-
-  const data = await res.json();
-  const geometry = data?.routes?.[0]?.geometry?.coordinates;
-  if (!Array.isArray(geometry) || geometry.length < 2) return null;
-  return sanitizePath(geometry);
+  return {
+    coords: sanitizePath(best.geometry.coordinates),
+    confidence: Number(best.confidence || 0),
+  };
 }
 
 async function snapPathToRoads(rawCoords) {
   const cleaned = sanitizePath(rawCoords);
   if (cleaned.length < 2) return null;
 
-  const limited = sampleCoordinates(cleaned, MAX_SOURCE_POINTS);
-  const chunks = chunkWithOverlap(limited, MAX_MATCH_INPUT_POINTS);
+  const chunks = chunkWithOverlap(cleaned, MAX_MATCH_INPUT_POINTS);
   const snappedParts = [];
 
   for (const chunk of chunks) {
-    let snapped = await osrmMatch(chunk);
-    if (!snapped) snapped = await osrmRoute(chunk);
-    if (!snapped || snapped.length < 2) return null;
+    const matched = await osrmMatch(chunk);
+
+    // Preserve GPX intent: never reroute with shortest-path fallback.
+    // If map matching confidence is weak, keep original chunk geometry.
+    let snapped = chunk;
+    if (matched && matched.coords.length >= 2 && matched.confidence >= MIN_MATCH_CONFIDENCE) {
+      snapped = matched.coords;
+      snapped[0] = chunk[0];
+      snapped[snapped.length - 1] = chunk[chunk.length - 1];
+    }
+
+    if (!snapped || snapped.length < 2) {
+      snapped = chunk;
+    }
 
     snappedParts.push(snapped);
     await sleep(REQUEST_DELAY_MS);
   }
 
   const merged = mergePathParts(snappedParts);
-  const contiguous = splitByGap(merged, MAX_CONTIGUOUS_GAP_METERS);
-  const bestSegment = pickLongestSegment(contiguous);
-  if (!bestSegment || bestSegment.length < 2) return null;
-  return bestSegment;
+  if (merged.length < 2) return cleaned;
+
+  // If snapping created unstable jumps, keep original GPX geometry for this route.
+  if (maxStepMeters(merged) > MAX_SAFE_JUMP_METERS) {
+    return cleaned;
+  }
+
+  // Guard against severe truncation: keep GPX if snapped shape is too short.
+  const mergedLen = pathLengthMeters(merged);
+  const sourceLen = pathLengthMeters(cleaned);
+  if (sourceLen > 0 && mergedLen < sourceLen * 0.45) {
+    return cleaned;
+  }
+
+  merged[0] = cleaned[0];
+  merged[merged.length - 1] = cleaned[cleaned.length - 1];
+  return sanitizePath(merged);
 }
 
 async function main() {
