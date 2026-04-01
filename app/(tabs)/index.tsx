@@ -1832,10 +1832,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   dragHandle: {
-    width: 40,
+    width: 44,
     height: 5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(10,22,40,0.2)',
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
     marginBottom: 12,
   },
   sheetHeaderTitle: {
