@@ -227,6 +227,42 @@ function pickLocalized(variants: LocalizedVariants, language: BotLanguage): stri
   return pickRandom(options);
 }
 
+const SUPPORT_ACK_OPENERS: LocalizedVariants = {
+  en: [
+    'Thanks for reaching out. I understand what you need.',
+    'I hear you, and I am ready to help.',
+    'Absolutely, I can assist you with that.',
+  ],
+  tl: [
+    'Salamat sa pag-message. Naiintindihan ko ang concern mo.',
+    'Gets kita, at handa akong tumulong.',
+    'Sige, tutulungan kita dito.',
+  ],
+};
+
+const SUPPORT_CLOSERS: LocalizedVariants = {
+  en: [
+    'If you want, I can also help with your next question.',
+    'I am here if you need anything else for your commute.',
+    'Feel free to ask another route or fare question anytime.',
+  ],
+  tl: [
+    'Kung gusto mo, pwede pa kitang tulungan sa susunod mong tanong.',
+    'Nandito lang ako kung may iba ka pang commuting concern.',
+    'Chat ka lang ulit anytime para sa next route o fare question mo.',
+  ],
+};
+
+function composeSupportReply(
+  language: BotLanguage,
+  content: string,
+  options?: { includeClosing?: boolean },
+): string {
+  const opener = pickLocalized(SUPPORT_ACK_OPENERS, language);
+  const closing = options?.includeClosing ? ` ${pickLocalized(SUPPORT_CLOSERS, language)}` : '';
+  return `${opener} ${content}${closing}`.trim();
+}
+
 function template(message: string, replacements: Record<string, string>): string {
   let output = message;
   for (const [key, value] of Object.entries(replacements)) {
@@ -524,7 +560,7 @@ async function callGroqFallback(message: string, language: BotLanguage): Promise
         {
           role: 'system',
           content:
-            `You are Para app's transport assistant. Only answer about commuting, fares, jeepneys, tricycles, transit routes, destinations, and app usage. If question is outside this scope, respond exactly with: ${outOfScopeMsg}. Respond in ${requestedLanguage}. Keep responses friendly, practical, and concise.`,
+            `You are Jeepie, Para app's customer support assistant. Only answer about commuting, fares, jeepneys, tricycles, transit routes, destinations, and app usage. Always acknowledge the user's request first in one short sentence, then provide the resolution or next best step. If question is outside this scope, respond exactly with: ${outOfScopeMsg}. Respond in ${requestedLanguage}. Keep responses friendly, practical, and concise.`,
         },
         {
           role: 'user',
@@ -558,7 +594,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (!message) {
     return {
-      text: fallbackText(language, 'unknown'),
+      text: composeSupportReply(language, fallbackText(language, 'unknown')),
       language,
       state: currentState,
       usedGroq: false,
@@ -567,7 +603,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasBuilderIntent(normalized)) {
     return {
-      text: dataset.builderAnswer,
+      text: composeSupportReply(language, dataset.builderAnswer),
       language,
       state: {},
       usedGroq: false,
@@ -576,7 +612,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasFareNewsIntent(normalized)) {
     return {
-      text: pickFareNewsReply(language),
+      text: composeSupportReply(language, pickFareNewsReply(language)),
       language,
       state: {},
       usedGroq: false,
@@ -585,7 +621,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasTriviaIntent(normalized)) {
     return {
-      text: pickTrivia(language),
+      text: composeSupportReply(language, pickTrivia(language)),
       language,
       state: {},
       usedGroq: false,
@@ -605,7 +641,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
     if (!destination) {
       return {
-        text: fallbackText(language, 'missingDestination'),
+        text: composeSupportReply(language, fallbackText(language, 'missingDestination')),
         language,
         state: {},
         usedGroq: false,
@@ -619,7 +655,10 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
     if (!originCoordinate) {
       return {
-        text: template(fallbackText(language, 'askOrigin'), { destination: destination.name }),
+        text: composeSupportReply(
+          language,
+          template(fallbackText(language, 'askOrigin'), { destination: destination.name }),
+        ),
         language,
         state: { awaitingOriginForDestinationId: destination.id },
         usedGroq: false,
@@ -635,7 +674,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
     if (!originFromMessage && currentState.awaitingOriginForDestinationId && !request.currentLocation) {
       return {
-        text: fallbackText(language, 'unknownOrigin'),
+        text: composeSupportReply(language, fallbackText(language, 'unknownOrigin')),
         language,
         state: currentState,
         usedGroq: false,
@@ -645,13 +684,17 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     const estimate = estimateFare(originCoordinate, destination, routes, resolvedOriginPlace || undefined);
 
     return {
-      text: buildFareReply({
+      text: composeSupportReply(
         language,
-        originLabel,
-        destinationLabel: destination.name,
-        estimate,
-        usedGpsLocation: useGpsAsOrigin,
-      }),
+        buildFareReply({
+          language,
+          originLabel,
+          destinationLabel: destination.name,
+          estimate,
+          usedGpsLocation: useGpsAsOrigin,
+        }),
+        { includeClosing: true },
+      ),
       language,
       state: {},
       usedGroq: false,
@@ -721,7 +764,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
     if (!inScope) {
       return {
-        text: fallbackText(language, 'outOfScope'),
+        text: composeSupportReply(language, fallbackText(language, 'outOfScope')),
         language,
         state: {},
         usedGroq: false,
@@ -729,7 +772,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     }
 
   return {
-    text: fallbackText(language, 'unknown'),
+      text: composeSupportReply(language, fallbackText(language, 'unknown')),
     language,
     state: {},
     usedGroq: false,
