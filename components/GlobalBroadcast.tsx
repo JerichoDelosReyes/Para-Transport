@@ -158,7 +158,11 @@ export function GlobalBroadcast() {
         ]}
       >
         <View style={styles.contentRow} pointerEvents="auto">
-          <Ionicons name={icons[activeBroadcast.type] as any} size={28} color="#FFF" style={styles.icon} />
+          {activeBroadcast.type === 'critical' ? (
+            <Text style={[styles.icon, { color: '#FFF', fontSize: 28, fontWeight: '900', width: 28, textAlign: 'center' }]}>!!</Text>
+          ) : (
+            <Ionicons name={icons[activeBroadcast.type] as any} size={28} color="#FFF" style={styles.icon} />
+          )}
           <View style={styles.textContainer}>
             <Text style={styles.title}>{activeBroadcast.title}</Text>
             <Text style={styles.message}>{activeBroadcast.message}</Text>

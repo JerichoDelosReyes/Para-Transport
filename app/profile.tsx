@@ -60,11 +60,11 @@ export default function ProfileScreen() {
 
             <View style={styles.quickStatsRow}>
               <TouchableOpacity 
-                style={styles.quickStat}
+                style={[styles.quickStat, { flexDirection: 'row', gap: 6, alignItems: 'center' }]}
                 onPress={() => router.navigate('/broadcasts')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.quickStatValue}>Broadcasts</Text>
+                <Ionicons name="radio" size={24} color={COLORS.navy} />
               </TouchableOpacity>
 
               <View style={styles.quickStatDivider} />
