@@ -70,7 +70,11 @@ export default function BroadcastsScreen() {
           broadcasts.map((b) => (
             <View key={b.id} style={styles.cardWrapper}>
               <BlurView intensity={40} tint="dark" style={[styles.card, { backgroundColor: bgColors[b.type] || bgColors.info }]}>
-                <Ionicons name={icons[b.type] as any} size={28} color="#FFF" style={styles.icon} />
+                {b.type === 'critical' ? (
+                  <Text style={[styles.icon, { color: '#FFF', fontSize: 28, fontWeight: '900', width: 28, textAlign: 'center' }]}>!!</Text>
+                ) : (
+                  <Ionicons name={icons[b.type] as any} size={28} color="#FFF" style={styles.icon} />
+                )}
                 <View style={styles.textContainer}>
                   <Text style={styles.cardTitle}>{b.title}</Text>
                   <Text style={styles.cardMessage}>{b.message}</Text>
