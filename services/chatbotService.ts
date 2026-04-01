@@ -48,6 +48,11 @@ type DatasetTrivia = {
   tl: string;
 };
 
+type LocalizedVariants = {
+  en: string[];
+  tl: string[];
+};
+
 type DatasetShape = {
   farePolicy: {
     baseFarePhp: number;
@@ -60,13 +65,22 @@ type DatasetShape = {
   places: DatasetPlace[];
   farePairs: DatasetFarePair[];
   trivia: DatasetTrivia[];
+  triviaLeadIns: LocalizedVariants;
+  socialResponses: {
+    greetings: LocalizedVariants;
+    thanks: LocalizedVariants;
+    praise: LocalizedVariants;
+    userApology: LocalizedVariants;
+    acknowledgement: LocalizedVariants;
+  };
+  fareNews: LocalizedVariants;
   builderAnswer: string;
   fallbackMessages: {
-    outOfScope: { en: string; tl: string };
-    unknown: { en: string; tl: string };
-    missingDestination: { en: string; tl: string };
-    askOrigin: { en: string; tl: string };
-    unknownOrigin: { en: string; tl: string };
+    outOfScope: LocalizedVariants;
+    unknown: LocalizedVariants;
+    missingDestination: LocalizedVariants;
+    askOrigin: LocalizedVariants;
+    unknownOrigin: LocalizedVariants;
   };
 };
 
@@ -94,6 +108,11 @@ for (const place of dataset.places) {
 }
 
 const TAGALOG_HINTS = [
+  'kumusta',
+  'kamusta',
+  'kumutsa',
+  'kamutsa',
+  'musta',
   'magkano',
   'pamasahe',
   'papunta',
@@ -107,12 +126,31 @@ const TAGALOG_HINTS = [
   'sino',
   'gumawa',
   'pwede',
+  'puwede',
   'po',
+  'opo',
+  'oo',
+  'salamat',
+  'maraming salamat',
+  'pasensya',
+  'pasensiya',
+  'sige',
+  'cge',
+  'gege',
+  'ano',
+  'bakit',
+  'paano',
   'ako',
   'nasa',
 ];
 
 const ENGLISH_HINTS = [
+  'hi',
+  'hello',
+  'hey',
+  'good morning',
+  'good afternoon',
+  'good evening',
   'how much',
   'fare',
   'route',
@@ -127,7 +165,32 @@ const ENGLISH_HINTS = [
   'transport',
   'commute',
   'transit',
+  'thanks',
+  'thank you',
+  'sorry',
+  'please',
 ];
+
+const TAGALOG_SOCIAL_CUES = /\b(kumusta|kamusta|kumutsa|kamutsa|musta|salamat|pasensya|pasensiya|sige|cge|gege|opo|magandang)\b/;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hintMatches(normalized: string, token: string): boolean {
+  const normalizedToken = normalizeText(token);
+  if (!normalizedToken) return false;
+
+  if (normalizedToken.includes(' ')) {
+    return normalized.includes(normalizedToken);
+  }
+
+  return new RegExp(`\\b${escapeRegExp(normalizedToken)}\\b`).test(normalized);
+}
+
+function scoreHintMatches(normalized: string, hints: string[]): number {
+  return hints.reduce((count, token) => (hintMatches(normalized, token) ? count + 1 : count), 0);
+}
 
 function normalizeText(text: string): string {
   return text
@@ -141,9 +204,27 @@ function normalizeText(text: string): string {
 
 function detectLanguage(message: string): BotLanguage {
   const normalized = normalizeText(message);
-  const tlScore = TAGALOG_HINTS.reduce((count, token) => (normalized.includes(token) ? count + 1 : count), 0);
-  const enScore = ENGLISH_HINTS.reduce((count, token) => (normalized.includes(token) ? count + 1 : count), 0);
+  const tlScore = scoreHintMatches(normalized, TAGALOG_HINTS);
+  const enScore = scoreHintMatches(normalized, ENGLISH_HINTS);
+
+  if (TAGALOG_SOCIAL_CUES.test(normalized) && enScore <= tlScore + 1) {
+    return 'tl';
+  }
+
+  if (tlScore === enScore && tlScore > 0) {
+    return 'tl';
+  }
+
   return tlScore > enScore ? 'tl' : 'en';
+}
+
+function pickRandom<T>(items: T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function pickLocalized(variants: LocalizedVariants, language: BotLanguage): string {
+  const options = language === 'tl' ? variants.tl : variants.en;
+  return pickRandom(options);
 }
 
 function template(message: string, replacements: Record<string, string>): string {
@@ -259,16 +340,45 @@ function parseFareEndpoints(
 }
 
 function hasFareIntent(normalized: string): boolean {
-  return /(fare|pamasahe|magkano|bayad|how much|magkan[o0]|magkano po|how much fare)/.test(normalized);
+  return /(fare|pamasahe|magkano|bayad|how much|magkan[o0]|magkano po|how much fare|fare estimate|estimate fare|pamasahe papunta|pamasahe mula|how much should i pay)/.test(normalized);
 }
 
 function hasTriviaIntent(normalized: string): boolean {
-  return /(trivia|fun fact|did you know|alam mo ba|fact tungkol|fact about)/.test(normalized);
+  return /(trivia|fun fact|did you know|alam mo ba|fact tungkol|fact about|random fact|kwento trivia|trivia naman)/.test(normalized);
 }
 
 function hasBuilderIntent(normalized: string): boolean {
   return /(who (built|made|created)|sino (gumawa|bumuo|nag build|nagbuo)|developer|builders?)/.test(normalized)
     && /(para|app|application)/.test(normalized);
+}
+
+function hasFareNewsIntent(normalized: string): boolean {
+  return /(why.*fare|bakit.*pamasahe|tumaas.*pamasahe|fare (increase|hike)|oil price|fuel price|giyera|gyera|war|bakit.*14|from 13 to 14|13 to 14)/.test(normalized);
+}
+
+function hasGreetingIntent(normalized: string): boolean {
+  return /^(hi|hello|hey|yo|good morning|good afternoon|good evening|kumusta|kamusta|kumutsa|kamutsa|uy|musta|henlo)(\b|\s|!|\.)/.test(normalized)
+    || /\b(hi jeepie|hello jeepie|kumusta jeepie|kamusta jeepie|kumutsa jeepie|kamutsa jeepie|good day jeepie)\b/.test(normalized);
+}
+
+function hasThanksIntent(normalized: string): boolean {
+  return /\b(thanks|thank you|ty|salamat|maraming salamat|tenkyu)\b/.test(normalized);
+}
+
+function hasPraiseIntent(normalized: string): boolean {
+  return /\b(good job|great job|nice one|ang galing|galing mo|idol|solid mo|amazing|awesome|ang husay|best ka)\b/.test(normalized);
+}
+
+function hasUserApologyIntent(normalized: string): boolean {
+  return /\b(sorry|pasensya|pasensiya|my bad|patawad)\b/.test(normalized);
+}
+
+function hasAcknowledgementIntent(normalized: string): boolean {
+  return /\b(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po)\b/.test(normalized);
+}
+
+function hasCommuteTaskIntent(normalized: string): boolean {
+  return /(fare|pamasahe|route|ruta|destination|papunta|where|saan|how to go|paano pumunta|terminal|stop|transit|jeepney|tricycle|from|mula|galing|to |going to|trivia|fun fact|did you know|alam mo ba|app|application)/.test(normalized);
 }
 
 function isInScope(normalized: string): boolean {
@@ -351,23 +461,44 @@ function buildFareReply(params: {
 
   if (language === 'tl') {
     if (usedGpsLocation) {
-      return `Nakikita ko na nasa ${originLabel} ka ngayon. Puwede kang sumakay ng jeepney sa pinakamalapit na rutang ${estimate.routeHint} papuntang ${destinationLabel}. Tantyang layo ay ${estimate.distanceKm.toFixed(1)} km. Tantyang pamasahe ay ${formatPhp(estimate.normalFare)} para sa regular fare at ${formatPhp(estimate.discountedFare)} kung student, senior citizen, o PWD.`;
+      return `Sige, check natin. Nakikita ko na nasa ${originLabel} ka ngayon. Puwede kang sumakay ng jeepney sa pinakamalapit na rutang ${estimate.routeHint} papuntang ${destinationLabel}. Tantyang layo ay ${estimate.distanceKm.toFixed(1)} km. Tantyang pamasahe ay ${formatPhp(estimate.normalFare)} para sa regular fare at ${formatPhp(estimate.discountedFare)} kung student, senior citizen, o PWD. Ingat sa biyahe!`;
     }
 
-    return `Mula ${originLabel} papuntang ${destinationLabel}, puwede kang sumakay sa rutang ${estimate.routeHint}. Tantyang layo ay ${estimate.distanceKm.toFixed(1)} km. Tantyang pamasahe ay ${formatPhp(estimate.normalFare)} para sa regular fare at ${formatPhp(estimate.discountedFare)} kung student, senior citizen, o PWD.`;
+    return `Sure, ito ang estimate ko. Mula ${originLabel} papuntang ${destinationLabel}, puwede kang sumakay sa rutang ${estimate.routeHint}. Tantyang layo ay ${estimate.distanceKm.toFixed(1)} km. Tantyang pamasahe ay ${formatPhp(estimate.normalFare)} para sa regular fare at ${formatPhp(estimate.discountedFare)} kung student, senior citizen, o PWD.`;
   }
 
   if (usedGpsLocation) {
-    return `I'm seeing here that you are on ${originLabel} right now, you can ride a jeepney on the nearest jeepney route ${estimate.routeHint} going to ${destinationLabel}. Estimated distance is about ${estimate.distanceKm.toFixed(1)} km. Estimated fare is ${formatPhp(estimate.normalFare)} for normal fare and ${formatPhp(estimate.discountedFare)} if you are a student, senior citizen, or PWD.`;
+    return `Sure thing! I'm seeing here that you are on ${originLabel} right now. You can ride a jeepney on the nearest route ${estimate.routeHint} going to ${destinationLabel}. Estimated distance is about ${estimate.distanceKm.toFixed(1)} km. Estimated fare is ${formatPhp(estimate.normalFare)} for normal fare and ${formatPhp(estimate.discountedFare)} if you are a student, senior citizen, or PWD. Travel safe out there.`;
   }
 
-  return `From ${originLabel} to ${destinationLabel}, you can ride a jeepney on route ${estimate.routeHint}. Estimated distance is about ${estimate.distanceKm.toFixed(1)} km. Estimated fare is ${formatPhp(estimate.normalFare)} for normal fare and ${formatPhp(estimate.discountedFare)} if you are a student, senior citizen, or PWD.`;
+  return `Got you! From ${originLabel} to ${destinationLabel}, you can ride a jeepney on route ${estimate.routeHint}. Estimated distance is about ${estimate.distanceKm.toFixed(1)} km. Estimated fare is ${formatPhp(estimate.normalFare)} for normal fare and ${formatPhp(estimate.discountedFare)} if you are a student, senior citizen, or PWD.`;
 }
 
 function pickTrivia(language: BotLanguage): string {
-  const index = Math.floor(Math.random() * dataset.trivia.length);
-  const entry = dataset.trivia[index];
-  return language === 'tl' ? entry.tl : entry.en;
+  const entry = pickRandom(dataset.trivia);
+  const leadIn = pickLocalized(dataset.triviaLeadIns, language);
+  const fact = language === 'tl' ? entry.tl : entry.en;
+  const ending = language === 'tl'
+    ? pickRandom([
+      'Gusto mo pa ng isa pang trivia sa susunod?',
+      'Kung trip mo, may isa pa akong fun fact mamaya.',
+      'Sabihan mo lang ako kung gusto mo pa ng another trivia.',
+    ])
+    : pickRandom([
+      'Want another one after this?',
+      'If you like, I can share another fun fact next.',
+      'Just say the word if you want more trivia.',
+    ]);
+
+  return `${leadIn} ${fact} ${ending}`;
+}
+
+function pickSocialReply(language: BotLanguage, key: keyof DatasetShape['socialResponses']): string {
+  return pickLocalized(dataset.socialResponses[key], language);
+}
+
+function pickFareNewsReply(language: BotLanguage): string {
+  return pickLocalized(dataset.fareNews, language);
 }
 
 async function callGroqFallback(message: string, language: BotLanguage): Promise<string | null> {
@@ -375,9 +506,7 @@ async function callGroqFallback(message: string, language: BotLanguage): Promise
   const apiKey = rawKey?.trim();
   if (!apiKey) return null;
 
-  const outOfScopeMsg = language === 'tl'
-    ? dataset.fallbackMessages.outOfScope.tl
-    : dataset.fallbackMessages.outOfScope.en;
+  const outOfScopeMsg = pickLocalized(dataset.fallbackMessages.outOfScope, language);
 
   const requestedLanguage = language === 'tl' ? 'Tagalog' : 'English';
 
@@ -395,7 +524,7 @@ async function callGroqFallback(message: string, language: BotLanguage): Promise
         {
           role: 'system',
           content:
-            `You are Para app's transport assistant. Only answer about commuting, fares, jeepneys, tricycles, transit routes, destinations, and app usage. If question is outside this scope, respond exactly with: ${outOfScopeMsg}. Respond in ${requestedLanguage}. Keep responses concise and practical.`,
+            `You are Para app's transport assistant. Only answer about commuting, fares, jeepneys, tricycles, transit routes, destinations, and app usage. If question is outside this scope, respond exactly with: ${outOfScopeMsg}. Respond in ${requestedLanguage}. Keep responses friendly, practical, and concise.`,
         },
         {
           role: 'user',
@@ -416,13 +545,14 @@ async function callGroqFallback(message: string, language: BotLanguage): Promise
 
 function fallbackText(language: BotLanguage, key: keyof DatasetShape['fallbackMessages']): string {
   const entry = dataset.fallbackMessages[key];
-  return language === 'tl' ? entry.tl : entry.en;
+  return pickLocalized(entry, language);
 }
 
 export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotResponse> {
   const message = request.message.trim();
   const language = detectLanguage(message);
   const normalized = normalizeText(message);
+  const isTaskLikeMessage = hasCommuteTaskIntent(normalized);
   const currentState: ChatbotConversationState = request.state ?? {};
   const routes = request.routes ?? [];
 
@@ -438,6 +568,15 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   if (hasBuilderIntent(normalized)) {
     return {
       text: dataset.builderAnswer,
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasFareNewsIntent(normalized)) {
+    return {
+      text: pickFareNewsReply(language),
       language,
       state: {},
       usedGroq: false,
@@ -519,14 +658,52 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
-  if (!isInScope(normalized)) {
+  if (!isTaskLikeMessage && hasGreetingIntent(normalized)) {
     return {
-      text: fallbackText(language, 'outOfScope'),
+      text: pickSocialReply(language, 'greetings'),
       language,
       state: {},
       usedGroq: false,
     };
   }
+
+  if (!isTaskLikeMessage && hasPraiseIntent(normalized)) {
+    return {
+      text: pickSocialReply(language, 'praise'),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (!isTaskLikeMessage && hasThanksIntent(normalized)) {
+    return {
+      text: pickSocialReply(language, 'thanks'),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (!isTaskLikeMessage && hasUserApologyIntent(normalized)) {
+    return {
+      text: pickSocialReply(language, 'userApology'),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (!isTaskLikeMessage && hasAcknowledgementIntent(normalized)) {
+    return {
+      text: pickSocialReply(language, 'acknowledgement'),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  const inScope = isInScope(normalized);
 
   try {
     const groqReply = await callGroqFallback(message, language);
@@ -541,6 +718,15 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   } catch {
     // ignore and fall through to local unknown fallback
   }
+
+    if (!inScope) {
+      return {
+        text: fallbackText(language, 'outOfScope'),
+        language,
+        state: {},
+        usedGroq: false,
+      };
+    }
 
   return {
     text: fallbackText(language, 'unknown'),

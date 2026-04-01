@@ -12,26 +12,50 @@
     "para",
     "app",
     "application",
+    "help",
+    "assist",
+    "guide",
     "transport",
     "transportation",
     "commute",
     "commuting",
+    "commuter",
+    "trip",
+    "travel",
     "jeep",
     "jeepney",
     "tricycle",
+    "bus",
+    "uv",
     "fare",
     "pamasahe",
+    "bayad",
+    "price",
+    "presyo",
+    "taas pamasahe",
+    "fare increase",
+    "fare hike",
+    "oil",
+    "fuel",
+    "war",
     "route",
     "ruta",
     "transit",
     "destination",
+    "terminal",
+    "stop",
+    "landmark",
     "sakay",
     "baba",
+    "lipat",
     "student",
     "senior",
     "pwd",
     "location",
-    "gps"
+    "gps",
+    "trivia",
+    "fun fact",
+    "did you know"
   ],
   "places": [
     {
@@ -187,29 +211,172 @@
       "id": "culture_1",
       "en": "Jeepney route signboards usually list major landmarks so commuters can quickly check if it matches their destination.",
       "tl": "Karaniwang nakalista sa signboard ng jeepney ang mga pangunahing landmark para madaling ma-check ng commuter kung tugma sa destination."
+    },
+    {
+      "id": "culture_2",
+      "en": "Many jeepney drivers and conductors memorize major landmarks and alternate roads, especially during heavy traffic.",
+      "tl": "Maraming jeepney driver at konduktor ang kabisado ang mga pangunahing landmark at alternatibong daan, lalo na kapag mabigat ang trapiko."
+    },
+    {
+      "id": "safety_1",
+      "en": "Commuters often prepare exact fare to speed up payment and keep boarding and alighting more organized.",
+      "tl": "Madalas naghahanda ng eksaktong pamasahe ang mga commuter para mas mabilis ang bayaran at mas maayos ang sakay-baba."
+    },
+    {
+      "id": "history_1",
+      "en": "Jeepneys are considered one of the most iconic symbols of Filipino street culture and creativity.",
+      "tl": "Itinuturing ang jeepney bilang isa sa pinaka-ikonikong simbolo ng kulturang kalsada at pagkamalikhain ng mga Pilipino."
     }
   ],
+  "triviaLeadIns": {
+    "en": [
+      "I have a quick trivia for you! Did you know",
+      "Fun fact coming right up! Did you know",
+      "Here is a jolly commute trivia: did you know",
+      "Quick Jeepie trivia! Did you know"
+    ],
+    "tl": [
+      "May mabilis akong trivia para sa'yo! Alam mo ba na",
+      "Eto ang masayang trivia natin: alam mo ba na",
+      "Quick trivia mula kay Jeepie! Alam mo ba na",
+      "May fun fact ako para sa'yo: alam mo ba na"
+    ]
+  },
+  "socialResponses": {
+    "greetings": {
+      "en": [
+        "Hey there! I am Jeepie, your friendly commute buddy in Para. I can help you with fares, routes, transit tips, and even quick trivia while you travel.",
+        "Hi! Jeepie here. Glad you dropped by. Ask me about fares, jeepney routes, destinations, or transit tips, and I will happily help.",
+        "Hello! I am Jeepie, your jolly transport assistant. I can estimate fares, suggest route options, and share fun commuting facts too."
+      ],
+      "tl": [
+        "Uy, hello! Ako si Jeepie, ang friendly mong commute buddy sa Para. Pwede kitang tulungan sa pamasahe, ruta, transit tips, at kahit quick trivia.",
+        "Hi! Si Jeepie ito. Masaya akong makatulong. Tanong ka lang tungkol sa pamasahe, jeepney routes, destination, o transit tips.",
+        "Kumusta! Ako si Jeepie, ang jolly mong transport assistant. Kaya kitang tulungan sa fare estimate, route options, at mga fun commuting facts."
+      ]
+    },
+    "thanks": {
+      "en": [
+        "You are very welcome! I am always happy to help. If you want, I can also check your next fare or give a quick commute trivia.",
+        "Anytime! Thanks for chatting with me too. I am here whenever you need route, fare, or transit help.",
+        "Glad to help! Stay safe on the road, and just ping me again if you need another commute assist."
+      ],
+      "tl": [
+        "Walang anuman! Lagi akong ready tumulong. Kung gusto mo, pwede rin kitang bigyan ng quick trivia o next fare estimate.",
+        "Anytime! Salamat din sa pakikipag-chat. Nandito lang ako para sa ruta, pamasahe, at transit help mo.",
+        "Masaya akong makatulong! Ingat sa biyahe, at chat mo lang ulit ako kung may susunod ka pang tanong."
+      ]
+    },
+    "praise": {
+      "en": [
+        "Thank you so much, that means a lot! I will keep doing my best so your commute planning stays easier and friendlier.",
+        "Aww, thank you! I appreciate that. I will stay sharp and keep helping you with fares, routes, and transport tips.",
+        "Thanks for the kind words! You made my day. I am always here when you need a quick and friendly commute guide."
+      ],
+      "tl": [
+        "Maraming salamat, sobrang na-appreciate ko yan! Gagalingan ko pa para mas madali at mas friendly ang commute planning mo.",
+        "Naku, salamat! Nakakataba ng puso yan. Lagi akong ready tumulong sa pamasahe, ruta, at transport tips mo.",
+        "Salamat sa papuri! Napasaya mo ako. Nandito lang ako lagi bilang quick at friendly na gabay sa biyahe mo."
+      ]
+    },
+    "userApology": {
+      "en": [
+        "No worries at all, you are totally fine. We can continue anytime and I am happy to help.",
+        "That is okay, no problem. I am still here and ready whenever you want to continue.",
+        "All good, no need to worry. Let us keep going, and I will do my best to assist you."
+      ],
+      "tl": [
+        "Ayos lang yun, walang problema. Tuloy lang tayo anytime at masaya akong tumulong.",
+        "Okay lang, no worries. Nandito pa rin ako at ready kapag gusto mong magpatuloy.",
+        "Walang issue, ayos lang yan. Tara, tuloy natin at gagawin ko ang best ko para makatulong."
+      ]
+    },
+    "acknowledgement": {
+      "en": [
+        "Got it! If you need anything next, I am here and ready.",
+        "Noted! Just message me when you need another commute assist.",
+        "Copy that. I am on standby for your next fare or route question."
+      ],
+      "tl": [
+        "Sige, noted! Nandito lang ako kung may next ka pang tanong.",
+        "Gets ko! Chat mo lang ako ulit para sa susunod mong commute concern.",
+        "Okay, copy! Ready ako sa next fare o route question mo."
+      ]
+    }
+  },
+  "fareNews": {
+    "en": [
+      "Quick heads-up: fares can go higher when global oil prices spike, and recent war-related supply pressure has pushed fuel costs up in many places. That is one reason base fare moved from 13 to 14. Please take care out there and travel safely.",
+      "Good question. A major reason fares increased is the rising fuel cost tied to global oil price volatility, including supply pressure linked to war events. With operators paying more for fuel, fares were adjusted from 13 to 14. Stay safe out there.",
+      "Right now, fare increases are often connected to higher fuel prices. Because of war-related disruptions and oil market instability, operating costs went up, so base fare shifted from 13 to 14. Ingat on your commute today."
+    ],
+    "tl": [
+      "Quick update: tumataas ang pamasahe kapag tumataas din ang presyo ng langis sa world market. Dahil sa epekto ng giyera at pressure sa oil supply, tumaas ang fuel cost, kaya isa ito sa dahilan kung bakit naging 14 mula 13 ang base fare. Ingat ka palagi sa biyahe.",
+      "Magandang tanong. Isa sa pangunahing dahilan ng taas-pamasahe ay ang pagmahal ng fuel dahil sa global oil price volatility, kasama ang epekto ng giyera sa supply. Kaya na-adjust ang base fare mula 13 to 14. Mag-ingat ka lagi sa daan.",
+      "Sa ngayon, malaki ang epekto ng pagtaas ng presyo ng langis sa pamasahe. Dahil sa war-related disruptions at mas mahal na fuel, tumaas ang operating cost kaya naging 14 na ang base mula 13. Ingat palagi habang bumibiyahe."
+    ]
+  },
   "builderAnswer": "The 'Para' application's idea was proposed by Christian Valenzuela himself, this current version that you are seeing was built during a Hackathon competition, with:\n\nAcal, Lance Adrian\nDelos Reyes, Jericho\nNorona, Lee Adrian\nOrdiales, Cristian Gabriel\nValenzuela, Christian",
   "fallbackMessages": {
     "outOfScope": {
-      "en": "Sorry, I can only help with the Para app, fares, routes, transit, and commuting questions.",
-      "tl": "Pasensya na, sa Para app, pamasahe, ruta, transit, at commuting na tanong lang ako makakatulong."
+      "en": [
+        "Sorry, I can only help with the Para app, fares, routes, transit, and commuting questions. If you want, ask me about fare estimates or route tips.",
+        "I can best assist with Para app and transport topics like fares, routes, and transit. Ask me anything in that area and I will gladly help.",
+        "I might not be the best for that topic yet. I focus on commute help: fares, jeepney routes, transit tips, and Para app questions."
+      ],
+      "tl": [
+        "Pasensya na, sa Para app at commuting topics lang ako nakatuon, tulad ng pamasahe, ruta, at transit tips. Tanong ka lang doon at tutulungan kita.",
+        "Mas makakatulong ako sa Para app, pamasahe, ruta, at public transport concerns. Kung tungkol doon, game na game ako tumulong.",
+        "Hindi ko pa sakop ang topic na yan sa ngayon. Pero sa commuting, fares, at routes, handang-handa akong tumulong."
+      ]
     },
     "unknown": {
-      "en": "Sorry, I do not know that yet. Please ask about fares, routes, transit, or app features.",
-      "tl": "Pasensya na, hindi ko pa alam iyon. Subukan mong magtanong tungkol sa pamasahe, ruta, transit, o features ng app."
+      "en": [
+        "I am not fully sure about that yet, but I am still here to help. Try asking me about fares, routes, transit, or Para app features.",
+        "I do not have a solid answer for that right now. Ask me about fare estimates, route options, or transport tips and I will gladly assist.",
+        "I am still learning that part. If you want, I can help with commute topics first like jeepney fares, routes, and transit guidance."
+      ],
+      "tl": [
+        "Hindi pa buo ang sagot ko diyan sa ngayon, pero nandito pa rin ako para tumulong. Pwede kang magtanong tungkol sa pamasahe, ruta, transit, o app features.",
+        "Wala pa akong solid na sagot diyan ngayon. Pero kung fare estimate, route options, o transport tips, tutulungan kita agad.",
+        "Inaayos ko pa yung part na yan. Samantala, game ako sa commute topics tulad ng pamasahe, jeepney routes, at transit guidance."
+      ]
     },
     "missingDestination": {
-      "en": "I can calculate your fare. What destination are you going to?",
-      "tl": "Pwede kitang tulungan sa pamasahe. Saan ang destination mo?"
+      "en": [
+        "Sure, I can calculate your fare. What destination are you heading to?",
+        "I can help with that fare estimate. Where are you going?",
+        "Let us compute it. What is your destination?"
+      ],
+      "tl": [
+        "Sige, kaya kitang tulungan sa pamasahe. Saan ang destination mo?",
+        "Pwede natin i-estimate yan. Saan ka papunta?",
+        "Game, compute natin. Ano ang destination mo?"
+      ]
     },
     "askOrigin": {
-      "en": "I can estimate the fare to {destination}, but I am not sure where you are right now. Where are you coming from?",
-      "tl": "Kaya kong i-estimate ang pamasahe papuntang {destination}, pero hindi ko pa alam kung nasaan ka ngayon. Saan ka manggagaling?"
+      "en": [
+        "I can estimate the fare to {destination}, but I am not sure where you are right now. Where are you coming from?",
+        "I can compute your fare going to {destination}. May I know your current location first?",
+        "I can help with the fare to {destination}. What is your starting point?"
+      ],
+      "tl": [
+        "Kaya kong i-estimate ang pamasahe papuntang {destination}, pero hindi ko pa alam kung nasaan ka ngayon. Saan ka manggagaling?",
+        "Pwede kong i-compute ang pamasahe papuntang {destination}. Saan ka muna ngayon?",
+        "Tutulungan kita sa fare papuntang {destination}. Ano ang starting point mo?"
+      ]
     },
     "unknownOrigin": {
-      "en": "I could not match your current location to my fare dataset yet. Please share a nearby known place.",
-      "tl": "Hindi ko pa ma-match ang location mo sa fare dataset ko. Paki-share ang malapit na kilalang lugar."
+      "en": [
+        "I could not match your current location to my fare dataset yet. Please share a nearby known place.",
+        "I still cannot map your starting point clearly. Can you send a nearby landmark so I can estimate better?",
+        "I need a clearer origin point. Please tell me a nearby terminal or landmark."
+      ],
+      "tl": [
+        "Hindi ko pa ma-match ang location mo sa fare dataset ko. Paki-share ang malapit na kilalang lugar.",
+        "Hindi ko pa ma-pinpoint ang starting point mo. Pwede bang magbigay ka ng nearby landmark?",
+        "Kailangan ko ng mas malinaw na pinanggagalingan. Pakisabi ang malapit na terminal o landmark."
+      ]
     }
   }
 }
