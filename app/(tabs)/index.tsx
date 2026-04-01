@@ -27,7 +27,7 @@ import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
 import { findRoutesForDestination, rankRoutes, MatchedRoute, RankMode } from '../../services/routeSearch';
 import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
-import LOCAL_PLACES from '../../data/local_places.json';
+import LOCAL_PLACES from '../../data/local_places';
 import { fuzzyFilter } from '../../utils/fuzzySearch';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
