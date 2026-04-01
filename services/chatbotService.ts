@@ -534,19 +534,50 @@ function levenshteinDistance(a: string, b: string): number {
 function buildStopDestinations(routes: JeepneyRoute[]): StopDestination[] {
   const byLabel = new Map<string, StopDestination>();
 
+  const addCandidate = (name: string | undefined, coordinate?: Coordinate) => {
+    if (!name || !coordinate) return;
+    const normalizedLabel = normalizeText(name);
+    if (!normalizedLabel || normalizedLabel.length < 3) return;
+    if (!byLabel.has(normalizedLabel)) {
+      byLabel.set(normalizedLabel, {
+        name: name.trim(),
+        coordinate,
+      });
+    }
+  };
+
   for (const route of routes) {
+    const firstStop = route.stops?.[0];
+    const lastStop = route.stops?.[route.stops.length - 1];
+    const firstCoord: Coordinate | undefined = firstStop
+      ? { latitude: firstStop.coordinate.latitude, longitude: firstStop.coordinate.longitude }
+      : route.coordinates?.[0]
+        ? { latitude: route.coordinates[0].latitude, longitude: route.coordinates[0].longitude }
+        : undefined;
+    const lastCoord: Coordinate | undefined = lastStop
+      ? { latitude: lastStop.coordinate.latitude, longitude: lastStop.coordinate.longitude }
+      : route.coordinates?.[route.coordinates.length - 1]
+        ? {
+          latitude: route.coordinates[route.coordinates.length - 1].latitude,
+          longitude: route.coordinates[route.coordinates.length - 1].longitude,
+        }
+        : undefined;
+
+    addCandidate(route.properties.fromLabel, firstCoord);
+    addCandidate(route.properties.toLabel, lastCoord);
+
+    const routeName = route.properties.name || '';
+    const split = routeName.match(/^(.+?)\s*(?:->| to | - )\s*(.+)$/i);
+    if (split) {
+      addCandidate(split[1], firstCoord);
+      addCandidate(split[2], lastCoord);
+    }
+
     for (const stop of route.stops || []) {
-      const normalizedLabel = normalizeText(stop.label);
-      if (!normalizedLabel) continue;
-      if (!byLabel.has(normalizedLabel)) {
-        byLabel.set(normalizedLabel, {
-          name: stop.label,
-          coordinate: {
-            latitude: stop.coordinate.latitude,
-            longitude: stop.coordinate.longitude,
-          },
-        });
-      }
+      addCandidate(stop.label, {
+        latitude: stop.coordinate.latitude,
+        longitude: stop.coordinate.longitude,
+      });
     }
   }
 
@@ -961,8 +992,16 @@ function findMentionedRoute(normalized: string, routes: JeepneyRoute[]): Jeepney
 function buildLandmarkReply(language: BotLanguage, normalized: string, routes: JeepneyRoute[]): string {
   const mentionedRoute = findMentionedRoute(normalized, routes);
 
+  const routeLandmarks = (route: JeepneyRoute): string[] => {
+    const stopNames = (route.stops || []).map((stop) => stop.label);
+    const endpoints = [route.properties.fromLabel, route.properties.toLabel].filter(
+      (value): value is string => Boolean(value && value.trim()),
+    );
+    return uniqueText([...stopNames, ...endpoints]);
+  };
+
   if (mentionedRoute) {
-    const routeStops = uniqueText((mentionedRoute.stops || []).map((stop) => stop.label));
+    const routeStops = routeLandmarks(mentionedRoute);
     if (routeStops.length === 0) {
       return routeResponseText(language, 'landmarkNoData');
     }
@@ -981,7 +1020,7 @@ function buildLandmarkReply(language: BotLanguage, normalized: string, routes: J
   }
 
   const routeStops = uniqueText(
-    routes.flatMap((route) => (route.stops || []).map((stop) => stop.label)),
+    routes.flatMap((route) => routeLandmarks(route)),
   );
   const fallbackPlaces = uniqueText(dataset.places.map((place) => place.name));
   const allLandmarks = routeStops.length > 0 ? routeStops : fallbackPlaces;
@@ -1005,7 +1044,11 @@ function buildLandmarkReply(language: BotLanguage, normalized: string, routes: J
 }
 
 function routeContainsPlace(route: JeepneyRoute, place: DatasetPlace): boolean {
-  const stopLabels = (route.stops || []).map((stop) => normalizeText(stop.label));
+  const stopLabels = [
+    ...(route.stops || []).map((stop) => normalizeText(stop.label)),
+    normalizeText(route.properties.fromLabel || ''),
+    normalizeText(route.properties.toLabel || ''),
+  ].filter(Boolean);
   if (stopLabels.length === 0) return false;
 
   const names = uniqueText([place.name, ...place.aliases])
