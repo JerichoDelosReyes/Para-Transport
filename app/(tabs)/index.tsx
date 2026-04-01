@@ -211,6 +211,7 @@ const candidateHasMode = (candidate: RecommenderCandidate, mode: string): boolea
 export default function HomeScreen() {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState<string | null>(null);
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
   const [originQuery, setOriginQuery] = useState('');
@@ -291,6 +292,33 @@ export default function HomeScreen() {
   const [showRecommender, setShowRecommender] = useState(false);
   const [simAutoFollow, setSimAutoFollow] = useState(true);
   const [simBlink, setSimBlink] = useState(true);
+
+  const fallbackMapLibreStyle = useMemo(
+    () => ({
+      version: 8,
+      name: 'Para Raster Fallback',
+      sources: {
+        osm: {
+          type: 'raster',
+          tiles: [MAP_CONFIG.OSM_TILE_URL],
+          tileSize: 256,
+          attribution: MAP_CONFIG.OSM_ATTRIBUTION,
+        },
+      },
+      layers: [
+        {
+          id: 'osm-base',
+          type: 'raster',
+          source: 'osm',
+        },
+      ],
+    }),
+    []
+  );
+
+  const [mapLibreStyle, setMapLibreStyle] = useState<string | Record<string, unknown>>(
+    MAP_CONFIG.MAPLIBRE_STYLE_URL
+  );
 
   const selectedOptionLabel = useMemo(() => {
     if (!selectedRouteId) return 'Current Route';
@@ -933,13 +961,41 @@ export default function HomeScreen() {
     }
   };
 
+  useEffect(() => {
+    if (!USE_MAPLIBRE || isMapLoaded) return;
+
+    const watchdog = setTimeout(() => {
+      if (typeof mapLibreStyle === 'string') {
+        console.warn(
+          `[MapLibre] Primary style did not finish loading in time: ${MAP_CONFIG.MAPLIBRE_STYLE_URL}. Falling back to raster style.`
+        );
+        setMapLoadError('Primary map style unavailable. Using fallback map.');
+        setMapLibreStyle(fallbackMapLibreStyle);
+      }
+    }, 6000);
+
+    return () => clearTimeout(watchdog);
+  }, [isMapLoaded, mapLibreStyle, fallbackMapLibreStyle]);
+
   return (
     <View style={styles.screen}>
       {USE_MAPLIBRE ? (
         <MapLibreMapView
           style={StyleSheet.absoluteFillObject}
-          mapStyle={MAP_CONFIG.MAPLIBRE_STYLE_URL}
+          mapStyle={mapLibreStyle as any}
           onDidFinishLoadingMap={() => setIsMapLoaded(true)}
+          onDidFailLoadingMap={() => {
+            console.warn('[MapLibre] onDidFailLoadingMap triggered.');
+
+            if (typeof mapLibreStyle === 'string') {
+              setMapLoadError('Primary map style unavailable. Using fallback map.');
+              setMapLibreStyle(fallbackMapLibreStyle);
+              return;
+            }
+
+            setMapLoadError('Map failed to load. Check style URL and network access.');
+            setIsMapLoaded(true);
+          }}
           onPress={() => {
             setIsMapInteracted(true);
             if (sim.state === 'playing') setSimAutoFollow(false);
@@ -1271,6 +1327,9 @@ export default function HomeScreen() {
       {!isMapLoaded && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#E8A020" />
+          {mapLoadError ? (
+            <Text style={{ marginTop: 10, color: COLORS.textMuted, fontSize: 12 }}>{mapLoadError}</Text>
+          ) : null}
         </View>
       )}
 

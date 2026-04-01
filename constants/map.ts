@@ -2,7 +2,7 @@ const mapTilerKey = process.env.EXPO_PUBLIC_MAPTILER_KEY;
 const mapTilerStyle = process.env.EXPO_PUBLIC_MAPTILER_STYLE || 'openstreetmap';
 const cartoLightNoLabelsUrl = 'https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png';
 const canonicalStyleUrl =
-  'https://paragisstorage.blob.core.windows.net/maps/v1/style.json';
+  'https://paragisstorage.blob.core.windows.net/maps/style.json';
 
 const mapTilerUrl = mapTilerKey
   ? `https://api.maptiler.com/maps/${mapTilerStyle}/{z}/{x}/{y}.jpg?key=${mapTilerKey}`
