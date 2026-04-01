@@ -16,6 +16,7 @@ const CHATBOT_STATES = {
   SUCCESS: require("../assets/AIChatbot/SUCCESS.png"),
   ERROR: require("../assets/AIChatbot/ERROR.png"),
 };
+const JEEPIE_AVATAR = require("../assets/AIChatbot/Jeepie.png");
 
 type ChatMessage = {
   id: string;
@@ -203,7 +204,7 @@ export default function AIChatbotScreen() {
               <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
             </TouchableOpacity>
             <View style={styles.chatHeaderAvatarWrap}>
-              <Image source={CHATBOT_STATES.IDLE} style={styles.chatHeaderAvatarImage} />
+              <Image source={JEEPIE_AVATAR} style={styles.chatHeaderAvatarImage} />
             </View>
             <View style={styles.chatHeaderInfo}>
               <Text style={styles.chatHeaderName}>{BOT_NAME}</Text>
@@ -282,7 +283,7 @@ export default function AIChatbotScreen() {
                 return (
                   <View style={styles.aiMessageRow}>
                     <View style={styles.aiMessageAvatarWrap}>
-                      <Image source={CHATBOT_STATES.IDLE} style={styles.aiMessageAvatarImage} />
+                      <Image source={JEEPIE_AVATAR} style={styles.aiMessageAvatarImage} />
                     </View>
                     <View style={[styles.messageBubble, styles.aiBubble]}>
                       <Text style={[styles.messageText, styles.aiMessageText]}>
