@@ -9,6 +9,7 @@ import { View, Animated, StyleSheet, Easing, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { AchievementPopup } from '../components/AchievementPopup';
+import { ensurePmtilesProtocol } from '../services/pmtilesProtocol';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -105,6 +106,10 @@ export default function RootLayout() {
   });
 
   const [showAnimatedSplash, setShowAnimatedSplash] = useState(true);
+
+  useEffect(() => {
+    ensurePmtilesProtocol();
+  }, []);
 
   useEffect(() => {
     if (loaded || error) {

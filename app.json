@@ -35,7 +35,8 @@
       "favicon": "./assets/logo/appicon.png"
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      "@maplibre/maplibre-react-native"
     ],
     "extra": {
       "eas": {
