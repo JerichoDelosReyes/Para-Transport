@@ -109,13 +109,13 @@ export function GlobalBroadcast() {
 
   if (!activeBroadcast) return null;
 
-  const bgColors = {
-    info: COLORS.primaryDark,
+  const bgColors: Record<string, string> = {
+    info: COLORS.navy,
     warning: '#F59E0B',
     alert: '#EF4444',
   };
 
-  const icons = {
+  const icons: Record<string, any> = {
     info: 'information-circle',
     warning: 'warning',
     alert: 'alert-circle',
