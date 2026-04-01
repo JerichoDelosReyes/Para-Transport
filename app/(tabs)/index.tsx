@@ -323,6 +323,7 @@ export default function HomeScreen() {
   const [showTransitLayer, setShowTransitLayer] = useState(false);
   const [nearestStop, setNearestStop] = useState<any>(null);
   const user = useStore((state) => state.user);
+  const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
   const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
   const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
   const pendingRouteSearch = useStore((state) => state.pendingRouteSearch);
@@ -1237,8 +1238,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </BlurView>
         
-        <View style={styles.chatbotWrap}>
-          <TouchableOpacity style={styles.locateButton} onPress={() => router.push('/ai-chatbot')} activeOpacity={0.8}>
+        <View style={[styles.chatbotWrap, isGuestAccount && { opacity: 0.5 }]}>
+          <TouchableOpacity 
+            style={styles.locateButton} 
+            onPress={() => isGuestAccount ? Alert.alert('Guest Mode', 'AI Chatbot is not available for guest mode.') : router.push('/ai-chatbot')} 
+            activeOpacity={0.8}
+          >
             <Image 
               source={require('../../assets/AIChatbot/IDLE.png')} 
               style={{ width: 36, height: 36, resizeMode: 'contain' }} 

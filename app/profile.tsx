@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Image } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Image, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -19,6 +19,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useStore((state) => state.user);
+  const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
 
   return (
     <View style={styles.screen}>
@@ -57,12 +58,17 @@ export default function ProfileScreen() {
               <Text style={styles.name}>{user?.full_name || 'Passenger'}</Text>
             </View>
 
-            <View style={styles.quickStatsRow}>
+            <TouchableOpacity 
+              style={[styles.quickStatsRow, isGuestAccount && { opacity: 0.5 }]}
+              onPress={() => isGuestAccount && Alert.alert('Guest Mode', 'Points feature is not available for guest mode.')}
+              activeOpacity={isGuestAccount ? 0.8 : 1}
+              disabled={!isGuestAccount}
+            >
               <View style={styles.quickStat}>
                 <Text style={styles.quickStatValue}>{user?.points || 0}</Text>
                 <Text style={styles.quickStatLabel}>Points</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Grid Stats */}
@@ -101,18 +107,24 @@ export default function ProfileScreen() {
           </View>
 
           {/* Badges Section */}
-          <View style={styles.sectionHeaderContainer}>
+          <View style={[styles.sectionHeaderContainer, isGuestAccount && { opacity: 0.5 }]}>
             <Text style={styles.sectionTitle}>Badges</Text>
-            <TouchableOpacity onPress={() => router.navigate('/achievements')}>
+            <TouchableOpacity onPress={() => isGuestAccount ? Alert.alert('Guest Mode', 'Badges feature is not available for guest mode.') : router.navigate('/achievements')}>
               <Text style={styles.sectionLink}>View All</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.badgesWrapper}>
+          <View style={[styles.badgesWrapper, isGuestAccount && { opacity: 0.5 }]}>
             {BADGES.slice(0, 3).map((badge) => {
               const isEarned = user?.badges?.includes(badge.id) || false;
               return (
-                <View key={badge.id} style={[styles.badgeCard, !isEarned && styles.badgeLocked]}>
+                <TouchableOpacity 
+                  key={badge.id} 
+                  style={[styles.badgeCard, !isEarned && styles.badgeLocked]}
+                  onPress={() => isGuestAccount && Alert.alert('Guest Mode', 'Badges feature is not available for guest mode.')}
+                  activeOpacity={isGuestAccount ? 0.8 : 1}
+                  disabled={!isGuestAccount}
+                >
                                     <View style={styles.profileIconWrapper}>
                     {BADGE_IMAGES[badge.id] ? (
                       <Image 
@@ -130,7 +142,7 @@ export default function ProfileScreen() {
                       <Ionicons name="lock-closed" size={14} color={COLORS.textMuted} />
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>

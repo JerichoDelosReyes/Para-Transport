@@ -90,27 +90,31 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         
         <View style={styles.cardGroup}>
-          <TouchableOpacity 
-            style={styles.settingRow} 
-            activeOpacity={0.7}
-            onPress={() => router.navigate('/edit-profile')}
-          >
-            <View style={styles.rowLeft}>
-              <Feather name="user" size={20} color={COLORS.textStrong} style={styles.icon} />
-              <Text style={styles.settingLabel}>Edit Profile</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          
-          <View style={styles.settingRow}>
-            <View style={styles.rowLeft}>
-              <Feather name="mail" size={20} color={COLORS.textStrong} style={styles.icon} />
-              <Text style={styles.settingLabel}>Email</Text>
-            </View>
-            <Text style={styles.valueText}>{user?.email || 'N/A'}</Text>
-          </View>
-          <View style={styles.divider} />
+          {!isGuestAccount && (
+            <>
+              <TouchableOpacity 
+                style={styles.settingRow} 
+                activeOpacity={0.7}
+                onPress={() => router.navigate('/edit-profile')}
+              >
+                <View style={styles.rowLeft}>
+                  <Feather name="user" size={20} color={COLORS.textStrong} style={styles.icon} />
+                  <Text style={styles.settingLabel}>Edit Profile</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              
+              <View style={styles.settingRow}>
+                <View style={styles.rowLeft}>
+                  <Feather name="mail" size={20} color={COLORS.textStrong} style={styles.icon} />
+                  <Text style={styles.settingLabel}>Email</Text>
+                </View>
+                <Text style={styles.valueText}>{user?.email || 'N/A'}</Text>
+              </View>
+              <View style={styles.divider} />
+            </>
+          )}
 
           <View style={styles.settingRow}>
             <View style={styles.rowLeft}>
