@@ -15,7 +15,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Para uses your location to find your current position and show routes to your destination."
+        "NSLocationWhenInUseUsageDescription": "Para uses your location to find your current position and show routes to your destination.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.para.app"
     },
@@ -40,8 +41,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "34665852-31df-4ca2-b87a-510e5909f06c"
       }
-    }
+    },
+    "owner": "noxen-cv"
   }
 }
