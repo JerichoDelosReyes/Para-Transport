@@ -348,13 +348,15 @@ function composeSupportReply(
   content: string,
   options?: { includeClosing?: boolean },
 ): string {
-  const opener = formatForChatDisplay(pickLocalized(SUPPORT_ACK_OPENERS, language));
   const body = formatForChatDisplay(content);
-  const closing = options?.includeClosing
+  const shouldAddClosing = Boolean(options?.includeClosing)
+    && body.length < 520
+    && Math.random() < 0.45;
+  const closing = shouldAddClosing
     ? formatForChatDisplay(pickLocalized(SUPPORT_CLOSERS, language))
     : '';
 
-  const chunks = [opener, body, closing].filter(Boolean);
+  const chunks = [body, closing].filter(Boolean);
   return chunks.join('\n\n');
 }
 
@@ -692,7 +694,7 @@ function hasRouteListIntent(normalized: string): boolean {
 }
 
 function hasFarePolicyIntent(normalized: string): boolean {
-  return /(base fare|minimum fare|regular fare|discounted fare|discount fare|student fare|senior fare|pwd fare|fare policy|fare rules|magkano base|magkano minimum|magkano student|magkano senior|magkano pwd|pamasahe ngayon|base pamasahe|discount sa pamasahe)/.test(normalized);
+  return /(base fare|minimum fare|regular fare|discounted fare|discount fare|student fare|senior fare|pwd fare|fare policy|fare rules|what is the fare right now|fare right now|current fare|magkano base|magkano minimum|magkano student|magkano senior|magkano pwd|pamasahe ngayon|magkano pamasahe ngayon|base pamasahe|discount sa pamasahe)/.test(normalized);
 }
 
 function hasCapabilityIntent(normalized: string): boolean {

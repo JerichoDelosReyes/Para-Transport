@@ -82,7 +82,10 @@
     "route list",
     "available routes",
     "base fare",
-    "discounted fare"
+    "discounted fare",
+    "vermosa",
+    "cvsu",
+    "cavite state university imus"
   ],
   "places": [
     {
@@ -146,6 +149,18 @@
       "coordinate": { "latitude": 14.38, "longitude": 120.943 }
     },
     {
+      "id": "vermosa",
+      "name": "Vermosa",
+      "aliases": ["vermosa", "ayala vermosa", "vermosa imus", "vermosa complex"],
+      "coordinate": { "latitude": 14.3402, "longitude": 120.9806 }
+    },
+    {
+      "id": "cvsu_imus",
+      "name": "Cavite State University - Imus",
+      "aliases": ["cavite state university imus", "cavite state university - imus", "cvsu imus", "cvsu"],
+      "coordinate": { "latitude": 14.3961, "longitude": 120.9368 }
+    },
+    {
       "id": "pitx",
       "name": "PITX",
       "aliases": ["pitx", "paranaque integrated terminal exchange"],
@@ -206,6 +221,18 @@
       "destinationId": "salitran",
       "distanceKm": 3.3,
       "jeepneyRouteHint": "J-02 Dasmarinas to Imus Crossing"
+    },
+    {
+      "originId": "imus_crossing",
+      "destinationId": "vermosa",
+      "distanceKm": 7.1,
+      "jeepneyRouteHint": "J-01 then transfer to a jeepney route heading to Vermosa"
+    },
+    {
+      "originId": "imus_crossing",
+      "destinationId": "cvsu_imus",
+      "distanceKm": 3.0,
+      "jeepneyRouteHint": "J-01 Imus Crossing to Cavite State University - Imus"
     }
   ],
   "trivia": [
