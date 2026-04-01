@@ -58,8 +58,8 @@ export function rankRoutes(routes: MatchedRoute[], mode: RankMode): MatchedRoute
 const METERS_PER_DEG = 111_320;
 const MIN_COS_LAT = 0.2;
 
-const BUFFER_DISTANCE = 1000; // meters
-const TRANSFER_WALK_DISTANCE = 800; // meters
+const BUFFER_DISTANCE = 500; // meters
+const TRANSFER_WALK_DISTANCE = 500; // meters
 const AVG_SPEED_KMH = 15;
 const WALK_SPEED_KMH = 4;
 
