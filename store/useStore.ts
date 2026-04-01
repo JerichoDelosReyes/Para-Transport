@@ -2,19 +2,22 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { supabase } from '../config/supabaseClient';
+import { BadgeData } from '../types/badges';
 
 interface User {
-  name: string;
+  id?: string;
+  full_name: string;
   email: string;
   points: number;
   streak_count: number;
-  distance: number;
-  spent: number;
-  trips: number;
+  total_distance: number;
+  spent: number; // Kept locally since it's not in admin schema
+  total_trips: number;
+  is_banned?: boolean;
   saved_routes?: any[];
   saved_places?: any[];
   commute_history?: any[];
-  badges?: string[];
+  badges?: string[]; // Kept locally for now
 }
 
 type ChatbotPersistMessage = {
@@ -36,13 +39,14 @@ type ChatbotPersistState = {
 type SessionMode = 'guest' | 'auth' | null;
 
 const createGuestUser = (): User => ({
-  name: 'Komyuter',
+  full_name: 'Komyuter',
   email: 'guest@para.ph',
   points: 0,
   streak_count: 0,
-  distance: 0,
+  total_distance: 0,
   spent: 0,
-  trips: 0,
+  total_trips: 0,
+  is_banned: false,
   saved_routes: [],
   saved_places: [],
   commute_history: [],
@@ -53,6 +57,8 @@ interface StoreState {
   user: User;
   sessionMode: SessionMode;
   hasHydrated: boolean;
+  badgesData: BadgeData[];
+  setBadgesData: (badges: BadgeData[]) => void;
   insightDismissed: boolean;
   selectedTransitRoute: any | null;
   pendingRouteSearch: { origin: any; destination: any } | null;
@@ -92,6 +98,8 @@ export const useStore = create<StoreState>()(
       user: createGuestUser(),
       sessionMode: null,
       hasHydrated: false,
+      badgesData: [],
+      setBadgesData: (badgesData) => set({ badgesData }),
       insightDismissed: false,
       selectedTransitRoute: null,
       pendingRouteSearch: null,
@@ -133,13 +141,13 @@ export const useStore = create<StoreState>()(
       dismissInsight: () => set({ insightDismissed: true }),
       addPoints: (points) => set((state) => ({ user: { ...state.user, points: state.user.points + points } })),
       addTripStats: ({ distance, fare, points }) => set((state) => {
-        const newUser = {
+        const newUser: User = {
           ...state.user,
           points: (state.user.points || 0) + points,
           streak_count: (state.user.streak_count || 0) + 1,
-          distance: (state.user.distance || 0) + distance,
+          total_distance: (state.user.total_distance || 0) + distance,
           spent: (state.user.spent || 0) + fare,
-          trips: (state.user.trips || 0) + 1,
+          total_trips: (state.user.total_trips || 0) + 1,
         };
 
         const newBadges = [...(newUser.badges || [])];
@@ -152,33 +160,26 @@ export const useStore = create<StoreState>()(
            }
         };
 
-        if (newUser.trips >= 1) tryUnlock('route_rookie');
-        if (newUser.trips >= 5) tryUnlock('path_explorer');
-        if (newUser.trips >= 20) tryUnlock('urban_navigator');
-        if (newUser.trips >= 50) tryUnlock('frequent_rider');
-        if (newUser.trips >= 100) tryUnlock('ultimate_commuter');
-        if (newUser.distance >= 50) tryUnlock('long_hauler');
-        if (newUser.spent >= 100) tryUnlock('thrifty_commuter');
-        if (newUser.streak_count >= 14) tryUnlock('habit_builder');
-        if (newUser.streak_count >= 30) tryUnlock('dedicated_commuter');
+        state.badgesData.forEach(badge => {
+          const userValue = Number(newUser[badge.condition_type as keyof User]) || 0;
+          if (userValue >= badge.condition_value) tryUnlock(badge.id);
+        });
 
         if (newBadges.length > (newUser.badges?.length || 0)) {
            newUser.badges = newBadges;
         }
 
-        if (state.sessionMode === 'auth' && state.user.email) {
+        if (state.sessionMode === 'auth' && state.user.id) {
           // optionally sync to supabase
           supabase
             .from('users')
             .update({
               points: newUser.points,
               streak_count: newUser.streak_count,
-              distance: newUser.distance,
-              spent: newUser.spent,
-              trips: newUser.trips,
-              ...(newUser.badges ? { badges: newUser.badges } : {})
+              total_distance: newUser.total_distance,
+              total_trips: newUser.total_trips,
             })
-            .eq('email', state.user.email)
+            .eq('id', state.user.id)
             .then(({ error }) => {
               if (error && error.code !== 'PGRST204') console.log('Failed to sync trip stats to Supabase:', error.message);
             });
@@ -347,7 +348,7 @@ export const useStore = create<StoreState>()(
           try {
             const { data, error } = await supabase
               .from('users')
-              .select('points, streak_count, distance, trips, spent, badges')
+              .select('points, streak_count, total_distance, total_trips, spent, badges')
               .eq('email', state.user.email)
               .single();
               
@@ -357,8 +358,8 @@ export const useStore = create<StoreState>()(
                   ...s.user,
                   points: data.points ?? s.user.points ?? 0,
                   streak_count: data.streak_count ?? s.user.streak_count ?? 0,
-                  distance: data.distance ?? s.user.distance ?? 0,
-                  trips: data.trips ?? s.user.trips ?? 0,
+                  total_distance: data.total_distance ?? s.user.total_distance ?? 0,
+                  total_trips: data.total_trips ?? s.user.total_trips ?? 0,
                   spent: data.spent ?? s.user.spent ?? 0,
                   badges: data.badges ?? s.user.badges ?? [],
                   commute_history: s.user.commute_history || [],

@@ -9,6 +9,8 @@ import { View, Animated, StyleSheet, Easing, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { AchievementPopup } from '../components/AchievementPopup';
+import { supabase } from '../config/supabaseClient';
+import { useStore } from '../store/useStore';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -21,6 +23,24 @@ function CustomSplash({ onFinish }: { onFinish: () => void }) {
   
   // The whole screen fading out
   const screenOpacityAnim = useRef(new Animated.Value(1)).current;
+
+  const setBadgesData = useStore(state => state.setBadgesData);
+
+  useEffect(() => {
+    const fetchBadges = async () => {
+      const { data, error } = await supabase.from('badges').select('*');
+
+      if (data && data.length) {
+        setBadgesData(data);
+ 
+      } else {
+        const { BADGES } = require('../constants/badges');
+        setBadgesData(BADGES.map((b: any) => ({ id: b.id, name: b.name, description: b.description, condition_value: b.goal, condition_type: b.type, icon_url: b.id })));
+ 
+      }
+    };
+    fetchBadges();
+  }, []);
 
   useEffect(() => {
     Animated.sequence([
@@ -105,6 +125,23 @@ export default function RootLayout() {
   });
 
   const [showAnimatedSplash, setShowAnimatedSplash] = useState(true);
+  const setBadgesData = useStore(state => state.setBadgesData);
+
+  useEffect(() => {
+    const fetchBadges = async () => {
+      const { data, error } = await supabase.from('badges').select('*');
+
+      if (data && data.length) {
+        setBadgesData(data);
+ 
+      } else {
+        const { BADGES } = require('../constants/badges');
+        setBadgesData(BADGES.map((b: any) => ({ id: b.id, name: b.name, description: b.description, condition_value: b.goal, condition_type: b.type, icon_url: b.id })));
+ 
+      }
+    };
+    fetchBadges();
+  }, []);
 
   useEffect(() => {
     if (loaded || error) {

@@ -47,14 +47,14 @@ export default function ProfileScreen() {
           {/* Avatar Area */}
           <View style={styles.avatarSection}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(user?.name || '')}</Text>
+              <Text style={styles.avatarText}>{getInitials(user?.full_name || '')}</Text>
             </View>
           </View>
 
           {/* Top Info Area */}
           <View style={styles.infoArea}>
             <View style={styles.userInfo}>
-              <Text style={styles.name}>{user?.name || 'Passenger'}</Text>
+              <Text style={styles.name}>{user?.full_name || 'Passenger'}</Text>
             </View>
 
             <View style={styles.quickStatsRow}>
@@ -71,7 +71,7 @@ export default function ProfileScreen() {
               <View style={styles.gridIconContainer}>
                 <Text style={styles.gridIconText}>🚗</Text>
               </View>
-              <Text style={styles.gridValue}>{user?.trips || 0}</Text>
+              <Text style={styles.gridValue}>{user?.total_trips || 0}</Text>
               <Text style={styles.gridLabel}>Total Trips</Text>
             </View>
             
@@ -79,7 +79,7 @@ export default function ProfileScreen() {
               <View style={styles.gridIconContainer}>
                 <Text style={styles.gridIconText}>📍</Text>
               </View>
-              <Text style={styles.gridValue}>{(user?.distance || 0).toFixed(1)} <Text style={styles.gridValueSmall}>km</Text></Text>
+              <Text style={styles.gridValue}>{(user?.total_distance || 0).toFixed(1)} <Text style={styles.gridValueSmall}>km</Text></Text>
               <Text style={styles.gridLabel}>Distance</Text>
             </View>
             

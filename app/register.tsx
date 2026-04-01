@@ -95,12 +95,13 @@ export default function RegisterScreen() {
         setIsOtpSent(true);
       } else {
         beginAuthSession({
-          name: data?.user?.user_metadata?.display_name || name,
+          id: data?.user?.id,
+          full_name: data?.user?.user_metadata?.display_name || name,
           email: data?.user?.email || email,
           points: 0,
           streak_count: 0,
-          distance: 0,
-        trips: 0,
+          total_distance: 0,
+        total_trips: 0,
           spent: 0,
           saved_routes: [],
           saved_places: [],
@@ -127,12 +128,13 @@ export default function RegisterScreen() {
       const data = await verifyEmailOtp(email, otp);
       
       beginAuthSession({
-        name: data?.user?.user_metadata?.display_name || name,
+        id: data?.user?.id,
+          full_name: data?.user?.user_metadata?.display_name || name,
         email: data?.user?.email || email,
         points: 0,
         streak_count: 0,
-        distance: 0,
-        trips: 0,
+        total_distance: 0,
+        total_trips: 0,
         spent: 0,
         saved_routes: [],
         saved_places: [],

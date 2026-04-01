@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
-import { BADGES } from '../constants/badges';
 import { useStore } from '../store/useStore';
 
 import { BADGE_IMAGES } from '../constants/badgeImages';
@@ -14,37 +13,23 @@ export default function AchievementsScreen() {
   const router = useRouter();
   const user = useStore((state) => state.user);
   const unlockBadge = useStore((state) => state.unlockBadge);
+  const badgesData = useStore((state) => state.badgesData);
 
-  const getProgress = (badgeId: string) => {
-    const trips = (user)?.trips || 0;
-    const distance = user?.distance || 0;
-    const spent = user?.spent || 0;
-    const streak = user?.streak_count || 0;
-
-    switch (badgeId) {
-      case 'route_rookie': return trips;
-      case 'urban_navigator': return trips;
-      case 'frequent_rider': return trips;
-      case 'ultimate_commuter': return trips;
-      case 'long_hauler': return distance;
-      case 'thrifty_commuter': return spent;
-      case 'dedicated_commuter': return streak;
-      case 'habit_builder': return streak;
-      default: return 0; // Default active progress for non-tracked yet
-    }
+  const getProgress = (badge: any) => {
+    return Number((user as any)[badge.condition_type]) || 0;
   };
 
   React.useEffect(() => {
     const currentBadges = user.badges || [];
-    BADGES.forEach((badge) => {
+    badgesData.forEach((badge) => {
       if (!currentBadges.includes(badge.id)) {
-        const progress = getProgress(badge.id);
-        if (progress >= badge.goal) {
+        const progress = getProgress(badge);
+        if (progress >= badge.condition_value) {
           unlockBadge(badge.id);
         }
       }
     });
-  }, [user.trips, user.distance, user.spent, user.streak_count, user.badges]);
+  }, [user.total_trips, user.total_distance, user.spent, user.streak_count, user.badges, badgesData]);
 
   return (
     <View style={styles.screen}>
@@ -67,24 +52,24 @@ export default function AchievementsScreen() {
         <Text style={styles.pageTitle}>ACHIEVEMENT BADGES</Text>
         
         <View style={styles.grid}>
-          {BADGES.map((badge, idx) => {
+          {badgesData.map((badge, idx) => {
             const isEarned = user?.badges?.includes(badge.id) || false;
-            const progressValue = isEarned ? badge.goal : Math.min(badge.goal, getProgress(badge.id));
-            const fillWidth = `${(progressValue / badge.goal) * 100}%`;
+            const progressValue = isEarned ? badge.condition_value : Math.min(badge.condition_value, getProgress(badge));
+            const fillWidth = `${(progressValue / badge.condition_value) * 100}%`;
             const isLocked = !isEarned;
 
             return (
               <View key={badge.id || idx} style={[styles.card, isLocked && { opacity: 0.6 }]}>
                 <View style={[styles.iconWrapper]}>
-                  {BADGE_IMAGES[badge.id] ? (
+                  {badge.icon_url || BADGE_IMAGES[badge.id] ? (
                     <Image 
-                      source={BADGE_IMAGES[badge.id]} 
+                      source={(badge.icon_url && badge.icon_url.startsWith('http')) ? { uri: badge.icon_url } : BADGE_IMAGES[badge.id]} 
                       style={[styles.badgeImage, isLocked && { opacity: 0.3 }]} 
                       resizeMode="contain" 
                     />
                   ) : (
                     <Text style={[styles.iconTxt, isLocked && { opacity: 0.3 }]}>
-                      {badge.icon}
+                      🏆
                     </Text>
                   )}
                   {isLocked && (

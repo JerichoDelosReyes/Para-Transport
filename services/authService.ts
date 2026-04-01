@@ -138,3 +138,16 @@ export async function updatePassword(password: string) {
   return data;
 }
 
+
+export async function logUserAction(userId: string, action: string) {
+  try {
+    const { error } = await supabase
+      .from('user_logs')
+      .insert({ user_id: userId, action });
+    if (error) {
+      console.log('Failed to log user action:', error.message);
+    }
+  } catch (err) {
+    console.error('Error logging user action:', err);
+  }
+}

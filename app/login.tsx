@@ -26,6 +26,7 @@ import {
   mapLoginError,
   mapResetPasswordError,
   sendPasswordResetEmail,
+  logUserAction
 } from '../services/authService';
 import { useStore } from '../store/useStore';
 import OtpModal from '../components/OtpModal';
@@ -92,13 +93,15 @@ export default function LoginScreen() {
       } catch (err) {}
 
       // Construct a unified user to save in store
+      if (data?.user?.id) await logUserAction(data.user.id, 'Logged in');
       beginAuthSession({
-        name: data?.user?.user_metadata?.display_name || 'Commuter',
+        id: data?.user?.id,
+        full_name: data?.user?.user_metadata?.display_name || 'Commuter',
         email: data?.user?.email || email,
         points: userStats.points || 0,
         streak_count: userStats.streak_count || 0,
-        distance: userStats.distance || 0,
-        trips: userStats.trips || 0,
+        total_distance: userStats.total_distance || 0,
+        total_trips: userStats.total_trips || 0,
         spent: userStats.spent || 0,
         saved_routes: userStats.saved_routes || [],
         saved_places: userStats.saved_places || [],
@@ -166,12 +169,13 @@ export default function LoginScreen() {
       } catch (err) {}
       
       beginAuthSession({
-        name: data?.user?.user_metadata?.display_name || 'Commuter',
+        id: data?.user?.id,
+        full_name: data?.user?.user_metadata?.display_name || 'Commuter',
         email: data?.user?.email || email,
         points: userStats.points || 0,
         streak_count: userStats.streak_count || 0,
-        distance: userStats.distance || 0,
-        trips: userStats.trips || 0,
+        total_distance: userStats.total_distance || 0,
+        total_trips: userStats.total_trips || 0,
         spent: userStats.spent || 0,
         saved_routes: userStats.saved_routes || [],
         saved_places: userStats.saved_places || [],

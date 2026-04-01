@@ -15,7 +15,7 @@ export default function EditProfileScreen() {
   const resetProgress = useStore((state) => state.resetProgress);
   const insets = useSafeAreaInsets();
   
-  const [name, setName] = useState(user?.name || '');
+  const [name, setName] = useState(user?.full_name || '');
   const [isSaving, setIsSaving] = useState(false);
   
   const [isResetModalVisible, setIsResetModalVisible] = useState(false);
