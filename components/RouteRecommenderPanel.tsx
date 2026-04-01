@@ -215,7 +215,7 @@ export default function RouteRecommenderPanel({
         ListHeaderComponent={listHeader}
         ListEmptyComponent={emptyList}
         ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-        ListFooterComponent={() => <View style={{ height: 40 }} />}
+        ListFooterComponent={() => <View style={{ height: 200 }} />}
         initialNumToRender={6}
         maxToRenderPerBatch={8}
         windowSize={7}
@@ -276,6 +276,7 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: 20,
     paddingTop: 10,
+    paddingBottom: 250,
   },
   routeResultSubtitle: {
     fontFamily: "Inter-Medium",
