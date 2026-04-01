@@ -565,7 +565,7 @@
       ]
     }
   ],
-  "builderAnswer": "The 'Para' application's idea was proposed by Christian Valenzuela himself, this current version that you are seeing was built during a Hackathon competition, with:\n\nAcal, Lance Adrian\nDelos Reyes, Jericho\nNorona, Lee Adrian\nOrdiales, Cristian Gabriel\nValenzuela, Christian",
+  "builderAnswer": "Thank you for asking that one!\n\n'Para' was first built as a prototype at Cavite State University - Imus.\n\nThe 'Para' application itself was an idea proposed by Christian Valenzuela. It was later implemented and built by Cavite State University - Imus Computer Science students as part of their requirement for a Hackathon competition.\n\nThis was built by:\n\nAcal, Lance Adrian\nDelos Reyes, Jericho\nNorona, Lee Adrian\nOrdiales, Cristian Gabriel\nValenzuela, Christian",
   "fallbackMessages": {
     "outOfScope": {
       "en": [

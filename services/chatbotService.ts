@@ -494,8 +494,23 @@ function hasTriviaIntent(normalized: string): boolean {
 }
 
 function hasBuilderIntent(normalized: string): boolean {
-  return /(who (built|made|created)|sino (gumawa|bumuo|nag build|nagbuo)|developer|builders?)/.test(normalized)
+  return /(who (built|made|created|developed)|sino (gumawa|bumuo|nag build|nagbuo|nag develop)|developer|builders?|creator|creators)/.test(normalized)
     && /(para|app|application)/.test(normalized);
+}
+
+function hasBuilderOriginIntent(normalized: string): boolean {
+  const asksLocation = /\b(where|saan)\b/.test(normalized);
+  const asksCreation = /(created|built|made|developed|prototype|started|origin|ginawa|binuo|sinimulan|nagsimula)/.test(normalized);
+  const asksPara = /(para|app|application)/.test(normalized);
+  return asksLocation && asksCreation && asksPara;
+}
+
+function builderOriginReply(language: BotLanguage): string {
+  if (language === 'tl') {
+    return "Ang unang prototype ng 'Para' ay ginawa sa Cavite State University - Imus.";
+  }
+
+  return "'Para' was first prototyped at Cavite State University - Imus.";
 }
 
 function hasFareNewsIntent(normalized: string): boolean {
@@ -1156,9 +1171,18 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
+  if (hasBuilderOriginIntent(normalized)) {
+    return {
+      text: builderOriginReply(language),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
   if (hasBuilderIntent(normalized)) {
     return {
-      text: composeSupportReply(language, dataset.builderAnswer),
+      text: formatForChatDisplay(dataset.builderAnswer),
       language,
       state: {},
       usedGroq: false,
