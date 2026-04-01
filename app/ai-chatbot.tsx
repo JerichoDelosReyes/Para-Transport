@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Animated, KeyboardAvoidingView, Platform, FlatList, Keyboard } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Animated, KeyboardAvoidingView, Platform, FlatList, Keyboard, Alert } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -34,6 +34,7 @@ export default function AIChatbotScreen() {
   const storedConversationState = useStore((state: any) => state.chatbotConversationState || {});
   const setStoredMessages = useStore((state: any) => state.setChatbotMessages);
   const setStoredConversationState = useStore((state: any) => state.setChatbotConversationState);
+  const clearChatbotMemory = useStore((state: any) => state.clearChatbotMemory);
   const [messages, setMessages] = useState<ChatMessage[]>(() => storedMessages as ChatMessage[]);
   const [conversationState, setConversationState] = useState<ChatbotConversationState>(
     () => storedConversationState as ChatbotConversationState,
@@ -218,6 +219,25 @@ export default function AIChatbotScreen() {
     }
   };
 
+  const clearChatNow = () => {
+    clearChatbotMemory();
+    setMessages([]);
+    setConversationState({});
+    setInputText("");
+    setCurrentState("IDLE");
+  };
+
+  const handleClearChat = () => {
+    Alert.alert(
+      "Clear chat?",
+      "This will remove the current conversation and route context.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Clear", style: "destructive", onPress: clearChatNow },
+      ],
+    );
+  };
+
   return (
     <LinearGradient
       colors={[COLORS.background, "#FDE8A8", "#D7F3DE"]}
@@ -242,6 +262,10 @@ export default function AIChatbotScreen() {
                 <Text style={styles.chatHeaderStatus}>Online</Text>
               </View>
             </View>
+            <TouchableOpacity onPress={handleClearChat} style={styles.chatHeaderClearButton}>
+              <Ionicons name="trash-outline" size={18} color={COLORS.navy} />
+              <Text style={styles.chatHeaderClearText}>Clear</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.header}>
@@ -392,6 +416,23 @@ const styles = StyleSheet.create({
   chatHeaderAvatarImage: { width: "100%", height: "100%", resizeMode: "cover" },
   chatHeaderInfo: { flex: 1 },
   chatHeaderName: { color: COLORS.navy, fontSize: 18, fontWeight: "700" },
+  chatHeaderClearButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.65)",
+    borderWidth: 1,
+    borderColor: "rgba(10,22,40,0.14)",
+    columnGap: 4,
+  },
+  chatHeaderClearText: {
+    color: COLORS.navy,
+    fontSize: 12,
+    fontWeight: "700",
+  },
   chatStatusRow: { flexDirection: "row", alignItems: "center", marginTop: 1 },
   onlineDot: {
     width: 8,

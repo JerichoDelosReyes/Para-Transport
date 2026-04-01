@@ -1312,7 +1312,9 @@ function buildRouteReply(params: {
       intro,
       `Roadmap mula ${originLabel} papuntang ${destinationLabel}:`,
       steps.join('\n'),
-      `Tantyang biyahe: mga ${plan.estimatedMinutes} minuto | Tantyang layo: ${plan.distanceKm.toFixed(1)} km | Tantyang fare: ${formatPhp(plan.estimatedFare)} (regular)`,
+      `Tantyang biyahe: mga ${plan.estimatedMinutes} minuto.`,
+      `Tantyang layo: ${plan.distanceKm.toFixed(1)} km.`,
+      `Tantyang fare: ${formatPhp(plan.estimatedFare)} (regular).`,
       routeResponseText(language, 'routeSummaryOutro'),
     ].join('\n\n');
   }
@@ -1321,7 +1323,9 @@ function buildRouteReply(params: {
     intro,
     `Roadmap from ${originLabel} to ${destinationLabel}:`,
     steps.join('\n'),
-    `Estimated trip: around ${plan.estimatedMinutes} minutes | Estimated distance: ${plan.distanceKm.toFixed(1)} km | Estimated fare: ${formatPhp(plan.estimatedFare)} (regular)`,
+    `Estimated trip: around ${plan.estimatedMinutes} minutes.`,
+    `Estimated distance: ${plan.distanceKm.toFixed(1)} km.`,
+    `Estimated fare: ${formatPhp(plan.estimatedFare)} (regular).`,
     routeResponseText(language, 'routeSummaryOutro'),
   ].join('\n\n');
 }

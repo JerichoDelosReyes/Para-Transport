@@ -380,14 +380,19 @@ export const useStore = create<StoreState>()(
         sessionMode: state.sessionMode,
         insightDismissed: state.insightDismissed,
         selectedTransitRoute: state.selectedTransitRoute,
-        chatbotMessages: state.chatbotMessages,
-        chatbotConversationState: state.chatbotConversationState,
       }),
       merge: (persistedState: any, currentState: StoreState) => {
         if (!persistedState) return currentState;
+
+        const {
+          chatbotMessages: _ignoredChatbotMessages,
+          chatbotConversationState: _ignoredChatbotConversationState,
+          ...safePersistedState
+        } = persistedState;
+
         return {
           ...currentState,
-          ...persistedState,
+          ...safePersistedState,
           user: {
             ...currentState.user,
             ...(persistedState.user || {}),
@@ -395,8 +400,8 @@ export const useStore = create<StoreState>()(
             saved_routes: persistedState.user?.saved_routes || currentState.user?.saved_routes || [],
             saved_places: persistedState.user?.saved_places || currentState.user?.saved_places || [],
           },
-          chatbotMessages: persistedState.chatbotMessages || currentState.chatbotMessages || [],
-          chatbotConversationState: persistedState.chatbotConversationState || currentState.chatbotConversationState || {},
+          chatbotMessages: currentState.chatbotMessages || [],
+          chatbotConversationState: currentState.chatbotConversationState || {},
         };
       },
       onRehydrateStorage: () => (state) => {
