@@ -20,7 +20,9 @@ import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
-const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
+const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
+const MAX_WALK_PATH_POINTS = 140;
+const WALK_PATH_CACHE_LIMIT = 400;
 
 type MapCoordinate = {
   latitude: number;
@@ -67,6 +69,47 @@ const sqDistApprox = (a: MapCoordinate, b: MapCoordinate): number => {
     DEG *
     Math.cos(((a.latitude + b.latitude) / 2) * (Math.PI / 180));
   return dLat * dLat + dLng * dLng;
+};
+
+const roundCoordForKey = (value: number): string => value.toFixed(5);
+
+const makeWalkPathCacheKey = (from: MapCoordinate, to: MapCoordinate): string => {
+  return `${roundCoordForKey(from.latitude)},${roundCoordForKey(from.longitude)}|${roundCoordForKey(to.latitude)},${roundCoordForKey(to.longitude)}`;
+};
+
+const fetchRoadPath = async (
+  from: MapCoordinate,
+  to: MapCoordinate,
+  profile: 'foot' | 'driving',
+): Promise<MapCoordinate[] | null> => {
+  const coords = `${from.longitude},${from.latitude};${to.longitude},${to.latitude}`;
+  const params = new URLSearchParams({
+    overview: 'full',
+    geometries: 'geojson',
+    alternatives: 'false',
+    steps: 'false',
+  });
+
+  const url = `${ROUTING_BASE_URL}/${profile}/${coords}?${params.toString()}`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const geometry = data?.routes?.[0]?.geometry?.coordinates;
+    if (!Array.isArray(geometry) || geometry.length < 2) return null;
+
+    const mapped = sampleCoordinates(toMapCoordinates(geometry), MAX_WALK_PATH_POINTS);
+    if (mapped.length < 2) return null;
+
+    // Keep exact segment endpoints so transfer joins stay visually connected.
+    mapped[0] = from;
+    mapped[mapped.length - 1] = to;
+    return mapped;
+  } catch {
+    return null;
+  }
 };
 
 type RouteMetrics = {
@@ -225,6 +268,7 @@ export default function HomeScreen() {
   const [rankedRoutes, setRankedRoutes] = useState<MatchedRoute[]>([]);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<MatchedRoute | null>(null);
+  const [transitLegs, setTransitLegs] = useState<TransitLeg[]>([]);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
   const { routes: transitDataRoutes } = useRoutes();
 
@@ -287,6 +331,8 @@ export default function HomeScreen() {
   const updateLatestHistoryFare = useStore((state) => state.updateLatestHistoryFare);
   const addTripStats = useStore((state) => state.addTripStats);
   const mapRef = useRef<MapView | null>(null);
+  const walkPathCacheRef = useRef<Map<string, MapCoordinate[]>>(new Map());
+  const walkPathRequestRef = useRef(0);
   const tripStatRecordedRef = useRef(false);
   const [showRecommender, setShowRecommender] = useState(false);
   const [simAutoFollow, setSimAutoFollow] = useState(true);
@@ -636,6 +682,50 @@ export default function HomeScreen() {
     }
   }, [currentLocation, transitStops]);
 
+  const resolveWalkPathOnRoad = useCallback(async (
+    from: MapCoordinate,
+    to: MapCoordinate,
+  ): Promise<MapCoordinate[]> => {
+    const cacheKey = makeWalkPathCacheKey(from, to);
+    const reverseKey = makeWalkPathCacheKey(to, from);
+    const cache = walkPathCacheRef.current;
+
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
+    const reverseCached = cache.get(reverseKey);
+    if (reverseCached && reverseCached.length >= 2) {
+      const reversed = [...reverseCached].reverse();
+      cache.set(cacheKey, reversed);
+      return reversed;
+    }
+
+    let routedPath: MapCoordinate[] | null = null;
+    const profiles: Array<'foot' | 'driving'> = ['foot', 'driving'];
+    for (const profile of profiles) {
+      routedPath = await fetchRoadPath(from, to, profile);
+      if (routedPath && routedPath.length >= 2) break;
+    }
+
+    const fallbackPath = [from, to];
+    const resolved = (routedPath && routedPath.length >= 2 ? routedPath : fallbackPath).map((pt) => ({
+      latitude: pt.latitude,
+      longitude: pt.longitude,
+    }));
+
+    // Ensure exact joins to transit legs.
+    resolved[0] = from;
+    resolved[resolved.length - 1] = to;
+
+    cache.set(cacheKey, resolved);
+    if (cache.size > WALK_PATH_CACHE_LIMIT) {
+      const oldestKey = cache.keys().next().value;
+      if (oldestKey) cache.delete(oldestKey);
+    }
+
+    return resolved;
+  }, []);
+
   // Visible routes: always show selected route; otherwise show all if transit layer is on
   const visibleTransitRoutes = useMemo(() => {
     if (selectedTransitRoute) {
@@ -653,7 +743,7 @@ export default function HomeScreen() {
   }, [showTransitLayer, selectedTransitRoute, transitStops]);
 
   // Build multi-leg transit journey plan (Fixes: Walk lines, transfer segments + correct plotting)
-  const transitLegs = useMemo((): TransitLeg[] => {
+  const baseTransitLegs = useMemo((): TransitLeg[] => {
     if (selectedRoute?.legs && selectedRoute.legs.length > 0) {
       const legs: TransitLeg[] = [];
       const originPoint = currentLocation; 
@@ -726,6 +816,61 @@ export default function HomeScreen() {
     if (routeCoordinates.length < 2) return [];
     return buildTransitLegs(routeCoordinates, transitRoutes as any[], 55, 120);
   }, [selectedRoute, routeCoordinates, transitRoutes, currentLocation, destinationLocation]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const requestId = ++walkPathRequestRef.current;
+
+    const hydrateWalkLegs = async () => {
+      if (baseTransitLegs.length === 0) {
+        setTransitLegs([]);
+        return;
+      }
+
+      // Render base legs immediately, then replace walking segments with road-following paths.
+      setTransitLegs(baseTransitLegs);
+
+      const walkLegEntries = baseTransitLegs
+        .map((leg, idx) => ({ leg, idx }))
+        .filter(({ leg }) => !leg.onTransit && leg.coordinates.length >= 2);
+
+      if (walkLegEntries.length === 0) return;
+
+      const resolved = await Promise.all(
+        walkLegEntries.map(async ({ leg, idx }) => {
+          const from = leg.coordinates[0];
+          const to = leg.coordinates[leg.coordinates.length - 1];
+          const path = await resolveWalkPathOnRoad(from, to);
+          return { idx, path };
+        }),
+      );
+
+      if (isCancelled || requestId !== walkPathRequestRef.current) return;
+
+      const nextLegs = baseTransitLegs.map((leg) => ({
+        ...leg,
+        coordinates: [...leg.coordinates],
+      }));
+
+      for (const item of resolved) {
+        if (!item.path || item.path.length < 2) continue;
+        nextLegs[item.idx] = {
+          ...nextLegs[item.idx],
+          coordinates: item.path,
+          boardAt: item.path[0],
+          alightAt: item.path[item.path.length - 1],
+        };
+      }
+
+      setTransitLegs(nextLegs);
+    };
+
+    hydrateWalkLegs();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [baseTransitLegs, resolveWalkPathOnRoad]);
 
   // Simulation — uses the actual searched route coordinates and transit legs
   const sim = useSimulation(routeCoordinates, transitLegs);

@@ -67,12 +67,20 @@ const WALK_SPEED_KMH = 4;
 const MAX_LINE_POINTS = 160;
 const MAX_NEAR_CANDIDATES = 10;
 const MAX_TRANSFER_SAMPLES = 24;
-const MAX_TRANSFER_PAIRS = 36;
 const MAX_MATCHED_RESULTS = 40;
+
+// Multi-leg search safety limits.
+const MAX_TRANSFERS = 4; // up to 5 legs
+const MAX_STATE_EXPANSIONS = 420;
+const MAX_FRONTIER_SIZE = 180;
+const MAX_NEIGHBORS_PER_STATE = 8;
+const MAX_NEIGHBOR_CANDIDATES = 28;
+const MIN_LEG_DISTANCE_KM = 0.05;
+const MAX_TOTAL_WALK_KM = 3.2;
 
 /**
  * LTFRB Jeepney Fare Matrix (PUJ – Traditional)
- * First 4 km = P13.00, then P1.80 per succeeding km.
+ * First 4 km = P13.00, then P1.80 per succeeding km
  */
 const FARE_TABLE: [number, number][] = [
   [4, 13.0],
@@ -149,15 +157,17 @@ type TransferSample = {
   alongKm: number;
 };
 
+type RouteBBox = {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+};
+
 type RouteIndex = {
   coords: RouteCoord[];
   cumulativeMeters: number[];
-  bbox: {
-    minLat: number;
-    maxLat: number;
-    minLng: number;
-    maxLng: number;
-  };
+  bbox: RouteBBox;
   transferSamples: TransferSample[];
 };
 
@@ -170,10 +180,44 @@ type TransferCandidate = {
 };
 
 type SnapCandidate = {
-  route: JeepneyRoute;
-  index: RouteIndex;
+  info: RouteInfo;
   snap: SnapResult;
   meters: number;
+};
+
+type AlongPoint = {
+  latitude: number;
+  longitude: number;
+  alongKm: number;
+};
+
+type RouteInfo = {
+  route: JeepneyRoute;
+  index: RouteIndex;
+  code: string;
+};
+
+type NeighborCandidate = {
+  next: RouteInfo;
+  transfer: TransferCandidate;
+  heuristic: number;
+};
+
+type SearchState = {
+  current: RouteInfo;
+  entry: AlongPoint;
+  legs: RouteLeg[];
+  totalDistanceKm: number;
+  totalFare: number;
+  totalMinutes: number;
+  totalWalkKm: number;
+  transferCount: number;
+  usedCodes: Set<string>;
+};
+
+type QueuedState = {
+  state: SearchState;
+  priority: number;
 };
 
 const routeIndexCache = new WeakMap<JeepneyRoute, RouteIndex>();
@@ -236,7 +280,7 @@ function getRouteIndex(route: JeepneyRoute): RouteIndex {
 
 function pointCouldBeNearRoute(
   point: { latitude: number; longitude: number },
-  bbox: RouteIndex['bbox'],
+  bbox: RouteBBox,
   bufferMeters: number,
 ): boolean {
   const latPad = bufferMeters / METERS_PER_DEG;
@@ -324,12 +368,6 @@ function snapPointToRoute(
   };
 }
 
-type AlongPoint = {
-  latitude: number;
-  longitude: number;
-  alongKm: number;
-};
-
 function buildLegFromAlong(route: JeepneyRoute, from: AlongPoint, to: AlongPoint): RouteLeg {
   const distanceKm = Math.abs(to.alongKm - from.alongKm);
 
@@ -347,6 +385,27 @@ function transferCacheKey(aCode: string, bCode: string): string {
   return `${aCode}__${bCode}`;
 }
 
+function findBestSampleTransfer(
+  sourceSamples: TransferSample[],
+  targetIndex: RouteIndex,
+): { source: TransferSample; targetSnap: SnapResult } | null {
+  let bestSource: TransferSample | null = null;
+  let bestSnap: SnapResult | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const sample of sourceSamples) {
+    const snap = snapPointToRoute(sample.point, targetIndex);
+    if (snap.distanceMeters >= bestDistance) continue;
+
+    bestDistance = snap.distanceMeters;
+    bestSource = sample;
+    bestSnap = snap;
+  }
+
+  if (!bestSource || !bestSnap) return null;
+  return { source: bestSource, targetSnap: bestSnap };
+}
+
 function findTransferCandidate(
   aCode: string,
   aIndex: RouteIndex,
@@ -358,36 +417,89 @@ function findTransferCandidate(
     return transferPairCache.get(key) ?? null;
   }
 
-  let bestDistance = Number.POSITIVE_INFINITY;
+  const forward = findBestSampleTransfer(aIndex.transferSamples, bIndex);
+  const backward = findBestSampleTransfer(bIndex.transferSamples, aIndex);
+
   let best: TransferCandidate | null = null;
 
-  for (const sample of aIndex.transferSamples) {
-    const snapOnB = snapPointToRoute(sample.point, bIndex);
-    if (snapOnB.distanceMeters >= bestDistance) continue;
-
-    bestDistance = snapOnB.distanceMeters;
+  if (forward) {
     best = {
       pointA: {
-        latitude: sample.point.latitude,
-        longitude: sample.point.longitude,
+        latitude: forward.source.point.latitude,
+        longitude: forward.source.point.longitude,
       },
       pointB: {
-        latitude: snapOnB.latitude,
-        longitude: snapOnB.longitude,
+        latitude: forward.targetSnap.latitude,
+        longitude: forward.targetSnap.longitude,
       },
-      alongAKm: sample.alongKm,
-      alongBKm: snapOnB.alongKm,
-      walkDistanceKm: snapOnB.distanceMeters / 1000,
+      alongAKm: forward.source.alongKm,
+      alongBKm: forward.targetSnap.alongKm,
+      walkDistanceKm: forward.targetSnap.distanceMeters / 1000,
     };
   }
 
-  const result = best && bestDistance <= TRANSFER_WALK_DISTANCE ? best : null;
+  if (backward) {
+    const candidate: TransferCandidate = {
+      pointA: {
+        latitude: backward.targetSnap.latitude,
+        longitude: backward.targetSnap.longitude,
+      },
+      pointB: {
+        latitude: backward.source.point.latitude,
+        longitude: backward.source.point.longitude,
+      },
+      alongAKm: backward.targetSnap.alongKm,
+      alongBKm: backward.source.alongKm,
+      walkDistanceKm: backward.targetSnap.distanceMeters / 1000,
+    };
+
+    if (!best || candidate.walkDistanceKm < best.walkDistanceKm) {
+      best = candidate;
+    }
+  }
+
+  const result = best && best.walkDistanceKm * 1000 <= TRANSFER_WALK_DISTANCE ? best : null;
   transferPairCache.set(key, result);
   return result;
 }
 
+function bboxGapMeters(a: RouteBBox, b: RouteBBox): number {
+  const latGap = Math.max(0, Math.max(a.minLat, b.minLat) - Math.min(a.maxLat, b.maxLat));
+  const lngGap = Math.max(0, Math.max(a.minLng, b.minLng) - Math.min(a.maxLng, b.maxLng));
+
+  if (latGap === 0 && lngGap === 0) return 0;
+
+  const refLat = (a.minLat + a.maxLat + b.minLat + b.maxLat) / 4;
+  const dy = latGap * METERS_PER_DEG;
+  const dx = lngGap * lonScaleAtLat(refLat);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function statePriority(state: SearchState, destHintMeters: number): number {
+  const transferPenalty = state.transferCount * 4;
+  const walkPenalty = state.totalWalkKm * 9;
+  const destPenalty = destHintMeters / 200;
+  return state.totalMinutes + transferPenalty + walkPenalty + destPenalty;
+}
+
+function buildMatchedRoute(legs: RouteLeg[], totalMinutes: number, totalFare: number, totalDistanceKm: number): MatchedRoute {
+  const first = legs[0];
+  const last = legs[legs.length - 1];
+
+  return {
+    legs,
+    distanceKm: totalDistanceKm,
+    estimatedFare: totalFare,
+    estimatedMinutes: totalMinutes,
+    transferCount: Math.max(0, legs.length - 1),
+    route: first.route,
+    boardingPoint: first.boardingPoint,
+    alightingPoint: last.alightingPoint,
+  };
+}
+
 /**
- * Find all transit routes (single or 2-leg transfers) from origin to destination.
+ * Find all transit routes (single or multi-transfer) from origin to destination.
  */
 export function findRoutesForDestination(
   origin: { latitude: number; longitude: number },
@@ -395,131 +507,221 @@ export function findRoutesForDestination(
   routes: JeepneyRoute[],
   bufferMeters: number = BUFFER_DISTANCE,
 ): MatchedRoute[] {
+  const allInfos: RouteInfo[] = [];
   const nearOriginRanked: SnapCandidate[] = [];
-  const nearDestRanked: SnapCandidate[] = [];
+  const nearDestByCode = new Map<string, SnapCandidate>();
+  const destHintByCode = new Map<string, number>();
 
   for (const route of routes) {
     if (route.coordinates.length < 2) continue;
-    const index = getRouteIndex(route);
 
-    if (pointCouldBeNearRoute(origin, index.bbox, bufferMeters)) {
-      const originSnap = snapPointToRoute(origin, index);
+    const info: RouteInfo = {
+      route,
+      index: getRouteIndex(route),
+      code: route.properties.code,
+    };
+    allInfos.push(info);
+
+    if (pointCouldBeNearRoute(origin, info.index.bbox, bufferMeters)) {
+      const originSnap = snapPointToRoute(origin, info.index);
       if (originSnap.distanceMeters <= bufferMeters) {
         nearOriginRanked.push({
-          route,
-          index,
+          info,
           snap: originSnap,
           meters: originSnap.distanceMeters,
         });
       }
     }
 
-    if (pointCouldBeNearRoute(destination, index.bbox, bufferMeters)) {
-      const destSnap = snapPointToRoute(destination, index);
+    if (pointCouldBeNearRoute(destination, info.index.bbox, bufferMeters)) {
+      const destSnap = snapPointToRoute(destination, info.index);
       if (destSnap.distanceMeters <= bufferMeters) {
-        nearDestRanked.push({
-          route,
-          index,
-          snap: destSnap,
-          meters: destSnap.distanceMeters,
-        });
+        const existing = nearDestByCode.get(info.code);
+        if (!existing || destSnap.distanceMeters < existing.meters) {
+          nearDestByCode.set(info.code, {
+            info,
+            snap: destSnap,
+            meters: destSnap.distanceMeters,
+          });
+          destHintByCode.set(info.code, destSnap.distanceMeters);
+        }
       }
     }
   }
 
+  if (allInfos.length === 0 || nearDestByCode.size === 0) return [];
+
   nearOriginRanked.sort((a, b) => a.meters - b.meters);
-  nearDestRanked.sort((a, b) => a.meters - b.meters);
+  const startCandidates = nearOriginRanked.slice(0, MAX_NEAR_CANDIDATES);
+  if (startCandidates.length === 0) return [];
 
-  const nearOrigin = nearOriginRanked.slice(0, MAX_NEAR_CANDIDATES);
-  const nearDest = nearDestRanked.slice(0, MAX_NEAR_CANDIDATES);
+  const neighborMemo = new Map<string, NeighborCandidate[]>();
 
-  const nearDestByCode = new Map<string, SnapCandidate>();
-  for (const info of nearDest) {
-    nearDestByCode.set(info.route.properties.code, info);
-  }
+  const getNeighbors = (fromInfo: RouteInfo): NeighborCandidate[] => {
+    const cached = neighborMemo.get(fromInfo.code);
+    if (cached) return cached;
 
-  const matched: MatchedRoute[] = [];
-  const seen = new Set<string>();
+    const candidates: NeighborCandidate[] = [];
+    for (const toInfo of allInfos) {
+      if (toInfo.code === fromInfo.code) continue;
 
-  // Single-leg routes.
-  for (const info of nearOrigin) {
-    const code = info.route.properties.code;
-    const destInfo = nearDestByCode.get(code);
-    if (!destInfo) continue;
+      const bboxGap = bboxGapMeters(fromInfo.index.bbox, toInfo.index.bbox);
+      if (bboxGap > TRANSFER_WALK_DISTANCE * 1.35) continue;
 
-    const leg = buildLegFromAlong(info.route, info.snap, destInfo.snap);
-    if (seen.has(code)) continue;
-    seen.add(code);
+      const transfer = findTransferCandidate(fromInfo.code, fromInfo.index, toInfo.code, toInfo.index);
+      if (!transfer) continue;
 
-    matched.push({
-      legs: [leg],
-      distanceKm: leg.distanceKm,
-      estimatedFare: leg.estimatedFare,
-      estimatedMinutes: leg.estimatedMinutes,
+      const destHint = destHintByCode.get(toInfo.code) ?? 4000;
+      const heuristic = transfer.walkDistanceKm * 1000 + destHint;
+
+      candidates.push({
+        next: toInfo,
+        transfer,
+        heuristic,
+      });
+    }
+
+    candidates.sort((a, b) => a.heuristic - b.heuristic);
+    const trimmed = candidates.slice(0, MAX_NEIGHBOR_CANDIDATES);
+    neighborMemo.set(fromInfo.code, trimmed);
+    return trimmed;
+  };
+
+  const resultBySignature = new Map<string, MatchedRoute>();
+  const bestStateScore = new Map<string, number>();
+  const frontier: QueuedState[] = [];
+
+  const seededCodes = new Set<string>();
+  for (const start of startCandidates) {
+    if (seededCodes.has(start.info.code)) continue;
+    seededCodes.add(start.info.code);
+
+    const state: SearchState = {
+      current: start.info,
+      entry: {
+        latitude: start.snap.latitude,
+        longitude: start.snap.longitude,
+        alongKm: start.snap.alongKm,
+      },
+      legs: [],
+      totalDistanceKm: 0,
+      totalFare: 0,
+      totalMinutes: 0,
+      totalWalkKm: 0,
       transferCount: 0,
-      route: leg.route,
-      boardingPoint: leg.boardingPoint,
-      alightingPoint: leg.alightingPoint,
+      usedCodes: new Set([start.info.code]),
+    };
+
+    frontier.push({
+      state,
+      priority: statePriority(state, destHintByCode.get(start.info.code) ?? 4000),
     });
   }
 
-  // Transfer routes, ranked by proximity score before deeper evaluation.
-  const transferPairs: Array<{ a: SnapCandidate; b: SnapCandidate; score: number }> = [];
-  for (const a of nearOrigin) {
-    for (const b of nearDest) {
-      if (a.route.properties.code === b.route.properties.code) continue;
-      transferPairs.push({ a, b, score: a.meters + b.meters });
+  let expansions = 0;
+  while (
+    frontier.length > 0 &&
+    expansions < MAX_STATE_EXPANSIONS &&
+    resultBySignature.size < MAX_MATCHED_RESULTS
+  ) {
+    frontier.sort((a, b) => a.priority - b.priority);
+    const queued = frontier.shift();
+    if (!queued) break;
+
+    const state = queued.state;
+    expansions += 1;
+
+    const destCandidate = nearDestByCode.get(state.current.code);
+    if (destCandidate) {
+      const finalLeg = buildLegFromAlong(state.current.route, state.entry, destCandidate.snap);
+
+      if (finalLeg.distanceKm >= MIN_LEG_DISTANCE_KM || state.legs.length === 0) {
+        const legs = [...state.legs, finalLeg];
+        const totalDistanceKm = state.totalDistanceKm + finalLeg.distanceKm;
+        const totalFare = state.totalFare + finalLeg.estimatedFare;
+        const totalMinutes = state.totalMinutes + finalLeg.estimatedMinutes;
+
+        const matched = buildMatchedRoute(legs, totalMinutes, totalFare, totalDistanceKm);
+        const sig = legs.map((leg) => leg.route.properties.code).join('>');
+        const prev = resultBySignature.get(sig);
+
+        if (!prev || matched.estimatedMinutes < prev.estimatedMinutes) {
+          resultBySignature.set(sig, matched);
+        }
+      }
+    }
+
+    if (state.transferCount >= MAX_TRANSFERS) continue;
+    if (state.totalWalkKm >= MAX_TOTAL_WALK_KM) continue;
+
+    const neighbors = getNeighbors(state.current);
+    let expanded = 0;
+
+    for (const neighbor of neighbors) {
+      if (expanded >= MAX_NEIGHBORS_PER_STATE) break;
+      if (state.usedCodes.has(neighbor.next.code)) continue;
+
+      const transferOnCurrent: AlongPoint = {
+        latitude: neighbor.transfer.pointA.latitude,
+        longitude: neighbor.transfer.pointA.longitude,
+        alongKm: neighbor.transfer.alongAKm,
+      };
+
+      const currentLeg = buildLegFromAlong(state.current.route, state.entry, transferOnCurrent);
+      if (currentLeg.distanceKm < MIN_LEG_DISTANCE_KM) continue;
+
+      const walkKm = neighbor.transfer.walkDistanceKm;
+      const nextTotalWalkKm = state.totalWalkKm + walkKm;
+      if (nextTotalWalkKm > MAX_TOTAL_WALK_KM) continue;
+
+      const walkMin = Math.ceil((walkKm / WALK_SPEED_KMH) * 60);
+
+      const nextState: SearchState = {
+        current: neighbor.next,
+        entry: {
+          latitude: neighbor.transfer.pointB.latitude,
+          longitude: neighbor.transfer.pointB.longitude,
+          alongKm: neighbor.transfer.alongBKm,
+        },
+        legs: [...state.legs, currentLeg],
+        totalDistanceKm: state.totalDistanceKm + currentLeg.distanceKm,
+        totalFare: state.totalFare + currentLeg.estimatedFare,
+        totalMinutes: state.totalMinutes + currentLeg.estimatedMinutes + walkMin,
+        totalWalkKm: nextTotalWalkKm,
+        transferCount: state.transferCount + 1,
+        usedCodes: new Set(state.usedCodes).add(neighbor.next.code),
+      };
+
+      const bucketAlong = Math.round(nextState.entry.alongKm * 5); // 200m bins
+      const stateKey = `${nextState.current.code}|${nextState.transferCount}|${bucketAlong}`;
+      const score = nextState.totalMinutes + nextState.transferCount * 4 + nextState.totalWalkKm * 9;
+      const bestScore = bestStateScore.get(stateKey);
+
+      if (bestScore !== undefined && score >= bestScore) continue;
+
+      bestStateScore.set(stateKey, score);
+
+      frontier.push({
+        state: nextState,
+        priority: statePriority(nextState, destHintByCode.get(nextState.current.code) ?? 4000),
+      });
+      expanded += 1;
+    }
+
+    if (frontier.length > MAX_FRONTIER_SIZE) {
+      frontier.sort((a, b) => a.priority - b.priority);
+      frontier.length = MAX_FRONTIER_SIZE;
     }
   }
 
-  transferPairs.sort((x, y) => x.score - y.score);
+  const matched = Array.from(resultBySignature.values());
+  matched.sort((a, b) => {
+    return (
+      a.transferCount - b.transferCount ||
+      a.estimatedMinutes - b.estimatedMinutes ||
+      a.estimatedFare - b.estimatedFare
+    );
+  });
 
-  let evaluatedPairs = 0;
-  for (const pair of transferPairs) {
-    if (evaluatedPairs >= MAX_TRANSFER_PAIRS) break;
-
-    const aCode = pair.a.route.properties.code;
-    const bCode = pair.b.route.properties.code;
-    const key = `${aCode}+${bCode}`;
-    if (seen.has(key)) continue;
-
-    evaluatedPairs += 1;
-
-    const transfer = findTransferCandidate(aCode, pair.a.index, bCode, pair.b.index);
-    if (!transfer) continue;
-
-    const transferOnA: AlongPoint = {
-      latitude: transfer.pointA.latitude,
-      longitude: transfer.pointA.longitude,
-      alongKm: transfer.alongAKm,
-    };
-    const transferOnB: AlongPoint = {
-      latitude: transfer.pointB.latitude,
-      longitude: transfer.pointB.longitude,
-      alongKm: transfer.alongBKm,
-    };
-
-    const leg1 = buildLegFromAlong(pair.a.route, pair.a.snap, transferOnA);
-    const leg2 = buildLegFromAlong(pair.b.route, transferOnB, pair.b.snap);
-
-    if (leg1.distanceKm < 0.1 || leg2.distanceKm < 0.1) continue;
-
-    const walkKm = transfer.walkDistanceKm;
-    const walkMin = Math.ceil((walkKm / WALK_SPEED_KMH) * 60);
-
-    seen.add(key);
-    matched.push({
-      legs: [leg1, leg2],
-      distanceKm: leg1.distanceKm + leg2.distanceKm,
-      estimatedFare: leg1.estimatedFare + leg2.estimatedFare,
-      estimatedMinutes: leg1.estimatedMinutes + walkMin + leg2.estimatedMinutes,
-      transferCount: 1,
-      route: leg1.route,
-      boardingPoint: leg1.boardingPoint,
-      alightingPoint: leg2.alightingPoint,
-    });
-  }
-
-  matched.sort((a, b) => a.legs.length - b.legs.length || a.estimatedMinutes - b.estimatedMinutes);
   return matched.slice(0, MAX_MATCHED_RESULTS);
 }
