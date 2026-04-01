@@ -14,6 +14,7 @@ export type ChatbotConversationState = {
   awaitingOriginForDestinationId?: string;
   awaitingOriginIntent?: 'fare' | 'route';
   awaitingDestinationIntent?: 'fare' | 'route';
+  destinationPromptCount?: number;
   pendingDestinationName?: string;
   pendingDestinationCoordinate?: Coordinate;
   pendingDestinationPlaceId?: string;
@@ -798,6 +799,7 @@ function hasPendingFollowUpState(state: ChatbotConversationState): boolean {
     state.awaitingDestinationIntent
     || state.awaitingOriginIntent
     || state.awaitingOriginForDestinationId
+    || state.destinationPromptCount
     || state.pendingDestinationName
     || state.pendingDestinationCoordinate
     || state.pendingDestinationPlaceId,
@@ -815,6 +817,38 @@ function buildCancelFollowUpReply(language: BotLanguage): string {
   return [
     'Sure, I will stop the pending route/fare follow-up now.',
     'You can ask me something else anytime, like trivia or app guidance.',
+  ].join('\n\n');
+}
+
+const MAX_DESTINATION_REPROMPTS = 1;
+
+function nextDestinationRepromptState(
+  currentState: ChatbotConversationState,
+  intent: 'fare' | 'route',
+): ChatbotConversationState | null {
+  const nextCount = currentState.awaitingDestinationIntent === intent
+    ? (currentState.destinationPromptCount ?? 0) + 1
+    : 1;
+
+  if (nextCount > MAX_DESTINATION_REPROMPTS) return null;
+
+  return {
+    awaitingDestinationIntent: intent,
+    destinationPromptCount: nextCount,
+  };
+}
+
+function buildDestinationRepromptLimitReply(language: BotLanguage): string {
+  if (language === 'tl') {
+    return [
+      'Mukhang hindi ko pa makuha ang exact destination mo, kaya hihinto muna ako sa paulit-ulit na tanong.',
+      'Pwede mong i-type ang buong place name (hal. Vermosa), o mag-switch tayo sa ibang topic tulad ng trivia.',
+    ].join('\n\n');
+  }
+
+  return [
+    'I still cannot get your exact destination, so I will stop repeating the same destination prompt.',
+    'You can type the full place name (for example, Vermosa), or switch to another topic like trivia.',
   ].join('\n\n');
 }
 
@@ -1628,10 +1662,20 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       : pendingDestination ?? findStopDestinationByHints(normalized, routes);
 
     if (!destinationPoint) {
+      const nextState = nextDestinationRepromptState(currentState, 'fare');
+      if (!nextState) {
+        return {
+          text: composeSupportReply(language, buildDestinationRepromptLimitReply(language)),
+          language,
+          state: {},
+          usedGroq: false,
+        };
+      }
+
       return {
         text: composeSupportReply(language, fallbackText(language, 'missingDestination')),
         language,
-        state: { awaitingDestinationIntent: 'fare' },
+        state: nextState,
         usedGroq: false,
       };
     }
@@ -1726,10 +1770,20 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       : pendingDestination ?? findStopDestinationByHints(normalized, routes);
 
     if (!destinationPoint) {
+      const nextState = nextDestinationRepromptState(currentState, 'route');
+      if (!nextState) {
+        return {
+          text: composeSupportReply(language, buildDestinationRepromptLimitReply(language)),
+          language,
+          state: {},
+          usedGroq: false,
+        };
+      }
+
       return {
         text: composeSupportReply(language, routeResponseText(language, 'askDestination')),
         language,
-        state: { awaitingDestinationIntent: 'route' },
+        state: nextState,
         usedGroq: false,
       };
     }

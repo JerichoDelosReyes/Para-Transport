@@ -27,6 +27,7 @@ type ChatbotPersistState = {
   awaitingOriginForDestinationId?: string;
   awaitingOriginIntent?: 'fare' | 'route';
   awaitingDestinationIntent?: 'fare' | 'route';
+  destinationPromptCount?: number;
   pendingDestinationName?: string;
   pendingDestinationCoordinate?: { latitude: number; longitude: number };
   pendingDestinationPlaceId?: string;
