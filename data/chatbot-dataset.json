@@ -1,0 +1,670 @@
+{
+  "version": "2026-04-01",
+  "farePolicy": {
+    "currency": "PHP",
+    "baseFarePhp": 14,
+    "baseDistanceKm": 4,
+    "additionalPerKmPhp": 1.8,
+    "discountRate": 0.2,
+    "roundToNearestQuarter": true
+  },
+  "topicKeywords": [
+    "para",
+    "app",
+    "application",
+    "help",
+    "assist",
+    "guide",
+    "transport",
+    "transportation",
+    "commute",
+    "commuting",
+    "commuter",
+    "trip",
+    "travel",
+    "jeep",
+    "jeepney",
+    "tricycle",
+    "bus",
+    "uv",
+    "fare",
+    "pamasahe",
+    "bayad",
+    "price",
+    "presyo",
+    "taas pamasahe",
+    "fare increase",
+    "fare hike",
+    "oil",
+    "fuel",
+    "war",
+    "route",
+    "ruta",
+    "transit",
+    "destination",
+    "terminal",
+    "stop",
+    "landmark",
+    "navigate",
+    "navigation",
+    "direction",
+    "directions",
+    "how to go",
+    "paano pumunta",
+    "pin",
+    "pinned",
+    "pinpoint",
+    "drop pin",
+    "saved",
+    "bookmark",
+    "achievement",
+    "achievements",
+    "profile",
+    "settings",
+    "search",
+    "map",
+    "home",
+    "chatbot",
+    "ai chatbot",
+    "sakay",
+    "baba",
+    "lipat",
+    "student",
+    "senior",
+    "pwd",
+    "location",
+    "gps",
+    "trivia",
+    "fun fact",
+    "did you know",
+    "what can you do",
+    "anong kaya mo",
+    "route list",
+    "available routes",
+    "base fare",
+    "discounted fare",
+    "vermosa",
+    "cvsu",
+    "cavite state university imus"
+  ],
+  "places": [
+    {
+      "id": "imus_crossing",
+      "name": "Imus Crossing",
+      "aliases": ["imus crossing", "crossing imus", "imus kanto"],
+      "coordinate": { "latitude": 14.4251, "longitude": 120.9404 }
+    },
+    {
+      "id": "bacoor_boulevard",
+      "name": "Bacoor Boulevard",
+      "aliases": ["bacoor boulevard", "bacoor blvd"],
+      "coordinate": { "latitude": 14.4578, "longitude": 120.949 }
+    },
+    {
+      "id": "imus_centrum",
+      "name": "Imus Centrum",
+      "aliases": ["imus centrum", "centrum imus"],
+      "coordinate": { "latitude": 14.43, "longitude": 120.941 }
+    },
+    {
+      "id": "dasmarinas_burol",
+      "name": "Dasmarinas Burol",
+      "aliases": ["dasmarinas burol", "burol", "dasma burol"],
+      "coordinate": { "latitude": 14.3275, "longitude": 120.946 }
+    },
+    {
+      "id": "bacoor_terminal",
+      "name": "Bacoor Terminal",
+      "aliases": ["bacoor terminal", "terminal bacoor"],
+      "coordinate": { "latitude": 14.46, "longitude": 120.95 }
+    },
+    {
+      "id": "mall_of_asia_terminal",
+      "name": "Mall of Asia Terminal",
+      "aliases": ["mall of asia", "moa", "moa terminal"],
+      "coordinate": { "latitude": 14.5323, "longitude": 120.9822 }
+    },
+    {
+      "id": "imus_public_market",
+      "name": "Imus Public Market",
+      "aliases": ["imus public market", "public market imus", "imus palengke"],
+      "coordinate": { "latitude": 14.426, "longitude": 120.9415 }
+    },
+    {
+      "id": "kawit_poblacion",
+      "name": "Kawit Poblacion",
+      "aliases": ["kawit poblacion", "poblacion kawit"],
+      "coordinate": { "latitude": 14.4468, "longitude": 120.9026 }
+    },
+    {
+      "id": "dasmarinas_terminal",
+      "name": "Dasmarinas Terminal",
+      "aliases": ["dasmarinas terminal", "dasma terminal"],
+      "coordinate": { "latitude": 14.32, "longitude": 120.94 }
+    },
+    {
+      "id": "district_imus",
+      "name": "District Imus",
+      "aliases": ["district imus", "the district imus"],
+      "coordinate": { "latitude": 14.38, "longitude": 120.943 }
+    },
+    {
+      "id": "vermosa",
+      "name": "Vermosa",
+      "aliases": ["vermosa", "ayala vermosa", "vermosa imus", "vermosa complex"],
+      "coordinate": { "latitude": 14.3402, "longitude": 120.9806 }
+    },
+    {
+      "id": "cvsu_imus",
+      "name": "Cavite State University - Imus",
+      "aliases": ["cavite state university imus", "cavite state university - imus", "cvsu imus", "cvsu"],
+      "coordinate": { "latitude": 14.3961, "longitude": 120.9368 }
+    },
+    {
+      "id": "pitx",
+      "name": "PITX",
+      "aliases": ["pitx", "paranaque integrated terminal exchange"],
+      "coordinate": { "latitude": 14.53, "longitude": 120.98 }
+    },
+    {
+      "id": "salitran",
+      "name": "Salitran",
+      "aliases": ["salitran"],
+      "coordinate": { "latitude": 14.35, "longitude": 120.942 }
+    }
+  ],
+  "farePairs": [
+    {
+      "originId": "imus_crossing",
+      "destinationId": "bacoor_boulevard",
+      "distanceKm": 5.2,
+      "jeepneyRouteHint": "J-01 Imus Crossing to Bacoor Boulevard"
+    },
+    {
+      "originId": "imus_centrum",
+      "destinationId": "dasmarinas_burol",
+      "distanceKm": 11.5,
+      "jeepneyRouteHint": "U-01 Imus Centrum to Dasmarinas Burol"
+    },
+    {
+      "originId": "dasmarinas_terminal",
+      "destinationId": "imus_crossing",
+      "distanceKm": 10.5,
+      "jeepneyRouteHint": "J-02 Dasmarinas to Imus Crossing"
+    },
+    {
+      "originId": "imus_public_market",
+      "destinationId": "kawit_poblacion",
+      "distanceKm": 4.8,
+      "jeepneyRouteHint": "T-01 Imus Public Market to Kawit Poblacion"
+    },
+    {
+      "originId": "bacoor_terminal",
+      "destinationId": "mall_of_asia_terminal",
+      "distanceKm": 14.2,
+      "jeepneyRouteHint": "B-01 Bacoor to Mall of Asia"
+    },
+    {
+      "originId": "imus_crossing",
+      "destinationId": "district_imus",
+      "distanceKm": 5,
+      "jeepneyRouteHint": "J-01 via MCI/Nomad"
+    },
+    {
+      "originId": "imus_crossing",
+      "destinationId": "pitx",
+      "distanceKm": 16.4,
+      "jeepneyRouteHint": "J-01 then transfer to B-01"
+    },
+    {
+      "originId": "dasmarinas_terminal",
+      "destinationId": "salitran",
+      "distanceKm": 3.3,
+      "jeepneyRouteHint": "J-02 Dasmarinas to Imus Crossing"
+    },
+    {
+      "originId": "imus_crossing",
+      "destinationId": "vermosa",
+      "distanceKm": 7.1,
+      "jeepneyRouteHint": "J-01 then transfer to a jeepney route heading to Vermosa"
+    },
+    {
+      "originId": "imus_crossing",
+      "destinationId": "cvsu_imus",
+      "distanceKm": 3.0,
+      "jeepneyRouteHint": "J-01 Imus Crossing to Cavite State University - Imus"
+    }
+  ],
+  "trivia": [
+    {
+      "id": "jeepney_1",
+      "en": "Jeepneys began as surplus military jeeps after World War II and were redesigned by Filipinos for public transport.",
+      "tl": "Nagsimula ang jeepney mula sa surplus military jeeps pagkatapos ng World War II at inangkop ito ng mga Pilipino bilang pampublikong sasakyan."
+    },
+    {
+      "id": "jeepney_2",
+      "en": "Traditional jeepneys are known for colorful hand-painted art, chrome details, and personalized route signboards.",
+      "tl": "Kilala ang traditional jeepney sa makukulay na hand-painted art, chrome details, at personalized na signboard ng ruta."
+    },
+    {
+      "id": "jeepney_3",
+      "en": "The phrase 'Bayad po' is common inside jeepneys when passing fare to the driver.",
+      "tl": "Karaniwan ang salitang 'Bayad po' sa loob ng jeepney kapag inaabot ang pamasahe sa driver."
+    },
+    {
+      "id": "tricycle_1",
+      "en": "Tricycles are often used for short neighborhood trips and first-mile or last-mile connections.",
+      "tl": "Madalas gamitin ang tricycle para sa maiikling biyahe sa barangay at bilang first-mile o last-mile na sakay."
+    },
+    {
+      "id": "tricycle_2",
+      "en": "In many towns, tricycle routes and fare ranges are coordinated by local government units.",
+      "tl": "Sa maraming bayan, ang ruta at fare range ng tricycle ay inaayos ng local government units."
+    },
+    {
+      "id": "culture_1",
+      "en": "Jeepney route signboards usually list major landmarks so commuters can quickly check if it matches their destination.",
+      "tl": "Karaniwang nakalista sa signboard ng jeepney ang mga pangunahing landmark para madaling ma-check ng commuter kung tugma sa destination."
+    },
+    {
+      "id": "culture_2",
+      "en": "Many jeepney drivers and conductors memorize major landmarks and alternate roads, especially during heavy traffic.",
+      "tl": "Maraming jeepney driver at konduktor ang kabisado ang mga pangunahing landmark at alternatibong daan, lalo na kapag mabigat ang trapiko."
+    },
+    {
+      "id": "safety_1",
+      "en": "Commuters often prepare exact fare to speed up payment and keep boarding and alighting more organized.",
+      "tl": "Madalas naghahanda ng eksaktong pamasahe ang mga commuter para mas mabilis ang bayaran at mas maayos ang sakay-baba."
+    },
+    {
+      "id": "history_1",
+      "en": "Jeepneys are considered one of the most iconic symbols of Filipino street culture and creativity.",
+      "tl": "Itinuturing ang jeepney bilang isa sa pinaka-ikonikong simbolo ng kulturang kalsada at pagkamalikhain ng mga Pilipino."
+    }
+  ],
+  "triviaLeadIns": {
+    "en": [
+      "I have a quick trivia for you! Did you know",
+      "Fun fact coming right up! Did you know",
+      "Here is a jolly commute trivia: did you know",
+      "Quick Jeepie trivia! Did you know"
+    ],
+    "tl": [
+      "May mabilis akong trivia para sa'yo! Alam mo ba na",
+      "Eto ang masayang trivia natin: alam mo ba na",
+      "Quick trivia mula kay Jeepie! Alam mo ba na",
+      "May fun fact ako para sa'yo: alam mo ba na"
+    ]
+  },
+  "socialResponses": {
+    "greetings": {
+      "en": [
+        "Hi! I am Jeepie, your Para commute companion. I am here to help with fares, routes, transit tips, and quick commuting questions. Where are we heading today?",
+        "Hello! Jeepie here, your travel buddy inside Para. I can help with fare estimates, jeepney routes, and destination guidance.",
+        "Hey there! I am Jeepie, your road buddy in Para. Tell me your destination, and we can plan your route together."
+      ],
+      "tl": [
+        "Kumusta! Ako si Jeepie, ang commute companion mo sa Para. Nandito ako para tumulong sa pamasahe, ruta, transit tips, at biyahe concerns. Saan tayo ngayon?",
+        "Kamusta! Si Jeepie ito, ang ka-biayahe mo sa Para. Pwede kitang tulungan sa fare estimate, jeepney routes, at gabay sa destinasyon.",
+        "Kamusta! Ako si Jeepie, road buddy mo sa Para. Sabihin mo lang destination mo at planuhin natin ang biyahe mo."
+      ]
+    },
+    "thanks": {
+      "en": [
+        "You are very welcome! Jeepie happy dance unlocked. If you want, I can check your next fare too.",
+        "Anytime! My wheels are always ready. Send your next destination and I will guide you again.",
+        "Glad to help! I will stay on standby like a jeep at the terminal."
+      ],
+      "tl": [
+        "Walang anuman! Na-activate na naman ang Jeepie happy dance. Kung gusto mo, check natin agad next fare mo.",
+        "Anytime! Naka-standby lang ako parang jeep sa terminal. Sabihin mo lang next destination mo.",
+        "Masaya akong makatulong! Chat mo lang ulit ako at samahan kita sa susunod mong biyahe."
+      ]
+    },
+    "praise": {
+      "en": [
+        "Wow, nice! You just boosted my virtual fuel tank to full. I will keep making your commute smoother.",
+        "That was awesome to hear. Jeepie confidence level is now at turbo mode for your next route.",
+        "You are too kind. I will repay that with cleaner routes and smarter fare tips for you."
+      ],
+      "tl": [
+        "Wow, nice! Full tank tuloy ang virtual energy ko. Mas pagbubutihin ko pa ang route at fare guides mo.",
+        "Solid yan! Naka-turbo mode na si Jeepie para sa susunod mong biyahe.",
+        "Salamat sa papuri! Bawi ako sa mas malinaw na roadmap at mas swabeng commute tips."
+      ]
+    },
+    "userApology": {
+      "en": [
+        "No worries at all, you are totally fine. We can continue anytime and I am happy to help.",
+        "That is okay, no problem. I am still here and ready whenever you want to continue.",
+        "All good, no need to worry. Let us keep going, and I will do my best to assist you."
+      ],
+      "tl": [
+        "Ayos lang yun, walang problema. Tuloy lang tayo anytime at masaya akong tumulong.",
+        "Okay lang, no worries. Nandito pa rin ako at ready kapag gusto mong magpatuloy.",
+        "Walang issue, ayos lang yan. Tara, tuloy natin at gagawin ko ang best ko para makatulong."
+      ]
+    },
+    "acknowledgement": {
+      "en": [
+        "Got it! If you need anything next, I am here and ready.",
+        "Noted! Just message me when you need another commute assist.",
+        "Copy that. I am on standby for your next fare or route question."
+      ],
+      "tl": [
+        "Sige, noted! Nandito lang ako kung may next ka pang tanong.",
+        "Gets ko! Chat mo lang ako ulit para sa susunod mong commute concern.",
+        "Okay, copy! Ready ako sa next fare o route question mo."
+      ]
+    },
+    "goodbye": {
+      "en": [
+        "Bye for now! Jeepie parking mode activated. Message me anytime for your next commute.",
+        "See you! I will be right here when your next destination pops up.",
+        "Goodbye and travel safe! I will keep the route map warm for you."
+      ],
+      "tl": [
+        "Paalam muna! Naka-parking mode muna si Jeepie. Chat mo lang ulit ako anytime.",
+        "Ingat! Nandito lang ako kapag may next destination ka na.",
+        "Sige, hanggang sa muli! I-ready ko ulit ang route map para sa'yo."
+      ]
+    }
+  },
+  "fareNews": {
+    "en": [
+      "Quick heads-up: fares can go higher when global oil prices spike, and recent war-related supply pressure has pushed fuel costs up in many places. That is one reason base fare moved from 13 to 14. Please take care out there and travel safely.",
+      "Good question. A major reason fares increased is the rising fuel cost tied to global oil price volatility, including supply pressure linked to war events. With operators paying more for fuel, fares were adjusted from 13 to 14. Stay safe out there.",
+      "Right now, fare increases are often connected to higher fuel prices. Because of war-related disruptions and oil market instability, operating costs went up, so base fare shifted from 13 to 14. Ingat on your commute today."
+    ],
+    "tl": [
+      "Quick update: tumataas ang pamasahe kapag tumataas din ang presyo ng langis sa world market. Dahil sa epekto ng giyera at pressure sa oil supply, tumaas ang fuel cost, kaya isa ito sa dahilan kung bakit naging 14 mula 13 ang base fare. Ingat ka palagi sa biyahe.",
+      "Magandang tanong. Isa sa pangunahing dahilan ng taas-pamasahe ay ang pagmahal ng fuel dahil sa global oil price volatility, kasama ang epekto ng giyera sa supply. Kaya na-adjust ang base fare mula 13 to 14. Mag-ingat ka lagi sa daan.",
+      "Sa ngayon, malaki ang epekto ng pagtaas ng presyo ng langis sa pamasahe. Dahil sa war-related disruptions at mas mahal na fuel, tumaas ang operating cost kaya naging 14 na ang base mula 13. Ingat palagi habang bumibiyahe."
+    ]
+  },
+  "routeResponses": {
+    "askDestination": {
+      "en": [
+        "I can check route options for you. What destination do you want to go to?",
+        "Sure, I can help you navigate. Where is your destination?",
+        "I can find the best route. Please tell me your destination first."
+      ],
+      "tl": [
+        "Sige, matutulungan kita sa ruta. Saan ang destination mo?",
+        "Pwede kitang i-guide sa biyahe. Saan ka papunta?",
+        "Kaya kong mag-check ng route options. Pakisabi muna ang destination mo."
+      ]
+    },
+    "askOrigin": {
+      "en": [
+        "I can guide you to {destination}. May I know your current location or starting point?",
+        "I can check the route to {destination}. Where are you coming from?",
+        "I can help you navigate to {destination}. Please share your origin point first."
+      ],
+      "tl": [
+        "Matutulungan kita papuntang {destination}. Saan ka manggagaling ngayon?",
+        "Pwede kong i-check ang ruta papuntang {destination}. Nasaan ka ngayon?",
+        "Kaya kitang i-guide papuntang {destination}. Pakisabi muna ang starting point mo."
+      ]
+    },
+    "noRouteFound": {
+      "en": [
+        "I could not find a clear jeepney route for that yet. Please share a nearby landmark, terminal, or pinned location so I can retry.",
+        "I am not seeing a strong route match yet. Try sending a nearby stop or more specific destination.",
+        "I could not map a reliable route yet. You can provide a nearby terminal so I can refine the route check."
+      ],
+      "tl": [
+        "Wala pa akong malinaw na jeepney route para diyan sa ngayon. Paki-share ang malapit na landmark, terminal, o pinned location para ma-check ko ulit.",
+        "Hindi ko pa mahanap ang pinaka-tugmang ruta. Subukan mong magbigay ng mas specific na destination o nearby stop.",
+        "Hindi ko pa ma-map nang maayos ang ruta. Pakisabi ang malapit na terminal para ma-refine ko ang route check."
+      ]
+    },
+    "pinAcknowledgement": {
+      "en": [
+        "Thanks, I received your pinned location.",
+        "Great, I can see you are asking using a pinned location.",
+        "Noted, I got your pin reference."
+      ],
+      "tl": [
+        "Salamat, nakuha ko ang pinned location mo.",
+        "Ayos, nakita ko na pin-based ang request mo.",
+        "Noted, nakuha ko ang pin reference mo."
+      ]
+    },
+    "routeFoundIntro": {
+      "en": [
+        "I checked the best route option for you.",
+        "I found a route plan you can follow.",
+        "I reviewed the available route and here is the best match."
+      ],
+      "tl": [
+        "Na-check ko na ang pinaka-okay na route option para sa'yo.",
+        "May nahanap akong route plan na pwede mong sundan.",
+        "Na-review ko ang available routes at eto ang best match."
+      ]
+    },
+    "routeSummaryOutro": {
+      "en": [
+        "If you want, I can also estimate the fare for this exact route.",
+        "I can also compute your expected fare for this route if you want.",
+        "If helpful, I can give fare and transfer tips for this route next."
+      ],
+      "tl": [
+        "Kung gusto mo, pwede ko ring i-estimate ang pamasahe para sa exact route na ito.",
+        "Pwede ko ring i-compute ang expected fare mo para sa rutang ito.",
+        "Kung kailangan, mabibigyan din kita ng fare at transfer tips para dito."
+      ]
+    },
+    "landmarkListIntro": {
+      "en": [
+        "Here are the landmarks and stops currently available in the route data:",
+        "I checked the loaded routes, and these are the available landmarks/stops:",
+        "Great question. These are the landmarks and stops I can see right now:"
+      ],
+      "tl": [
+        "Narito ang mga landmark at stops na available ngayon sa route data:",
+        "Na-check ko ang loaded routes, at ito ang mga available na landmarks/stops:",
+        "Magandang tanong. Ito ang mga landmark at stop na nakikita ko ngayon:"
+      ]
+    },
+    "landmarkRouteIntro": {
+      "en": [
+        "For route {route}, these are the landmarks/stops I can see:",
+        "On route {route}, here are the available stops and landmarks:",
+        "I checked route {route}. These are the listed landmarks/stops:"
+      ],
+      "tl": [
+        "Para sa route {route}, ito ang mga landmark/stops na nakikita ko:",
+        "Sa route {route}, narito ang available na stops at landmarks:",
+        "Na-check ko ang route {route}. Ito ang listed na landmarks/stops:"
+      ]
+    },
+    "landmarkNoData": {
+      "en": [
+        "I do not have enough landmark data for that route yet. Try asking for all available landmarks so I can list what is loaded now.",
+        "I am not seeing stop/landmark entries for that exact route yet. You can ask me for currently available landmarks.",
+        "No clear landmark records yet for that route. I can show all loaded landmarks instead."
+      ],
+      "tl": [
+        "Wala pa akong sapat na landmark data para sa route na yan. Pwede mong hingin ang lahat ng available landmarks para ma-list ko ang loaded ngayon.",
+        "Hindi ko pa makita ang eksaktong stop/landmark entries para sa route na yan. Pwede kitang bigyan ng currently available landmarks.",
+        "Wala pang malinaw na landmark records para sa route na yan. Pero pwede kong ipakita ang lahat ng loaded landmarks."
+      ]
+    },
+    "landmarkListOutro": {
+      "en": [
+        "If you want, I can filter this list by a specific route code or destination.",
+        "I can narrow this down for a specific route if you share the route name or code.",
+        "You can send a destination next, and I will align landmarks with route guidance."
+      ],
+      "tl": [
+        "Kung gusto mo, pwede kong i-filter ang list na ito gamit ang specific route code o destination.",
+        "Pwede ko itong paliitin sa isang route lang kung ibibigay mo ang route name o code.",
+        "Pwede kang mag-send ng destination next para mai-align ko ang landmarks sa route guidance."
+      ]
+    }
+  },
+  "appGuides": [
+    {
+      "id": "find_route",
+      "intents": ["how to find route", "find route", "how to navigate", "paano pumunta", "how to go", "route function", "paano gamitin route"],
+      "en": [
+        "To find a route, go to the Home map screen and set your origin and destination in Search. Then review the suggested route options and choose one to view full details.",
+        "You can plan a trip from the main map screen. Enter your destination, confirm your origin, and pick from the recommended routes based on time, fare, or ease.",
+        "Open the map tab, search your destination, and select a suggested route. You can inspect fare estimate, transfer count, and stop details before traveling."
+      ],
+      "tl": [
+        "Para maghanap ng ruta, pumunta sa Home map screen at ilagay ang origin at destination sa Search. Pagkatapos, i-review ang suggested routes at piliin ang gusto mo.",
+        "Pwede kang magplano ng biyahe sa main map screen. I-enter ang destination, i-confirm ang origin, tapos pumili sa recommended routes ayon sa oras, fare, o ease.",
+        "Buksan ang map tab, i-search ang destination, at pumili ng suggested route. Makikita mo ang fare estimate, transfer count, at stop details bago bumiyahe."
+      ]
+    },
+    {
+      "id": "saved",
+      "intents": ["how to go to saved", "saved", "saved routes", "bookmark", "where is saved", "paano pumunta sa saved", "saan makikita saved"],
+      "en": [
+        "Open the Saved tab from the bottom navigation to view bookmarked routes. You can open route details there and remove saved items anytime.",
+        "To check saved routes, tap Saved on the bottom tabs. It shows your bookmarked trips and lets you quickly reopen them.",
+        "Go to the Saved screen from the tabs below. Your saved routes are listed there with quick View actions."
+      ],
+      "tl": [
+        "Buksan ang Saved tab sa bottom navigation para makita ang mga na-bookmark mong ruta. Pwede mo ring i-open o alisin ang saved items doon.",
+        "Para i-check ang saved routes, i-tap ang Saved sa ibabang tabs. Nandoon ang mga naka-bookmark mong biyahe.",
+        "Pumunta sa Saved screen mula sa tabs sa ibaba. Makikita mo roon ang listahan ng saved routes at quick View actions."
+      ]
+    },
+    {
+      "id": "achievements",
+      "intents": ["achievements", "achievement", "how to check achievements", "where achievements", "badges", "points", "streak"],
+      "en": [
+        "To check achievements, open your profile or achievements screen from the app menu. You can view earned badges, trip milestones, and progress there.",
+        "Your achievements are shown in the Achievements area, including badges, points, and streak progress.",
+        "Go to the Achievements page to track milestones like routes completed, distance traveled, and streaks."
+      ],
+      "tl": [
+        "Para i-check ang achievements, buksan ang profile o achievements screen mula sa app menu. Makikita mo doon ang badges, milestones, at progress mo.",
+        "Makikita ang achievements mo sa Achievements area, kasama ang badges, points, at streak progress.",
+        "Pumunta sa Achievements page para makita ang milestones gaya ng completed routes, distance traveled, at streaks."
+      ]
+    },
+    {
+      "id": "chatbot_help",
+      "intents": ["how to use chatbot", "how to use jeepie", "chatbot help", "paano gamitin si jeepie", "paano gamitin chatbot"],
+      "en": [
+        "You can chat with Jeepie by asking about fares, routes, transit tips, destinations, and app features. If needed, share your origin or pinned location for better route guidance.",
+        "To use Jeepie, type your question in the chat box. You can ask route directions, fare estimates, app navigation help, and commute trivia.",
+        "Just message Jeepie naturally. For best results, include your destination and current location or nearby landmark."
+      ],
+      "tl": [
+        "Pwede kang makipag-chat kay Jeepie tungkol sa pamasahe, ruta, transit tips, destinations, at app features. Kung kailangan, ibigay ang origin o pinned location mo para mas accurate.",
+        "Para gamitin si Jeepie, i-type lang ang tanong sa chat box. Pwede kang magtanong ng route directions, fare estimates, at app navigation help.",
+        "Mag-chat ka lang kay Jeepie nang natural. Mas okay kung may destination at current location o nearby landmark ka."
+      ]
+    },
+    {
+      "id": "jeepie_capabilities",
+      "intents": ["what can you do", "what can jeepie do", "capabilities", "features", "anong kaya mo", "ano kaya mo", "anong pwede mong gawin", "help options"],
+      "en": [
+        "I can help with fare estimates, route guidance, available route and stop lists, achievement unlock tips, and app usage navigation like Saved, Profile, and Settings.",
+        "You can ask me about regular/discounted fares, route planning from origin to destination, landmarks or stops, and how to unlock badges such as Route Rookie.",
+        "I support commute questions in English or Tagalog, including fare policy info, route options, app guidance, and jeepney/tricycle trivia."
+      ],
+      "tl": [
+        "Kaya kitang tulungan sa fare estimates, route guidance, listahan ng available routes/stops, achievement unlock tips, at app navigation gaya ng Saved, Profile, at Settings.",
+        "Pwede mo akong tanungin tungkol sa regular/discounted fares, route planning mula origin hanggang destination, landmarks o stops, at kung paano makuha ang badges tulad ng Route Rookie.",
+        "Suportado ko ang commute questions sa English o Tagalog, kasama ang fare policy info, route options, app guidance, at jeepney/tricycle trivia."
+      ]
+    },
+    {
+      "id": "profile_settings",
+      "intents": ["profile", "settings", "edit profile", "how to edit profile", "account settings", "paano mag edit profile", "saan settings"],
+      "en": [
+        "Open Profile to view your account details, then go to Edit Profile or Settings to update your information and app preferences.",
+        "For account changes, visit your Profile screen and tap Edit Profile. For app preferences, open Settings.",
+        "You can manage personal info in Profile and adjust behavior options in Settings."
+      ],
+      "tl": [
+        "Buksan ang Profile para makita ang account details mo, tapos pumunta sa Edit Profile o Settings para mag-update ng impormasyon at preferences.",
+        "Para sa account changes, pumunta sa Profile screen at i-tap ang Edit Profile. Para sa app preferences, buksan ang Settings.",
+        "Pwede mong i-manage ang personal info sa Profile at i-adjust ang options sa Settings."
+      ]
+    },
+    {
+      "id": "search_and_pin",
+      "intents": ["pin location", "pinned location", "pinpoint", "drop pin", "search destination", "how to search place", "paano mag search ng lugar"],
+      "en": [
+        "Use the Search field on the map to find your destination or drop a pin. Once selected, Jeepie can help suggest route and fare guidance.",
+        "You can search a place name or use a pinned location on the map. Then ask Jeepie to compute route or fare from your current point.",
+        "To use pin or pinpoint flow, set a destination on the map first, then ask Jeepie for route steps or estimated fare."
+      ],
+      "tl": [
+        "Gamitin ang Search field sa map para hanapin ang destination o mag-drop ng pin. Kapag na-set na, tutulungan ka ni Jeepie sa route at fare guidance.",
+        "Pwede kang mag-search ng place name o gumamit ng pinned location sa map. Pagkatapos, tanungin si Jeepie para sa route o fare estimate.",
+        "Para sa pin o pinpoint flow, i-set muna ang destination sa map, tapos tanungin si Jeepie para sa route steps o estimated fare."
+      ]
+    }
+  ],
+  "builderAnswer": "Thank you for asking that one!\n\n'Para' was first built as a prototype at Cavite State University - Imus.\n\nThe 'Para' application itself was an idea proposed by Christian Valenzuela, and it was later implemented and built by Cavite State University - Imus Computer Science students as part of their requirement for a Hackathon competition.\n\nThis was built, implemented, and improved by:\n\nAcal, Lance Adrian\nDelos Reyes, Jericho\nNorona, Lee Adrian\nOrdiales, Cristian Gabriel\nValenzuela, Christian",
+  "fallbackMessages": {
+    "outOfScope": {
+      "en": [
+        "Sorry, I can only help with the Para app, fares, routes, transit, and commuting questions. If you want, ask me about fare estimates or route tips.",
+        "I can best assist with Para app and transport topics like fares, routes, and transit. Ask me anything in that area and I will gladly help.",
+        "I might not be the best for that topic yet. I focus on commute help: fares, jeepney routes, transit tips, and Para app questions."
+      ],
+      "tl": [
+        "Pasensya na, sa Para app at commuting topics lang ako nakatuon, tulad ng pamasahe, ruta, at transit tips. Tanong ka lang doon at tutulungan kita.",
+        "Mas makakatulong ako sa Para app, pamasahe, ruta, at public transport concerns. Kung tungkol doon, game na game ako tumulong.",
+        "Hindi ko pa sakop ang topic na yan sa ngayon. Pero sa commuting, fares, at routes, handang-handa akong tumulong."
+      ]
+    },
+    "unknown": {
+      "en": [
+        "I am not fully sure about that yet, but I am still here to help. Try asking me about fares, routes, transit, or Para app features.",
+        "I do not have a solid answer for that right now. Ask me about fare estimates, route options, or transport tips and I will gladly assist.",
+        "I am still learning that part. If you want, I can help with commute topics first like jeepney fares, routes, and transit guidance."
+      ],
+      "tl": [
+        "Hindi pa buo ang sagot ko diyan sa ngayon, pero nandito pa rin ako para tumulong. Pwede kang magtanong tungkol sa pamasahe, ruta, transit, o app features.",
+        "Wala pa akong solid na sagot diyan ngayon. Pero kung fare estimate, route options, o transport tips, tutulungan kita agad.",
+        "Inaayos ko pa yung part na yan. Samantala, game ako sa commute topics tulad ng pamasahe, jeepney routes, at transit guidance."
+      ]
+    },
+    "missingDestination": {
+      "en": [
+        "Sure, I can calculate your fare. What destination are you heading to?",
+        "I can help with that fare estimate. Where are you going?",
+        "Let us compute it. What is your destination?"
+      ],
+      "tl": [
+        "Sige, kaya kitang tulungan sa pamasahe. Saan ang destination mo?",
+        "Pwede natin i-estimate yan. Saan ka papunta?",
+        "Game, compute natin. Ano ang destination mo?"
+      ]
+    },
+    "askOrigin": {
+      "en": [
+        "I can estimate the fare to {destination}, but I am not sure where you are right now. Where are you coming from?",
+        "I can compute your fare going to {destination}. May I know your current location first?",
+        "I can help with the fare to {destination}. What is your starting point?"
+      ],
+      "tl": [
+        "Kaya kong i-estimate ang pamasahe papuntang {destination}, pero hindi ko pa alam kung nasaan ka ngayon. Saan ka manggagaling?",
+        "Pwede kong i-compute ang pamasahe papuntang {destination}. Saan ka muna ngayon?",
+        "Tutulungan kita sa fare papuntang {destination}. Ano ang starting point mo?"
+      ]
+    },
+    "unknownOrigin": {
+      "en": [
+        "I could not match your current location to my fare dataset yet. Please share a nearby known place.",
+        "I still cannot map your starting point clearly. Can you send a nearby landmark so I can estimate better?",
+        "I need a clearer origin point. Please tell me a nearby terminal or landmark."
+      ],
+      "tl": [
+        "Hindi ko pa ma-match ang location mo sa fare dataset ko. Paki-share ang malapit na kilalang lugar.",
+        "Hindi ko pa ma-pinpoint ang starting point mo. Pwede bang magbigay ka ng nearby landmark?",
+        "Kailangan ko ng mas malinaw na pinanggagalingan. Pakisabi ang malapit na terminal o landmark."
+      ]
+    }
+  }
+}

@@ -34,6 +34,101 @@ function cleanText(input) {
     .trim();
 }
 
+function cleanEndpoint(raw) {
+  let text = cleanText(raw);
+  if (!text) return '';
+
+  text = text
+    .replace(/^Jeepney Route[^:]*:\s*/i, '')
+    .replace(/\b[a-z_]+=[^=]+(?=\s+[a-z_]+=|$)/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return text;
+}
+
+function isUsableEndpoint(value) {
+  const text = cleanText(value);
+  if (!text) return false;
+  if (text.length < 3 || text.length > 80) return false;
+  if (/=/.test(text)) return false;
+
+  const lower = text.toLowerCase();
+  if (/(network|operator|public_transport|wheelchair|smoking)\s*=/.test(lower)) return false;
+  if (/^terminal\s+[ab]$/i.test(text)) return false;
+
+  return true;
+}
+
+function splitEndpoints(value) {
+  const text = cleanEndpoint(value).replace(/→/g, '->');
+  if (!text) return null;
+
+  const arrow = text.match(/^(.+?)\s*->\s*(.+)$/);
+  if (arrow) {
+    return { from: cleanEndpoint(arrow[1]), to: cleanEndpoint(arrow[2]) };
+  }
+
+  const toMatch = text.match(/^(.+?)\s+to\s+(.+)$/i);
+  if (toMatch) {
+    return { from: cleanEndpoint(toMatch[1]), to: cleanEndpoint(toMatch[2]) };
+  }
+
+  return null;
+}
+
+function chooseEndpoint(candidates, fallback) {
+  for (const candidate of candidates) {
+    const cleaned = cleanEndpoint(candidate);
+    if (isUsableEndpoint(cleaned)) return cleaned;
+  }
+  return fallback;
+}
+
+function parseViaHints(props, label, name) {
+  const candidates = [];
+
+  if (props && props.via) {
+    candidates.push(String(props.via));
+  }
+
+  const viaRegex = /\(via\s+([^)]+)\)|\bvia\s+([^\-]+?)(?=\s*->|\s*$)/gi;
+  for (const source of [label, name]) {
+    if (!source) continue;
+    let match;
+    while ((match = viaRegex.exec(source)) !== null) {
+      const value = cleanEndpoint(match[1] || match[2]);
+      if (value) candidates.push(value);
+    }
+  }
+
+  const out = [];
+  const seen = new Set();
+
+  for (const raw of candidates) {
+    const parts = String(raw)
+      .split(/[;,|]/)
+      .map((p) => cleanEndpoint(p).replace(/^via\s+/i, '').trim())
+      .filter(Boolean);
+
+    for (const part of parts) {
+      if (!isUsableEndpoint(part)) continue;
+      const key = part.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(part);
+    }
+  }
+
+  return out;
+}
+
+function samplePathPoint(pathCoords, fraction) {
+  if (!Array.isArray(pathCoords) || pathCoords.length === 0) return null;
+  const idx = Math.max(0, Math.min(pathCoords.length - 1, Math.round((pathCoords.length - 1) * fraction)));
+  return pathCoords[idx];
+}
+
 function slug(input) {
   return cleanText(input)
     .toUpperCase()
@@ -132,14 +227,18 @@ function parseFare(props) {
 }
 
 function makeLabels(props) {
-  const fromLabel = cleanText(props.from);
-  const toLabel = cleanText(props.to);
+  const fromLabelRaw = cleanText(props.from);
+  const toLabelRaw = cleanText(props.to);
   const name = cleanText(props.name);
   const ref = cleanText(props.ref);
 
+  const splitFromName = splitEndpoints(name);
+
   let label = '';
-  if (fromLabel && toLabel) {
-    label = `${fromLabel} -> ${toLabel}`;
+  if (fromLabelRaw && toLabelRaw) {
+    label = `${fromLabelRaw} -> ${toLabelRaw}`;
+  } else if (splitFromName?.from && splitFromName?.to) {
+    label = `${splitFromName.from} -> ${splitFromName.to}`;
   } else if (name) {
     label = name;
   } else if (ref) {
@@ -148,11 +247,26 @@ function makeLabels(props) {
     label = 'Unnamed Jeepney Route';
   }
 
+  const splitFromLabel = splitEndpoints(label);
+  const fromLabel = chooseEndpoint(
+    [fromLabelRaw, splitFromLabel?.from, splitFromName?.from],
+    'Terminal A',
+  );
+  const toLabel = chooseEndpoint(
+    [toLabelRaw, splitFromLabel?.to, splitFromName?.to],
+    'Terminal B',
+  );
+
+  if (isUsableEndpoint(fromLabel) && isUsableEndpoint(toLabel)) {
+    label = `${fromLabel} -> ${toLabel}`;
+  }
+
   const finalName = name || label;
-  return { name: finalName, label, fromLabel, toLabel, ref };
+  const viaHints = parseViaHints(props, label, finalName);
+  return { name: finalName, label, fromLabel, toLabel, ref, viaHints };
 }
 
-function buildStops(pathCoords, fromLabel, toLabel) {
+function buildStops(pathCoords, fromLabel, toLabel, viaHints = []) {
   if (pathCoords.length < 2) return [];
   const first = pathCoords[0];
   const last = pathCoords[pathCoords.length - 1];
@@ -164,14 +278,33 @@ function buildStops(pathCoords, fromLabel, toLabel) {
     stop_order: 1,
   };
 
+  const midStops = [];
+  const usableVia = (viaHints || [])
+    .filter((hint) => isUsableEndpoint(hint))
+    .filter((hint) => hint.toLowerCase() !== String(fromLabel || '').toLowerCase())
+    .filter((hint) => hint.toLowerCase() !== String(toLabel || '').toLowerCase())
+    .slice(0, 4);
+
+  for (let i = 0; i < usableVia.length; i += 1) {
+    const fraction = (i + 1) / (usableVia.length + 1);
+    const point = samplePathPoint(pathCoords, fraction);
+    if (!point) continue;
+    midStops.push({
+      stop_name: usableVia[i],
+      latitude: point[1],
+      longitude: point[0],
+      stop_order: i + 2,
+    });
+  }
+
   const stopB = {
     stop_name: toLabel || (fromLabel ? `${fromLabel} Terminal` : 'Terminal B'),
     latitude: last[1],
     longitude: last[0],
-    stop_order: 2,
+    stop_order: midStops.length + 2,
   };
 
-  return [stopA, stopB];
+  return [stopA, ...midStops, stopB];
 }
 
 async function deleteAllRows(supabase, tableName, idColumn) {
@@ -241,7 +374,7 @@ async function main() {
       continue;
     }
 
-    const { name, label, fromLabel, toLabel, ref } = makeLabels(props);
+    const { name, label, fromLabel, toLabel, ref, viaHints } = makeLabels(props);
     const routeCodeBase = slug(ref || label || name || `JEEP-${relationId}`) || `JEEP-${relationId}`;
     const routeCode = `${routeCodeBase}-${relationId}`;
 
@@ -273,7 +406,7 @@ async function main() {
       continue;
     }
 
-    const stops = buildStops(pathCoords, fromLabel, toLabel).map((s) => ({
+    const stops = buildStops(pathCoords, fromLabel, toLabel, viaHints).map((s) => ({
       route_id: routeRow.id,
       ...s,
     }));

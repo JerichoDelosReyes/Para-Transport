@@ -17,6 +17,22 @@ interface User {
   badges?: string[];
 }
 
+type ChatbotPersistMessage = {
+  id: string;
+  text: string;
+  isUser: boolean;
+};
+
+type ChatbotPersistState = {
+  awaitingOriginForDestinationId?: string;
+  awaitingOriginIntent?: 'fare' | 'route';
+  awaitingDestinationIntent?: 'fare' | 'route';
+  destinationPromptCount?: number;
+  pendingDestinationName?: string;
+  pendingDestinationCoordinate?: { latitude: number; longitude: number };
+  pendingDestinationPlaceId?: string;
+};
+
 type SessionMode = 'guest' | 'auth' | null;
 
 const createGuestUser = (): User => ({
@@ -40,6 +56,8 @@ interface StoreState {
   insightDismissed: boolean;
   selectedTransitRoute: any | null;
   pendingRouteSearch: { origin: any; destination: any } | null;
+  chatbotMessages: ChatbotPersistMessage[];
+  chatbotConversationState: ChatbotPersistState;
   setUser: (user: User) => void;
   beginGuestSession: () => void;
   beginAuthSession: (user: User) => void;
@@ -51,6 +69,9 @@ interface StoreState {
   resetStreak: () => void;
   setSelectedTransitRoute: (route: any | null) => void;
   setPendingRouteSearch: (search: { origin: any; destination: any } | null) => void;
+  setChatbotMessages: (messages: ChatbotPersistMessage[]) => void;
+  setChatbotConversationState: (state: ChatbotPersistState) => void;
+  clearChatbotMemory: () => void;
   saveRoute: (route: any) => void;
   removeSavedRoute: (routeId: string | number) => void;
   savePlace: (place: any) => void;
@@ -74,6 +95,8 @@ export const useStore = create<StoreState>()(
       insightDismissed: false,
       selectedTransitRoute: null,
       pendingRouteSearch: null,
+      chatbotMessages: [],
+      chatbotConversationState: {},
       unlockedBadgeToShow: null,
       setUser: (user) => set({ user }),
       beginGuestSession: () =>
@@ -82,6 +105,8 @@ export const useStore = create<StoreState>()(
           sessionMode: 'guest',
           selectedTransitRoute: null,
           pendingRouteSearch: null,
+          chatbotMessages: [],
+          chatbotConversationState: {},
           unlockedBadgeToShow: null,
         }),
       beginAuthSession: (user) =>
@@ -100,6 +125,8 @@ export const useStore = create<StoreState>()(
           sessionMode: null,
           selectedTransitRoute: null,
           pendingRouteSearch: null,
+          chatbotMessages: [],
+          chatbotConversationState: {},
           unlockedBadgeToShow: null,
         }),
       setHasHydrated: (value) => set({ hasHydrated: value }),
@@ -162,6 +189,9 @@ export const useStore = create<StoreState>()(
       resetStreak: () => set((state) => ({ user: { ...state.user, streak_count: 0 } })),
       setSelectedTransitRoute: (route) => set({ selectedTransitRoute: route }),
       setPendingRouteSearch: (search) => set({ pendingRouteSearch: search }),
+      setChatbotMessages: (messages) => set({ chatbotMessages: messages }),
+      setChatbotConversationState: (chatbotConversationState) => set({ chatbotConversationState }),
+      clearChatbotMemory: () => set({ chatbotMessages: [], chatbotConversationState: {} }),
       saveRoute: (route: any) =>
         set((state) => {
           const currentSaved = state.user.saved_routes || [];
@@ -354,16 +384,25 @@ export const useStore = create<StoreState>()(
       }),
       merge: (persistedState: any, currentState: StoreState) => {
         if (!persistedState) return currentState;
+
+        const {
+          chatbotMessages: _ignoredChatbotMessages,
+          chatbotConversationState: _ignoredChatbotConversationState,
+          ...safePersistedState
+        } = persistedState;
+
         return {
           ...currentState,
-          ...persistedState,
+          ...safePersistedState,
           user: {
             ...currentState.user,
             ...(persistedState.user || {}),
             commute_history: persistedState.user?.commute_history || currentState.user?.commute_history || [],
             saved_routes: persistedState.user?.saved_routes || currentState.user?.saved_routes || [],
             saved_places: persistedState.user?.saved_places || currentState.user?.saved_places || [],
-          }
+          },
+          chatbotMessages: currentState.chatbotMessages || [],
+          chatbotConversationState: currentState.chatbotConversationState || {},
         };
       },
       onRehydrateStorage: () => (state) => {

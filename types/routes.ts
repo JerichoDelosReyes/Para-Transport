@@ -17,6 +17,9 @@ export type RouteProperties = {
   fare: number;
   status: string;
   operator: string;
+  fromLabel?: string;
+  toLabel?: string;
+  network?: string;
 };
 
 export type JeepneyRoute = {
