@@ -390,6 +390,7 @@ export const useStore = create<StoreState>()(
         sessionMode: state.sessionMode,
         insightDismissed: state.insightDismissed,
         selectedTransitRoute: state.selectedTransitRoute,
+        dismissedBroadcasts: state.dismissedBroadcasts,
       }),
       merge: (persistedState: any, currentState: StoreState) => {
         if (!persistedState) return currentState;

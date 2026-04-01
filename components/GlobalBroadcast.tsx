@@ -21,6 +21,7 @@ export function GlobalBroadcast() {
   const insets = useSafeAreaInsets();
   const dismissedBroadcasts = useStore((state) => state.dismissedBroadcasts);
   const dismissBroadcastStore = useStore((state) => state.dismissBroadcast);
+  const sessionMode = useStore((state) => state.sessionMode);
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [activeBroadcast, setActiveBroadcast] = useState<BroadcastMessage | null>(null);
   const slideAnim = useRef(new Animated.Value(-150)).current; // Slide down from top
@@ -86,8 +87,13 @@ export function GlobalBroadcast() {
 
   // Show logic
   useEffect(() => {
+    if (!sessionMode) {
+      if (activeBroadcast) dismissCurrent();
+      return;
+    }
+
     if (!activeBroadcast && broadcasts.length > 0) {
-      // Pick first
+      // Pick first only if user is actively in session (logged in/guest mode)
       setActiveBroadcast(broadcasts[0]);
       Animated.timing(slideAnim, {
         toValue: 0,
@@ -98,7 +104,7 @@ export function GlobalBroadcast() {
       // Current one was removed
       dismissCurrent();
     }
-  }, [broadcasts, activeBroadcast]);
+  }, [broadcasts, activeBroadcast, sessionMode]);
 
   const handleUserDismiss = () => {
     if (activeBroadcast) {
