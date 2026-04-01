@@ -92,6 +92,8 @@ interface StoreState {
   clearUnlockedBadge: () => void;
   resetProgress: () => void;
   syncWithSupabase: () => Promise<void>;
+  dismissedBroadcasts: string[];
+  dismissBroadcast: (id: string) => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -100,6 +102,7 @@ export const useStore = create<StoreState>()(
       user: createGuestUser(),
       sessionMode: null,
       hasHydrated: false,
+      dismissedBroadcasts: [],
       badgesData: [],
       setBadgesData: (badgesData) => set({ badgesData }),
       fareMatrices: [],
@@ -131,6 +134,7 @@ export const useStore = create<StoreState>()(
           },
           sessionMode: 'auth',
         })),
+      dismissBroadcast: (id: string) => set((state) => ({ dismissedBroadcasts: [...state.dismissedBroadcasts, id] })),
       clearSession: () =>
         set({
           user: createGuestUser(),

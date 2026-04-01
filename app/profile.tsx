@@ -106,6 +106,19 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          {/* Broadcasts Link */}
+          <TouchableOpacity 
+            style={[styles.sectionHeaderContainer, { marginTop: 10, marginBottom: 24 }]} 
+            onPress={() => router.navigate('/broadcasts')}
+            activeOpacity={0.7}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="radio" size={24} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.sectionTitle}>Recent Broadcasts</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color={COLORS.textMuted} />
+          </TouchableOpacity>
+
           {/* Badges Section */}
           <View style={[styles.sectionHeaderContainer, isGuestAccount && { opacity: 0.5 }]}>
             <Text style={styles.sectionTitle}>Badges</Text>

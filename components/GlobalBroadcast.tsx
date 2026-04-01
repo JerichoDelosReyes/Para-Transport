@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { supabase } from '../config/supabaseClient';
+import { useStore } from '../store/useStore';
 
 type BroadcastMessage = {
   id: string;
@@ -17,6 +19,8 @@ const windowWidth = Dimensions.get('window').width;
 
 export function GlobalBroadcast() {
   const insets = useSafeAreaInsets();
+  const dismissedBroadcasts = useStore((state) => state.dismissedBroadcasts);
+  const dismissBroadcastStore = useStore((state) => state.dismissBroadcast);
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [activeBroadcast, setActiveBroadcast] = useState<BroadcastMessage | null>(null);
   const slideAnim = useRef(new Animated.Value(-150)).current; // Slide down from top
@@ -33,7 +37,9 @@ export function GlobalBroadcast() {
         .order('created_at', { ascending: false });
       
       if (!unmounted && data && data.length > 0) {
-        setBroadcasts(data);
+        // Filter out those already dismissed
+        const unseenBroadcasts = data.filter((b) => !dismissedBroadcasts.includes(b.id));
+        setBroadcasts(unseenBroadcasts);
       }
     };
 
@@ -46,7 +52,7 @@ export function GlobalBroadcast() {
         (payload) => {
           if (payload.eventType === 'INSERT') {
             const newBcast = payload.new as BroadcastMessage;
-            if (newBcast.is_active) {
+            if (newBcast.is_active && !dismissedBroadcasts.includes(newBcast.id)) {
               setBroadcasts((prev) => [newBcast, ...prev]);
             }
           } else if (payload.eventType === 'UPDATE') {
@@ -76,7 +82,7 @@ export function GlobalBroadcast() {
       unmounted = true;
       supabase.removeChannel(channel);
     };
-  }, [activeBroadcast]);
+  }, [activeBroadcast, dismissedBroadcasts]);
 
   // Show logic
   useEffect(() => {
@@ -94,6 +100,13 @@ export function GlobalBroadcast() {
     }
   }, [broadcasts, activeBroadcast]);
 
+  const handleUserDismiss = () => {
+    if (activeBroadcast) {
+      dismissBroadcastStore(activeBroadcast.id);
+    }
+    dismissCurrent();
+  };
+
   const dismissCurrent = () => {
     Animated.timing(slideAnim, {
       toValue: -150,
@@ -110,9 +123,9 @@ export function GlobalBroadcast() {
   if (!activeBroadcast) return null;
 
   const bgColors: Record<string, string> = {
-    info: COLORS.navy,
-    warning: '#F59E0B',
-    alert: '#EF4444',
+    info: 'rgba(10, 34, 64, 0.6)', // COLORS.navy with opacity
+    warning: 'rgba(245, 158, 11, 0.65)',
+    alert: 'rgba(239, 68, 68, 0.65)',
   };
 
   const icons: Record<string, any> = {
@@ -127,22 +140,32 @@ export function GlobalBroadcast() {
         styles.bannerContainer,
         {
           transform: [{ translateY: slideAnim }],
-          backgroundColor: bgColors[activeBroadcast.type] || bgColors.info,
-          paddingTop: Math.max(insets.top, 10) + 10,
         },
       ]}
       pointerEvents="box-none"
     >
-      <View style={styles.contentRow} pointerEvents="auto">
-        <Ionicons name={icons[activeBroadcast.type] as any} size={28} color="#FFF" style={styles.icon} />
-        <View style={styles.textContainer}>
-          <Text style={styles.title}>{activeBroadcast.title}</Text>
-          <Text style={styles.message}>{activeBroadcast.message}</Text>
+      <BlurView 
+        intensity={40} 
+        tint="dark" 
+        style={[
+          styles.glassBackground, 
+          { 
+            backgroundColor: bgColors[activeBroadcast.type] || bgColors.info,
+            paddingTop: Math.max(insets.top, 10) + 10,
+          }
+        ]}
+      >
+        <View style={styles.contentRow} pointerEvents="auto">
+          <Ionicons name={icons[activeBroadcast.type] as any} size={28} color="#FFF" style={styles.icon} />
+          <View style={styles.textContainer}>
+            <Text style={styles.title}>{activeBroadcast.title}</Text>
+            <Text style={styles.message}>{activeBroadcast.message}</Text>
+          </View>
+          <TouchableOpacity onPress={handleUserDismiss} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color="#FFF" />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={dismissCurrent} style={styles.closeButton}>
-          <Ionicons name="close" size={24} color="#FFF" />
-        </TouchableOpacity>
-      </View>
+      </BlurView>
     </Animated.View>
   );
 }
@@ -152,14 +175,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     width: windowWidth,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
     zIndex: 99999,
+  },
+  glassBackground: {
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingHorizontal: 16,
+    overflow: 'hidden',
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   contentRow: {
     flexDirection: 'row',
