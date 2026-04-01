@@ -15,7 +15,7 @@ const TABLES = [
 
 const MAX_MATCH_INPUT_POINTS = 90;
 const REQUEST_DELAY_MS = 90;
-const MIN_MATCH_CONFIDENCE = 0.28;
+const MIN_MATCH_CONFIDENCE = 0.2;
 const MAX_SAFE_JUMP_METERS = 420;
 
 function loadDotEnv(envPath) {

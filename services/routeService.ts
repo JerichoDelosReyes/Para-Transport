@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabaseClient';
 import type { JeepneyRoute, RouteCoord, StopPoint } from '../types/routes';
 
-const CACHE_KEY = '@para_routes_cache_v3_roadsnapped';
+const CACHE_KEY = '@para_routes_cache_v4_clean_geometry';
 const CACHE_TTL_MS = 1000 * 60 * 60; // 1 hour
 
 interface CachedData {

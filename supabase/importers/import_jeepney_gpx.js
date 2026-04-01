@@ -7,6 +7,8 @@ const { createClient } = require('@supabase/supabase-js');
 const FALLBACK_GPX_PATH = 'E:/Downloads/export.gpx';
 const FALLBACK_FARE = 13;
 const DELETE_ALL_FILTER_ID = '00000000-0000-0000-0000-000000000000';
+const MAX_SEGMENT_JOIN_GAP_METERS = 350;
+const MAX_INTERNAL_POINT_GAP_METERS = 900;
 
 function loadDotEnv(envPath) {
   if (!fs.existsSync(envPath)) return;
@@ -148,10 +150,27 @@ function slug(input) {
     .slice(0, 48);
 }
 
-function sqDist(a, b) {
-  const dx = a[0] - b[0];
-  const dy = a[1] - b[1];
-  return dx * dx + dy * dy;
+function distMeters(a, b) {
+  const [lon1, lat1] = a;
+  const [lon2, lat2] = b;
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const p1 = toRad(lat1);
+  const p2 = toRad(lat2);
+
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function pathLengthMeters(coords) {
+  if (!Array.isArray(coords) || coords.length < 2) return 0;
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    total += distMeters(coords[i - 1], coords[i]);
+  }
+  return total;
 }
 
 function dedupeConsecutive(coords) {
@@ -169,25 +188,119 @@ function dedupeConsecutive(coords) {
   return out;
 }
 
-function stitchSegments(segments) {
-  const out = [];
-  for (const rawSeg of segments) {
-    let seg = dedupeConsecutive(rawSeg);
-    if (seg.length < 2) continue;
+function appendDedupe(base, extra) {
+  for (const pt of extra) {
+    const prev = base[base.length - 1];
+    if (!prev || prev[0] !== pt[0] || prev[1] !== pt[1]) base.push(pt);
+  }
+}
 
-    if (out.length > 0) {
-      const last = out[out.length - 1];
-      const dStart = sqDist(last, seg[0]);
-      const dEnd = sqDist(last, seg[seg.length - 1]);
-      if (dEnd < dStart) seg = seg.slice().reverse();
-    }
-
-    for (const pt of seg) {
-      const prev = out[out.length - 1];
-      if (!prev || prev[0] !== pt[0] || prev[1] !== pt[1]) out.push(pt);
+function pickLongestRun(runs) {
+  if (!Array.isArray(runs) || runs.length === 0) return [];
+  let best = runs[0];
+  let bestLen = pathLengthMeters(best);
+  for (let i = 1; i < runs.length; i++) {
+    const len = pathLengthMeters(runs[i]);
+    if (len > bestLen) {
+      best = runs[i];
+      bestLen = len;
     }
   }
-  return out;
+  return best;
+}
+
+function keepLongestContinuousRun(coords, maxGapMeters) {
+  if (!Array.isArray(coords) || coords.length < 2) return [];
+
+  const runs = [];
+  let run = [coords[0]];
+
+  for (let i = 1; i < coords.length; i++) {
+    const prev = coords[i - 1];
+    const cur = coords[i];
+    if (distMeters(prev, cur) <= maxGapMeters) {
+      run.push(cur);
+      continue;
+    }
+
+    if (run.length >= 2) runs.push(run);
+    run = [cur];
+  }
+
+  if (run.length >= 2) runs.push(run);
+  return dedupeConsecutive(pickLongestRun(runs));
+}
+
+function stitchSegments(segments) {
+  const cleanedSegments = [];
+
+  for (const rawSeg of segments) {
+    const deduped = dedupeConsecutive(rawSeg);
+    const cleaned = keepLongestContinuousRun(deduped, MAX_INTERNAL_POINT_GAP_METERS);
+    if (cleaned.length >= 2) cleanedSegments.push(cleaned);
+  }
+
+  if (cleanedSegments.length === 0) return [];
+  if (cleanedSegments.length === 1) return cleanedSegments[0];
+
+  let seedIndex = 0;
+  let bestSeedLen = pathLengthMeters(cleanedSegments[0]);
+  for (let i = 1; i < cleanedSegments.length; i++) {
+    const len = pathLengthMeters(cleanedSegments[i]);
+    if (len > bestSeedLen) {
+      bestSeedLen = len;
+      seedIndex = i;
+    }
+  }
+
+  const used = new Array(cleanedSegments.length).fill(false);
+  let chain = cleanedSegments[seedIndex].slice();
+  used[seedIndex] = true;
+
+  while (true) {
+    const chainStart = chain[0];
+    const chainEnd = chain[chain.length - 1];
+
+    let best = null;
+
+    for (let i = 0; i < cleanedSegments.length; i++) {
+      if (used[i]) continue;
+      const seg = cleanedSegments[i];
+      const segStart = seg[0];
+      const segEnd = seg[seg.length - 1];
+
+      const options = [
+        { gap: distMeters(chainEnd, segStart), attach: 'append', reverse: false },
+        { gap: distMeters(chainEnd, segEnd), attach: 'append', reverse: true },
+        { gap: distMeters(segEnd, chainStart), attach: 'prepend', reverse: false },
+        { gap: distMeters(segStart, chainStart), attach: 'prepend', reverse: true },
+      ];
+
+      for (const option of options) {
+        if (option.gap > MAX_SEGMENT_JOIN_GAP_METERS) continue;
+        if (!best || option.gap < best.gap) {
+          best = { index: i, ...option };
+        }
+      }
+    }
+
+    if (!best) break;
+
+    used[best.index] = true;
+    let segToMerge = cleanedSegments[best.index];
+    if (best.reverse) segToMerge = segToMerge.slice().reverse();
+
+    if (best.attach === 'append') {
+      appendDedupe(chain, segToMerge);
+      continue;
+    }
+
+    const merged = segToMerge.slice();
+    appendDedupe(merged, chain);
+    chain = merged;
+  }
+
+  return keepLongestContinuousRun(dedupeConsecutive(chain), MAX_INTERNAL_POINT_GAP_METERS);
 }
 
 function extractFirstTag(xml, tagName) {
