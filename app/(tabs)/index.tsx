@@ -4,6 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import MapView, { Marker, Polyline, Callout } from 'react-native-maps';
+import {
+  MapView as MapLibreMapView,
+  Camera as MapLibreCamera,
+  ShapeSource,
+  LineLayer,
+  PointAnnotation,
+  type CameraRef as MapLibreCameraRef,
+} from '@maplibre/maplibre-react-native';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
@@ -45,6 +53,7 @@ const INITIAL_REGION: MapRegion = {
 };
 
 const PH_BOUNDS = MAP_CONFIG.PHILIPPINES_BOUNDS;
+const USE_MAPLIBRE = MAP_CONFIG.MAP_RENDERER === 'maplibre';
 
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
@@ -277,6 +286,7 @@ export default function HomeScreen() {
   const updateLatestHistoryFare = useStore((state) => state.updateLatestHistoryFare);
   const addTripStats = useStore((state) => state.addTripStats);
   const mapRef = useRef<MapView | null>(null);
+  const mapLibreCameraRef = useRef<MapLibreCameraRef | null>(null);
   const tripStatRecordedRef = useRef(false);
   const [showRecommender, setShowRecommender] = useState(false);
   const [simAutoFollow, setSimAutoFollow] = useState(true);
@@ -289,6 +299,56 @@ export default function HomeScreen() {
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+  const regionToZoomLevel = (region: MapRegion): number => {
+    const zoom = Math.log2(360 / Math.max(region.longitudeDelta, 0.0001));
+    return clamp(zoom, 10, 18);
+  };
+
+  const animateRegion = (next: MapRegion, durationMs: number) => {
+    if (USE_MAPLIBRE) {
+      mapLibreCameraRef.current?.setCamera({
+        centerCoordinate: [next.longitude, next.latitude],
+        zoomLevel: regionToZoomLevel(next),
+        animationDuration: durationMs,
+        animationMode: 'easeTo',
+      });
+      return;
+    }
+
+    mapRef.current?.animateToRegion(next, durationMs);
+  };
+
+  const fitRouteCoordinates = (allCoords: MapCoordinate[]) => {
+    if (allCoords.length === 0) return;
+
+    if (USE_MAPLIBRE) {
+      let minLat = Infinity;
+      let maxLat = -Infinity;
+      let minLng = Infinity;
+      let maxLng = -Infinity;
+
+      for (const coord of allCoords) {
+        minLat = Math.min(minLat, coord.latitude);
+        maxLat = Math.max(maxLat, coord.latitude);
+        minLng = Math.min(minLng, coord.longitude);
+        maxLng = Math.max(maxLng, coord.longitude);
+      }
+
+      mapLibreCameraRef.current?.fitBounds(
+        [maxLng, maxLat],
+        [minLng, minLat],
+        [160, 50, 300, 50],
+        700,
+      );
+      return;
+    }
+
+    mapRef.current?.fitToCoordinates(allCoords, {
+      edgePadding: { top: 160, right: 50, bottom: 300, left: 50 },
+      animated: true,
+    });
+  };
+
   const handleZoomIn = () => {
     const next: MapRegion = {
       ...mapRegion,
@@ -296,7 +356,7 @@ export default function HomeScreen() {
       longitudeDelta: clamp(mapRegion.longitudeDelta * 0.7, 0.0025, 0.4),
     };
     setMapRegion(next);
-    mapRef.current?.animateToRegion(next, 250);
+    animateRegion(next, 250);
   };
 
   const handleZoomOut = () => {
@@ -306,7 +366,7 @@ export default function HomeScreen() {
       longitudeDelta: clamp(mapRegion.longitudeDelta / 0.7, 0.0025, 0.4),
     };
     setMapRegion(next);
-    mapRef.current?.animateToRegion(next, 250);
+    animateRegion(next, 250);
   };
 
   const handleLocateUser = () => {
@@ -327,7 +387,7 @@ export default function HomeScreen() {
         longitudeDelta: 0.01,
       };
       setMapRegion(next);
-      mapRef.current?.animateToRegion(next, 500);
+      animateRegion(next, 500);
     } else {
       Alert.alert('Location Not Found', 'We are still getting your current location.');
     }
@@ -437,7 +497,7 @@ export default function HomeScreen() {
       : currentLocation;
       
     if (!startPoint) {
-      mapRef.current?.animateToRegion({...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01}, 600);
+      animateRegion({ ...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 600);
       return;
     }
 
@@ -455,10 +515,7 @@ export default function HomeScreen() {
 
       if (results.length > 0) {
         const allCoords = results.flatMap(m => m.legs.flatMap((l: any) => l.route.coordinates));
-        mapRef.current?.fitToCoordinates(allCoords, {
-          edgePadding: { top: 160, right: 50, bottom: 300, left: 50 },
-          animated: true,
-        });
+        fitRouteCoordinates(allCoords);
 
         // Delay route highlight by 300ms to allow bottom sheet intro animation to pop smoothly
         setTimeout(() => {
@@ -469,7 +526,7 @@ export default function HomeScreen() {
            }
         }, 300);
       } else {
-        mapRef.current?.animateToRegion({...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01}, 600);
+        animateRegion({ ...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 600);
       }
 
       Keyboard.dismiss();
@@ -619,7 +676,7 @@ export default function HomeScreen() {
         longitudeDelta: 0.005,
       };
       //mapRegionRef.current = nearestRegion;
-      mapRef.current?.animateToRegion(nearestRegion, 600);
+      animateRegion(nearestRegion, 600);
     }
   }, [currentLocation, transitStops]);
 
@@ -845,8 +902,8 @@ export default function HomeScreen() {
 
   // Auto-follow camera during simulation playback
   useEffect(() => {
-    if (sim.state === 'playing' && sim.position && simAutoFollow && mapRef.current) {
-      mapRef.current.animateToRegion({
+    if (sim.state === 'playing' && sim.position && simAutoFollow) {
+      animateRegion({
         latitude: sim.position.latitude,
         longitude: sim.position.longitude,
         latitudeDelta: 0.012,
@@ -856,6 +913,8 @@ export default function HomeScreen() {
   }, [sim.position, sim.state, simAutoFollow]);
 
   const handleRegionChangeComplete = (region: MapRegion) => {
+    if (USE_MAPLIBRE) return;
+
     let newLat = region.latitude;
     let newLng = region.longitude;
 
@@ -876,6 +935,123 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screen}>
+      {USE_MAPLIBRE ? (
+        <MapLibreMapView
+          style={StyleSheet.absoluteFillObject}
+          mapStyle={MAP_CONFIG.MAPLIBRE_STYLE_URL}
+          onDidFinishLoadingMap={() => setIsMapLoaded(true)}
+          onPress={() => {
+            setIsMapInteracted(true);
+            if (sim.state === 'playing') setSimAutoFollow(false);
+          }}
+          pitchEnabled={false}
+          rotateEnabled={false}
+          compassEnabled={false}
+          logoEnabled={false}
+          attributionEnabled={false}
+          zoomEnabled
+          scrollEnabled
+        >
+          <MapLibreCamera
+            ref={mapLibreCameraRef}
+            defaultSettings={{
+              centerCoordinate: [INITIAL_REGION.longitude, INITIAL_REGION.latitude],
+              zoomLevel: regionToZoomLevel(INITIAL_REGION),
+            }}
+            minZoomLevel={10}
+            maxZoomLevel={18}
+            maxBounds={{
+              ne: [PH_BOUNDS.maxLongitude, PH_BOUNDS.maxLatitude],
+              sw: [PH_BOUNDS.minLongitude, PH_BOUNDS.minLatitude],
+            }}
+          />
+
+          {activeUserPosition ? (
+            <PointAnnotation
+              id="user-position"
+              coordinate={[activeUserPosition.longitude, activeUserPosition.latitude]}
+            >
+              <View style={styles.liveUserMarker}>
+                <View style={styles.liveUserCore}>
+                  <Ionicons name="person" size={13} color="#FFFFFF" />
+                </View>
+              </View>
+            </PointAnnotation>
+          ) : null}
+
+          {destinationLocation ? (
+            <PointAnnotation
+              id="destination-position"
+              coordinate={[destinationLocation.longitude, destinationLocation.latitude]}
+            >
+              <View style={styles.terminalMarker} />
+            </PointAnnotation>
+          ) : null}
+
+          {visibleTransitLegs.map((leg, idx) => {
+            const shape: GeoJSON.Feature<GeoJSON.LineString> = {
+              type: 'Feature',
+              geometry: {
+                type: 'LineString',
+                coordinates: leg.coordinates.map((c) => [c.longitude, c.latitude]),
+              },
+              properties: {},
+            };
+
+            return (
+              <ShapeSource id={`route-seg-source-${idx}`} key={`route-seg-source-${idx}`} shape={shape}>
+                <LineLayer
+                  id={`route-seg-line-${idx}`}
+                  style={{
+                    lineColor: leg.onTransit ? '#E8A020' : '#888888',
+                    lineWidth: leg.onTransit ? 5 : 3,
+                    lineOpacity: 0.9,
+                  }}
+                />
+              </ShapeSource>
+            );
+          })}
+
+          {!destinationLocation && visibleTransitRoutes.map((route: any) => {
+            const routeShape: GeoJSON.Feature<GeoJSON.LineString> = {
+              type: 'Feature',
+              geometry: {
+                type: 'LineString',
+                coordinates: route.coordinates.map((c: MapCoordinate) => [c.longitude, c.latitude]),
+              },
+              properties: {},
+            };
+
+            return (
+              <ShapeSource id={`transit-route-source-${route.id}`} key={`transit-route-source-${route.id}`} shape={routeShape}>
+                <LineLayer
+                  id={`transit-route-line-${route.id}`}
+                  style={{
+                    lineColor: selectedTransitRoute?.id === route.id ? route.color : `${route.color}AA`,
+                    lineWidth: selectedTransitRoute?.id === route.id ? 5 : 3,
+                    lineOpacity: 0.8,
+                  }}
+                />
+              </ShapeSource>
+            );
+          })}
+
+          {!destinationLocation && visibleTransitStops.map((stop: any) => (
+            <PointAnnotation
+              key={`transit-stop-ml-${stop.id}`}
+              id={`transit-stop-ml-${stop.id}`}
+              coordinate={[stop.coordinate.longitude, stop.coordinate.latitude]}
+            >
+              <View style={[
+                styles.transitStopMarker,
+                nearestStop?.id === stop.id && styles.nearestStopMarker,
+              ]}>
+                <Ionicons name="ellipse" size={6} color="#FFFFFF" />
+              </View>
+            </PointAnnotation>
+          ))}
+        </MapLibreMapView>
+      ) : (
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
@@ -1037,9 +1213,8 @@ export default function HomeScreen() {
             </Callout>
           </Marker>
         ))}
-
-
       </MapView>
+  )}
 
       {/* Map Controls */}
       <View style={styles.mapControls}>
