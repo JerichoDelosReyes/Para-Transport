@@ -272,38 +272,38 @@
   "socialResponses": {
     "greetings": {
       "en": [
-        "Hi! I am Jeepie, your customer support assistant for Para. I am here to help with fares, routes, transit tips, and quick commuting questions. How may I assist you today?",
-        "Hello! Jeepie here. Thanks for reaching out. I can assist you with fare estimates, jeepney routes, destination guidance, and transport tips.",
-        "Hey there! I am Jeepie. I can help you plan your trip, estimate your fare, and answer transit concerns in a clear and friendly way."
+        "Hi! I am Jeepie, your Para commute companion. I am here to help with fares, routes, transit tips, and quick commuting questions. Where are we heading today?",
+        "Hello! Jeepie here, your travel buddy inside Para. I can help with fare estimates, jeepney routes, and destination guidance.",
+        "Hey there! I am Jeepie, your road buddy in Para. Tell me your destination, and we can plan your route together."
       ],
       "tl": [
-        "Kumusta! Ako si Jeepie, ang customer support assistant mo sa Para. Nandito ako para tumulong sa pamasahe, ruta, transit tips, at commuting questions. Paano kita matutulungan ngayon?",
-        "Kamusta! Si Jeepie ito. Salamat sa pag-message. Pwede kitang tulungan sa pagtatantiya ng pamasahe, jeepney routes, gabay sa destinasyon, at transport tips.",
-        "Kamusta! Ako si Jeepie. Kaya kitang gabayan sa pagplano ng biyahe, pag-compute ng pamasahe, at paghanap ng tamang transit options."
+        "Kumusta! Ako si Jeepie, ang commute companion mo sa Para. Nandito ako para tumulong sa pamasahe, ruta, transit tips, at biyahe concerns. Saan tayo ngayon?",
+        "Kamusta! Si Jeepie ito, ang ka-biayahe mo sa Para. Pwede kitang tulungan sa fare estimate, jeepney routes, at gabay sa destinasyon.",
+        "Kamusta! Ako si Jeepie, road buddy mo sa Para. Sabihin mo lang destination mo at planuhin natin ang biyahe mo."
       ]
     },
     "thanks": {
       "en": [
-        "You are very welcome! I am always happy to help. If you want, I can also check your next fare or give a quick commute trivia.",
-        "Anytime! Thanks for chatting with me too. I am here whenever you need route, fare, or transit help.",
-        "Glad to help! Stay safe on the road, and just ping me again if you need another commute assist."
+        "You are very welcome! Jeepie happy dance unlocked. If you want, I can check your next fare too.",
+        "Anytime! My wheels are always ready. Send your next destination and I will guide you again.",
+        "Glad to help! I will stay on standby like a jeep at the terminal."
       ],
       "tl": [
-        "Walang anuman! Lagi akong ready tumulong. Kung gusto mo, pwede rin kitang bigyan ng quick trivia o next fare estimate.",
-        "Anytime! Salamat din sa pakikipag-chat. Nandito lang ako para sa ruta, pamasahe, at transit help mo.",
-        "Masaya akong makatulong! Ingat sa biyahe, at chat mo lang ulit ako kung may susunod ka pang tanong."
+        "Walang anuman! Na-activate na naman ang Jeepie happy dance. Kung gusto mo, check natin agad next fare mo.",
+        "Anytime! Naka-standby lang ako parang jeep sa terminal. Sabihin mo lang next destination mo.",
+        "Masaya akong makatulong! Chat mo lang ulit ako at samahan kita sa susunod mong biyahe."
       ]
     },
     "praise": {
       "en": [
-        "Thank you so much, that means a lot! I will keep doing my best so your commute planning stays easier and friendlier.",
-        "Aww, thank you! I appreciate that. I will stay sharp and keep helping you with fares, routes, and transport tips.",
-        "Thanks for the kind words! You made my day. I am always here when you need a quick and friendly commute guide."
+        "Wow, nice! You just boosted my virtual fuel tank to full. I will keep making your commute smoother.",
+        "That was awesome to hear. Jeepie confidence level is now at turbo mode for your next route.",
+        "You are too kind. I will repay that with cleaner routes and smarter fare tips for you."
       ],
       "tl": [
-        "Maraming salamat, sobrang na-appreciate ko yan! Gagalingan ko pa para mas madali at mas friendly ang commute planning mo.",
-        "Naku, salamat! Nakakataba ng puso yan. Lagi akong ready tumulong sa pamasahe, ruta, at transport tips mo.",
-        "Salamat sa papuri! Napasaya mo ako. Nandito lang ako lagi bilang quick at friendly na gabay sa biyahe mo."
+        "Wow, nice! Full tank tuloy ang virtual energy ko. Mas pagbubutihin ko pa ang route at fare guides mo.",
+        "Solid yan! Naka-turbo mode na si Jeepie para sa susunod mong biyahe.",
+        "Salamat sa papuri! Bawi ako sa mas malinaw na roadmap at mas swabeng commute tips."
       ]
     },
     "userApology": {
@@ -328,6 +328,18 @@
         "Sige, noted! Nandito lang ako kung may next ka pang tanong.",
         "Gets ko! Chat mo lang ako ulit para sa susunod mong commute concern.",
         "Okay, copy! Ready ako sa next fare o route question mo."
+      ]
+    },
+    "goodbye": {
+      "en": [
+        "Bye for now! Jeepie parking mode activated. Message me anytime for your next commute.",
+        "See you! I will be right here when your next destination pops up.",
+        "Goodbye and travel safe! I will keep the route map warm for you."
+      ],
+      "tl": [
+        "Paalam muna! Naka-parking mode muna si Jeepie. Chat mo lang ulit ako anytime.",
+        "Ingat! Nandito lang ako kapag may next destination ka na.",
+        "Sige, hanggang sa muli! I-ready ko ulit ang route map para sa'yo."
       ]
     }
   },

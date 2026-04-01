@@ -30,8 +30,14 @@ export default function AIChatbotScreen() {
   const insets = useSafeAreaInsets();
   const [currentState, setCurrentState] = useState<keyof typeof CHATBOT_STATES>("IDLE");
   const [inputText, setInputText] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [conversationState, setConversationState] = useState<ChatbotConversationState>({});
+  const storedMessages = useStore((state: any) => state.chatbotMessages || []);
+  const storedConversationState = useStore((state: any) => state.chatbotConversationState || {});
+  const setStoredMessages = useStore((state: any) => state.setChatbotMessages);
+  const setStoredConversationState = useStore((state: any) => state.setChatbotConversationState);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => storedMessages as ChatMessage[]);
+  const [conversationState, setConversationState] = useState<ChatbotConversationState>(
+    () => storedConversationState as ChatbotConversationState,
+  );
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [currentLocationLabel, setCurrentLocationLabel] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -49,6 +55,29 @@ export default function AIChatbotScreen() {
     ? authName.split(" ")[0]
     : null;
   const hasConversation = messages.length > 0;
+
+  useEffect(() => {
+    if (messages.length === 0 && storedMessages.length > 0) {
+      setMessages(storedMessages as ChatMessage[]);
+    }
+  }, [storedMessages, messages.length]);
+
+  useEffect(() => {
+    if (
+      Object.keys(conversationState || {}).length === 0
+      && Object.keys(storedConversationState || {}).length > 0
+    ) {
+      setConversationState(storedConversationState as ChatbotConversationState);
+    }
+  }, [storedConversationState, conversationState]);
+
+  useEffect(() => {
+    setStoredMessages(messages);
+  }, [messages, setStoredMessages]);
+
+  useEffect(() => {
+    setStoredConversationState(conversationState);
+  }, [conversationState, setStoredConversationState]);
 
   useEffect(() => {
     Animated.loop(
