@@ -1274,6 +1274,8 @@ export default function HomeScreen() {
                 setMatchedRoutes([]);
                 setDestinationLocation(null);
                 setRouteSummary(null);
+                setDestinationQuery('');
+                setOriginQuery('');
                 sim.reset();
               }}
               activeOpacity={0.8}
