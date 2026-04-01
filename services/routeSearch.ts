@@ -80,14 +80,52 @@ const MIN_LEG_DISTANCE_KM = 0.05;
 const MAX_TOTAL_WALK_KM = 3.2;
 const MIN_FORWARD_PROGRESS_KM = 0.01;
 
+// LTFRB jeepney fare guide (effective Oct 8, 2023), regular fare column for 1..50 km.
+const JEEPNEY_REGULAR_FARE_TABLE: number[] = [
+  13.0, 13.0, 13.0, 13.0, 14.75, 16.5, 18.5, 20.25, 22.0, 23.75,
+  25.5, 27.5, 29.25, 31.0, 32.75, 34.5, 36.5, 38.25, 40.0, 41.75,
+  43.5, 45.5, 47.25, 49.0, 50.75, 52.5, 54.5, 56.25, 58.0, 59.75,
+  61.5, 63.5, 65.25, 67.0, 68.75, 70.5, 72.5, 74.25, 76.0, 77.75,
+  79.5, 81.5, 83.25, 85.0, 86.75, 88.5, 90.5, 92.25, 94.0, 95.75,
+];
+const JEEPNEY_PER_KM_AFTER_50 = 1.75;
+
+function getFareDiscountMultiplier(): number {
+  const discountType = useStore.getState().user?.fare_discount_type || 'regular';
+  return discountType === 'regular' ? 1 : 0.8;
+}
+
+function applyUserFareDiscount(rawFare: number): number {
+  const multiplier = getFareDiscountMultiplier();
+  return Math.max(1, Math.round(rawFare * multiplier));
+}
+
+function calculateJeepneyGuidedFare(distanceKm: number): number {
+  const billableKm = Math.max(1, Math.ceil(distanceKm));
+  const maxGuideKm = JEEPNEY_REGULAR_FARE_TABLE.length;
+
+  const rawFare =
+    billableKm <= maxGuideKm
+      ? JEEPNEY_REGULAR_FARE_TABLE[billableKm - 1]
+      : JEEPNEY_REGULAR_FARE_TABLE[maxGuideKm - 1] +
+        (billableKm - maxGuideKm) * JEEPNEY_PER_KM_AFTER_50;
+
+  return applyUserFareDiscount(rawFare);
+}
+
 function calculateFare(distanceKm: number, vehicleType: string = 'jeepney'): number {
+  const normalizedVehicleType = String(vehicleType || 'jeepney').toLowerCase();
+  const normalizedType = normalizedVehicleType === 'uv' ? 'uv_express' : normalizedVehicleType;
+
+  // Use guide-based regular fare for jeepney routes and round to whole pesos.
+  if (normalizedType === 'jeepney') {
+    return calculateJeepneyGuidedFare(distanceKm);
+  }
+
   const fareMatrices = useStore.getState().fareMatrices || [];
   let baseFare = 13.0;
   let baseDistance = 4.0;
   let perKmRate = 1.8;
-
-  // Map 'uv' to 'uv_express' if needed based on the Supabase payload
-  const normalizedType = vehicleType === 'uv' ? 'uv_express' : vehicleType;
   
   const matrix = fareMatrices.find((m: any) => m.vehicle_type === normalizedType);
   if (matrix) {
@@ -96,13 +134,12 @@ function calculateFare(distanceKm: number, vehicleType: string = 'jeepney'): num
     perKmRate = Number(matrix.per_km_rate) || perKmRate;
   }
 
-  if (distanceKm <= baseDistance) return baseFare;
+  if (distanceKm <= baseDistance) return applyUserFareDiscount(baseFare);
 
   const extraKm = distanceKm - baseDistance;
   const raw = baseFare + extraKm * perKmRate;
 
-  // Round up to nearest 0.25 (standard Philippine fare rounding)
-  return Math.ceil(raw * 4) / 4;
+  return applyUserFareDiscount(raw);
 }
 
 function lonScaleAtLat(lat: number): number {
