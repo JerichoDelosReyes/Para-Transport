@@ -271,7 +271,7 @@ function pickLocalized(variants: LocalizedVariants, language: BotLanguage): stri
 function formatForChatDisplay(text: string): string {
   const cleaned = text
     .replace(/[ \t]+/g, ' ')
-    .replace(/\s*\n\s*/g, '\n')
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
@@ -1182,7 +1182,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasBuilderIntent(normalized)) {
     return {
-      text: formatForChatDisplay(dataset.builderAnswer),
+      text: dataset.builderAnswer,
       language,
       state: {},
       usedGroq: false,
