@@ -64,13 +64,15 @@ export default function AIChatbotScreen() {
   }, [storedMessages, messages.length]);
 
   useEffect(() => {
-    if (
-      Object.keys(conversationState || {}).length === 0
-      && Object.keys(storedConversationState || {}).length > 0
-    ) {
+    const localStateEmpty = Object.keys(conversationState || {}).length === 0;
+    const storedStateHasValue = Object.keys(storedConversationState || {}).length > 0;
+    const localHasMessages = messages.length > 0;
+    const storedHasMessages = storedMessages.length > 0;
+
+    if (localStateEmpty && !localHasMessages && storedStateHasValue && storedHasMessages) {
       setConversationState(storedConversationState as ChatbotConversationState);
     }
-  }, [storedConversationState, conversationState]);
+  }, [storedConversationState, conversationState, messages.length, storedMessages.length]);
 
   useEffect(() => {
     setStoredMessages(messages);
@@ -358,7 +360,7 @@ export default function AIChatbotScreen() {
           <View style={[styles.inputWrapper, hasConversation ? styles.inputWrapperChat : null]}>
             <TextInput 
               style={styles.textInput}
-              placeholder="Ask about fares, routes, or jeepney trivia..."
+              placeholder="Ask Jeepie only"
               placeholderTextColor={COLORS.textMuted}
               value={inputText}
               onChangeText={setInputText}

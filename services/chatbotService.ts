@@ -789,6 +789,35 @@ function hasAcknowledgementIntent(normalized: string): boolean {
   return /\b(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po)\b/.test(normalized);
 }
 
+function hasCancelIntent(normalized: string): boolean {
+  return /\b(cancel|cancel it|stop|stop it|never\s?mind|nvm|forget it|forget that|scratch that|ignore that|drop it|skip muna|pass muna|wag na|huwag na|ayoko na|hindi na|di na)\b/.test(normalized);
+}
+
+function hasPendingFollowUpState(state: ChatbotConversationState): boolean {
+  return Boolean(
+    state.awaitingDestinationIntent
+    || state.awaitingOriginIntent
+    || state.awaitingOriginForDestinationId
+    || state.pendingDestinationName
+    || state.pendingDestinationCoordinate
+    || state.pendingDestinationPlaceId,
+  );
+}
+
+function buildCancelFollowUpReply(language: BotLanguage): string {
+  if (language === 'tl') {
+    return [
+      'Sige, ititigil ko muna ang pending na route/fare follow-up.',
+      'Pwede ka nang magtanong ng ibang bagay anytime, tulad ng trivia o app guide.',
+    ].join('\n\n');
+  }
+
+  return [
+    'Sure, I will stop the pending route/fare follow-up now.',
+    'You can ask me something else anytime, like trivia or app guidance.',
+  ].join('\n\n');
+}
+
 function hasCommuteTaskIntent(normalized: string): boolean {
   return /(fare|pamasahe|route|ruta|destination|papunta|where|saan|how to go|paano pumunta|terminal|stop|transit|jeepney|tricycle|from|mula|galing|to |going to|trivia|fun fact|did you know|alam mo ba|app|application|saved|achievements|profile|settings|pinpoint|pinned|drop pin|base fare|discounted fare|what can you do|anong kaya mo|mga ruta|route list|vermosa|how to get to|papuntang)/.test(normalized);
 }
@@ -1436,6 +1465,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const isTaskLikeMessage = hasCommuteTaskIntent(normalized);
   const hasPinReference = hasPinIntent(normalized);
   const currentState: ChatbotConversationState = request.state ?? {};
+  const hasPendingFollowUp = hasPendingFollowUpState(currentState);
   const routes = request.routes ?? [];
 
   if (!message) {
@@ -1443,6 +1473,15 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       text: composeSupportReply(language, fallbackText(language, 'unknown')),
       language,
       state: currentState,
+      usedGroq: false,
+    };
+  }
+
+  if (hasPendingFollowUp && hasCancelIntent(normalized)) {
+    return {
+      text: composeSupportReply(language, buildCancelFollowUpReply(language)),
+      language,
+      state: {},
       usedGroq: false,
     };
   }
