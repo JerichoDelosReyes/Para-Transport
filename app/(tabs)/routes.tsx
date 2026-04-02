@@ -1,52 +1,16 @@
-﻿import { useState, useMemo, useEffect } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, InteractionManager, Alert, Image } from 'react-native';
+﻿import { ScrollView, StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
+import { useState, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
-import { useRoutes } from '../../hooks/useRoutes';
-import type { JeepneyRoute } from '../../types/routes';
 import { useStore } from '../../store/useStore';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
-import { ROUTE_COLORS, ROUTE_LABELS } from '../../constants/routeVisuals';
 
-const FILTER_MODES = ['All', 'Jeepney', 'Tricycle', 'Bus'] as const;
-const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> = {
-  All: null,
-  Jeepney: 'jeepney',
-  Tricycle: 'tricycle',
-  Bus: 'bus',
-};
-
-const TYPE_ORDER = ['tricycle', 'jeepney', 'bus'];
-const VEHICLE_ICONS: Record<string, any> = {
-  jeepney: require('../../assets/icons/jeepney-icon.png'),
-  bus: require('../../assets/icons/bus-icon.png'),
-  tricycle: require('../../assets/icons/tricycle-icon.png'),
-};
-
-function normalizeGpxRoute(r: JeepneyRoute) {
-  return {
-    id: r.properties.code,
-    type: r.properties.type,
-    color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
-    ref: r.properties.code,
-    name: r.properties.name,
-    from: r.stops[0]?.label || '',
-    to: r.stops[r.stops.length - 1]?.label || '',
-    operator: r.properties.operator || '',
-    coordinates: r.coordinates,
-    stops: r.stops.map((s, idx) => ({
-      id: `${r.properties.code}-stop-${idx}`,
-      coordinate: s.coordinate,
-      name: s.label,
-      operator: r.properties.operator || '',
-    })),
-    verified: true,
-    fare: r.properties.fare,
-  };
-}
+const HISTORY_FILTERS = ['All', 'Today', 'Yesterday', 'Older'] as const;
+type HistoryFilter = typeof HISTORY_FILTERS[number];
+const ITEMS_PER_PAGE = 10;
 
 export default function RoutesScreen() {
   const router = useRouter();
@@ -58,6 +22,48 @@ export default function RoutesScreen() {
   const saveRoute = useStore((state) => state.saveRoute);
   const removeSavedRoute = useStore((state) => state.removeSavedRoute);
   const isGuestAccount = useStore((state) => state.sessionMode === 'guest');
+
+  const [activeFilter, setActiveFilter] = useState<HistoryFilter>('All');
+  const [page, setPage] = useState(1);
+
+  const handleFilterChange = (filter: HistoryFilter) => {
+    setActiveFilter(filter);
+    setPage(1);
+  };
+
+  const filteredHistory = useMemo(() => {
+    const history = user.commute_history || [];
+    if (!history.length) return [];
+
+    const now = new Date();
+    const todayStr = now.toDateString();
+    
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toDateString();
+
+    return history.filter((item: any) => {
+      if (activeFilter === 'All') return true;
+      if (!item.timestamp) return activeFilter === 'Older';
+      
+      const itemDate = new Date(item.timestamp);
+      const itemStr = itemDate.toDateString();
+
+      if (activeFilter === 'Today') {
+        return itemStr === todayStr;
+      }
+      if (activeFilter === 'Yesterday') {
+        return itemStr === yesterdayStr;
+      }
+      if (activeFilter === 'Older') {
+        return itemStr !== todayStr && itemStr !== yesterdayStr;
+      }
+      return true;
+    });
+  }, [user.commute_history, activeFilter]);
+
+  const displayedHistory = filteredHistory.slice(0, page * ITEMS_PER_PAGE);
+  const hasMore = displayedHistory.length < filteredHistory.length;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -76,70 +82,101 @@ export default function RoutesScreen() {
             <JeepIllustration width={220} height={150} />
             <Text style={styles.emptyTitle}>Sign in to view history.</Text>
           </View>
-        ) : user.commute_history && user.commute_history.length > 0 ? (
-          <>
-            {user.commute_history.map((item: any, index: number) => {
-              const targetName = `${item.origin?.name || 'Current Location'} to ${item.destination?.name || 'Unknown'}`;
-              const isSaved = user.saved_routes?.some((r: any) => 
-                r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
-              );
-              return (
-                  <View key={item.id || index} style={styles.historyCard}>
-                    <View style={styles.historyCardTop}>
-                      <Text style={styles.historyRouteName} numberOfLines={1}>
-                        {targetName}
-                      </Text>
-                      <TouchableOpacity
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        onPress={() => {
-                          if (!isSaved) {
-                            saveRoute({
-                              id: Date.now(),
-                              name: targetName,
-                              legs: [{ mode: 'Custom Route', from: item.origin?.name || 'Current Location', to: item.destination?.name || 'Unknown', fromObj: item.origin || null, toObj: item.destination }],
-                              total_fare: item.fare || 0,
-                            });
-                            Alert.alert('Saved', 'Route has been added to your Saved page.');
-                          } else {
-                            const routeToRemove = user.saved_routes?.find((r: any) => 
-                              r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
-                            );
-                            if (routeToRemove) {
-                               removeSavedRoute(routeToRemove.id);
-                            }
-                          }
-                        }}
-                      >
-                        <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={18} color={isSaved ? COLORS.primary : COLORS.textMuted} />
-                      </TouchableOpacity>
-                    </View>
-                    <View>
-                      <Text style={styles.historyLegSummary}>Recent Search</Text>
-                      <Text style={[styles.historyLegSummary, { marginTop: 2, fontSize: 10, color: '#9CA3AF' }]}>
-                        {item.timestamp ? (new Date(item.timestamp).toLocaleDateString() + ' at ' + new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'Recent'}
-                      </Text>
-                    </View>
-                    <View style={[styles.historyCardBottom, { justifyContent: 'flex-end' }]}>
-                      <TouchableOpacity 
-                        style={styles.historyGhostButton} 
-                        activeOpacity={0.9} 
-                        onPress={() => {
-                          setPendingRouteSearch({ origin: item.origin || null, destination: item.destination });
-                          router.navigate('/(tabs)');
-                        }}
-                      >
-                        <Text style={styles.historyGhostButtonText}>View</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
-            </>
-        ) : (
+        ) : !user.commute_history || user.commute_history.length === 0 ? (
           <View style={styles.emptyState}>
             <JeepIllustration width={220} height={150} />
             <Text style={styles.emptyTitle}>Wala pang history.</Text>
           </View>
+        ) : (
+          <>
+            <View style={styles.quickActionsContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScroll}>
+                {HISTORY_FILTERS.map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[styles.modePill, activeFilter === mode && styles.modePillActive]}
+                    onPress={() => handleFilterChange(mode)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.modePillText, activeFilter === mode && styles.modePillTextActive]}>{mode}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {displayedHistory.length > 0 ? (
+              displayedHistory.map((item: any, index: number) => {
+                const targetName = `${item.origin?.name || 'Current Location'} to ${item.destination?.name || 'Unknown'}`;
+                const isSaved = user.saved_routes?.some((r: any) => 
+                  r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
+                );
+                return (
+                    <View key={item.id || index} style={styles.historyCard}>
+                      <View style={styles.historyCardTop}>
+                        <Text style={styles.historyRouteName} numberOfLines={1}>
+                          {targetName}
+                        </Text>
+                        <TouchableOpacity
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          onPress={() => {
+                            if (!isSaved) {
+                              saveRoute({
+                                id: Date.now(),
+                                name: targetName,
+                                legs: [{ mode: 'Custom Route', from: item.origin?.name || 'Current Location', to: item.destination?.name || 'Unknown', fromObj: item.origin || null, toObj: item.destination }],
+                                total_fare: item.fare || 0,
+                              });
+                              Alert.alert('Saved', 'Route has been added to your Saved page.');
+                            } else {
+                              const routeToRemove = user.saved_routes?.find((r: any) => 
+                                r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
+                              );
+                              if (routeToRemove) {
+                                removeSavedRoute(routeToRemove.id);
+                              }
+                            }
+                          }}
+                        >
+                          <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={18} color={isSaved ? COLORS.primary : COLORS.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                      <View>
+                        <Text style={styles.historyLegSummary}>Recent Search</Text>
+                        <Text style={[styles.historyLegSummary, { marginTop: 2, fontSize: 10, color: '#9CA3AF' }]}>
+                          {item.timestamp ? (new Date(item.timestamp).toLocaleDateString() + ' at ' + new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'Recent'}
+                        </Text>
+                      </View>
+                      <View style={[styles.historyCardBottom, { justifyContent: 'flex-end' }]}>
+                        <TouchableOpacity 
+                          style={styles.historyGhostButton} 
+                          activeOpacity={0.9} 
+                          onPress={() => {
+                            setPendingRouteSearch({ origin: item.origin || null, destination: item.destination });
+                            router.navigate('/(tabs)');
+                          }}
+                        >
+                          <Text style={styles.historyGhostButtonText}>View</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+              })
+            ) : (
+              <View style={styles.emptyFilterState}>
+                <Text style={styles.emptyTitle}>No history found.</Text>
+              </View>
+            )}
+
+            {hasMore && (
+              <TouchableOpacity 
+                style={styles.loadMoreButton}
+                activeOpacity={0.8}
+                onPress={() => setPage(p => p + 1)}
+              >
+                <Text style={styles.loadMoreText}>Load More</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -333,6 +370,29 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.06)',
     backgroundColor: COLORS.card,
     padding: SPACING.cardPadding,
+  },
+  emptyFilterState: {
+    alignItems: 'center',
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: COLORS.card,
+    padding: SPACING.cardPadding,
+    marginTop: 4,
+  },
+  loadMoreButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+    marginBottom: 48,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#F5C518',
+  },
+  loadMoreText: {
+    fontFamily: 'Inter',
+    fontWeight: '700',
+    fontSize: 14,
+    color: '#0A1628',
   },
   emptyTitle: {
     marginTop: 8,
