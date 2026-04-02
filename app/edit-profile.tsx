@@ -40,7 +40,7 @@ export default function EditProfileScreen() {
       if (user?.email) {
         const { error } = await supabase
           .from('users')
-          .update({ name: name.trim() })
+          .update({ full_name: name.trim() })
           .eq('email', user.email);
 
         if (error && error.code !== 'PGRST204' && !error.message.includes("Could not find")) {
@@ -48,7 +48,7 @@ export default function EditProfileScreen() {
         }
       }
       
-      setUser({ ...user, name: name.trim() } as any);
+      setUser({ ...user, full_name: name.trim() } as any);
       Alert.alert('Success', 'Profile updated successfully!', [
         { text: 'OK', onPress: () => router.back() }
       ]);
