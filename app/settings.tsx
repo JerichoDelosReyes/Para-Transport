@@ -29,21 +29,6 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
-  const handleResetGuestData = () => {
-    Alert.alert('Reset Data', 'Clear all guest progress, saved routes, and recent searches?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reset',
-        style: 'destructive',
-        onPress: () => {
-          clearRecents();
-          resetProgress();
-          Alert.alert('Done', 'Data has been reset.');
-        },
-      },
-    ]);
-  };
-
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -185,12 +170,6 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {isGuestAccount && (
-          <TouchableOpacity style={styles.resetButton} onPress={handleResetGuestData}>
-            <Text style={styles.resetButtonText}>Reset Data</Text>
-          </TouchableOpacity>
-        )}
-
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
@@ -330,19 +309,5 @@ const styles = StyleSheet.create({
     fontFamily: 'SFPro-Bold',
     fontSize: 16,
     color: '#FF3B30',
-  },
-  resetButton: {
-    marginTop: 10,
-    backgroundColor: '#FFF8E1',
-    borderRadius: RADIUS.card,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(232,160,32,0.4)',
-  },
-  resetButtonText: {
-    fontFamily: 'SFPro-Bold',
-    fontSize: 16,
-    color: '#A65F00',
   }
 });
