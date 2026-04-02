@@ -168,7 +168,7 @@ export default function RoutesScreen() {
                             router.navigate('/(tabs)');
                           }}
                         >
-                          <Text style={styles.historyGhostButtonText}>View</Text>
+                          <Text style={styles.historyGhostButtonText}>View Route</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
