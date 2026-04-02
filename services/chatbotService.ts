@@ -369,23 +369,27 @@ function template(message: string, replacements: Record<string, string>): string
   return output;
 }
 
-function roundFare(value: number): number {
-  if (!dataset.farePolicy.roundToNearestQuarter) return Number(value.toFixed(2));
-  return Math.ceil(value * 4) / 4;
+const JEEPNEY_BASE_FARE_REGULAR = 13;
+const JEEPNEY_BASE_FARE_DISCOUNTED = 11;
+const JEEPNEY_BASE_DISTANCE_KM = 4;
+const JEEPNEY_PER_KM_RATE = 1.8;
+
+function calculateJeepneyFare(distanceKm: number, discounted = false): number {
+  const billableKm = Math.max(1, Math.ceil(distanceKm));
+  const baseFare = discounted ? JEEPNEY_BASE_FARE_DISCOUNTED : JEEPNEY_BASE_FARE_REGULAR;
+
+  if (billableKm <= JEEPNEY_BASE_DISTANCE_KM) return baseFare;
+
+  const extraKm = billableKm - JEEPNEY_BASE_DISTANCE_KM;
+  return Math.round(baseFare + extraKm * JEEPNEY_PER_KM_RATE);
 }
 
 function calculateNormalFare(distanceKm: number): number {
-  const { baseFarePhp, baseDistanceKm, additionalPerKmPhp } = dataset.farePolicy;
-  if (distanceKm <= baseDistanceKm) return baseFarePhp;
-
-  const extraKm = distanceKm - baseDistanceKm;
-  const raw = baseFarePhp + extraKm * additionalPerKmPhp;
-  return roundFare(raw);
+  return calculateJeepneyFare(distanceKm, false);
 }
 
-function calculateDiscountedFare(normalFare: number): number {
-  const discounted = normalFare * (1 - dataset.farePolicy.discountRate);
-  return Number(discounted.toFixed(2));
+function calculateDiscountedFare(distanceKm: number): number {
+  return calculateJeepneyFare(distanceKm, true);
 }
 
 function formatPhp(value: number): string {
@@ -1165,33 +1169,25 @@ function buildRouteListReply(language: BotLanguage, routes: JeepneyRoute[], dest
 }
 
 function buildFarePolicyReply(language: BotLanguage): string {
-  const baseFare = dataset.farePolicy.baseFarePhp;
-  const baseDistance = dataset.farePolicy.baseDistanceKm;
-  const additionalPerKm = dataset.farePolicy.additionalPerKmPhp;
-  const discountRate = dataset.farePolicy.discountRate;
-  const discountedBase = Number((baseFare * (1 - discountRate)).toFixed(2));
-  const hasQuarterRounding = dataset.farePolicy.roundToNearestQuarter;
+  const baseFare = JEEPNEY_BASE_FARE_REGULAR;
+  const discountedBase = JEEPNEY_BASE_FARE_DISCOUNTED;
+  const baseDistance = JEEPNEY_BASE_DISTANCE_KM;
+  const additionalPerKm = JEEPNEY_PER_KM_RATE;
 
   if (language === 'tl') {
     return [
-      'Narito ang current fare policy sa dataset ni Jeepie:',
-      `1. Base fare: ${formatPhp(baseFare)} para sa unang ${baseDistance} km.`,
-      `2. Additional fare: +${formatPhp(additionalPerKm)} kada dagdag na 1 km.`,
-      `3. Discounted fare (student/senior/PWD): ${Math.round(discountRate * 100)}% off. Halimbawa, base discounted fare ay ${formatPhp(discountedBase)}.`,
-      hasQuarterRounding
-        ? '4. Ang regular fare estimate ay niroround up sa pinakamalapit na 0.25 para mas realistic ang fare simulation.'
-        : '4. Ang fare estimate ay hindi gumagamit ng quarter-step rounding.',
+      'Narito ang current jeepney fare policy ni Jeepie:',
+      `1. Regular base fare: ${formatPhp(baseFare)} para sa unang ${baseDistance} km.`,
+      `2. Discounted base fare (student/senior/PWD): ${formatPhp(discountedBase)} para sa unang ${baseDistance} km.`,
+      `3. Kapag lampas ${baseDistance} km, may dagdag na +${formatPhp(additionalPerKm)} kada susunod na billable km.`,
     ].join('\n\n');
   }
 
   return [
-    'Here is Jeepie\'s current fare policy from the dataset:',
-    `1. Base fare: ${formatPhp(baseFare)} for the first ${baseDistance} km.`,
-    `2. Additional fare: +${formatPhp(additionalPerKm)} for every extra 1 km.`,
-    `3. Discounted fare (student/senior/PWD): ${Math.round(discountRate * 100)}% off. Example base discounted fare is ${formatPhp(discountedBase)}.`,
-    hasQuarterRounding
-      ? '4. Regular fare estimates are rounded up to the nearest 0.25 for a more realistic fare simulation.'
-      : '4. Fare estimates are not using quarter-step rounding.',
+    'Here is Jeepie\'s current jeepney fare policy:',
+    `1. Regular base fare: ${formatPhp(baseFare)} for the first ${baseDistance} km.`,
+    `2. Discounted base fare (student/senior/PWD): ${formatPhp(discountedBase)} for the first ${baseDistance} km.`,
+    `3. Once beyond ${baseDistance} km, an additional +${formatPhp(additionalPerKm)} is added per next billable km.`,
   ].join('\n\n');
 }
 
@@ -1253,7 +1249,9 @@ function estimateFare(
       const normalFare = best.legs.reduce((sum, leg) => {
         return sum + calculateNormalFare(Math.max(leg.distanceKm, 0.05));
       }, 0);
-      const discountedFare = calculateDiscountedFare(normalFare);
+      const discountedFare = best.legs.reduce((sum, leg) => {
+        return sum + calculateDiscountedFare(Math.max(leg.distanceKm, 0.05));
+      }, 0);
 
       const routeHint = best.legs
         .map((leg) => leg.route.properties.code || leg.route.properties.name || 'Jeepney Route')
@@ -1275,7 +1273,7 @@ function estimateFare(
       return {
         distanceKm: pair.distanceKm,
         normalFare,
-        discountedFare: calculateDiscountedFare(normalFare),
+        discountedFare: calculateDiscountedFare(pair.distanceKm),
         routeHint: pair.jeepneyRouteHint,
       };
     }
@@ -1286,7 +1284,7 @@ function estimateFare(
   return {
     distanceKm: estimatedDistanceKm,
     normalFare,
-    discountedFare: calculateDiscountedFare(normalFare),
+    discountedFare: calculateDiscountedFare(estimatedDistanceKm),
     routeHint: 'nearest jeepney route near your current area',
   };
 }
