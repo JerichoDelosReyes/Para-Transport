@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Animated, KeyboardAvoidingView, Platform, FlatList, Keyboard, Alert } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Animated, KeyboardAvoidingView, Platform, FlatList, Keyboard, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -366,6 +366,18 @@ export default function AIChatbotScreen() {
                   </View>
                 );
               }}
+              ListFooterComponent={() => 
+                isSending ? (
+                  <View style={[styles.aiMessageRow, { marginTop: 8 }]}>
+                    <View style={styles.aiMessageAvatarWrap}>
+                      <Image source={JEEPIE_AVATAR} style={styles.aiMessageAvatarImage} />
+                    </View>
+                    <View style={[styles.messageBubble, styles.aiBubble, { paddingVertical: 14 }]}>
+                      <ActivityIndicator size="small" color={COLORS.navy} />
+                    </View>
+                  </View>
+                ) : null
+              }
               style={styles.chatList}
             />
           </View>
@@ -378,7 +390,7 @@ export default function AIChatbotScreen() {
           <View style={[styles.inputWrapper, hasConversation ? styles.inputWrapperChat : null]}>
             <TextInput 
               style={styles.textInput}
-              placeholder="Ask Jeepie only"
+              placeholder="Ask Jeepie"
               placeholderTextColor={COLORS.textMuted}
               value={inputText}
               onChangeText={setInputText}
@@ -386,12 +398,16 @@ export default function AIChatbotScreen() {
             />
 
             <TouchableOpacity style={[styles.micButton, isSending ? { opacity: 0.6 } : null]} onPress={handleSend} disabled={isSending}>
-              <Ionicons 
-                name={inputText.trim() ? "send" : "mic"} 
-                size={22} 
-                color={"#FFFFFF"} 
-                style={inputText.trim() ? { transform: [{ translateX: 2 }, { translateY: -1 }] } : {}}
-              />
+              {isSending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons 
+                  name={inputText.trim() ? "send" : "mic"} 
+                  size={22} 
+                  color={"#FFFFFF"} 
+                  style={inputText.trim() ? { transform: [{ translateX: 2 }, { translateY: -1 }] } : {}}
+                />
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -473,7 +489,7 @@ const styles = StyleSheet.create({
   aiImagePortalKeyboard: { width: 160, height: 160, borderRadius: 80 },
   chatbotImage: { width: "100%", height: "100%", resizeMode: "contain" },
   aiShadow: { width: 120, height: 12, borderRadius: 6, backgroundColor: "rgba(10, 22, 40, 0.1)", marginTop: 30, transform: [{ scaleX: 2 }] },
-  chatBody: { flex: 1, backgroundColor: "rgba(255,255,255,0.32)" },
+  chatBody: { flex: 1, backgroundColor: "transparent" },
   chatList: { flex: 1 },
   chatContainer: { paddingHorizontal: 16, paddingVertical: 16, gap: 14, paddingBottom: 24 },
   userMessageRow: { width: "100%", alignItems: "flex-end" },
