@@ -10,7 +10,7 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import type { JeepneyRoute } from '../../types/routes';
 import { ROUTE_COLORS } from '../../constants/routeVisuals';
-import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
+import SearchScreen, { PlaceResult, TransitRouteType } from '../../components/SearchScreen';
 import { buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
@@ -18,6 +18,7 @@ import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
 import { findRoutesForDestination, rankRoutes, MatchedRoute, RankMode } from '../../services/routeSearch';
 import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
+import { loadRoutes } from '../../services/routeService';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
@@ -36,6 +37,13 @@ type MapRegion = {
   longitude: number;
   latitudeDelta: number;
   longitudeDelta: number;
+};
+
+type MapBounds = {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
 };
 
 const INITIAL_REGION: MapRegion = {
@@ -103,6 +111,71 @@ const getSlicedMapCoordinates = (leg: any): MapCoordinate[] => {
     for (let i = bIdx; i >= aIdx; i--) segment.push(fullCoords[i]);
   }
   return segment;
+};
+
+const buildBoundsFromCoordinates = (coordinates: MapCoordinate[]): MapBounds | null => {
+  if (!coordinates || coordinates.length === 0) return null;
+
+  let minLat = Number.POSITIVE_INFINITY;
+  let maxLat = Number.NEGATIVE_INFINITY;
+  let minLng = Number.POSITIVE_INFINITY;
+  let maxLng = Number.NEGATIVE_INFINITY;
+
+  for (const c of coordinates) {
+    if (c.latitude < minLat) minLat = c.latitude;
+    if (c.latitude > maxLat) maxLat = c.latitude;
+    if (c.longitude < minLng) minLng = c.longitude;
+    if (c.longitude > maxLng) maxLng = c.longitude;
+  }
+
+  return { minLat, maxLat, minLng, maxLng };
+};
+
+const regionToBounds = (region: MapRegion, padRatio = 0.25): MapBounds => {
+  const latPad = region.latitudeDelta * (0.5 + padRatio);
+  const lngPad = region.longitudeDelta * (0.5 + padRatio);
+  return {
+    minLat: region.latitude - latPad,
+    maxLat: region.latitude + latPad,
+    minLng: region.longitude - lngPad,
+    maxLng: region.longitude + lngPad,
+  };
+};
+
+const boundsIntersect = (a: MapBounds, b: MapBounds): boolean => {
+  return !(
+    a.maxLat < b.minLat ||
+    a.minLat > b.maxLat ||
+    a.maxLng < b.minLng ||
+    a.minLng > b.maxLng
+  );
+};
+
+const pointInBounds = (point: MapCoordinate, bounds: MapBounds): boolean => {
+  return (
+    point.latitude >= bounds.minLat &&
+    point.latitude <= bounds.maxLat &&
+    point.longitude >= bounds.minLng &&
+    point.longitude <= bounds.maxLng
+  );
+};
+
+const normalizeTransitRouteType = (value: unknown): TransitRouteType | null => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized.includes('bus')) return 'bus';
+  if (normalized.includes('jeepney')) return 'jeepney';
+  return null;
+};
+
+const routeMatchesSelectedType = (
+  route: JeepneyRoute,
+  selectedType: TransitRouteType,
+): boolean => {
+  return normalizeTransitRouteType(route?.properties?.type) === selectedType;
+};
+
+const routeTypeLabel = (routeType: TransitRouteType): string => {
+  return routeType === 'bus' ? 'Bus' : 'Jeepney';
 };
 
 const roundCoordForKey = (value: number): string => value.toFixed(5);
@@ -292,9 +365,9 @@ export default function HomeScreen() {
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
   const [originQuery, setOriginQuery] = useState('');
+  const [selectedRouteType, setSelectedRouteType] = useState<TransitRouteType>('jeepney');
   const [isRouting, setIsRouting] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
-  const [currentLocationLabel, setCurrentLocationLabel] = useState<string>('Current Location');
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
@@ -306,22 +379,13 @@ export default function HomeScreen() {
   const [transitLegs, setTransitLegs] = useState<TransitLeg[]>([]);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
   const { routes: transitDataRoutes } = useRoutes();
-
-  useEffect(() => {
-    let cancelled = false;
-    if (currentLocation) {
-      fetch(`${GEOCODING_BASE_URL}/reverse?lat=${currentLocation.latitude}&lon=${currentLocation.longitude}&format=json&zoom=18&addressdetails=0`, { headers: { 'Accept-Language': 'en' } })
-        .then(res => res.json())
-        .then(data => {
-          if (!cancelled && data && (data.display_name || data.name)) {
-            const name = data.display_name || data.name;
-            setCurrentLocationLabel(name.split(',')[0].trim());
-          }
-        })
-        .catch(() => {});
-    }
-    return () => { cancelled = true; };
-  }, [currentLocation]);
+  const routesBySelectedType = useMemo(() => {
+    return transitDataRoutes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
+  }, [transitDataRoutes, selectedRouteType]);
+  const selectedRouteTypeLabel = useMemo(
+    () => routeTypeLabel(selectedRouteType),
+    [selectedRouteType],
+  );
 
   useEffect(() => {
     setRankedRoutes(rankRoutes(matchedRoutes, rankTab).slice(0, MAX_RANKED_ROUTE_OPTIONS));
@@ -332,14 +396,9 @@ export default function HomeScreen() {
     setSelectedRoute(route);
     if (route) {
       setRouteSummary({ distanceKm: route.distanceKm || 0, durationMin: route.estimatedMinutes || Math.round((route.distanceKm || 0) * 12) });
-      const newCoords = route.legs.flatMap((leg: any) => getSlicedMapCoordinates(leg));
+      const newCoords = route.legs.flatMap((leg: any) => leg.route.coordinates);
       if (newCoords && newCoords.length >= 2) {
         setRouteCoordinates(sampleCoordinates(newCoords, 700));
-        const sampledForBounds = sampleCoordinates(newCoords, 200);
-        mapRef.current?.fitToCoordinates(sampledForBounds, {
-          edgePadding: { top: 100, right: 40, bottom: 250, left: 40 },
-          animated: true,
-        });
       } else {
         setRouteCoordinates([]);
       }
@@ -351,28 +410,34 @@ export default function HomeScreen() {
 
   // Normalize route data to a unified transit shape
   const transitRoutes = useMemo(() => {
-    const normalized = transitDataRoutes.map((r: JeepneyRoute) => ({
-      id: r.properties.code,
-      type: r.properties.type,
-      color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
-      ref: r.properties.code,
-      name: r.properties.name,
-      from: r.stops[0]?.label || '',
-      to: r.stops[r.stops.length - 1]?.label || '',
-      operator: r.properties.operator || '',
-      coordinates: sampleCoordinates(r.coordinates, 320),
-      stops: r.stops.map((s, idx) => ({
-        id: `${r.properties.code}-stop-${idx}`,
-        coordinate: s.coordinate,
-        name: s.label,
-        type: s.type,
+    const normalized = routesBySelectedType.map((r: JeepneyRoute) => {
+      // Keep map rendering lightweight by using pre-sampled route coordinates.
+      const compactCoords = sampleCoordinates(r.coordinates, 320);
+
+      return {
+        id: r.properties.code,
+        type: r.properties.type,
+        color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
+        ref: r.properties.code,
+        name: r.properties.name,
+        from: r.stops[0]?.label || '',
+        to: r.stops[r.stops.length - 1]?.label || '',
         operator: r.properties.operator || '',
-      })),
-      verified: true,
-      fare: r.properties.fare,
-    }));
+        coordinates: compactCoords,
+        bbox: buildBoundsFromCoordinates(compactCoords),
+        stops: r.stops.map((s, idx) => ({
+          id: `${r.properties.code}-stop-${idx}`,
+          coordinate: s.coordinate,
+          name: s.label,
+          type: s.type,
+          operator: r.properties.operator || '',
+        })),
+        verified: true,
+        fare: r.properties.fare,
+      };
+    });
     return normalized;
-  }, [transitDataRoutes]);
+  }, [routesBySelectedType]);
   const transitStops = useMemo(() => {
     return transitRoutes.flatMap((route: any) => route.stops || []);
   }, [transitRoutes]);
@@ -388,7 +453,7 @@ export default function HomeScreen() {
   const updateLatestHistoryFare = useStore((state) => state.updateLatestHistoryFare);
   const addTripStats = useStore((state) => state.addTripStats);
   const mapRef = useRef<MapView | null>(null);
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const walkPathCacheRef = useRef<Map<string, MapCoordinate[]>>(new Map());
   const walkPathRequestRef = useRef(0);
   const tripStatRecordedRef = useRef(false);
@@ -449,7 +514,7 @@ export default function HomeScreen() {
   }, [currentLocation]);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('tabPress', (e) => {
+    const unsubscribe = navigation.addListener('tabPress', () => {
       if (navigation.isFocused()) {
         handleLocateUser();
       }
@@ -590,16 +655,39 @@ export default function HomeScreen() {
     try {
       setIsRouting(true);
 
+      let routesForSearch = routesBySelectedType;
+      if (routesForSearch.length === 0) {
+        const loaded = await loadRoutes();
+        routesForSearch = loaded.routes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
+      }
+
+      if (routesForSearch.length === 0) {
+        Alert.alert(
+          'No Routes Available',
+          `No ${selectedRouteTypeLabel.toLowerCase()} routes are loaded yet. Try switching to the other route type.`,
+        );
+        return;
+      }
+
       // Yield one frame before heavy matching so the search UI can settle.
       await new Promise<void>((resolve) => {
         InteractionManager.runAfterInteractions(() => resolve());
       });
 
-      const results = findRoutesForDestination(
-        startPoint,
-        destinationPoint,
-        transitDataRoutes,
-      );
+      // Retry with wider route proximity buffers so destination searches
+      // still return candidates when geocoded points are slightly off-route.
+      const bufferCandidates = [500, 900, 1400, 2200];
+      let results: MatchedRoute[] = [];
+
+      for (const bufferMeters of bufferCandidates) {
+        results = findRoutesForDestination(
+          startPoint,
+          destinationPoint,
+          routesForSearch,
+          bufferMeters,
+        );
+        if (results.length > 0) break;
+      }
 
       setMatchedRoutes(results);
       setSelectedRouteId(null);
@@ -607,10 +695,10 @@ export default function HomeScreen() {
 
       if (results.length > 0) {
         const allCoords = results.flatMap(m =>
-          m.legs.flatMap((l: any) => sampleCoordinates(getSlicedMapCoordinates(l), 40))
+          m.legs.flatMap((l: any) => sampleCoordinates(l.route.coordinates, 40))
         );
         mapRef.current?.fitToCoordinates(allCoords, {
-          edgePadding: { top: 100, right: 50, bottom: 250, left: 50 },
+          edgePadding: { top: 160, right: 50, bottom: 300, left: 50 },
           animated: true,
         });
 
@@ -628,41 +716,12 @@ export default function HomeScreen() {
 
       Keyboard.dismiss();
       
-      let originName = origin?.title;
-      if ((!origin || originName === 'Current Location' || originName === 'Your Location') && currentLocation) {
-        try {
-          const res = await fetch(`${GEOCODING_BASE_URL}/reverse?lat=${currentLocation.latitude}&lon=${currentLocation.longitude}&format=json&zoom=18&addressdetails=0`, { headers: { 'Accept-Language': 'en' } });
-          if (res.ok) {
-            const data = await res.json();
-            originName = data?.display_name || data?.name || 'Unknown Location';
-          } else { originName = 'Unknown Location'; }
-        } catch { originName = 'Unknown Location'; }
-      }
-
-      let destName = destination.title;
-      if (destName === 'Dropped Pin' || destName === 'Current Location' || destName === 'Your Location') {
-        try {
-          const res = await fetch(`${GEOCODING_BASE_URL}/reverse?lat=${destination.latitude}&lon=${destination.longitude}&format=json&zoom=18&addressdetails=0`, { headers: { 'Accept-Language': 'en' } });
-          if (res.ok) {
-            const data = await res.json();
-            destName = data?.display_name || data?.name || destName;
-          }
-        } catch {}
-      }
-
-      if (originName && originName !== 'Current Location' && originName !== 'Your Location' && originName !== 'Unknown Location') {
-        setOriginQuery(originName.split(',')[0].trim());
-      }
-      if (destName && destName !== 'Dropped Pin' && destName !== 'Unknown Location') {
-        setDestinationQuery(destName.split(',')[0].trim());
-      }
-
-      const h_origin = { name: originName || 'Unknown Location', lat: startPoint.latitude, lon: startPoint.longitude };
+      const h_origin = origin ? { name: origin.title, lat: origin.latitude, lon: origin.longitude } : null;
       const initialFare = results.length > 0 ? (results[0].estimatedFare || 0) : 0;
       addHistory({
         id: Date.now().toString(),
         origin: h_origin,
-        destination: { name: destName, lat: destination.latitude, lon: destination.longitude },
+        destination: { name: destination.title, lat: destination.latitude, lon: destination.longitude },
         fare: initialFare,
         timestamp: Date.now(),
       });
@@ -672,7 +731,7 @@ export default function HomeScreen() {
     } finally {
       setIsRouting(false);
     }
-  }, [currentLocation, transitDataRoutes]);
+  }, [currentLocation, routesBySelectedType, selectedRouteType, selectedRouteTypeLabel, addHistory]);
 
   const handleMapLongPress = useCallback(async (event: LongPressEvent) => {
     if (isRouting) return;
@@ -875,21 +934,44 @@ export default function HomeScreen() {
     return resolved;
   }, []);
 
+  useEffect(() => {
+    if (!selectedTransitRoute) return;
+    const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
+    if (selectedType && selectedType !== selectedRouteType) {
+      setSelectedTransitRoute(null);
+    }
+  }, [selectedTransitRoute, selectedRouteType, setSelectedTransitRoute]);
+
   // Visible routes: always show selected route; otherwise show all if transit layer is on
   const visibleTransitRoutes = useMemo(() => {
     if (selectedTransitRoute) {
+      const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
+      if (selectedType && selectedType !== selectedRouteType) return [];
       return selectedTransitRoute.coordinates ? [selectedTransitRoute] : [];
     }
     if (!showTransitLayer) return [];
-    return transitRoutes;
-  }, [showTransitLayer, selectedTransitRoute, transitRoutes]);
+
+    const viewportBounds = regionToBounds(mapRegion, 0.35);
+    return transitRoutes.filter((route: any) => {
+      if (!route.bbox) return true;
+      return boundsIntersect(route.bbox, viewportBounds);
+    });
+  }, [showTransitLayer, selectedTransitRoute, selectedRouteType, transitRoutes, mapRegion]);
 
   // Visible stops: always show stops for selected route; otherwise show all if transit layer is on
   const visibleTransitStops = useMemo(() => {
-    if (selectedTransitRoute?.stops?.length > 0) return selectedTransitRoute.stops;
+    if (selectedTransitRoute?.stops?.length > 0) {
+      const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
+      if (!selectedType || selectedType === selectedRouteType) {
+        return selectedTransitRoute.stops;
+      }
+      return [];
+    }
     if (!showTransitLayer) return [];
-    return transitStops;
-  }, [showTransitLayer, selectedTransitRoute, transitStops]);
+
+    const viewportBounds = regionToBounds(mapRegion, 0.2);
+    return transitStops.filter((stop: any) => pointInBounds(stop.coordinate, viewportBounds));
+  }, [showTransitLayer, selectedTransitRoute, selectedRouteType, transitStops, mapRegion]);
 
   // Build multi-leg transit journey plan (Fixes: Walk lines, transfer segments + correct plotting)
   const baseTransitLegs = useMemo((): TransitLeg[] => {
@@ -898,13 +980,28 @@ export default function HomeScreen() {
       const originPoint = currentLocation; 
 
       selectedRoute.legs.forEach((leg: any, idx: number) => {
+        const fullCoords = leg.route.coordinates;
+        let bIdx = 0; let aIdx = fullCoords.length - 1;
+        let minDistB = Infinity; let minDistA = Infinity;
+        
+        for (let i = 0; i < fullCoords.length; i++) {
+          const db = sqDistApprox(fullCoords[i], leg.boardingPoint);
+          if (db < minDistB) { minDistB = db; bIdx = i; }
+          const da = sqDistApprox(fullCoords[i], leg.alightingPoint);
+          if (da < minDistA) { minDistA = da; aIdx = i; }
+        }
+        
         // Isolate transit polyline between board and alight points
-        const segment = getSlicedMapCoordinates(leg);
+        const segment = [];
+        if (bIdx <= aIdx) {
+          for (let i = bIdx; i <= aIdx; i++) segment.push(fullCoords[i]);
+        } else {
+          for (let i = bIdx; i >= aIdx; i--) segment.push(fullCoords[i]);
+        }
 
         // 1. Walk from start or prev stop to this board
         const prevPoint = idx === 0 ? originPoint : selectedRoute.legs[idx-1].alightingPoint;
         if (prevPoint) {
-           const routeName = leg.route.properties.name || 'transit route';
            legs.push({
              transitRouteId: 'walk',
              coordinates: [prevPoint, leg.boardingPoint],
@@ -912,7 +1009,7 @@ export default function HomeScreen() {
              transitInfo: null,
              boardAt: prevPoint,
              alightAt: leg.boardingPoint,
-             boardLabel: '', alightLabel: `pickup for ${routeName}`
+             boardLabel: '', alightLabel: ''
            });
         }
 
@@ -940,7 +1037,7 @@ export default function HomeScreen() {
            transitInfo: null,
            boardAt: lastAlight,
            alightAt: destinationLocation,
-           boardLabel: '', alightLabel: destinationQuery || 'destination'
+           boardLabel: '', alightLabel: ''
          });
       }
 
@@ -1212,6 +1309,27 @@ export default function HomeScreen() {
       setMapRegion(region); // Important: Keep track of panning/zooming so buttons zoom in on the CURRENT view instead of snapping back to the initial coord
     }
   };
+
+  const handleRouteTypeChange = useCallback((nextType: TransitRouteType) => {
+    if (nextType === selectedRouteType) return;
+
+    setSelectedRouteType(nextType);
+    setNearestStop(null);
+    setSelectedTransitRoute(null);
+    setShowRecommender(false);
+    setMatchedRoutes([]);
+    setSelectedRouteId(null);
+    setSelectedRoute(null);
+    setTransitLegs([]);
+    setRouteCoordinates([]);
+    setRouteSummary(null);
+    setDestinationLocation(null);
+    setDestinationQuery('');
+
+    if (sim.state !== 'idle') {
+      sim.reset();
+    }
+  }, [selectedRouteType, setSelectedTransitRoute, sim]);
 
   return (
     <View style={styles.screen}>
@@ -1486,7 +1604,7 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
               <Text style={[styles.searchInputText, {color: COLORS.textMuted, flex: 1, marginLeft: 6}]} numberOfLines={1}>
-                {destinationQuery ? `${originQuery || 'My Location'} → ${destinationQuery}` : `Saan tayo, ${user?.username || (user?.full_name || 'Komyuter').split(' ')[0]}?`}
+                {destinationQuery ? `${originQuery || 'My Location'} → ${destinationQuery}` : `Saan tayo, ${(user?.full_name || 'Komyuter').split(' ')[0]}?`}
               </Text>
               <TouchableOpacity 
                 onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon! (Requires a native voice plugin)')} 
@@ -1510,6 +1628,44 @@ export default function HomeScreen() {
               Transit
             </Text>
           </TouchableOpacity>
+
+          <View style={styles.routeTypeSelectorRow}>
+            <TouchableOpacity
+              style={[
+                styles.routeTypeSelectorButton,
+                selectedRouteType === 'jeepney' && styles.routeTypeSelectorButtonActive,
+              ]}
+              activeOpacity={0.85}
+              onPress={() => handleRouteTypeChange('jeepney')}
+            >
+              <Text
+                style={[
+                  styles.routeTypeSelectorText,
+                  selectedRouteType === 'jeepney' && styles.routeTypeSelectorTextActive,
+                ]}
+              >
+                Jeepney
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.routeTypeSelectorButton,
+                selectedRouteType === 'bus' && styles.routeTypeSelectorButtonActive,
+              ]}
+              activeOpacity={0.85}
+              onPress={() => handleRouteTypeChange('bus')}
+            >
+              <Text
+                style={[
+                  styles.routeTypeSelectorText,
+                  selectedRouteType === 'bus' && styles.routeTypeSelectorTextActive,
+                ]}
+              >
+                Bus
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Simulation Play Button (top row, only when idle) */}
           {simCoordinates.length >= 2 && sim.state === 'idle' && (
@@ -1570,7 +1726,9 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {selectedTransitRoute ? (
+        {selectedTransitRoute &&
+        (!normalizeTransitRouteType((selectedTransitRoute as any).type) ||
+          normalizeTransitRouteType((selectedTransitRoute as any).type) === selectedRouteType) ? (
           <View style={styles.transitRouteCard}>
             <View style={styles.transitRouteHeader}>
               <View style={[styles.transitTypeBadge, { backgroundColor: selectedTransitRoute.color || '#1E88E5' }]}>
@@ -1666,6 +1824,7 @@ export default function HomeScreen() {
         selectedRoute={selectedRouteId}
         setSelectedRoute={(id: string | null) => setSelectedRouteId(id)}
         destinationName={destinationQuery}
+        routeTypeLabel={selectedRouteTypeLabel}
         onClose={() => {
           setShowRecommender(false);
         }}
@@ -1674,9 +1833,11 @@ export default function HomeScreen() {
       {/* Full-screen search */}
       <SearchScreen
         visible={isSearchActive}
-        currentLocationLabel={currentLocationLabel}
+        currentLocationLabel="Current Location"
         initialOrigin={pendingRouteSearch ? pendingRouteSearch.origin : originQuery}
         initialDestination={pendingRouteSearch ? pendingRouteSearch.destination : destinationQuery}
+        selectedRouteType={selectedRouteType}
+        onSelectRouteType={handleRouteTypeChange}
         onClearRoute={handleClearRoute}
         onClose={() => {
           setIsSearchActive(false);
@@ -2256,6 +2417,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.navy,
+  },
+  routeTypeSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10,22,40,0.04)',
+    borderRadius: RADIUS.pill,
+    padding: 3,
+  },
+  routeTypeSelectorButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.pill,
+  },
+  routeTypeSelectorButtonActive: {
+    backgroundColor: '#0A1628',
+  },
+  routeTypeSelectorText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  routeTypeSelectorTextActive: {
+    color: '#FFFFFF',
   },
   transitErrorCard: {
     flexDirection: 'row',

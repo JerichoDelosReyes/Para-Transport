@@ -18,6 +18,32 @@ const REQUEST_DELAY_MS = 90;
 const MIN_MATCH_CONFIDENCE = 0.2;
 const MAX_SAFE_JUMP_METERS = 420;
 
+function parseTableFilters(cliArgs) {
+  const selected = new Set();
+
+  for (let i = 0; i < cliArgs.length; i++) {
+    const arg = String(cliArgs[i] || '').trim();
+    if (!arg) continue;
+
+    if (arg === '--table') {
+      const next = String(cliArgs[i + 1] || '').trim();
+      if (!next) {
+        throw new Error('Missing value after --table. Example: --table bus_routes');
+      }
+      selected.add(next.toLowerCase());
+      i += 1;
+      continue;
+    }
+
+    const tableInline = arg.match(/^--table=(.+)$/i);
+    if (tableInline?.[1]) {
+      selected.add(String(tableInline[1]).trim().toLowerCase());
+    }
+  }
+
+  return selected;
+}
+
 function loadDotEnv(envPath) {
   if (!fs.existsSync(envPath)) return;
   const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
@@ -212,9 +238,52 @@ async function snapPathToRoads(rawCoords) {
   return sanitizePath(merged);
 }
 
+async function fetchAllActiveRoutes(supabase, table) {
+  const pageSize = 1000;
+  const out = [];
+  let offset = 0;
+
+  while (true) {
+    const from = offset;
+    const to = offset + pageSize - 1;
+
+    const { data, error } = await supabase
+      .from(table.routeTable)
+      .select(`${table.idCol}, ${table.pathCol}, ${table.labelCol}`)
+      .eq('is_active', true)
+      .order(table.labelCol, { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      throw new Error(`Failed to read ${table.routeTable}: ${error.message}`);
+    }
+
+    const batch = Array.isArray(data) ? data : [];
+    if (batch.length === 0) break;
+
+    out.push(...batch);
+    if (batch.length < pageSize) break;
+
+    offset += pageSize;
+  }
+
+  return out;
+}
+
 async function main() {
   const workspaceRoot = process.cwd();
   loadDotEnv(path.join(workspaceRoot, '.env'));
+
+  const selectedTables = parseTableFilters(process.argv.slice(2));
+  const tablesToProcess = selectedTables.size > 0
+    ? TABLES.filter((table) => selectedTables.has(table.routeTable.toLowerCase()))
+    : TABLES;
+
+  if (selectedTables.size > 0 && tablesToProcess.length === 0) {
+    throw new Error(
+      `No matching route tables for --table filter. Available: ${TABLES.map((t) => t.routeTable).join(', ')}`
+    );
+  }
 
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -230,14 +299,15 @@ async function main() {
   let skippedRoutes = 0;
   let failedRoutes = 0;
 
-  for (const table of TABLES) {
-    const { data: rows, error } = await supabase
-      .from(table.routeTable)
-      .select(`${table.idCol}, ${table.pathCol}, ${table.labelCol}`)
-      .eq('is_active', true)
-      .order(table.labelCol, { ascending: true });
+  if (selectedTables.size > 0) {
+    console.log(`[snap] table filter active: ${tablesToProcess.map((t) => t.routeTable).join(', ')}`);
+  }
 
-    if (error) {
+  for (const table of tablesToProcess) {
+    let rows;
+    try {
+      rows = await fetchAllActiveRoutes(supabase, table);
+    } catch (error) {
       console.warn(`[snap] Skipping ${table.routeTable}: ${error.message}`);
       continue;
     }
