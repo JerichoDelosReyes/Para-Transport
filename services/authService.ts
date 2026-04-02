@@ -37,6 +37,28 @@ export function validateRequiredFields(values: string[]): boolean {
   return values.every((value) => value.trim().length > 0);
 }
 
+const PROFANITY_LIST = [
+  'fuck', 'shit', 'bitch', 'ass', 'asshole', 'dick', 'cunt', 'pussy', 'bastard', 'slut', 'whore', 'faggot', 'motherfucker', 'cock', 'putangina', 'tangina', 'tngina', 'gago', 'gaga', 'tanga', 'putragis', 'bobo', 'tarantado', 'hayop', 'hinayupak', 'ulol', 'bading', 'bakla', 'pokpok', 'malandi', 'kantot', 'kantutan', 'kantotero', 'burat', 'pepe', 'pempem', 'suso', 'tite', 'titi', 'bayag', 'puke', 'puking', 'tae', 'tubol', 'inutil', 'pakyu', 'pucha'
+];
+
+export function validateUsername(username: string): string {
+  if (!username) return 'Username is required.';
+  if (username.length < 3) return 'Username must be at least 3 characters long.';
+  if (username.includes(' ')) return 'Username cannot contain spaces.';
+  
+  const alphanumericOnly = /^[a-zA-Z0-9_.-]+$/;
+  if (!alphanumericOnly.test(username)) return 'Username can only contain letters, numbers, underscores, and dashes.';
+  
+  const lowerUsername = username.toLowerCase();
+  for (const word of PROFANITY_LIST) {
+    if (lowerUsername.includes(word)) {
+      return 'Username contains inappropriate language.';
+    }
+  }
+
+  return '';
+}
+
 export function isEmailValid(email: string): boolean {
   return EMAIL_POLICY.test(email.trim());
 }

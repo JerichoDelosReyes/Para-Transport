@@ -24,6 +24,7 @@ import {
   isEmailValid,
   isPasswordStrong,
   passwordValidationMessage,
+  validateUsername,
   mapRegisterError,
   logUserAction
 } from '../services/authService';
@@ -71,14 +72,13 @@ export default function RegisterScreen() {
       setErrorMsg('Please fill in all fields.');
       return;
     }
-    if (username.length < 3) {
-      setErrorMsg('Username must be at least 3 characters long.');
+    
+    const userErr = validateUsername(username);
+    if (userErr) {
+      setErrorMsg(userErr);
       return;
     }
-    if (!/^[a-zA-Z0-9_.-]+$/.test(username)) {
-      setErrorMsg('Username can only contain letters, numbers, underscores, and dashes.');
-      return;
-    }
+
     if (!isEmailValid(email)) {
       setErrorMsg('Please enter a valid email address.');
       return;
