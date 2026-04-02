@@ -105,7 +105,15 @@ export async function registerWithEmailPassword(params: {
       }
     }
   });
+  
   if (error) throw error;
+  
+  // Supabase returns an empty identities array if prevent email enumeration is enabled
+  // and the user already exists
+  if (data?.user?.identities && data.user.identities.length === 0) {
+    throw new Error('This email is already registered.');
+  }
+
   return data;
 }
 
