@@ -555,6 +555,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: SPACING.screenX,
+    paddingBottom: 350,
   },
   currentLocationBtn: {
     flexDirection: 'row',
