@@ -67,7 +67,7 @@ export default function RoutesScreen() {
       </View>
 
       <ScrollView
-        style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: 16 }}
+        style={{ flex: 1, backgroundColor: COLORS.background }}
         contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
@@ -77,14 +77,13 @@ export default function RoutesScreen() {
             <Text style={styles.emptyTitle}>Sign in to view history.</Text>
           </View>
         ) : user.commute_history && user.commute_history.length > 0 ? (
-          <View style={{ paddingTop: 0 }}>
-            <View style={{ gap: SPACING.cardGap }}>
-              {user.commute_history.map((item: any, index: number) => {
-                const targetName = `${item.origin?.name || 'Current Location'} to ${item.destination?.name || 'Unknown'}`;
-                const isSaved = user.saved_routes?.some((r: any) => 
-                  r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
-                );
-                return (
+          <>
+            {user.commute_history.map((item: any, index: number) => {
+              const targetName = `${item.origin?.name || 'Current Location'} to ${item.destination?.name || 'Unknown'}`;
+              const isSaved = user.saved_routes?.some((r: any) => 
+                r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
+              );
+              return (
                   <View key={item.id || index} style={styles.historyCard}>
                     <View style={styles.historyCardTop}>
                       <Text style={styles.historyRouteName} numberOfLines={1}>
@@ -135,8 +134,7 @@ export default function RoutesScreen() {
                   </View>
                 );
               })}
-            </View>
-          </View>
+            </>
         ) : (
           <View style={styles.emptyState}>
             <JeepIllustration width={220} height={150} />
@@ -194,8 +192,10 @@ const styles = StyleSheet.create({
     color: '#0A1628',
   },
   content: {
-    padding: SPACING.screenX,
-    paddingTop: 24,
+    paddingHorizontal: SPACING.screenX,
+    paddingTop: 20,
+    paddingBottom: 24,
+    gap: SPACING.cardGap,
   },
   sectionHeader: {
     marginBottom: 20,
