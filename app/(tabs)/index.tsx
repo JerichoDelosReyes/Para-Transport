@@ -656,9 +656,13 @@ export default function HomeScreen() {
       setIsRouting(true);
 
       let routesForSearch = routesBySelectedType;
-      if (routesForSearch.length === 0) {
-        const loaded = await loadRoutes();
-        routesForSearch = loaded.routes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
+
+      // Always attempt a fresh load so newly imported/reversed routes
+      // become searchable immediately without requiring app restart.
+      const loaded = await loadRoutes();
+      const latestByType = loaded.routes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
+      if (latestByType.length > 0) {
+        routesForSearch = latestByType;
       }
 
       if (routesForSearch.length === 0) {

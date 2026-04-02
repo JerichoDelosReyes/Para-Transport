@@ -525,11 +525,22 @@ function snapPointToRouteForward(
   point: { latitude: number; longitude: number },
   index: RouteIndex,
   minAlongKm: number,
+  preferredDistanceMeters?: number,
 ): SnapResult | null {
   const coords = index.coords;
   if (coords.length < 2) return null;
 
   const minAlongMeters = Math.max(0, minAlongKm * 1000);
+  const preferredDistSq =
+    typeof preferredDistanceMeters === 'number' && Number.isFinite(preferredDistanceMeters) && preferredDistanceMeters > 0
+      ? preferredDistanceMeters * preferredDistanceMeters
+      : null;
+
+  let bestPreferredAlongMeters = Number.POSITIVE_INFINITY;
+  let bestPreferredDistSq = Number.POSITIVE_INFINITY;
+  let bestPreferredLat = coords[0].latitude;
+  let bestPreferredLng = coords[0].longitude;
+  let foundPreferred = false;
 
   let bestDistSq = Number.POSITIVE_INFINITY;
   let bestLat = coords[0].latitude;
@@ -580,6 +591,20 @@ function snapPointToRouteForward(
     const projY = ay + t * aby;
     const distSq = projX * projX + projY * projY;
 
+    if (preferredDistSq !== null && distSq <= preferredDistSq) {
+      if (
+        !foundPreferred ||
+        alongMeters < bestPreferredAlongMeters ||
+        (Math.abs(alongMeters - bestPreferredAlongMeters) < 1e-6 && distSq < bestPreferredDistSq)
+      ) {
+        bestPreferredAlongMeters = alongMeters;
+        bestPreferredDistSq = distSq;
+        bestPreferredLat = point.latitude + projY / METERS_PER_DEG;
+        bestPreferredLng = point.longitude + projX / lonScale;
+        foundPreferred = true;
+      }
+    }
+
     if (distSq < bestDistSq) {
       bestDistSq = distSq;
       bestLat = point.latitude + projY / METERS_PER_DEG;
@@ -590,6 +615,15 @@ function snapPointToRouteForward(
   }
 
   if (!found) return null;
+
+  if (foundPreferred) {
+    return {
+      latitude: bestPreferredLat,
+      longitude: bestPreferredLng,
+      distanceMeters: Math.sqrt(bestPreferredDistSq),
+      alongKm: bestPreferredAlongMeters / 1000,
+    };
+  }
 
   return {
     latitude: bestLat,
@@ -807,8 +841,7 @@ export function findRoutesForDestination(
   if (nearDestByCode.size === 0) return [];
 
   nearOriginRanked.sort((a, b) => a.meters - b.meters);
-  const startCandidates = nearOriginRanked.slice(0, MAX_NEAR_CANDIDATES);
-  if (startCandidates.length === 0) return [];
+  if (nearOriginRanked.length === 0) return [];
 
   const neighborMemo = new Map<string, NeighborCandidate[]>();
 
@@ -844,153 +877,165 @@ export function findRoutesForDestination(
     return trimmed;
   };
 
-  const resultBySignature = new Map<string, MatchedRoute>();
-  const bestStateScore = new Map<string, number>();
-  const frontier: QueuedState[] = [];
+  const runSearchWithSeedLimit = (seedLimit: number): MatchedRoute[] => {
+    const startCandidates = nearOriginRanked.slice(0, seedLimit);
+    if (startCandidates.length === 0) return [];
 
-  const seededCodes = new Set<string>();
-  for (const start of startCandidates) {
-    if (seededCodes.has(start.info.code)) continue;
-    seededCodes.add(start.info.code);
+    const resultBySignature = new Map<string, MatchedRoute>();
+    const bestStateScore = new Map<string, number>();
+    const frontier: QueuedState[] = [];
 
-    const state: SearchState = {
-      current: start.info,
-      entry: {
-        latitude: start.snap.latitude,
-        longitude: start.snap.longitude,
-        alongKm: start.snap.alongKm,
-      },
-      legs: [],
-      totalDistanceKm: 0,
-      totalFare: 0,
-      totalMinutes: 0,
-      totalWalkKm: 0,
-      transferCount: 0,
-      usedCodes: new Set([start.info.code]),
-    };
+    const seededCodes = new Set<string>();
+    for (const start of startCandidates) {
+      if (seededCodes.has(start.info.code)) continue;
+      seededCodes.add(start.info.code);
 
-    frontier.push({
-      state,
-      priority: statePriority(state, destHintByCode.get(start.info.code) ?? 4000),
-    });
-  }
-
-  let expansions = 0;
-  while (
-    frontier.length > 0 &&
-    expansions < MAX_STATE_EXPANSIONS &&
-    resultBySignature.size < MAX_MATCHED_RESULTS
-  ) {
-    frontier.sort((a, b) => a.priority - b.priority);
-    const queued = frontier.shift();
-    if (!queued) break;
-
-    const state = queued.state;
-    expansions += 1;
-
-    const destCandidate = nearDestByCode.get(state.current.code);
-    if (destCandidate) {
-      const forwardDestSnap = snapPointToRouteForward(
-        destination,
-        state.current.index,
-        state.entry.alongKm + MIN_FORWARD_PROGRESS_KM,
-      );
-
-      if (!forwardDestSnap || forwardDestSnap.distanceMeters > bufferMeters) {
-        continue;
-      }
-
-      const finalLeg = buildLegFromAlong(state.current.route, state.entry, forwardDestSnap);
-      if (!finalLeg) continue;
-
-      if (finalLeg.distanceKm >= MIN_LEG_DISTANCE_KM || state.legs.length === 0) {
-        const legs = [...state.legs, finalLeg];
-        const totalDistanceKm = state.totalDistanceKm + finalLeg.distanceKm;
-        const totalFare = state.totalFare + finalLeg.estimatedFare;
-        const totalMinutes = state.totalMinutes + finalLeg.estimatedMinutes;
-
-        const matched = buildMatchedRoute(legs, totalMinutes, totalFare, totalDistanceKm);
-        const sig = legs.map((leg) => leg.route.properties.code).join('>');
-        const prev = resultBySignature.get(sig);
-
-        if (!prev || matched.estimatedMinutes < prev.estimatedMinutes) {
-          resultBySignature.set(sig, matched);
-        }
-      }
-    }
-
-    if (state.transferCount >= MAX_TRANSFERS) continue;
-    if (state.totalWalkKm >= MAX_TOTAL_WALK_KM) continue;
-
-    const neighbors = getNeighbors(state.current);
-    let expanded = 0;
-
-    for (const neighbor of neighbors) {
-      if (expanded >= MAX_NEIGHBORS_PER_STATE) break;
-      if (state.usedCodes.has(neighbor.next.code)) continue;
-
-      const transferOnCurrent: AlongPoint = {
-        latitude: neighbor.transfer.pointA.latitude,
-        longitude: neighbor.transfer.pointA.longitude,
-        alongKm: neighbor.transfer.alongAKm,
-      };
-
-      const currentLeg = buildLegFromAlong(state.current.route, state.entry, transferOnCurrent);
-      if (!currentLeg) continue;
-      if (currentLeg.distanceKm < MIN_LEG_DISTANCE_KM) continue;
-
-      const walkKm = neighbor.transfer.walkDistanceKm;
-      const nextTotalWalkKm = state.totalWalkKm + walkKm;
-      if (nextTotalWalkKm > MAX_TOTAL_WALK_KM) continue;
-
-      const walkMin = Math.ceil((walkKm / WALK_SPEED_KMH) * 60);
-
-      const nextState: SearchState = {
-        current: neighbor.next,
+      const state: SearchState = {
+        current: start.info,
         entry: {
-          latitude: neighbor.transfer.pointB.latitude,
-          longitude: neighbor.transfer.pointB.longitude,
-          alongKm: neighbor.transfer.alongBKm,
+          latitude: start.snap.latitude,
+          longitude: start.snap.longitude,
+          alongKm: start.snap.alongKm,
         },
-        legs: [...state.legs, currentLeg],
-        totalDistanceKm: state.totalDistanceKm + currentLeg.distanceKm,
-        totalFare: state.totalFare + currentLeg.estimatedFare,
-        totalMinutes: state.totalMinutes + currentLeg.estimatedMinutes + walkMin,
-        totalWalkKm: nextTotalWalkKm,
-        transferCount: state.transferCount + 1,
-        usedCodes: new Set(state.usedCodes).add(neighbor.next.code),
+        legs: [],
+        totalDistanceKm: 0,
+        totalFare: 0,
+        totalMinutes: 0,
+        totalWalkKm: 0,
+        transferCount: 0,
+        usedCodes: new Set([start.info.code]),
       };
-
-      const bucketAlong = Math.round(nextState.entry.alongKm * 5); // 200m bins
-      const stateKey = `${nextState.current.code}|${nextState.transferCount}|${bucketAlong}`;
-      const score = nextState.totalMinutes + nextState.transferCount * 4 + nextState.totalWalkKm * 9;
-      const bestScore = bestStateScore.get(stateKey);
-
-      if (bestScore !== undefined && score >= bestScore) continue;
-
-      bestStateScore.set(stateKey, score);
 
       frontier.push({
-        state: nextState,
-        priority: statePriority(nextState, destHintByCode.get(nextState.current.code) ?? 4000),
+        state,
+        priority: statePriority(state, destHintByCode.get(start.info.code) ?? 4000),
       });
-      expanded += 1;
     }
 
-    if (frontier.length > MAX_FRONTIER_SIZE) {
+    let expansions = 0;
+    while (
+      frontier.length > 0 &&
+      expansions < MAX_STATE_EXPANSIONS &&
+      resultBySignature.size < MAX_MATCHED_RESULTS
+    ) {
       frontier.sort((a, b) => a.priority - b.priority);
-      frontier.length = MAX_FRONTIER_SIZE;
+      const queued = frontier.shift();
+      if (!queued) break;
+
+      const state = queued.state;
+      expansions += 1;
+
+      const destCandidate = nearDestByCode.get(state.current.code);
+      if (destCandidate) {
+        const forwardDestSnap = snapPointToRouteForward(
+          destination,
+          state.current.index,
+          state.entry.alongKm + MIN_FORWARD_PROGRESS_KM,
+          bufferMeters,
+        );
+
+        if (forwardDestSnap && forwardDestSnap.distanceMeters <= bufferMeters) {
+          const finalLeg = buildLegFromAlong(state.current.route, state.entry, forwardDestSnap);
+          if (finalLeg && (finalLeg.distanceKm >= MIN_LEG_DISTANCE_KM || state.legs.length === 0)) {
+            const legs = [...state.legs, finalLeg];
+            const totalDistanceKm = state.totalDistanceKm + finalLeg.distanceKm;
+            const totalFare = state.totalFare + finalLeg.estimatedFare;
+            const totalMinutes = state.totalMinutes + finalLeg.estimatedMinutes;
+
+            const matched = buildMatchedRoute(legs, totalMinutes, totalFare, totalDistanceKm);
+            const sig = legs.map((leg) => leg.route.properties.code).join('>');
+            const prev = resultBySignature.get(sig);
+
+            if (!prev || matched.estimatedMinutes < prev.estimatedMinutes) {
+              resultBySignature.set(sig, matched);
+            }
+          }
+        }
+      }
+
+      if (state.transferCount >= MAX_TRANSFERS) continue;
+      if (state.totalWalkKm >= MAX_TOTAL_WALK_KM) continue;
+
+      const neighbors = getNeighbors(state.current);
+      let expanded = 0;
+
+      for (const neighbor of neighbors) {
+        if (expanded >= MAX_NEIGHBORS_PER_STATE) break;
+        if (state.usedCodes.has(neighbor.next.code)) continue;
+
+        const transferOnCurrent: AlongPoint = {
+          latitude: neighbor.transfer.pointA.latitude,
+          longitude: neighbor.transfer.pointA.longitude,
+          alongKm: neighbor.transfer.alongAKm,
+        };
+
+        const currentLeg = buildLegFromAlong(state.current.route, state.entry, transferOnCurrent);
+        if (!currentLeg) continue;
+        if (currentLeg.distanceKm < MIN_LEG_DISTANCE_KM) continue;
+
+        const walkKm = neighbor.transfer.walkDistanceKm;
+        const nextTotalWalkKm = state.totalWalkKm + walkKm;
+        if (nextTotalWalkKm > MAX_TOTAL_WALK_KM) continue;
+
+        const walkMin = Math.ceil((walkKm / WALK_SPEED_KMH) * 60);
+
+        const nextState: SearchState = {
+          current: neighbor.next,
+          entry: {
+            latitude: neighbor.transfer.pointB.latitude,
+            longitude: neighbor.transfer.pointB.longitude,
+            alongKm: neighbor.transfer.alongBKm,
+          },
+          legs: [...state.legs, currentLeg],
+          totalDistanceKm: state.totalDistanceKm + currentLeg.distanceKm,
+          totalFare: state.totalFare + currentLeg.estimatedFare,
+          totalMinutes: state.totalMinutes + currentLeg.estimatedMinutes + walkMin,
+          totalWalkKm: nextTotalWalkKm,
+          transferCount: state.transferCount + 1,
+          usedCodes: new Set(state.usedCodes).add(neighbor.next.code),
+        };
+
+        const bucketAlong = Math.round(nextState.entry.alongKm * 5); // 200m bins
+        const stateKey = `${nextState.current.code}|${nextState.transferCount}|${bucketAlong}`;
+        const score = nextState.totalMinutes + nextState.transferCount * 4 + nextState.totalWalkKm * 9;
+        const bestScore = bestStateScore.get(stateKey);
+
+        if (bestScore !== undefined && score >= bestScore) continue;
+
+        bestStateScore.set(stateKey, score);
+
+        frontier.push({
+          state: nextState,
+          priority: statePriority(nextState, destHintByCode.get(nextState.current.code) ?? 4000),
+        });
+        expanded += 1;
+      }
+
+      if (frontier.length > MAX_FRONTIER_SIZE) {
+        frontier.sort((a, b) => a.priority - b.priority);
+        frontier.length = MAX_FRONTIER_SIZE;
+      }
     }
+
+    const matched = Array.from(resultBySignature.values());
+    matched.sort((a, b) => {
+      return (
+        a.transferCount - b.transferCount ||
+        a.estimatedMinutes - b.estimatedMinutes ||
+        a.estimatedFare - b.estimatedFare
+      );
+    });
+
+    return matched.slice(0, MAX_MATCHED_RESULTS);
+  };
+
+  const baseMatches = runSearchWithSeedLimit(MAX_NEAR_CANDIDATES);
+  if (baseMatches.length > 0 || nearOriginRanked.length <= MAX_NEAR_CANDIDATES) {
+    return baseMatches;
   }
 
-  const matched = Array.from(resultBySignature.values());
-  matched.sort((a, b) => {
-    return (
-      a.transferCount - b.transferCount ||
-      a.estimatedMinutes - b.estimatedMinutes ||
-      a.estimatedFare - b.estimatedFare
-    );
-  });
-
-  return matched.slice(0, MAX_MATCHED_RESULTS);
+  // Dense corridors can have many equally-near overlapping routes. Retry with
+  // a wider seed set so opposite-direction lines are not dropped too early.
+  const expandedSeedLimit = Math.min(nearOriginRanked.length, Math.max(MAX_NEAR_CANDIDATES * 3, 30));
+  return runSearchWithSeedLimit(expandedSeedLimit);
 }
