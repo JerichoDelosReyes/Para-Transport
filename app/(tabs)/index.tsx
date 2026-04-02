@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert, StatusBar, Image, InteractionManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import MapView, { Marker, Polyline, Callout, LongPressEvent } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
@@ -343,6 +343,7 @@ export default function HomeScreen() {
   const updateLatestHistoryFare = useStore((state) => state.updateLatestHistoryFare);
   const addTripStats = useStore((state) => state.addTripStats);
   const mapRef = useRef<MapView | null>(null);
+  const navigation = useNavigation();
   const walkPathCacheRef = useRef<Map<string, MapCoordinate[]>>(new Map());
   const walkPathRequestRef = useRef(0);
   const tripStatRecordedRef = useRef(false);
@@ -377,7 +378,7 @@ export default function HomeScreen() {
     mapRef.current?.animateToRegion(next, 250);
   };
 
-  const handleLocateUser = () => {
+  const handleLocateUser = useCallback(() => {
     if (currentLocation) {
       if (
         currentLocation.latitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLatitude ||
@@ -399,7 +400,16 @@ export default function HomeScreen() {
     } else {
       Alert.alert('Location Not Found', 'We are still getting your current location.');
     }
-  };
+  }, [currentLocation]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('tabPress', (e) => {
+      if (navigation.isFocused()) {
+        handleLocateUser();
+      }
+    });
+    return unsubscribe;
+  }, [navigation, handleLocateUser]);
 
   // Search Expand Animation
   const searchOpacityAnim = useRef(new Animated.Value(0)).current;

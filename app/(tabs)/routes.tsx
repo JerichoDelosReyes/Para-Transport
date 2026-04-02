@@ -53,168 +53,25 @@ export default function RoutesScreen() {
   const insets = useSafeAreaInsets();
   const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
   const bottomPadding = 48 + bottomSpace + 16;
-  const [activeTab, setActiveTab] = useState<'transit' | 'history'>('history');
-  const [selectedMode, setSelectedMode] = useState<(typeof FILTER_MODES)[number]>('All');
-  const [isReady, setIsReady] = useState(false);
-  const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
   const user = useStore((state) => state.user);
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const saveRoute = useStore((state) => state.saveRoute);
   const removeSavedRoute = useStore((state) => state.removeSavedRoute);
   const isGuestAccount = useStore((state) => state.sessionMode === 'guest');
 
-  useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() => {
-      setIsReady(true);
-    });
-    return () => task.cancel();
-  }, []);
-
-  const { routes: transitDataRoutes, loading: routesLoading } = useRoutes();
-
-  const verifiedRoutes = useMemo(
-    () => transitDataRoutes.map(normalizeGpxRoute),
-    [transitDataRoutes]
-  );
-
-  const filteredVerifiedRoutes = useMemo(() => {
-    const targetType = MODE_TO_ROUTE_TYPE[selectedMode];
-    if (!targetType) return verifiedRoutes;
-    return verifiedRoutes.filter((r) => r.type === targetType);
-  }, [verifiedRoutes, selectedMode]);
-
-  const grouped = useMemo(() => {
-    const groups: Record<string, any[]> = {};
-    for (const type of TYPE_ORDER) {
-      groups[type] = [];
-    }
-    for (const route of filteredVerifiedRoutes) {
-      if (groups[route.type]) {
-        groups[route.type].push(route);
-      }
-    }
-    return groups;
-  }, [filteredVerifiedRoutes]);
-
-  const totalTransitCount = filteredVerifiedRoutes.length;
-
-  const handleTransitRoutePress = (route: any) => {
-    setSelectedTransitRoute(route);
-    router.navigate('/(tabs)');
-  };
-
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Routes</Text>
+        <Text style={styles.headerTitle}>History</Text>
         <ProfileButton />
       </View>
 
-      <View style={styles.tabSwitcher}>
-        <TouchableOpacity
-          style={[styles.switchTab, activeTab === 'history' && styles.switchTabActive]}
-          onPress={() => setActiveTab('history')}
-        >
-          <Text style={[styles.switchTabText, activeTab === 'history' && styles.switchTabTextActive]}>HISTORY</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.switchTab, activeTab === 'transit' && styles.switchTabActive]}
-          onPress={() => setActiveTab('transit')}
-        >
-          <Text style={[styles.switchTabText, activeTab === 'transit' && styles.switchTabTextActive]}>TRANSIT</Text>
-        </TouchableOpacity>
-      </View>
-
       <ScrollView
-        style={{ flex: 1, backgroundColor: COLORS.background }}
+        style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: 16 }}
         contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
-        {activeTab === 'transit' ? (
-          <View>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                TRANSIT ROUTES {totalTransitCount > 0 ? `(${totalTransitCount})` : ''}
-              </Text>
-            </View>
-
-            <View style={styles.quickActionsContainer}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScroll}>
-                {FILTER_MODES.map((mode) => (
-                  <TouchableOpacity
-                    key={mode}
-                    style={[styles.modePill, selectedMode === mode && styles.modePillActive]}
-                    onPress={() => setSelectedMode(mode)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.modePillText, selectedMode === mode && styles.modePillTextActive]}>{mode}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
-            {(!isReady || routesLoading) ? (
-              <View style={styles.skeletonContainer}>
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <View key={i} style={styles.skeletonCard} />
-                ))}
-              </View>
-            ) : totalTransitCount === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No transit routes found.</Text>
-              </View>
-            ) : (
-              <>
-                {TYPE_ORDER.map((type) => {
-                  const group = grouped[type];
-                  if (!group || group.length === 0) return null;
-                  return (
-                    <View key={type} style={styles.group}>
-                      <View style={styles.groupHeader}>
-                        <View style={[styles.groupDot, { backgroundColor: ROUTE_COLORS[type as keyof typeof ROUTE_COLORS] }]} />
-                        <Text style={styles.groupTitle}>
-                          {ROUTE_LABELS[type as keyof typeof ROUTE_LABELS]} ({group.length})
-                        </Text>
-                      </View>
-                      {group.map((route) => (
-                        <TouchableOpacity
-                          key={route.id}
-                          style={styles.routeCard}
-                          activeOpacity={0.85}
-                          onPress={() => handleTransitRoutePress(route)}
-                        >
-                          <View style={[styles.routeIcon, { backgroundColor: route.color + '20' }]}>
-                            {VEHICLE_ICONS[route.type] ? (
-                              <Image source={VEHICLE_ICONS[route.type]} style={[styles.routeIconImage, { tintColor: route.color }]} />
-                            ) : (
-                              <Ionicons name="bus" size={18} color={route.color} />
-                            )}
-                          </View>
-                          <View style={styles.routeInfo}>
-                            <Text style={styles.routeName} numberOfLines={1}>
-                              {route.ref ? `[${route.ref}] ` : ''}{route.name}
-                            </Text>
-                            {(route.from || route.to) ? (
-                              <Text style={styles.routeMeta} numberOfLines={1}>
-                                {route.from}{route.from && route.to ? ' -> ' : ''}{route.to}
-                              </Text>
-                            ) : null}
-                            {route.operator ? (
-                              <Text style={styles.routeOperator} numberOfLines={1}>
-                                {route.operator}
-                              </Text>
-                            ) : null}
-                          </View>
-                          <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  );
-                })}
-              </>
-            )}
-          </View>
-        ) : isGuestAccount ? (
+        {isGuestAccount ? (
           <View style={styles.emptyState}>
             <JeepIllustration width={220} height={150} />
             <Text style={styles.emptyTitle}>Sign in to view history.</Text>
