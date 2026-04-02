@@ -1,5 +1,17 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
+import * as Notifications from 'expo-notifications';
 import type { TransitLeg } from '../utils/routeSegments';
+
+// Set up local notifications handler so they display immediately
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 type Coord = { latitude: number; longitude: number };
 
@@ -87,6 +99,46 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
 
   const distanceTravelled = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const warnedLegIdx = useRef<number>(-1);
+  const previousLabelRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const requestPermissions = async () => {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        await Notifications.requestPermissionsAsync();
+      }
+    };
+    requestPermissions();
+  }, []);
+
+  useEffect(() => {
+    const currentLabel = currentSegInfo?.label;
+
+    if (!currentLabel) {
+      if (state === 'idle' || state === 'finished') {
+        previousLabelRef.current = null;
+      }
+      return;
+    }
+
+    if (state === 'playing' && currentLabel !== previousLabelRef.current) {
+      if (previousLabelRef.current !== null) {
+        const modeDesc = currentSegInfo.onTransit 
+          ? (currentSegInfo.vehicleType ? currentSegInfo.vehicleType.toUpperCase() : 'TRANSIT') 
+          : 'WALKING';
+
+        Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Journey Update',
+            body: `Switching to ${modeDesc}: ${currentLabel}`,
+          },
+          trigger: null,
+        });
+      }
+      previousLabelRef.current = currentLabel;
+    }
+  }, [currentSegInfo?.label, currentSegInfo?.onTransit, currentSegInfo?.vehicleType, state]);
 
   // Pre-compute cumulative distances whenever coordinates change
   useEffect(() => {
@@ -214,6 +266,35 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
       setState('finished');
       stopTimer();
       return;
+    }
+
+    // Check if we should warn about an upcoming leg transition
+    for (let c = 0; c < legBoundaries.current.length - 1; c++) {
+      const b = legBoundaries.current[c];
+      const distRemaining = b.cumEnd - distanceTravelled.current;
+      
+      // Notify if within 200 meters of the end of the *current* leg,
+      // and we haven't already warned for this exact transition boundary.
+      // E.g., transitioning from leg c to c+1.
+      if (distRemaining > 0 && distRemaining <= 200 && warnedLegIdx.current < c) {
+        warnedLegIdx.current = c;
+        
+        const nextLegIdx = legBoundaries.current[c+1].legIdx;
+        const nextLeg = transitLegs[nextLegIdx];
+        
+        if (nextLeg) {
+          const distStr = Math.round(distRemaining);
+          
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: "Heads up!",
+              body: `You are now going to switch modes of transportation in ${distStr} meters`,
+            },
+            trigger: null,
+          });
+        }
+        break; 
+      }
     }
 
     const cumDist = segDistances.current;
