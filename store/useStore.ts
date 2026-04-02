@@ -22,6 +22,7 @@ interface User {
   commute_history?: any[];
   badges?: string[]; // Kept locally for now
   fare_discount_type?: FareDiscountType;
+  last_ride_at?: string | null;
 }
 
 type ChatbotPersistMessage = {
@@ -56,6 +57,7 @@ const createGuestUser = (): User => ({
   commute_history: [],
   badges: [],
   fare_discount_type: 'regular',
+  last_ride_at: null,
 });
 
 interface StoreState {
@@ -171,10 +173,35 @@ export const useStore = create<StoreState>()(
       dismissInsight: () => set({ insightDismissed: true }),
       addPoints: (points) => set((state) => ({ user: { ...state.user, points: state.user.points + points } })),
       addTripStats: ({ distance, fare, points }) => set((state) => {
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+        let newStreak = state.user.streak_count || 0;
+        let lastRideStr = null;
+
+        if (state.user.last_ride_at) {
+          const lastRideDate = new Date(state.user.last_ride_at);
+          lastRideStr = lastRideDate.toISOString().split('T')[0];
+
+          if (lastRideStr !== todayStr) {
+             const yesterday = new Date();
+             yesterday.setDate(now.getDate() - 1);
+             const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+             if (lastRideStr === yesterdayStr) {
+               newStreak += 1;
+             } else {
+               newStreak = 1;
+             }
+          }
+        } else {
+          newStreak = 1;
+        }
+
         const newUser: User = {
           ...state.user,
           points: (state.user.points || 0) + points,
-          streak_count: (state.user.streak_count || 0) + 1,
+          streak_count: newStreak,
+          last_ride_at: now.toISOString(),
           total_distance: (state.user.total_distance || 0) + distance,
           spent: (state.user.spent || 0) + fare,
           total_trips: (state.user.total_trips || 0) + 1,
@@ -206,6 +233,7 @@ export const useStore = create<StoreState>()(
             .update({
               points: newUser.points,
               streak_count: newUser.streak_count,
+              last_ride_at: newUser.last_ride_at,
               total_distance: newUser.total_distance,
               total_trips: newUser.total_trips,
             })
@@ -397,6 +425,7 @@ export const useStore = create<StoreState>()(
               spent: 0,
               trips: 0,
               badges: [],
+              last_ride_at: null,
             })
             .eq('email', state.user.email)
             .then(({ error }) => {
@@ -412,7 +441,7 @@ export const useStore = create<StoreState>()(
           try {
             const { data, error } = await supabase
               .from('users')
-              .select('points, streak_count, total_distance, total_trips, spent, badges')
+              .select('points, streak_count, total_distance, total_trips, spent, badges, last_ride_at')
               .eq('email', state.user.email)
               .single();
               
@@ -422,6 +451,7 @@ export const useStore = create<StoreState>()(
                   ...s.user,
                   points: data.points ?? s.user.points ?? 0,
                   streak_count: data.streak_count ?? s.user.streak_count ?? 0,
+                  last_ride_at: data.last_ride_at ?? s.user.last_ride_at ?? null,
                   total_distance: data.total_distance ?? s.user.total_distance ?? 0,
                   total_trips: data.total_trips ?? s.user.total_trips ?? 0,
                   spent: data.spent ?? s.user.spent ?? 0,
