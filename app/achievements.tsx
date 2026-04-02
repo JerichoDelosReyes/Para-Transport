@@ -28,6 +28,7 @@ export default function AchievementsScreen() {
           .from('users')
           .select('id, full_name, points')
           .order('points', { ascending: false })
+          .order('id', { ascending: true })
           .limit(3);
         
         if (error) {
@@ -41,9 +42,15 @@ export default function AchievementsScreen() {
             .from('users')
             .select('*', { count: 'exact', head: true })
             .gt('points', user.points || 0);
+            
+          const { count: tieBreakerCount } = await supabase
+            .from('users')
+            .select('id', { count: 'exact', head: true })
+            .eq('points', user.points || 0)
+            .lt('id', user.id);
           
           if (!rankError && count !== null) {
-            setCurrentUserRank(count + 1);
+            setCurrentUserRank(count + (tieBreakerCount || 0) + 1);
           }
         }
       } catch (e) {
@@ -124,7 +131,7 @@ export default function AchievementsScreen() {
                   );
                 })}
                 
-                {currentUserRank && currentUserRank > 3 && user?.id && (
+                {currentUserRank && user?.id && !leaderboard.some(lb => lb.id === user.id) && (
                   <>
                     <View style={styles.leaderboardDivider} />
                     <View style={[styles.leaderboardCard, styles.leaderboardCardMe, { borderBottomWidth: 0 }]}>

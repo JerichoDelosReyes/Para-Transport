@@ -22,31 +22,6 @@ export default function ProfileScreen() {
   const user = useStore((state) => state.user);
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
 
-  const [userRank, setUserRank] = useState<number | null>(null);
-  const [loadingRank, setLoadingRank] = useState(false);
-
-  useEffect(() => {
-    const fetchRank = async () => {
-      if (isGuestAccount || !user?.id) return;
-      try {
-        setLoadingRank(true);
-        const { count, error } = await supabase
-          .from('users')
-          .select('*', { count: 'exact', head: true })
-          .gt('points', user.points || 0);
-
-        if (!error && count !== null) {
-          setUserRank(count + 1);
-        }
-      } catch (err) {
-        console.error('Failed to fetch rank for profile:', err);
-      } finally {
-        setLoadingRank(false);
-      }
-    };
-    fetchRank();
-  }, [user?.points, user?.id, isGuestAccount]);
-
   return (
     <View style={styles.screen}>
       <View style={[styles.topSection, { paddingTop: insets.top }]}>
@@ -139,37 +114,6 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.gridValue}>{user?.streak_count || 0}</Text>
               <Text style={styles.gridLabel}>Current Streak</Text>
-            </View>
-          </View>
-
-          {/* Leaderboard Position */}
-          <View style={[styles.sectionHeaderContainer, isGuestAccount && { opacity: 0.5 }]}>
-            <Text style={styles.sectionTitle}>Leaderboard Placement</Text>
-            <TouchableOpacity onPress={() => isGuestAccount ? Alert.alert('Guest Mode', 'Leaderboards are not available for guest mode.') : router.navigate('/achievements')}>
-              <Text style={styles.sectionLink}>View Leaderboard</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={[styles.leaderboardPlacementCard, isGuestAccount && { opacity: 0.5 }]}>
-            <View style={styles.lbPlacementLeft}>
-              <View style={styles.lbTrophyContainer}>
-                <Ionicons name="trophy" size={24} color="#E8A020" />
-              </View>
-              <View>
-                <Text style={styles.lbPlacementTitle}>Global Ranking</Text>
-                <Text style={styles.lbPlacementSubtitle}>Earn points on each trip to climb</Text>
-              </View>
-            </View>
-            <View style={styles.lbPlacementRight}>
-              {loadingRank ? (
-                <ActivityIndicator size="small" color={COLORS.primary} />
-              ) : isGuestAccount ? (
-                <Text style={styles.lbRankValue}>-</Text>
-              ) : userRank ? (
-                <Text style={styles.lbRankValue}>#{userRank}</Text>
-              ) : (
-                <Text style={styles.lbRankValue}>-</Text>
-              )}
             </View>
           </View>
 
