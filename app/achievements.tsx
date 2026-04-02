@@ -18,6 +18,7 @@ export default function AchievementsScreen() {
 
   const [leaderboard, setLeaderboard] = React.useState<any[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = React.useState(true);
+  const [currentUserRank, setCurrentUserRank] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     const fetchLeaderboard = async () => {
@@ -27,12 +28,23 @@ export default function AchievementsScreen() {
           .from('users')
           .select('id, full_name, points')
           .order('points', { ascending: false })
-          .limit(10);
+          .limit(3);
         
         if (error) {
           console.error('Error fetching leaderboard:', error);
         } else if (data) {
           setLeaderboard(data);
+        }
+
+        if (user && user.id && user.email !== 'guest@para.ph') {
+          const { count, error: rankError } = await supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .gt('points', user.points || 0);
+          
+          if (!rankError && count !== null) {
+            setCurrentUserRank(count + 1);
+          }
         }
       } catch (e) {
         console.error(e);
@@ -42,7 +54,7 @@ export default function AchievementsScreen() {
     };
 
     fetchLeaderboard();
-  }, []);
+  }, [user]);
 
   const getProgress = (badge: any) => {
     return Number((user as any)[badge.condition_type]) || 0;
@@ -90,33 +102,54 @@ export default function AchievementsScreen() {
             ) : leaderboard.length === 0 ? (
               <Text style={styles.emptyText}>No users ranked yet.</Text>
             ) : (
-              leaderboard.map((lbUser, index) => {
-                const isTop3 = index < 3;
-                const isMe = lbUser.id === user.id;
+              <>
+                {leaderboard.map((lbUser, index) => {
+                  const isMe = lbUser.id === user?.id;
+                  
+                  return (
+                    <View key={lbUser.id || index} style={[styles.leaderboardCard, isMe && styles.leaderboardCardMe]}>
+                      <View style={[styles.rankContainer, styles.rankContainerTop]}>
+                        <Text style={[styles.rankText, styles.rankTextTop]}>#{index + 1}</Text>
+                      </View>
+                      <View style={styles.lbInfo}>
+                        <Text style={[styles.lbName, isMe && styles.lbNameMe]} numberOfLines={1}>
+                          {lbUser.full_name || 'Anonymous User'}
+                        </Text>
+                      </View>
+                      <View style={styles.pointsContainer}>
+                        <Text style={[styles.pointsText, styles.pointsTextTop]}>{lbUser.points || 0}</Text>
+                        <Text style={styles.pointsLabel}>PTS</Text>
+                      </View>
+                    </View>
+                  );
+                })}
                 
-                return (
-                  <View key={lbUser.id || index} style={[styles.leaderboardCard, isMe && styles.leaderboardCardMe]}>
-                    <View style={[styles.rankContainer, isTop3 && styles.rankContainerTop]}>
-                      <Text style={[styles.rankText, isTop3 && styles.rankTextTop]}>#{index + 1}</Text>
+                {currentUserRank && currentUserRank > 3 && user?.id && (
+                  <>
+                    <View style={styles.leaderboardDivider} />
+                    <View style={[styles.leaderboardCard, styles.leaderboardCardMe, { borderBottomWidth: 0 }]}>
+                      <View style={styles.rankContainer}>
+                        <Text style={styles.rankText}>#{currentUserRank}</Text>
+                      </View>
+                      <View style={styles.lbInfo}>
+                        <Text style={[styles.lbName, styles.lbNameMe]} numberOfLines={1}>
+                          {user.full_name || 'Anonymous User'}
+                        </Text>
+                      </View>
+                      <View style={styles.pointsContainer}>
+                        <Text style={styles.pointsText}>{user.points || 0}</Text>
+                        <Text style={styles.pointsLabel}>PTS</Text>
+                      </View>
                     </View>
-                    <View style={styles.lbInfo}>
-                      <Text style={[styles.lbName, isMe && styles.lbNameMe]} numberOfLines={1}>
-                        {lbUser.full_name || 'Anonymous User'}
-                      </Text>
-                    </View>
-                    <View style={styles.pointsContainer}>
-                      <Text style={[styles.pointsText, isTop3 && styles.pointsTextTop]}>{lbUser.points || 0}</Text>
-                      <Text style={styles.pointsLabel}>PTS</Text>
-                    </View>
-                  </View>
-                );
-              })
+                  </>
+                )}
+              </>
             )}
           </View>
 
           <View style={[styles.sectionHeader, { marginTop: 32 }]}>
             <Ionicons name="medal" size={24} color="#E8A020" />
-            <Text style={styles.sectionTitle}>YOUR BADGES</Text>
+            <Text style={styles.sectionTitle}>LEADERBOARDS AND BADGES</Text>
           </View>
 
           <View style={styles.grid}>
@@ -243,6 +276,12 @@ const styles = StyleSheet.create({
   },
   leaderboardCardMe: {
     backgroundColor: '#FFFBEB', // Light yellow tint for the user
+  },
+  leaderboardDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    marginHorizontal: 16,
+    marginVertical: 4,
   },
   rankContainer: {
     width: 32,

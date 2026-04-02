@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Image, Alert } from 'react-native';
+import { useState, useEffect } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Image, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { useStore } from '../store/useStore';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { BADGES } from '../constants/badges';
 import { BADGE_IMAGES } from '../constants/badgeImages';
+import { supabase } from '../config/supabaseClient';
 
 function getInitials(name: string) {
   if (!name) return 'PR';
@@ -20,6 +21,31 @@ export default function ProfileScreen() {
   const router = useRouter();
   const user = useStore((state) => state.user);
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
+
+  const [userRank, setUserRank] = useState<number | null>(null);
+  const [loadingRank, setLoadingRank] = useState(false);
+
+  useEffect(() => {
+    const fetchRank = async () => {
+      if (isGuestAccount || !user?.id) return;
+      try {
+        setLoadingRank(true);
+        const { count, error } = await supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .gt('points', user.points || 0);
+
+        if (!error && count !== null) {
+          setUserRank(count + 1);
+        }
+      } catch (err) {
+        console.error('Failed to fetch rank for profile:', err);
+      } finally {
+        setLoadingRank(false);
+      }
+    };
+    fetchRank();
+  }, [user?.points, user?.id, isGuestAccount]);
 
   return (
     <View style={styles.screen}>
@@ -116,9 +142,40 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          {/* Leaderboard Position */}
+          <View style={[styles.sectionHeaderContainer, isGuestAccount && { opacity: 0.5 }]}>
+            <Text style={styles.sectionTitle}>Leaderboard Placement</Text>
+            <TouchableOpacity onPress={() => isGuestAccount ? Alert.alert('Guest Mode', 'Leaderboards are not available for guest mode.') : router.navigate('/achievements')}>
+              <Text style={styles.sectionLink}>View Leaderboard</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={[styles.leaderboardPlacementCard, isGuestAccount && { opacity: 0.5 }]}>
+            <View style={styles.lbPlacementLeft}>
+              <View style={styles.lbTrophyContainer}>
+                <Ionicons name="trophy" size={24} color="#E8A020" />
+              </View>
+              <View>
+                <Text style={styles.lbPlacementTitle}>Global Ranking</Text>
+                <Text style={styles.lbPlacementSubtitle}>Earn points on each trip to climb</Text>
+              </View>
+            </View>
+            <View style={styles.lbPlacementRight}>
+              {loadingRank ? (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              ) : isGuestAccount ? (
+                <Text style={styles.lbRankValue}>-</Text>
+              ) : userRank ? (
+                <Text style={styles.lbRankValue}>#{userRank}</Text>
+              ) : (
+                <Text style={styles.lbRankValue}>-</Text>
+              )}
+            </View>
+          </View>
+
           {/* Badges Section */}
           <View style={[styles.sectionHeaderContainer, isGuestAccount && { opacity: 0.5 }]}>
-            <Text style={styles.sectionTitle}>Badges</Text>
+            <Text style={styles.sectionTitle}>Leaderboards and Badges</Text>
             <TouchableOpacity onPress={() => isGuestAccount ? Alert.alert('Guest Mode', 'Badges feature is not available for guest mode.') : router.navigate('/achievements')}>
               <Text style={styles.sectionLink}>View All</Text>
             </TouchableOpacity>
@@ -347,6 +404,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+  },
+  leaderboardPlacementCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.card,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  lbPlacementLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  lbTrophyContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFBEB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lbPlacementTitle: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  lbPlacementSubtitle: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  lbPlacementRight: {
+    alignItems: 'flex-end',
+  },
+  lbRankValue: {
+    fontFamily: 'Inter',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#D97706',
   },
   badgeCard: {
     width: '31%',
