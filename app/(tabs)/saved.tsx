@@ -13,7 +13,8 @@ export default function SavedScreen() {
   const insets = useSafeAreaInsets();
   const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
   const bottomPadding = 48 + bottomSpace + 16;
-  const { user, removeSavedRoute, setSelectedTransitRoute, setPendingRouteSearch } = useStore();
+  const { user, removeSavedRoute, setSelectedTransitRoute, setPendingRouteSearch, sessionMode } = useStore();
+  const isGuestAccount = sessionMode === 'guest';
   const savedRoutes = user?.saved_routes || [];
   const [selectedRoute, setSelectedRoute] = useState<any>(null);
   const [isModalVisible, setModalVisible] = useState(false);
@@ -52,30 +53,35 @@ export default function SavedScreen() {
       </View>
 
       <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
-        {savedRoutes.length === 0 && (
+        {isGuestAccount ? (
+          <View style={styles.emptyState}>
+            <JeepIllustration width={220} height={150} />
+            <Text style={styles.emptyTitle}>Sign in to save routes.</Text>
+          </View>
+        ) : savedRoutes.length === 0 ? (
           <View style={styles.emptyState}>
             <JeepIllustration width={220} height={150} />
             <Text style={styles.emptyTitle}>Wala pang saved.</Text>
           </View>
+        ) : (
+          savedRoutes.map((route) => (
+            <View key={route.id} style={styles.card}>
+              <View style={styles.cardTop}>
+                <Text style={styles.routeName}>{route.name}</Text>
+                <TouchableOpacity onPress={() => confirmRemove(route.id)}>
+                  <Ionicons name="bookmark" size={18} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.legSummary}>{route.legs.map((leg: any) => leg.mode).join(' • ')}</Text>
+              <View style={styles.cardBottom}>
+                <Text style={styles.fare}>{route.total_fare ? `₱${route.total_fare.toFixed(2)}` : 'FARE VARIES'}</Text>
+                <TouchableOpacity style={styles.ghostButton} activeOpacity={0.9} onPress={() => openModal(route)}>
+                  <Text style={styles.ghostButtonText}>View</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
         )}
-
-        {savedRoutes.map((route) => (
-          <View key={route.id} style={styles.card}>
-            <View style={styles.cardTop}>
-              <Text style={styles.routeName}>{route.name}</Text>
-              <TouchableOpacity onPress={() => confirmRemove(route.id)}>
-                <Ionicons name="bookmark" size={18} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.legSummary}>{route.legs.map((leg: any) => leg.mode).join(' • ')}</Text>
-            <View style={styles.cardBottom}>
-              <Text style={styles.fare}>{route.total_fare ? `₱${route.total_fare.toFixed(2)}` : 'FARE VARIES'}</Text>
-              <TouchableOpacity style={styles.ghostButton} activeOpacity={0.9} onPress={() => openModal(route)}>
-                <Text style={styles.ghostButtonText}>View</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
       </ScrollView>
 
       <Modal visible={isModalVisible} animationType="fade" transparent>

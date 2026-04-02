@@ -61,7 +61,8 @@ export default function SearchScreen({
   const [isFetching, setIsFetching] = useState(false);
 
   const { recents, addRecent } = useRecentSearches();
-  const { saveRoute, removeSavedRoute, user } = useStore();
+  const { saveRoute, removeSavedRoute, user, sessionMode } = useStore();
+  const isGuestAccount = sessionMode === 'guest';
 
   const originRef = useRef<TextInput>(null);
   const destRef = useRef<TextInput>(null);
@@ -416,7 +417,7 @@ export default function SearchScreen({
           </>
         ) : (
           <>
-            {recents.length > 0 && (
+            {!isGuestAccount && recents.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
                   <Ionicons name="time-outline" size={16} color={COLORS.navy} />

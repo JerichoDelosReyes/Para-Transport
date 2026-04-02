@@ -61,6 +61,7 @@ export default function RoutesScreen() {
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const saveRoute = useStore((state) => state.saveRoute);
   const removeSavedRoute = useStore((state) => state.removeSavedRoute);
+  const isGuestAccount = useStore((state) => state.sessionMode === 'guest');
 
   useEffect(() => {
     const task = InteractionManager.runAfterInteractions(() => {
@@ -212,6 +213,11 @@ export default function RoutesScreen() {
                 })}
               </>
             )}
+          </View>
+        ) : isGuestAccount ? (
+          <View style={styles.emptyState}>
+            <JeepIllustration width={220} height={150} />
+            <Text style={styles.emptyTitle}>Sign in to view history.</Text>
           </View>
         ) : user.commute_history && user.commute_history.length > 0 ? (
           <View style={{ paddingTop: 0 }}>

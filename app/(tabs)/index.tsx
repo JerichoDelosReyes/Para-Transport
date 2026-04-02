@@ -1254,10 +1254,10 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </BlurView>
         
-        <View style={[styles.chatbotWrap, isGuestAccount && { opacity: 0.5 }]}>
+        <View style={[styles.chatbotWrap]}>
           <TouchableOpacity 
             style={styles.locateButton} 
-            onPress={() => isGuestAccount ? Alert.alert('Guest Mode', 'AI Chatbot is not available for guest mode.') : router.push('/ai-chatbot')} 
+            onPress={() => router.push('/ai-chatbot')} 
             activeOpacity={0.8}
           >
             <Image 
