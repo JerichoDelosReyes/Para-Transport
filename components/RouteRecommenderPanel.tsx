@@ -182,7 +182,7 @@ export default function RouteRecommenderPanel({
         <Ionicons name="bus-outline" size={36} color={COLORS.textMuted} />
         <Text style={styles.emptyResultTitle}>No transit routes found</Text>
         <Text style={styles.emptyResultText}>
-          No jeepney routes pass near both your location and this destination.
+          No transit routes pass near both your location and this destination.
         </Text>
       </View>
     ),

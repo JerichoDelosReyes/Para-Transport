@@ -18,6 +18,7 @@ import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
 import { findRoutesForDestination, rankRoutes, MatchedRoute, RankMode } from '../../services/routeSearch';
 import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
+import { loadRoutes } from '../../services/routeService';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
@@ -36,6 +37,13 @@ type MapRegion = {
   longitude: number;
   latitudeDelta: number;
   longitudeDelta: number;
+};
+
+type MapBounds = {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
 };
 
 const INITIAL_REGION: MapRegion = {
@@ -80,6 +88,53 @@ const sqDistApprox = (a: MapCoordinate, b: MapCoordinate): number => {
     DEG *
     Math.cos(((a.latitude + b.latitude) / 2) * (Math.PI / 180));
   return dLat * dLat + dLng * dLng;
+};
+
+const buildBoundsFromCoordinates = (coordinates: MapCoordinate[]): MapBounds | null => {
+  if (!coordinates || coordinates.length === 0) return null;
+
+  let minLat = Number.POSITIVE_INFINITY;
+  let maxLat = Number.NEGATIVE_INFINITY;
+  let minLng = Number.POSITIVE_INFINITY;
+  let maxLng = Number.NEGATIVE_INFINITY;
+
+  for (const c of coordinates) {
+    if (c.latitude < minLat) minLat = c.latitude;
+    if (c.latitude > maxLat) maxLat = c.latitude;
+    if (c.longitude < minLng) minLng = c.longitude;
+    if (c.longitude > maxLng) maxLng = c.longitude;
+  }
+
+  return { minLat, maxLat, minLng, maxLng };
+};
+
+const regionToBounds = (region: MapRegion, padRatio = 0.25): MapBounds => {
+  const latPad = region.latitudeDelta * (0.5 + padRatio);
+  const lngPad = region.longitudeDelta * (0.5 + padRatio);
+  return {
+    minLat: region.latitude - latPad,
+    maxLat: region.latitude + latPad,
+    minLng: region.longitude - lngPad,
+    maxLng: region.longitude + lngPad,
+  };
+};
+
+const boundsIntersect = (a: MapBounds, b: MapBounds): boolean => {
+  return !(
+    a.maxLat < b.minLat ||
+    a.minLat > b.maxLat ||
+    a.maxLng < b.minLng ||
+    a.minLng > b.maxLng
+  );
+};
+
+const pointInBounds = (point: MapCoordinate, bounds: MapBounds): boolean => {
+  return (
+    point.latitude >= bounds.minLat &&
+    point.latitude <= bounds.maxLat &&
+    point.longitude >= bounds.minLng &&
+    point.longitude <= bounds.maxLng
+  );
 };
 
 const roundCoordForKey = (value: number): string => value.toFixed(5);
@@ -306,26 +361,32 @@ export default function HomeScreen() {
 
   // Normalize route data to a unified transit shape
   const transitRoutes = useMemo(() => {
-    const normalized = transitDataRoutes.map((r: JeepneyRoute) => ({
-      id: r.properties.code,
-      type: r.properties.type,
-      color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
-      ref: r.properties.code,
-      name: r.properties.name,
-      from: r.stops[0]?.label || '',
-      to: r.stops[r.stops.length - 1]?.label || '',
-      operator: r.properties.operator || '',
-      coordinates: sampleCoordinates(r.coordinates, 320),
-      stops: r.stops.map((s, idx) => ({
-        id: `${r.properties.code}-stop-${idx}`,
-        coordinate: s.coordinate,
-        name: s.label,
-        type: s.type,
+    const normalized = transitDataRoutes.map((r: JeepneyRoute) => {
+      // Keep map rendering lightweight by using pre-sampled route coordinates.
+      const compactCoords = sampleCoordinates(r.coordinates, 320);
+
+      return {
+        id: r.properties.code,
+        type: r.properties.type,
+        color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
+        ref: r.properties.code,
+        name: r.properties.name,
+        from: r.stops[0]?.label || '',
+        to: r.stops[r.stops.length - 1]?.label || '',
         operator: r.properties.operator || '',
-      })),
-      verified: true,
-      fare: r.properties.fare,
-    }));
+        coordinates: compactCoords,
+        bbox: buildBoundsFromCoordinates(compactCoords),
+        stops: r.stops.map((s, idx) => ({
+          id: `${r.properties.code}-stop-${idx}`,
+          coordinate: s.coordinate,
+          name: s.label,
+          type: s.type,
+          operator: r.properties.operator || '',
+        })),
+        verified: true,
+        fare: r.properties.fare,
+      };
+    });
     return normalized;
   }, [transitDataRoutes]);
   const transitStops = useMemo(() => {
@@ -343,7 +404,7 @@ export default function HomeScreen() {
   const updateLatestHistoryFare = useStore((state) => state.updateLatestHistoryFare);
   const addTripStats = useStore((state) => state.addTripStats);
   const mapRef = useRef<MapView | null>(null);
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const walkPathCacheRef = useRef<Map<string, MapCoordinate[]>>(new Map());
   const walkPathRequestRef = useRef(0);
   const tripStatRecordedRef = useRef(false);
@@ -404,7 +465,7 @@ export default function HomeScreen() {
   }, [currentLocation]);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('tabPress', (e) => {
+    const unsubscribe = navigation.addListener('tabPress', () => {
       if (navigation.isFocused()) {
         handleLocateUser();
       }
@@ -545,16 +606,36 @@ export default function HomeScreen() {
     try {
       setIsRouting(true);
 
+      let routesForSearch = transitDataRoutes;
+      if (routesForSearch.length === 0) {
+        const loaded = await loadRoutes();
+        routesForSearch = loaded.routes;
+      }
+
+      if (routesForSearch.length === 0) {
+        Alert.alert('Routes Still Loading', 'Transit routes are still loading. Please try again in a moment.');
+        return;
+      }
+
       // Yield one frame before heavy matching so the search UI can settle.
       await new Promise<void>((resolve) => {
         InteractionManager.runAfterInteractions(() => resolve());
       });
 
-      const results = findRoutesForDestination(
-        startPoint,
-        destinationPoint,
-        transitDataRoutes,
-      );
+      // Retry with wider route proximity buffers so destination searches
+      // still return candidates when geocoded points are slightly off-route.
+      const bufferCandidates = [500, 900, 1400, 2200];
+      let results: MatchedRoute[] = [];
+
+      for (const bufferMeters of bufferCandidates) {
+        results = findRoutesForDestination(
+          startPoint,
+          destinationPoint,
+          routesForSearch,
+          bufferMeters,
+        );
+        if (results.length > 0) break;
+      }
 
       setMatchedRoutes(results);
       setSelectedRouteId(null);
@@ -807,15 +888,22 @@ export default function HomeScreen() {
       return selectedTransitRoute.coordinates ? [selectedTransitRoute] : [];
     }
     if (!showTransitLayer) return [];
-    return transitRoutes;
-  }, [showTransitLayer, selectedTransitRoute, transitRoutes]);
+
+    const viewportBounds = regionToBounds(mapRegion, 0.35);
+    return transitRoutes.filter((route: any) => {
+      if (!route.bbox) return true;
+      return boundsIntersect(route.bbox, viewportBounds);
+    });
+  }, [showTransitLayer, selectedTransitRoute, transitRoutes, mapRegion]);
 
   // Visible stops: always show stops for selected route; otherwise show all if transit layer is on
   const visibleTransitStops = useMemo(() => {
     if (selectedTransitRoute?.stops?.length > 0) return selectedTransitRoute.stops;
     if (!showTransitLayer) return [];
-    return transitStops;
-  }, [showTransitLayer, selectedTransitRoute, transitStops]);
+
+    const viewportBounds = regionToBounds(mapRegion, 0.2);
+    return transitStops.filter((stop: any) => pointInBounds(stop.coordinate, viewportBounds));
+  }, [showTransitLayer, selectedTransitRoute, transitStops, mapRegion]);
 
   // Build multi-leg transit journey plan (Fixes: Walk lines, transfer segments + correct plotting)
   const baseTransitLegs = useMemo((): TransitLeg[] => {

@@ -79,6 +79,7 @@ const MAX_NEIGHBOR_CANDIDATES = 28;
 const MIN_LEG_DISTANCE_KM = 0.05;
 const MAX_TOTAL_WALK_KM = 3.2;
 const MIN_FORWARD_PROGRESS_KM = 0.01;
+const SPATIAL_GRID_CELL_DEG = 0.01;
 
 const JEEPNEY_BASE_FARE_REGULAR = 13;
 const JEEPNEY_BASE_FARE_DISCOUNTED = 11;
@@ -243,8 +244,16 @@ type QueuedState = {
   priority: number;
 };
 
+type RouteSearchDataset = {
+  infos: RouteInfo[];
+  codeToIndex: Map<string, number>;
+  pointGrid: Map<string, number[]>;
+  neighborCandidatesByCode: Map<string, number[]>;
+};
+
 const routeIndexCache = new WeakMap<JeepneyRoute, RouteIndex>();
 const transferPairCache = new Map<string, TransferCandidate | null>();
+const routeSearchDatasetCache = new WeakMap<JeepneyRoute[], RouteSearchDataset>();
 
 function buildTransferSamples(coords: RouteCoord[], cumulativeMeters: number[]): TransferSample[] {
   if (coords.length === 0) return [];
@@ -299,6 +308,127 @@ function getRouteIndex(route: JeepneyRoute): RouteIndex {
   const idx = buildRouteIndex(route);
   routeIndexCache.set(route, idx);
   return idx;
+}
+
+function gridCellKey(latitude: number, longitude: number): string {
+  const row = Math.floor(latitude / SPATIAL_GRID_CELL_DEG);
+  const col = Math.floor(longitude / SPATIAL_GRID_CELL_DEG);
+  return `${row}:${col}`;
+}
+
+function collectPointGridCandidates(
+  grid: Map<string, number[]>,
+  point: { latitude: number; longitude: number },
+  radiusMeters: number,
+): Set<number> {
+  const latPad = radiusMeters / METERS_PER_DEG;
+  const lngPad = radiusMeters / lonScaleAtLat(point.latitude);
+
+  const minRow = Math.floor((point.latitude - latPad) / SPATIAL_GRID_CELL_DEG);
+  const maxRow = Math.floor((point.latitude + latPad) / SPATIAL_GRID_CELL_DEG);
+  const minCol = Math.floor((point.longitude - lngPad) / SPATIAL_GRID_CELL_DEG);
+  const maxCol = Math.floor((point.longitude + lngPad) / SPATIAL_GRID_CELL_DEG);
+
+  const out = new Set<number>();
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) {
+      const key = `${row}:${col}`;
+      const bucket = grid.get(key);
+      if (!bucket) continue;
+      for (const idx of bucket) out.add(idx);
+    }
+  }
+
+  return out;
+}
+
+function buildRouteSearchDataset(routes: JeepneyRoute[]): RouteSearchDataset {
+  const infos: RouteInfo[] = [];
+  const codeToIndex = new Map<string, number>();
+  const pointGrid = new Map<string, number[]>();
+
+  for (const route of routes) {
+    if (route.coordinates.length < 2) continue;
+
+    const info: RouteInfo = {
+      route,
+      index: getRouteIndex(route),
+      code: route.properties.code,
+    };
+
+    const idx = infos.length;
+    infos.push(info);
+    codeToIndex.set(info.code, idx);
+
+    // Index simplified route points into a spatial hash for fast candidate lookup.
+    const seenCells = new Set<string>();
+    for (const point of info.index.coords) {
+      const key = gridCellKey(point.latitude, point.longitude);
+      if (seenCells.has(key)) continue;
+      seenCells.add(key);
+
+      const bucket = pointGrid.get(key);
+      if (bucket) {
+        bucket.push(idx);
+      } else {
+        pointGrid.set(key, [idx]);
+      }
+    }
+  }
+
+  return {
+    infos,
+    codeToIndex,
+    pointGrid,
+    neighborCandidatesByCode: new Map<string, number[]>(),
+  };
+}
+
+function getRouteSearchDataset(routes: JeepneyRoute[]): RouteSearchDataset {
+  const cached = routeSearchDatasetCache.get(routes);
+  if (cached) return cached;
+
+  const dataset = buildRouteSearchDataset(routes);
+  routeSearchDatasetCache.set(routes, dataset);
+  return dataset;
+}
+
+function getPotentialNeighborIndexes(
+  dataset: RouteSearchDataset,
+  fromInfo: RouteInfo,
+): number[] {
+  const cached = dataset.neighborCandidatesByCode.get(fromInfo.code);
+  if (cached) return cached;
+
+  const fromIdx = dataset.codeToIndex.get(fromInfo.code);
+  const candidates = new Set<number>();
+
+  const coords = fromInfo.index.coords;
+  if (coords.length > 0) {
+    const stride = Math.max(1, Math.floor(coords.length / MAX_TRANSFER_SAMPLES));
+    for (let i = 0; i < coords.length; i += stride) {
+      const near = collectPointGridCandidates(
+        dataset.pointGrid,
+        coords[i],
+        TRANSFER_WALK_DISTANCE * 1.5,
+      );
+      for (const idx of near) candidates.add(idx);
+    }
+
+    const last = coords[coords.length - 1];
+    const nearLast = collectPointGridCandidates(
+      dataset.pointGrid,
+      last,
+      TRANSFER_WALK_DISTANCE * 1.5,
+    );
+    for (const idx of nearLast) candidates.add(idx);
+  }
+
+  if (fromIdx !== undefined) candidates.delete(fromIdx);
+
+  const out = Array.from(candidates);
+  dataset.neighborCandidatesByCode.set(fromInfo.code, out);
+  return out;
 }
 
 function pointCouldBeNearRoute(
@@ -609,21 +739,15 @@ export function findRoutesForDestination(
   routes: JeepneyRoute[],
   bufferMeters: number = BUFFER_DISTANCE,
 ): MatchedRoute[] {
-  const allInfos: RouteInfo[] = [];
+  const dataset = getRouteSearchDataset(routes);
+  const allInfos = dataset.infos;
   const nearOriginRanked: SnapCandidate[] = [];
   const nearDestByCode = new Map<string, SnapCandidate>();
   const destHintByCode = new Map<string, number>();
 
-  for (const route of routes) {
-    if (route.coordinates.length < 2) continue;
+  if (allInfos.length === 0) return [];
 
-    const info: RouteInfo = {
-      route,
-      index: getRouteIndex(route),
-      code: route.properties.code,
-    };
-    allInfos.push(info);
-
+  const considerRoute = (info: RouteInfo) => {
     if (pointCouldBeNearRoute(origin, info.index.bbox, bufferMeters)) {
       const originSnap = snapPointToRoute(origin, info.index);
       if (originSnap.distanceMeters <= bufferMeters) {
@@ -649,9 +773,38 @@ export function findRoutesForDestination(
         }
       }
     }
+  };
+
+  const candidateIndexes = new Set<number>();
+  const endpointScanRadius = Math.max(bufferMeters * 1.5, 700);
+
+  for (const idx of collectPointGridCandidates(dataset.pointGrid, origin, endpointScanRadius)) {
+    candidateIndexes.add(idx);
+  }
+  for (const idx of collectPointGridCandidates(dataset.pointGrid, destination, endpointScanRadius)) {
+    candidateIndexes.add(idx);
   }
 
-  if (allInfos.length === 0 || nearDestByCode.size === 0) return [];
+  if (candidateIndexes.size > 0) {
+    for (const idx of candidateIndexes) {
+      const info = allInfos[idx];
+      if (!info) continue;
+      considerRoute(info);
+    }
+  }
+
+  // Safety fallback: if candidate pruning misses endpoints, do a full scan.
+  if (nearOriginRanked.length === 0 || nearDestByCode.size === 0) {
+    nearOriginRanked.length = 0;
+    nearDestByCode.clear();
+    destHintByCode.clear();
+
+    for (const info of allInfos) {
+      considerRoute(info);
+    }
+  }
+
+  if (nearDestByCode.size === 0) return [];
 
   nearOriginRanked.sort((a, b) => a.meters - b.meters);
   const startCandidates = nearOriginRanked.slice(0, MAX_NEAR_CANDIDATES);
@@ -664,8 +817,10 @@ export function findRoutesForDestination(
     if (cached) return cached;
 
     const candidates: NeighborCandidate[] = [];
-    for (const toInfo of allInfos) {
-      if (toInfo.code === fromInfo.code) continue;
+    const neighborIndexes = getPotentialNeighborIndexes(dataset, fromInfo);
+    for (const idx of neighborIndexes) {
+      const toInfo = allInfos[idx];
+      if (!toInfo || toInfo.code === fromInfo.code) continue;
 
       const bboxGap = bboxGapMeters(fromInfo.index.bbox, toInfo.index.bbox);
       if (bboxGap > TRANSFER_WALK_DISTANCE * 1.35) continue;
