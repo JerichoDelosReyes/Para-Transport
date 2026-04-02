@@ -244,7 +244,7 @@ export default function SearchScreen({
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { flex: 1 }]}>Your Route</Text>
           <TouchableOpacity onPress={handleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name={isRouteSaved() ? "heart" : "heart-outline"} size={24} color={isRouteSaved() ? COLORS.primary : COLORS.navy} />
+            <Ionicons name={isRouteSaved() ? "bookmark" : "bookmark-outline"} size={24} color={isRouteSaved() ? COLORS.primary : COLORS.navy} />
           </TouchableOpacity>
         </View>
 

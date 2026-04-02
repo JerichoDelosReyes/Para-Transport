@@ -125,13 +125,13 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
     if (state === 'playing' && currentLabel !== previousLabelRef.current) {
       if (previousLabelRef.current !== null) {
         const modeDesc = currentSegInfo.onTransit 
-          ? (currentSegInfo.vehicleType ? currentSegInfo.vehicleType.toUpperCase() : 'TRANSIT') 
-          : 'WALKING';
+          ? (currentSegInfo.vehicleType ? `Boarding ${currentSegInfo.vehicleType.charAt(0).toUpperCase() + currentSegInfo.vehicleType.slice(1).toLowerCase()}` : 'Boarding Transit') 
+          : 'Walking';
 
         Notifications.scheduleNotificationAsync({
           content: {
-            title: 'Journey Update',
-            body: `Switching to ${modeDesc}: ${currentLabel}`,
+            title: modeDesc,
+            body: currentLabel,
           },
           trigger: null,
         });
@@ -233,11 +233,13 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
         const leg = transitLegs[b.legIdx];
         if (!leg) continue;
         if (leg.onTransit) {
-          const ref = leg.transitInfo?.ref || leg.transitInfo?.name || 'Transit';
+          const routeName = leg.transitInfo?.name || leg.transitInfo?.ref || 'Transit';
           const color = leg.transitInfo?.color || '#E8A020';
-          return { onTransit: true, label: `${ref} → ${leg.alightLabel}`, color, vehicleType: leg.transitInfo?.type || null };
+          const alightText = leg.alightLabel ? ` → ${leg.alightLabel}` : '';
+          return { onTransit: true, label: `${routeName}${alightText}`, color, vehicleType: leg.transitInfo?.type || null };
         }
-        return { onTransit: false, label: `Walking to ${leg.alightLabel}`, color: '#808080', vehicleType: null };
+        const walkingText = leg.alightLabel ? `Walking to ${leg.alightLabel}` : 'Walking';
+        return { onTransit: false, label: walkingText, color: '#808080', vehicleType: null };
       }
     }
     // Fallback: if we're past all legs (end of route)

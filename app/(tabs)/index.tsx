@@ -82,6 +82,29 @@ const sqDistApprox = (a: MapCoordinate, b: MapCoordinate): number => {
   return dLat * dLat + dLng * dLng;
 };
 
+const getSlicedMapCoordinates = (leg: any): MapCoordinate[] => {
+  const fullCoords = leg.route.coordinates;
+  if (!fullCoords || fullCoords.length === 0) return [];
+  
+  let bIdx = 0; let aIdx = fullCoords.length - 1;
+  let minDistB = Infinity; let minDistA = Infinity;
+  
+  for (let i = 0; i < fullCoords.length; i++) {
+    const db = sqDistApprox(fullCoords[i], leg.boardingPoint);
+    if (db < minDistB) { minDistB = db; bIdx = i; }
+    const da = sqDistApprox(fullCoords[i], leg.alightingPoint);
+    if (da < minDistA) { minDistA = da; aIdx = i; }
+  }
+  
+  const segment: MapCoordinate[] = [];
+  if (bIdx <= aIdx) {
+    for (let i = bIdx; i <= aIdx; i++) segment.push(fullCoords[i]);
+  } else {
+    for (let i = bIdx; i >= aIdx; i--) segment.push(fullCoords[i]);
+  }
+  return segment;
+};
+
 const roundCoordForKey = (value: number): string => value.toFixed(5);
 
 const makeWalkPathCacheKey = (from: MapCoordinate, to: MapCoordinate): string => {
@@ -271,6 +294,7 @@ export default function HomeScreen() {
   const [originQuery, setOriginQuery] = useState('');
   const [isRouting, setIsRouting] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
+  const [currentLocationLabel, setCurrentLocationLabel] = useState<string>('Current Location');
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
@@ -284,6 +308,22 @@ export default function HomeScreen() {
   const { routes: transitDataRoutes } = useRoutes();
 
   useEffect(() => {
+    let cancelled = false;
+    if (currentLocation) {
+      fetch(`${GEOCODING_BASE_URL}/reverse?lat=${currentLocation.latitude}&lon=${currentLocation.longitude}&format=json&zoom=18&addressdetails=0`, { headers: { 'Accept-Language': 'en' } })
+        .then(res => res.json())
+        .then(data => {
+          if (!cancelled && data && (data.display_name || data.name)) {
+            const name = data.display_name || data.name;
+            setCurrentLocationLabel(name.split(',')[0].trim());
+          }
+        })
+        .catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [currentLocation]);
+
+  useEffect(() => {
     setRankedRoutes(rankRoutes(matchedRoutes, rankTab).slice(0, MAX_RANKED_ROUTE_OPTIONS));
   }, [matchedRoutes, rankTab]);
 
@@ -292,9 +332,14 @@ export default function HomeScreen() {
     setSelectedRoute(route);
     if (route) {
       setRouteSummary({ distanceKm: route.distanceKm || 0, durationMin: route.estimatedMinutes || Math.round((route.distanceKm || 0) * 12) });
-      const newCoords = route.legs.flatMap((leg: any) => leg.route.coordinates);
+      const newCoords = route.legs.flatMap((leg: any) => getSlicedMapCoordinates(leg));
       if (newCoords && newCoords.length >= 2) {
         setRouteCoordinates(sampleCoordinates(newCoords, 700));
+        const sampledForBounds = sampleCoordinates(newCoords, 200);
+        mapRef.current?.fitToCoordinates(sampledForBounds, {
+          edgePadding: { top: 100, right: 40, bottom: 250, left: 40 },
+          animated: true,
+        });
       } else {
         setRouteCoordinates([]);
       }
@@ -562,10 +607,10 @@ export default function HomeScreen() {
 
       if (results.length > 0) {
         const allCoords = results.flatMap(m =>
-          m.legs.flatMap((l: any) => sampleCoordinates(l.route.coordinates, 40))
+          m.legs.flatMap((l: any) => sampleCoordinates(getSlicedMapCoordinates(l), 40))
         );
         mapRef.current?.fitToCoordinates(allCoords, {
-          edgePadding: { top: 160, right: 50, bottom: 300, left: 50 },
+          edgePadding: { top: 100, right: 50, bottom: 250, left: 50 },
           animated: true,
         });
 
@@ -583,12 +628,41 @@ export default function HomeScreen() {
 
       Keyboard.dismiss();
       
-      const h_origin = origin ? { name: origin.title, lat: origin.latitude, lon: origin.longitude } : null;
+      let originName = origin?.title;
+      if ((!origin || originName === 'Current Location' || originName === 'Your Location') && currentLocation) {
+        try {
+          const res = await fetch(`${GEOCODING_BASE_URL}/reverse?lat=${currentLocation.latitude}&lon=${currentLocation.longitude}&format=json&zoom=18&addressdetails=0`, { headers: { 'Accept-Language': 'en' } });
+          if (res.ok) {
+            const data = await res.json();
+            originName = data?.display_name || data?.name || 'Unknown Location';
+          } else { originName = 'Unknown Location'; }
+        } catch { originName = 'Unknown Location'; }
+      }
+
+      let destName = destination.title;
+      if (destName === 'Dropped Pin' || destName === 'Current Location' || destName === 'Your Location') {
+        try {
+          const res = await fetch(`${GEOCODING_BASE_URL}/reverse?lat=${destination.latitude}&lon=${destination.longitude}&format=json&zoom=18&addressdetails=0`, { headers: { 'Accept-Language': 'en' } });
+          if (res.ok) {
+            const data = await res.json();
+            destName = data?.display_name || data?.name || destName;
+          }
+        } catch {}
+      }
+
+      if (originName && originName !== 'Current Location' && originName !== 'Your Location' && originName !== 'Unknown Location') {
+        setOriginQuery(originName.split(',')[0].trim());
+      }
+      if (destName && destName !== 'Dropped Pin' && destName !== 'Unknown Location') {
+        setDestinationQuery(destName.split(',')[0].trim());
+      }
+
+      const h_origin = { name: originName || 'Unknown Location', lat: startPoint.latitude, lon: startPoint.longitude };
       const initialFare = results.length > 0 ? (results[0].estimatedFare || 0) : 0;
       addHistory({
         id: Date.now().toString(),
         origin: h_origin,
-        destination: { name: destination.title, lat: destination.latitude, lon: destination.longitude },
+        destination: { name: destName, lat: destination.latitude, lon: destination.longitude },
         fare: initialFare,
         timestamp: Date.now(),
       });
@@ -824,28 +898,13 @@ export default function HomeScreen() {
       const originPoint = currentLocation; 
 
       selectedRoute.legs.forEach((leg: any, idx: number) => {
-        const fullCoords = leg.route.coordinates;
-        let bIdx = 0; let aIdx = fullCoords.length - 1;
-        let minDistB = Infinity; let minDistA = Infinity;
-        
-        for (let i = 0; i < fullCoords.length; i++) {
-          const db = sqDistApprox(fullCoords[i], leg.boardingPoint);
-          if (db < minDistB) { minDistB = db; bIdx = i; }
-          const da = sqDistApprox(fullCoords[i], leg.alightingPoint);
-          if (da < minDistA) { minDistA = da; aIdx = i; }
-        }
-        
         // Isolate transit polyline between board and alight points
-        const segment = [];
-        if (bIdx <= aIdx) {
-          for (let i = bIdx; i <= aIdx; i++) segment.push(fullCoords[i]);
-        } else {
-          for (let i = bIdx; i >= aIdx; i--) segment.push(fullCoords[i]);
-        }
+        const segment = getSlicedMapCoordinates(leg);
 
         // 1. Walk from start or prev stop to this board
         const prevPoint = idx === 0 ? originPoint : selectedRoute.legs[idx-1].alightingPoint;
         if (prevPoint) {
+           const routeName = leg.route.properties.name || 'transit route';
            legs.push({
              transitRouteId: 'walk',
              coordinates: [prevPoint, leg.boardingPoint],
@@ -853,7 +912,7 @@ export default function HomeScreen() {
              transitInfo: null,
              boardAt: prevPoint,
              alightAt: leg.boardingPoint,
-             boardLabel: '', alightLabel: ''
+             boardLabel: '', alightLabel: `pickup for ${routeName}`
            });
         }
 
@@ -881,7 +940,7 @@ export default function HomeScreen() {
            transitInfo: null,
            boardAt: lastAlight,
            alightAt: destinationLocation,
-           boardLabel: '', alightLabel: ''
+           boardLabel: '', alightLabel: destinationQuery || 'destination'
          });
       }
 
@@ -1615,7 +1674,7 @@ export default function HomeScreen() {
       {/* Full-screen search */}
       <SearchScreen
         visible={isSearchActive}
-        currentLocationLabel="Current Location"
+        currentLocationLabel={currentLocationLabel}
         initialOrigin={pendingRouteSearch ? pendingRouteSearch.origin : originQuery}
         initialDestination={pendingRouteSearch ? pendingRouteSearch.destination : destinationQuery}
         onClearRoute={handleClearRoute}
