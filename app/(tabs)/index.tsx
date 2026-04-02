@@ -1341,37 +1341,6 @@ export default function HomeScreen() {
       showDrop: boolean;
     }> = [];
 
-    const transitLegsOnly = transitLegs
-      .map((leg, idx) => ({ leg, idx }))
-      .filter(({ leg }) => leg.onTransit && leg.coordinates.length >= 2);
-
-    // In planning mode, keep the UX simple: one board marker (first transit leg)
-    // and one drop-off marker (last transit leg), even if internal transfers exist.
-    if (simPointIndex < 0) {
-      if (transitLegsOnly.length === 0) return markers;
-
-      const first = transitLegsOnly[0];
-      const last = transitLegsOnly[transitLegsOnly.length - 1];
-
-      markers.push({
-        leg: first.leg,
-        idx: first.idx,
-        showBoard: true,
-        showDrop: first.idx === last.idx,
-      });
-
-      if (last.idx !== first.idx) {
-        markers.push({
-          leg: last.leg,
-          idx: last.idx,
-          showBoard: false,
-          showDrop: true,
-        });
-      }
-
-      return markers;
-    }
-
     let cursor = 0;
     for (let idx = 0; idx < transitLegs.length; idx++) {
       const leg = transitLegs[idx];
@@ -1382,6 +1351,11 @@ export default function HomeScreen() {
       cursor = legEnd;
 
       if (!leg.onTransit) continue;
+
+      if (simPointIndex < 0) {
+        markers.push({ leg, idx, showBoard: true, showDrop: true });
+        continue;
+      }
 
       const showBoard = simPointIndex < legStart;
       const showDrop = simPointIndex < legEnd;
