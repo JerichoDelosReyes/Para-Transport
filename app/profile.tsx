@@ -96,7 +96,15 @@ export default function ProfileScreen() {
 
             {/* Leaderboard Placement */}
             {!isGuestAccount && (
-              isLoadingRank ? (
+              (user?.points || 0) === 0 ? (
+                <TouchableOpacity 
+                  activeOpacity={0.7} 
+                  onPress={() => router.navigate('/achievements')} 
+                  style={[styles.rankBadge, { backgroundColor: '#F3F4F6' }]}
+                >
+                  <Text style={[styles.rankNumber, { color: '#6B7280', fontSize: 13 }]}>Ride to rank!</Text>
+                </TouchableOpacity>
+              ) : isLoadingRank ? (
                 <View style={[styles.rankBadge, { width: 70, height: 42, justifyContent: 'center' }]}>
                   <ActivityIndicator size="small" color={COLORS.navy} />
                 </View>
