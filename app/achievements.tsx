@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
 import { useStore } from '../store/useStore';
 
 import { BADGE_IMAGES } from '../constants/badgeImages';
@@ -33,66 +33,73 @@ export default function AchievementsScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
-        </TouchableOpacity>
+      <View style={[styles.topSection, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+            <View style={styles.iconButtonCircle}>
+              <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.headerTitleText}>ACHIEVEMENTS</Text>
+          <View style={{ width: 44, height: 44 }} />
+        </View>
       </View>
-      <ScrollView 
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.logoContainer}>
-          <Image 
-            source={require('../assets/logo/icon_achievement.png')} 
-            style={styles.logoImage} 
-            resizeMode="contain" 
-          />
-        </View>
-        <Text style={styles.pageTitle}>ACHIEVEMENT BADGES</Text>
-        
-        <View style={styles.grid}>
-          {badgesData.map((badge, idx) => {
-            const isEarned = user?.badges?.includes(badge.id) || false;
-            const progressValue = isEarned ? badge.condition_value : Math.min(badge.condition_value, getProgress(badge));
-            const fillWidth = `${(progressValue / badge.condition_value) * 100}%`;
-            const isLocked = !isEarned;
 
-            return (
-              <View key={badge.id || idx} style={[styles.card, isLocked && { opacity: 0.6 }]}>
-                <View style={[styles.iconWrapper]}>
-                  {badge.icon_url || BADGE_IMAGES[badge.id] ? (
-                    <Image 
-                      source={(badge.icon_url && badge.icon_url.startsWith('http')) ? { uri: badge.icon_url } : BADGE_IMAGES[badge.id]} 
-                      style={[styles.badgeImage, isLocked && { opacity: 0.3 }]} 
-                      resizeMode="contain" 
-                    />
-                  ) : (
-                    <Text style={[styles.iconTxt, isLocked && { opacity: 0.3 }]}>
-                      🏆
+      <View style={styles.bottomSection}>
+        <ScrollView 
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('../assets/logo/icon_achievement.png')} 
+              style={styles.logoImage} 
+              resizeMode="contain" 
+            />
+          </View>
+          <View style={styles.grid}>
+            {[...badgesData].sort((a, b) => a.condition_value - b.condition_value).map((badge, idx) => {
+              const isEarned = user?.badges?.includes(badge.id) || false;
+              const progressValue = isEarned ? badge.condition_value : Math.min(badge.condition_value, getProgress(badge));
+              const fillWidth = `${(progressValue / badge.condition_value) * 100}%`;
+              const isLocked = !isEarned;
+
+              return (
+                <View key={badge.id || idx} style={[styles.card, isLocked && { opacity: 0.7 }]}>
+                  <View style={[styles.iconWrapper, isEarned && styles.iconWrapperEarned]}>
+                    {badge.icon_url || BADGE_IMAGES[badge.id] ? (
+                      <Image 
+                        source={(badge.icon_url && badge.icon_url.startsWith('http')) ? { uri: badge.icon_url } : BADGE_IMAGES[badge.id]} 
+                        style={[styles.badgeImage, isLocked && { opacity: 0.3 }]} 
+                        resizeMode="contain" 
+                      />
+                    ) : (
+                      <Text style={[styles.iconTxt, isLocked && { opacity: 0.3 }]}>
+                        🏆
+                      </Text>
+                    )}
+                    {isLocked && (
+                      <View style={styles.lockOverlay}>
+                        <Ionicons name="lock-closed" size={14} color={COLORS.textMuted} />
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.textWrapper}>
+                    <Text style={[styles.badgeName]}>{badge.name}</Text>
+                    <Text style={[styles.badgeDesc]}>
+                      {badge.description}
                     </Text>
-                  )}
-                  {isLocked && (
-                    <View style={styles.lockOverlay}>
-                      <Ionicons name="lock-closed" size={16} color="#555" />
-                    </View>
-                  )}
+                  </View>
+                  
+                  <View style={[styles.progressContainer]}>
+                    <View style={[styles.progressBar, { width: fillWidth as any }]} />
+                  </View>
                 </View>
-                <View style={styles.textWrapper}>
-                  <Text style={[styles.badgeName]}>{badge.name}</Text>
-                  <Text style={[styles.badgeDesc]}>
-                    {badge.description}
-                  </Text>
-                </View>
-                
-                <View style={[styles.progressContainer]}>
-                  <View style={[styles.progressBar, { width: fillWidth as any }]} />
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      </ScrollView>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </View>
     </View>
   );
 }
@@ -100,40 +107,53 @@ export default function AchievementsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.primary, // matched the platform header gold
+    backgroundColor: COLORS.background,
   },
-  header: {
-    paddingHorizontal: SPACING.screenX,
-    paddingBottom: 10,
+  topSection: {
+    backgroundColor: COLORS.primary,
     zIndex: 10,
   },
-  backBtn: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.screenX,
+    paddingVertical: 14,
+    height: 64,
+  },
+  headerTitleText: {
+    fontFamily: 'Cubao',
+    fontSize: TYPOGRAPHY.screenTitle,
+    color: '#000000',
+  },
+  iconButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  iconButtonCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomSection: {
+    flex: 1,
+  },
   content: {
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 10,
+    paddingTop: 24,
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 24,
   },
   logoImage: {
-    width: 200, // scaled up for more prominence
-    height: 70,
-  },
-  pageTitle: {
-    fontFamily: 'Inter',
-    fontWeight: '800',
-    fontSize: 22,
-    color: '#1A1A2E',
-    textAlign: 'center',
-    marginBottom: 30,
+    width: 280,
+    height: 90,
   },
   grid: {
     flexDirection: 'row',
@@ -143,30 +163,40 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '48%',
-    backgroundColor: '#FAF5E3',
-    borderRadius: 16,
-    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.card,
+    padding: 16,
     alignItems: 'center',
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   iconWrapper: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
     backgroundColor: '#d5a944',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+  },
+  iconWrapperEarned: {
+    // Keep styling structure
   },
   iconTxt: {
-    fontSize: 45,
+    fontSize: 36,
   },
   badgeImage: {
     width: 60,
@@ -176,47 +206,47 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
-    minHeight: 40,
+    marginBottom: 16,
+    minHeight: 44,
   },
   badgeName: {
     fontFamily: 'Inter',
     fontWeight: '700',
-    fontSize: 13,
-    color: '#1A1A2E',
+    fontSize: 14,
+    color: COLORS.navy,
     textAlign: 'center',
     marginBottom: 4,
   },
   badgeDesc: {
     fontFamily: 'Inter',
-    fontSize: 11,
-    color: '#4B4B4B',
+    fontSize: 12,
+    color: COLORS.textMuted,
     textAlign: 'center',
-    lineHeight: 14,
+    lineHeight: 16,
   },
   progressContainer: {
     height: 6,
-    backgroundColor: '#D1CBA8',
+    backgroundColor: 'rgba(10,22,40,0.1)',
     borderRadius: 3,
-    width: '80%',
+    width: '100%',
     overflow: 'hidden',
   },
   progressBar: {
     height: '100%',
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#E8A020',
     borderRadius: 3,
   },
   lockOverlay: {
     position: 'absolute',
-    bottom: -5,
-    right: -5,
-    backgroundColor: '#E0E0E0',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#FFFFFF',
     borderRadius: 15,
-    width: 30,
-    height: 30,
+    width: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.05)',
   }
 });
