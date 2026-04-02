@@ -31,7 +31,7 @@ export type PlaceResult = {
   longitude: number;
 };
 
-export type TransitRouteType = 'jeepney' | 'bus';
+export type TransitRouteType = 'jeepney' | 'bus' | 'combo';
 
 type SearchScreenProps = {
   visible: boolean;
@@ -366,6 +366,29 @@ export default function SearchScreen({
           <TouchableOpacity
             style={[
               styles.routeTypeChip,
+              selectedRouteType === 'combo' && styles.routeTypeChipActive,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => onSelectRouteType('combo')}
+          >
+            <Ionicons
+              name="shuffle-outline"
+              size={14}
+              color={selectedRouteType === 'combo' ? '#FFFFFF' : COLORS.navy}
+            />
+            <Text
+              style={[
+                styles.routeTypeChipText,
+                selectedRouteType === 'combo' && styles.routeTypeChipTextActive,
+              ]}
+            >
+              Jeep + Bus
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.routeTypeChip,
               selectedRouteType === 'bus' && styles.routeTypeChipActive,
             ]}
             activeOpacity={0.85}
@@ -629,6 +652,7 @@ const styles = StyleSheet.create({
   routeTypeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     paddingHorizontal: SPACING.screenX,
     marginBottom: 10,

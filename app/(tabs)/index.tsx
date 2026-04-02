@@ -165,22 +165,35 @@ const pointInBounds = (point: MapCoordinate, bounds: MapBounds): boolean => {
   );
 };
 
-const normalizeTransitRouteType = (value: unknown): TransitRouteType | null => {
+type VehicleRouteType = 'jeepney' | 'bus';
+
+const normalizeTransitRouteType = (value: unknown): VehicleRouteType | null => {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized.includes('bus')) return 'bus';
   if (normalized.includes('jeepney')) return 'jeepney';
   return null;
 };
 
+const selectedTypeAllowsRouteType = (
+  selectedType: TransitRouteType,
+  routeType: VehicleRouteType | null,
+): boolean => {
+  if (!routeType) return false;
+  if (selectedType === 'combo') return routeType === 'jeepney' || routeType === 'bus';
+  return routeType === selectedType;
+};
+
 const routeMatchesSelectedType = (
   route: JeepneyRoute,
   selectedType: TransitRouteType,
 ): boolean => {
-  return normalizeTransitRouteType(route?.properties?.type) === selectedType;
+  return selectedTypeAllowsRouteType(selectedType, normalizeTransitRouteType(route?.properties?.type));
 };
 
 const routeTypeLabel = (routeType: TransitRouteType): string => {
-  return routeType === 'bus' ? 'Bus' : 'Jeepney';
+  if (routeType === 'bus') return 'Bus';
+  if (routeType === 'jeepney') return 'Jeepney';
+  return 'Jeep + Bus';
 };
 
 const roundCoordForKey = (value: number): string => value.toFixed(5);
@@ -993,7 +1006,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!selectedTransitRoute) return;
     const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
-    if (selectedType && selectedType !== selectedRouteType) {
+    if (selectedType && !selectedTypeAllowsRouteType(selectedRouteType, selectedType)) {
       setSelectedTransitRoute(null);
     }
   }, [selectedTransitRoute, selectedRouteType, setSelectedTransitRoute]);
@@ -1002,7 +1015,7 @@ export default function HomeScreen() {
   const visibleTransitRoutes = useMemo(() => {
     if (selectedTransitRoute) {
       const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
-      if (selectedType && selectedType !== selectedRouteType) return [];
+      if (selectedType && !selectedTypeAllowsRouteType(selectedRouteType, selectedType)) return [];
       return selectedTransitRoute.coordinates ? [selectedTransitRoute] : [];
     }
     if (!showTransitLayer) return [];
@@ -1018,7 +1031,7 @@ export default function HomeScreen() {
   const visibleTransitStops = useMemo(() => {
     if (selectedTransitRoute?.stops?.length > 0) {
       const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
-      if (!selectedType || selectedType === selectedRouteType) {
+      if (!selectedType || selectedTypeAllowsRouteType(selectedRouteType, selectedType)) {
         return selectedTransitRoute.stops;
       }
       return [];
@@ -1738,6 +1751,24 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={[
                 styles.routeTypeSelectorButton,
+                selectedRouteType === 'combo' && styles.routeTypeSelectorButtonActive,
+              ]}
+              activeOpacity={0.85}
+              onPress={() => handleRouteTypeChange('combo')}
+            >
+              <Text
+                style={[
+                  styles.routeTypeSelectorText,
+                  selectedRouteType === 'combo' && styles.routeTypeSelectorTextActive,
+                ]}
+              >
+                Combo
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.routeTypeSelectorButton,
                 selectedRouteType === 'bus' && styles.routeTypeSelectorButtonActive,
               ]}
               activeOpacity={0.85}
@@ -1815,7 +1846,10 @@ export default function HomeScreen() {
 
         {selectedTransitRoute &&
         (!normalizeTransitRouteType((selectedTransitRoute as any).type) ||
-          normalizeTransitRouteType((selectedTransitRoute as any).type) === selectedRouteType) ? (
+          selectedTypeAllowsRouteType(
+            selectedRouteType,
+            normalizeTransitRouteType((selectedTransitRoute as any).type),
+          )) ? (
           <View style={styles.transitRouteCard}>
             <View style={styles.transitRouteHeader}>
               <View style={[styles.transitTypeBadge, { backgroundColor: selectedTransitRoute.color || '#1E88E5' }]}>

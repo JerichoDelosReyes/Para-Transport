@@ -90,8 +90,57 @@ const JEEPNEY_BASE_FARE_DISCOUNTED = 11;
 const JEEPNEY_BASE_DISTANCE_KM = 4;
 const JEEPNEY_DEFAULT_PER_KM_RATE = 1.8;
 
+type FareMatrixRow = {
+  vehicle_type?: string;
+  is_active?: boolean;
+  base_fare?: number;
+  base_distance?: number;
+  per_km_rate?: number;
+  base_fare_regular?: number;
+  base_fare_discount?: number;
+  base_distance_km?: number;
+  per_km_regular?: number;
+  per_km_discount?: number;
+};
+
+function normalizeVehicleType(value: unknown): string {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'uv' ? 'uv_express' : normalized;
+}
+
+function getFareDiscountType(): string {
+  return String(useStore.getState().user?.fare_discount_type || 'regular').toLowerCase();
+}
+
+function getActiveFareMatrix(vehicleType: string): FareMatrixRow | null {
+  const normalized = normalizeVehicleType(vehicleType);
+  const fareMatrices = (useStore.getState().fareMatrices || []) as FareMatrixRow[];
+
+  const activeRows = fareMatrices.filter((matrix) => matrix && matrix.is_active !== false);
+  const sourceRows = activeRows.length > 0 ? activeRows : fareMatrices;
+
+  return (
+    sourceRows.find((matrix) => normalizeVehicleType(matrix?.vehicle_type) === normalized) || null
+  );
+}
+
+function getNumericField(
+  matrix: FareMatrixRow | null,
+  keys: Array<keyof FareMatrixRow>,
+  fallback: number,
+): number {
+  if (!matrix) return fallback;
+
+  for (const key of keys) {
+    const value = Number(matrix[key]);
+    if (Number.isFinite(value)) return value;
+  }
+
+  return fallback;
+}
+
 function getFareDiscountMultiplier(): number {
-  const discountType = useStore.getState().user?.fare_discount_type || 'regular';
+  const discountType = getFareDiscountType();
   return discountType === 'regular' ? 1 : 0.8;
 }
 
@@ -100,51 +149,83 @@ function applyUserFareDiscount(rawFare: number): number {
   return Math.max(1, Math.round(rawFare * multiplier));
 }
 
-function getPerKmRate(vehicleType: string, fallback: number): number {
-  const fareMatrices = useStore.getState().fareMatrices || [];
-  const matrix = fareMatrices.find((m: any) => m.vehicle_type === vehicleType);
-  return Number(matrix?.per_km_rate) || fallback;
-}
-
 function calculateJeepneyFare(distanceKm: number): number {
-  const discountType = useStore.getState().user?.fare_discount_type || 'regular';
+  const matrix = getActiveFareMatrix('jeepney');
+  const discountType = getFareDiscountType();
+
+  const regularBaseFare = getNumericField(
+    matrix,
+    ['base_fare_regular', 'base_fare'],
+    JEEPNEY_BASE_FARE_REGULAR,
+  );
+  const discountBaseFare = getNumericField(
+    matrix,
+    ['base_fare_discount'],
+    JEEPNEY_BASE_FARE_DISCOUNTED,
+  );
+
+  const regularPerKmRate = getNumericField(
+    matrix,
+    ['per_km_regular', 'per_km_rate'],
+    JEEPNEY_DEFAULT_PER_KM_RATE,
+  );
+  const discountPerKmRate = getNumericField(
+    matrix,
+    ['per_km_discount'],
+    regularPerKmRate * getFareDiscountMultiplier(),
+  );
+
+  const baseDistanceKm = getNumericField(
+    matrix,
+    ['base_distance_km', 'base_distance'],
+    JEEPNEY_BASE_DISTANCE_KM,
+  );
+
   const billableKm = Math.max(1, Math.ceil(distanceKm));
-  const perKmRate = getPerKmRate('jeepney', JEEPNEY_DEFAULT_PER_KM_RATE);
-  const baseFare = discountType === 'regular' ? JEEPNEY_BASE_FARE_REGULAR : JEEPNEY_BASE_FARE_DISCOUNTED;
+  const baseFare = discountType === 'regular' ? regularBaseFare : discountBaseFare;
+  const perKmRate = discountType === 'regular' ? regularPerKmRate : discountPerKmRate;
 
-  if (billableKm <= JEEPNEY_BASE_DISTANCE_KM) return baseFare;
+  if (billableKm <= baseDistanceKm) return Math.max(1, Math.round(baseFare));
 
-  const extraKm = billableKm - JEEPNEY_BASE_DISTANCE_KM;
+  const extraKm = billableKm - baseDistanceKm;
   return Math.max(1, Math.round(baseFare + extraKm * perKmRate));
 }
 
 function calculateFare(distanceKm: number, vehicleType: string = 'jeepney'): number {
-  const normalizedVehicleType = String(vehicleType || 'jeepney').toLowerCase();
-  const normalizedType = normalizedVehicleType === 'uv' ? 'uv_express' : normalizedVehicleType;
+  const normalizedType = normalizeVehicleType(vehicleType || 'jeepney');
+  const discountType = getFareDiscountType();
 
   // Jeepney policy: first 4 km fixed (regular 13, discounted 11), then add per billable km.
   if (normalizedType === 'jeepney') {
     return calculateJeepneyFare(distanceKm);
   }
 
-  let baseFare = 13.0;
-  let baseDistance = 4.0;
-  let perKmRate = JEEPNEY_DEFAULT_PER_KM_RATE;
+  const matrix = getActiveFareMatrix(normalizedType);
 
-  const fareMatrices = useStore.getState().fareMatrices || [];
-  const matrix = fareMatrices.find((m: any) => m.vehicle_type === normalizedType);
-  if (matrix) {
-    baseFare = Number(matrix.base_fare) || baseFare;
-    baseDistance = Number(matrix.base_distance) || baseDistance;
-    perKmRate = Number(matrix.per_km_rate) || perKmRate;
-  }
+  const baseFareRegular = getNumericField(matrix, ['base_fare_regular', 'base_fare'], 13.0);
+  const baseDistance = getNumericField(matrix, ['base_distance_km', 'base_distance'], 4.0);
+  const perKmRateRegular = getNumericField(matrix, ['per_km_regular', 'per_km_rate'], JEEPNEY_DEFAULT_PER_KM_RATE);
 
-  if (distanceKm <= baseDistance) return applyUserFareDiscount(baseFare);
+  const baseFareDiscount = getNumericField(
+    matrix,
+    ['base_fare_discount'],
+    applyUserFareDiscount(baseFareRegular),
+  );
+  const perKmRateDiscount = getNumericField(
+    matrix,
+    ['per_km_discount'],
+    perKmRateRegular * getFareDiscountMultiplier(),
+  );
+
+  const baseFare = discountType === 'regular' ? baseFareRegular : baseFareDiscount;
+  const perKmRate = discountType === 'regular' ? perKmRateRegular : perKmRateDiscount;
+
+  if (distanceKm <= baseDistance) return Math.max(1, Math.round(baseFare));
 
   const extraKm = distanceKm - baseDistance;
-  const raw = baseFare + extraKm * perKmRate;
+  const rawFare = baseFare + extraKm * perKmRate;
 
-  return applyUserFareDiscount(raw);
+  return Math.max(1, Math.round(rawFare));
 }
 
 function lonScaleAtLat(lat: number): number {
