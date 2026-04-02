@@ -336,6 +336,80 @@ type QueuedState = {
   priority: number;
 };
 
+class MinQueuedStateHeap {
+  private items: QueuedState[] = [];
+
+  get size(): number {
+    return this.items.length;
+  }
+
+  push(item: QueuedState): void {
+    this.items.push(item);
+    this.siftUp(this.items.length - 1);
+  }
+
+  pop(): QueuedState | undefined {
+    if (this.items.length === 0) return undefined;
+    if (this.items.length === 1) return this.items.pop();
+
+    const top = this.items[0];
+    this.items[0] = this.items[this.items.length - 1];
+    this.items.pop();
+    this.siftDown(0);
+    return top;
+  }
+
+  trim(maxSize: number): void {
+    if (this.items.length <= maxSize) return;
+
+    // Keep the best N states by priority, then rebuild the heap.
+    this.items.sort((a, b) => a.priority - b.priority);
+    this.items.length = maxSize;
+
+    for (let i = Math.floor(this.items.length / 2) - 1; i >= 0; i--) {
+      this.siftDown(i);
+    }
+  }
+
+  private siftUp(index: number): void {
+    let i = index;
+    while (i > 0) {
+      const parent = Math.floor((i - 1) / 2);
+      if (this.items[parent].priority <= this.items[i].priority) break;
+      this.swap(parent, i);
+      i = parent;
+    }
+  }
+
+  private siftDown(index: number): void {
+    let i = index;
+    const n = this.items.length;
+
+    while (true) {
+      const left = i * 2 + 1;
+      const right = left + 1;
+      let smallest = i;
+
+      if (left < n && this.items[left].priority < this.items[smallest].priority) {
+        smallest = left;
+      }
+      if (right < n && this.items[right].priority < this.items[smallest].priority) {
+        smallest = right;
+      }
+
+      if (smallest === i) break;
+      this.swap(i, smallest);
+      i = smallest;
+    }
+  }
+
+  private swap(a: number, b: number): void {
+    const temp = this.items[a];
+    this.items[a] = this.items[b];
+    this.items[b] = temp;
+  }
+}
+
 type RouteSearchDataset = {
   infos: RouteInfo[];
   codeToIndex: Map<string, number>;
@@ -1176,7 +1250,7 @@ export function findRoutesForDestination(
 
     const resultBySignature = new Map<string, MatchedRoute>();
     const bestStateScore = new Map<string, number>();
-    const frontier: QueuedState[] = [];
+    const frontier = new MinQueuedStateHeap();
 
     const seededCodes = new Set<string>();
     for (const start of startCandidates) {
@@ -1207,12 +1281,11 @@ export function findRoutesForDestination(
 
     let expansions = 0;
     while (
-      frontier.length > 0 &&
+      frontier.size > 0 &&
       expansions < MAX_STATE_EXPANSIONS &&
       resultBySignature.size < MAX_MATCHED_RESULTS
     ) {
-      frontier.sort((a, b) => a.priority - b.priority);
-      const queued = frontier.shift();
+      const queued = frontier.pop();
       if (!queued) break;
 
       const state = queued.state;
@@ -1317,9 +1390,8 @@ export function findRoutesForDestination(
         expanded += 1;
       }
 
-      if (frontier.length > MAX_FRONTIER_SIZE) {
-        frontier.sort((a, b) => a.priority - b.priority);
-        frontier.length = MAX_FRONTIER_SIZE;
+      if (frontier.size > MAX_FRONTIER_SIZE) {
+        frontier.trim(MAX_FRONTIER_SIZE);
       }
     }
 

@@ -704,12 +704,47 @@ export default function HomeScreen() {
 
       let routesForSearch = routesBySelectedType;
 
-      // Always attempt a fresh load so newly imported/reversed routes
-      // become searchable immediately without requiring app restart.
-      const loaded = await loadRoutes();
-      const latestByType = loaded.routes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
-      if (latestByType.length > 0) {
-        routesForSearch = latestByType;
+      const bufferCandidates = [500, 900, 1400, 2200];
+      let yieldedBeforeMatching = false;
+      const yieldBeforeMatching = async () => {
+        if (yieldedBeforeMatching) return;
+        yieldedBeforeMatching = true;
+        await new Promise<void>((resolve) => {
+          InteractionManager.runAfterInteractions(() => resolve());
+        });
+      };
+
+      const runRouteMatch = (candidateRoutes: JeepneyRoute[]): MatchedRoute[] => {
+        let matched: MatchedRoute[] = [];
+        for (const bufferMeters of bufferCandidates) {
+          matched = findRoutesForDestination(
+            startPoint,
+            destinationPoint,
+            candidateRoutes,
+            bufferMeters,
+          );
+          if (matched.length > 0) break;
+        }
+        return matched;
+      };
+
+      // Fast path: match against already loaded routes first.
+      let results: MatchedRoute[] = [];
+      if (routesForSearch.length > 0) {
+        await yieldBeforeMatching();
+        results = runRouteMatch(routesForSearch);
+      }
+
+      // Fallback path: refresh from source only when local set is empty
+      // or when the first pass finds no candidates.
+      if (results.length === 0) {
+        const loaded = await loadRoutes();
+        const latestByType = loaded.routes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
+        if (latestByType.length > 0) {
+          routesForSearch = latestByType;
+          await yieldBeforeMatching();
+          results = runRouteMatch(routesForSearch);
+        }
       }
 
       if (routesForSearch.length === 0) {
@@ -718,26 +753,6 @@ export default function HomeScreen() {
           `No ${selectedRouteTypeLabel.toLowerCase()} routes are loaded yet. Try switching to the other route type.`,
         );
         return;
-      }
-
-      // Yield one frame before heavy matching so the search UI can settle.
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => resolve());
-      });
-
-      // Retry with wider route proximity buffers so destination searches
-      // still return candidates when geocoded points are slightly off-route.
-      const bufferCandidates = [500, 900, 1400, 2200];
-      let results: MatchedRoute[] = [];
-
-      for (const bufferMeters of bufferCandidates) {
-        results = findRoutesForDestination(
-          startPoint,
-          destinationPoint,
-          routesForSearch,
-          bufferMeters,
-        );
-        if (results.length > 0) break;
       }
 
       setMatchedRoutes(results);
