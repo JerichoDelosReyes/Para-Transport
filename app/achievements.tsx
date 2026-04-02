@@ -50,13 +50,6 @@ export default function AchievementsScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.logoContainer}>
-            <Image 
-              source={require('../assets/logo/icon_achievement.png')} 
-              style={styles.logoImage} 
-              resizeMode="contain" 
-            />
-          </View>
           <View style={styles.grid}>
             {[...badgesData].sort((a, b) => a.condition_value - b.condition_value).map((badge, idx) => {
               const isEarned = user?.badges?.includes(badge.id) || false;
@@ -146,14 +139,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: SPACING.screenX,
     paddingTop: 24,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  logoImage: {
-    width: 280,
-    height: 90,
   },
   grid: {
     flexDirection: 'row',
