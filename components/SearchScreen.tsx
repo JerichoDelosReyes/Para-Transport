@@ -31,11 +31,15 @@ export type PlaceResult = {
   longitude: number;
 };
 
+export type TransitRouteType = 'jeepney' | 'bus';
+
 type SearchScreenProps = {
   visible: boolean;
   currentLocationLabel?: string;
   initialOrigin?: string;
   initialDestination?: string;
+  selectedRouteType: TransitRouteType;
+  onSelectRouteType: (routeType: TransitRouteType) => void;
   onClose: () => void;
   onSelectRoute: (origin: PlaceResult | null, destination: PlaceResult) => void;
   onClearRoute?: (clearOrigin?: boolean, clearDestination?: boolean) => void;
@@ -46,6 +50,8 @@ export default function SearchScreen({
   currentLocationLabel,
   initialOrigin,
   initialDestination,
+  selectedRouteType,
+  onSelectRouteType,
   onClose,
   onSelectRoute,
   onClearRoute,
@@ -245,6 +251,54 @@ export default function SearchScreen({
           <Text style={[styles.headerTitle, { flex: 1 }]}>Your Route</Text>
           <TouchableOpacity onPress={handleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name={isRouteSaved() ? "heart" : "heart-outline"} size={24} color={isRouteSaved() ? COLORS.primary : COLORS.navy} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.routeTypeRow}>
+          <TouchableOpacity
+            style={[
+              styles.routeTypeChip,
+              selectedRouteType === 'jeepney' && styles.routeTypeChipActive,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => onSelectRouteType('jeepney')}
+          >
+            <Ionicons
+              name="bus-outline"
+              size={14}
+              color={selectedRouteType === 'jeepney' ? '#FFFFFF' : COLORS.navy}
+            />
+            <Text
+              style={[
+                styles.routeTypeChipText,
+                selectedRouteType === 'jeepney' && styles.routeTypeChipTextActive,
+              ]}
+            >
+              Jeepney
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.routeTypeChip,
+              selectedRouteType === 'bus' && styles.routeTypeChipActive,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => onSelectRouteType('bus')}
+          >
+            <Ionicons
+              name="bus"
+              size={14}
+              color={selectedRouteType === 'bus' ? '#FFFFFF' : COLORS.navy}
+            />
+            <Text
+              style={[
+                styles.routeTypeChipText,
+                selectedRouteType === 'bus' && styles.routeTypeChipTextActive,
+              ]}
+            >
+              Bus
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -479,6 +533,37 @@ const styles = StyleSheet.create({
     fontFamily: 'Cubao',
     fontSize: 22,
     color: COLORS.navy,
+  },
+  routeTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: SPACING.screenX,
+    marginBottom: 10,
+  },
+  routeTypeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+  },
+  routeTypeChipActive: {
+    backgroundColor: '#0A1628',
+    borderColor: '#0A1628',
+  },
+  routeTypeChipText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  routeTypeChipTextActive: {
+    color: '#FFFFFF',
   },
   fieldsContainer: {
     paddingHorizontal: SPACING.screenX,

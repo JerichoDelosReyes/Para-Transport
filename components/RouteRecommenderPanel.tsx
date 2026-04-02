@@ -20,6 +20,7 @@ type Props = {
   selectedRoute: string | null;
   setSelectedRoute: (id: string | null) => void;
   destinationName?: string;
+  routeTypeLabel?: string;
   onClose: () => void;
 };
 
@@ -38,7 +39,8 @@ export default function RouteRecommenderPanel({
   selectedRoute,
   setSelectedRoute,
   onClose,
-  destinationName
+  destinationName,
+  routeTypeLabel,
 }: Props) {
   // Start off-screen at 0 (bound safely behind bottom edge)
   const panY = useRef(new Animated.Value(0)).current; 
@@ -180,13 +182,13 @@ export default function RouteRecommenderPanel({
     () => (
       <View style={styles.emptyResultCard}>
         <Ionicons name="bus-outline" size={36} color={COLORS.textMuted} />
-        <Text style={styles.emptyResultTitle}>No transit routes found</Text>
+        <Text style={styles.emptyResultTitle}>No {routeTypeLabel || 'transit'} routes found</Text>
         <Text style={styles.emptyResultText}>
-          No transit routes pass near both your location and this destination.
+          No {routeTypeLabel ? routeTypeLabel.toLowerCase() : 'transit'} routes pass near both your location and this destination.
         </Text>
       </View>
     ),
-    []
+    [routeTypeLabel]
   );
 
   return (
@@ -202,7 +204,7 @@ export default function RouteRecommenderPanel({
           <View style={styles.dragHandle} />
         </TouchableOpacity>
         <View style={styles.sheetHeaderRow}>
-          <Text style={styles.sheetHeaderTitle}>ROUTES</Text>
+          <Text style={styles.sheetHeaderTitle}>ROUTES - {(routeTypeLabel || 'Transit').toUpperCase()}</Text>
         </View>
       </View>
 

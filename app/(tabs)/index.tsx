@@ -10,7 +10,7 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import type { JeepneyRoute } from '../../types/routes';
 import { ROUTE_COLORS } from '../../constants/routeVisuals';
-import SearchScreen, { PlaceResult } from '../../components/SearchScreen';
+import SearchScreen, { PlaceResult, TransitRouteType } from '../../components/SearchScreen';
 import { buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
@@ -135,6 +135,24 @@ const pointInBounds = (point: MapCoordinate, bounds: MapBounds): boolean => {
     point.longitude >= bounds.minLng &&
     point.longitude <= bounds.maxLng
   );
+};
+
+const normalizeTransitRouteType = (value: unknown): TransitRouteType | null => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized.includes('bus')) return 'bus';
+  if (normalized.includes('jeepney')) return 'jeepney';
+  return null;
+};
+
+const routeMatchesSelectedType = (
+  route: JeepneyRoute,
+  selectedType: TransitRouteType,
+): boolean => {
+  return normalizeTransitRouteType(route?.properties?.type) === selectedType;
+};
+
+const routeTypeLabel = (routeType: TransitRouteType): string => {
+  return routeType === 'bus' ? 'Bus' : 'Jeepney';
 };
 
 const roundCoordForKey = (value: number): string => value.toFixed(5);
@@ -324,6 +342,7 @@ export default function HomeScreen() {
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
   const [originQuery, setOriginQuery] = useState('');
+  const [selectedRouteType, setSelectedRouteType] = useState<TransitRouteType>('jeepney');
   const [isRouting, setIsRouting] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
@@ -337,6 +356,13 @@ export default function HomeScreen() {
   const [transitLegs, setTransitLegs] = useState<TransitLeg[]>([]);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
   const { routes: transitDataRoutes } = useRoutes();
+  const routesBySelectedType = useMemo(() => {
+    return transitDataRoutes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
+  }, [transitDataRoutes, selectedRouteType]);
+  const selectedRouteTypeLabel = useMemo(
+    () => routeTypeLabel(selectedRouteType),
+    [selectedRouteType],
+  );
 
   useEffect(() => {
     setRankedRoutes(rankRoutes(matchedRoutes, rankTab).slice(0, MAX_RANKED_ROUTE_OPTIONS));
@@ -361,7 +387,7 @@ export default function HomeScreen() {
 
   // Normalize route data to a unified transit shape
   const transitRoutes = useMemo(() => {
-    const normalized = transitDataRoutes.map((r: JeepneyRoute) => {
+    const normalized = routesBySelectedType.map((r: JeepneyRoute) => {
       // Keep map rendering lightweight by using pre-sampled route coordinates.
       const compactCoords = sampleCoordinates(r.coordinates, 320);
 
@@ -388,7 +414,7 @@ export default function HomeScreen() {
       };
     });
     return normalized;
-  }, [transitDataRoutes]);
+  }, [routesBySelectedType]);
   const transitStops = useMemo(() => {
     return transitRoutes.flatMap((route: any) => route.stops || []);
   }, [transitRoutes]);
@@ -606,14 +632,17 @@ export default function HomeScreen() {
     try {
       setIsRouting(true);
 
-      let routesForSearch = transitDataRoutes;
+      let routesForSearch = routesBySelectedType;
       if (routesForSearch.length === 0) {
         const loaded = await loadRoutes();
-        routesForSearch = loaded.routes;
+        routesForSearch = loaded.routes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
       }
 
       if (routesForSearch.length === 0) {
-        Alert.alert('Routes Still Loading', 'Transit routes are still loading. Please try again in a moment.');
+        Alert.alert(
+          'No Routes Available',
+          `No ${selectedRouteTypeLabel.toLowerCase()} routes are loaded yet. Try switching to the other route type.`,
+        );
         return;
       }
 
@@ -679,7 +708,7 @@ export default function HomeScreen() {
     } finally {
       setIsRouting(false);
     }
-  }, [currentLocation, transitDataRoutes]);
+  }, [currentLocation, routesBySelectedType, selectedRouteType, selectedRouteTypeLabel, addHistory]);
 
   const handleMapLongPress = useCallback(async (event: LongPressEvent) => {
     if (isRouting) return;
@@ -882,9 +911,19 @@ export default function HomeScreen() {
     return resolved;
   }, []);
 
+  useEffect(() => {
+    if (!selectedTransitRoute) return;
+    const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
+    if (selectedType && selectedType !== selectedRouteType) {
+      setSelectedTransitRoute(null);
+    }
+  }, [selectedTransitRoute, selectedRouteType, setSelectedTransitRoute]);
+
   // Visible routes: always show selected route; otherwise show all if transit layer is on
   const visibleTransitRoutes = useMemo(() => {
     if (selectedTransitRoute) {
+      const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
+      if (selectedType && selectedType !== selectedRouteType) return [];
       return selectedTransitRoute.coordinates ? [selectedTransitRoute] : [];
     }
     if (!showTransitLayer) return [];
@@ -894,16 +933,22 @@ export default function HomeScreen() {
       if (!route.bbox) return true;
       return boundsIntersect(route.bbox, viewportBounds);
     });
-  }, [showTransitLayer, selectedTransitRoute, transitRoutes, mapRegion]);
+  }, [showTransitLayer, selectedTransitRoute, selectedRouteType, transitRoutes, mapRegion]);
 
   // Visible stops: always show stops for selected route; otherwise show all if transit layer is on
   const visibleTransitStops = useMemo(() => {
-    if (selectedTransitRoute?.stops?.length > 0) return selectedTransitRoute.stops;
+    if (selectedTransitRoute?.stops?.length > 0) {
+      const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
+      if (!selectedType || selectedType === selectedRouteType) {
+        return selectedTransitRoute.stops;
+      }
+      return [];
+    }
     if (!showTransitLayer) return [];
 
     const viewportBounds = regionToBounds(mapRegion, 0.2);
     return transitStops.filter((stop: any) => pointInBounds(stop.coordinate, viewportBounds));
-  }, [showTransitLayer, selectedTransitRoute, transitStops, mapRegion]);
+  }, [showTransitLayer, selectedTransitRoute, selectedRouteType, transitStops, mapRegion]);
 
   // Build multi-leg transit journey plan (Fixes: Walk lines, transfer segments + correct plotting)
   const baseTransitLegs = useMemo((): TransitLeg[] => {
@@ -1242,6 +1287,27 @@ export default function HomeScreen() {
     }
   };
 
+  const handleRouteTypeChange = useCallback((nextType: TransitRouteType) => {
+    if (nextType === selectedRouteType) return;
+
+    setSelectedRouteType(nextType);
+    setNearestStop(null);
+    setSelectedTransitRoute(null);
+    setShowRecommender(false);
+    setMatchedRoutes([]);
+    setSelectedRouteId(null);
+    setSelectedRoute(null);
+    setTransitLegs([]);
+    setRouteCoordinates([]);
+    setRouteSummary(null);
+    setDestinationLocation(null);
+    setDestinationQuery('');
+
+    if (sim.state !== 'idle') {
+      sim.reset();
+    }
+  }, [selectedRouteType, setSelectedTransitRoute, sim]);
+
   return (
     <View style={styles.screen}>
       <MapView
@@ -1540,6 +1606,44 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
 
+          <View style={styles.routeTypeSelectorRow}>
+            <TouchableOpacity
+              style={[
+                styles.routeTypeSelectorButton,
+                selectedRouteType === 'jeepney' && styles.routeTypeSelectorButtonActive,
+              ]}
+              activeOpacity={0.85}
+              onPress={() => handleRouteTypeChange('jeepney')}
+            >
+              <Text
+                style={[
+                  styles.routeTypeSelectorText,
+                  selectedRouteType === 'jeepney' && styles.routeTypeSelectorTextActive,
+                ]}
+              >
+                Jeepney
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.routeTypeSelectorButton,
+                selectedRouteType === 'bus' && styles.routeTypeSelectorButtonActive,
+              ]}
+              activeOpacity={0.85}
+              onPress={() => handleRouteTypeChange('bus')}
+            >
+              <Text
+                style={[
+                  styles.routeTypeSelectorText,
+                  selectedRouteType === 'bus' && styles.routeTypeSelectorTextActive,
+                ]}
+              >
+                Bus
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Simulation Play Button (top row, only when idle) */}
           {simCoordinates.length >= 2 && sim.state === 'idle' && (
             <TouchableOpacity
@@ -1599,7 +1703,9 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {selectedTransitRoute ? (
+        {selectedTransitRoute &&
+        (!normalizeTransitRouteType((selectedTransitRoute as any).type) ||
+          normalizeTransitRouteType((selectedTransitRoute as any).type) === selectedRouteType) ? (
           <View style={styles.transitRouteCard}>
             <View style={styles.transitRouteHeader}>
               <View style={[styles.transitTypeBadge, { backgroundColor: selectedTransitRoute.color || '#1E88E5' }]}>
@@ -1695,6 +1801,7 @@ export default function HomeScreen() {
         selectedRoute={selectedRouteId}
         setSelectedRoute={(id: string | null) => setSelectedRouteId(id)}
         destinationName={destinationQuery}
+        routeTypeLabel={selectedRouteTypeLabel}
         onClose={() => {
           setShowRecommender(false);
         }}
@@ -1706,6 +1813,8 @@ export default function HomeScreen() {
         currentLocationLabel="Current Location"
         initialOrigin={pendingRouteSearch ? pendingRouteSearch.origin : originQuery}
         initialDestination={pendingRouteSearch ? pendingRouteSearch.destination : destinationQuery}
+        selectedRouteType={selectedRouteType}
+        onSelectRouteType={handleRouteTypeChange}
         onClearRoute={handleClearRoute}
         onClose={() => {
           setIsSearchActive(false);
@@ -2285,6 +2394,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.navy,
+  },
+  routeTypeSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10,22,40,0.04)',
+    borderRadius: RADIUS.pill,
+    padding: 3,
+  },
+  routeTypeSelectorButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.pill,
+  },
+  routeTypeSelectorButtonActive: {
+    backgroundColor: '#0A1628',
+  },
+  routeTypeSelectorText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  routeTypeSelectorTextActive: {
+    color: '#FFFFFF',
   },
   transitErrorCard: {
     flexDirection: 'row',
