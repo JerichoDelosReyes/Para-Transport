@@ -347,6 +347,7 @@ export default function HomeScreen() {
   const walkPathCacheRef = useRef<Map<string, MapCoordinate[]>>(new Map());
   const walkPathRequestRef = useRef(0);
   const tripStatRecordedRef = useRef(false);
+  const hasInitiallyPannedRef = useRef(false);
   const [showRecommender, setShowRecommender] = useState(false);
   const [simAutoFollow, setSimAutoFollow] = useState(true);
   const [simBlink, setSimBlink] = useState(true);
@@ -410,6 +411,28 @@ export default function HomeScreen() {
     });
     return unsubscribe;
   }, [navigation, handleLocateUser]);
+
+  // Initial map pan to user location
+  useEffect(() => {
+    if (isMapLoaded && currentLocation && !hasInitiallyPannedRef.current && !pendingRouteSearch && !selectedTransitRoute) {
+      if (
+        currentLocation.latitude >= MAP_CONFIG.PHILIPPINES_BOUNDS.minLatitude &&
+        currentLocation.latitude <= MAP_CONFIG.PHILIPPINES_BOUNDS.maxLatitude &&
+        currentLocation.longitude >= MAP_CONFIG.PHILIPPINES_BOUNDS.minLongitude &&
+        currentLocation.longitude <= MAP_CONFIG.PHILIPPINES_BOUNDS.maxLongitude
+      ) {
+        hasInitiallyPannedRef.current = true;
+        const next: MapRegion = {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
+        setMapRegion(next);
+        mapRef.current?.animateToRegion(next, 500);
+      }
+    }
+  }, [isMapLoaded, currentLocation, pendingRouteSearch, selectedTransitRoute]);
 
   // Search Expand Animation
   const searchOpacityAnim = useRef(new Animated.Value(0)).current;
