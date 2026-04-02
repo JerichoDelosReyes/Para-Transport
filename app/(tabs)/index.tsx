@@ -997,7 +997,42 @@ export default function HomeScreen() {
       tripStatRecordedRef.current = true;
       const distKm = routeSummary?.distanceKm ?? 0;
       const fareAmt = selectedRoute?.estimatedFare ?? 0;
-      addTripStats({ distance: distKm, fare: fareAmt, points: Math.max(1, Math.round(distKm * 2)) });
+      
+      const now = new Date();
+      const hour = now.getHours();
+      const min = now.getMinutes();
+      const day = now.getDay();
+      const timeVal = hour + min / 60;
+      
+      let multiplier = 1.0;
+      let label = 'Completed!';
+      
+      // Morning Rush: 6:00 AM - 9:00 AM
+      if (timeVal >= 6 && timeVal <= 9) {
+        multiplier = 1.5;
+        label = 'Morning Rush Bonus!';
+      }
+      // Evening Rush: 4:30 PM - 8:00 PM
+      else if (timeVal >= 16.5 && timeVal <= 20) {
+        multiplier = 1.5;
+        label = 'Evening Rush Bonus!';
+      }
+      
+      // Worst Time: Friday 5:00 PM - 6:00 PM
+      if (day === 5 && timeVal >= 17 && timeVal <= 18) {
+        multiplier = 2.0; 
+        label = 'Friday Rush Madness Bonus!';
+      }
+
+      const basePoints = Math.max(1, Math.round(distKm * 2));
+      const totalPoints = Math.round(basePoints * multiplier);
+
+      addTripStats({ distance: distKm, fare: fareAmt, points: totalPoints });
+      
+      Alert.alert(
+        label, 
+        `You arrived at your destination! Earned ${totalPoints} points (${multiplier}x multiplier).`
+      );
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim.state]);
