@@ -86,17 +86,33 @@ export default function LoginScreen() {
       try {
         const { data: profile } = await supabase
           .from('users')
-          .select('points, streak_count, distance, trips, spent, badges, saved_routes, saved_places')
+          .select('username, display_name, points, streak_count, distance, trips, spent, badges, saved_routes, saved_places')
           .eq('email', email.trim().toLowerCase())
           .single();
         if (profile) userStats = profile;
       } catch (err) {}
 
+      const finalUsername = data?.user?.user_metadata?.username || userStats.username || '';
+      const finalDisplayName = data?.user?.user_metadata?.display_name || userStats.display_name || 'Commuter';
+
+      // Self-healing: If the local DB users table didn't have the username or display_name, update it so leaderboard works!
+      if (data?.user?.id && (!userStats.username || !userStats.display_name)) {
+        try {
+          await supabase.from('users').update({
+            username: finalUsername,
+            display_name: finalDisplayName
+          }).eq('id', data.user.id);
+        } catch (e) {
+          console.warn('Failed self healing user row', e);
+        }
+      }
+
       // Construct a unified user to save in store
       if (data?.user?.id) await logUserAction(data.user.id, 'Logged in');
       beginAuthSession({
         id: data?.user?.id,
-        full_name: data?.user?.user_metadata?.display_name || 'Commuter',
+        username: finalUsername,
+        full_name: finalDisplayName,
         email: data?.user?.email || email,
         points: userStats.points || 0,
         streak_count: userStats.streak_count || 0,
@@ -162,15 +178,30 @@ export default function LoginScreen() {
       try {
         const { data: profile } = await supabase
           .from('users')
-          .select('points, streak_count, distance, trips, spent, badges, saved_routes, saved_places')
+          .select('username, display_name, points, streak_count, distance, trips, spent, badges, saved_routes, saved_places')
           .eq('email', email.trim().toLowerCase())
           .single();
         if (profile) userStats = profile;
       } catch (err) {}
       
+      const finalUsername = data?.user?.user_metadata?.username || userStats.username || '';
+      const finalDisplayName = data?.user?.user_metadata?.display_name || userStats.display_name || 'Commuter';
+
+      if (data?.user?.id && (!userStats.username || !userStats.display_name)) {
+        try {
+          await supabase.from('users').update({
+            username: finalUsername,
+            display_name: finalDisplayName
+          }).eq('id', data.user.id);
+        } catch (e) {
+          console.warn('Failed self healing user row', e);
+        }
+      }
+      
       beginAuthSession({
         id: data?.user?.id,
-        full_name: data?.user?.user_metadata?.display_name || 'Commuter',
+        username: finalUsername,
+        full_name: finalDisplayName,
         email: data?.user?.email || email,
         points: userStats.points || 0,
         streak_count: userStats.streak_count || 0,

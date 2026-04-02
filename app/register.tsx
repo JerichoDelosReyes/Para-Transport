@@ -19,6 +19,7 @@ import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import OtpModal from '../components/OtpModal';
 import {
   registerWithEmailPassword,
+  checkUsernameExists,
   verifyEmailOtp,
   isEmailValid,
   isPasswordStrong,
@@ -51,6 +52,7 @@ export default function RegisterScreen() {
   const beginAuthSession = useStore((state) => state.beginAuthSession);
 
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -65,8 +67,16 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     setErrorMsg('');
-    if (!name.trim() || !email.trim() || !password || !confirmPassword) {
+    if (!name.trim() || !username.trim() || !email.trim() || !password || !confirmPassword) {
       setErrorMsg('Please fill in all fields.');
+      return;
+    }
+    if (username.length < 3) {
+      setErrorMsg('Username must be at least 3 characters long.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_.-]+$/.test(username)) {
+      setErrorMsg('Username can only contain letters, numbers, underscores, and dashes.');
       return;
     }
     if (!isEmailValid(email)) {
@@ -85,7 +95,15 @@ export default function RegisterScreen() {
 
     setIsLoading(true);
     try {
+      const usernameTaken = await checkUsernameExists(username);
+      if (usernameTaken) {
+        setErrorMsg('Username is already taken.');
+        setIsLoading(false);
+        return;
+      }
+
       const data = await registerWithEmailPassword({
+        username,
         displayName: name,
         email,
         password,
@@ -97,6 +115,7 @@ export default function RegisterScreen() {
       } else {
         beginAuthSession({
           id: data?.user?.id,
+          username: data?.user?.user_metadata?.username || username,
           full_name: data?.user?.user_metadata?.display_name || name,
           email: data?.user?.email || email,
           points: 0,
@@ -130,11 +149,22 @@ export default function RegisterScreen() {
       
       if (data?.user?.id) {
         await logUserAction(data.user.id, 'Registered new account');
+        
+        // Self-healing: make sure public.users has the username and display_name
+        try {
+          await supabase.from('users').update({ 
+            username: username,
+            display_name: name 
+          }).eq('id', data.user.id);
+        } catch (e) {
+          console.warn('Could not auto-sync username to public.users', e);
+        }
       }
 
       beginAuthSession({
         id: data?.user?.id,
-          full_name: data?.user?.user_metadata?.display_name || name,
+        username: data?.user?.user_metadata?.username || username,
+        full_name: data?.user?.user_metadata?.display_name || name,
         email: data?.user?.email || email,
         points: 0,
         streak_count: 0,
@@ -203,6 +233,16 @@ export default function RegisterScreen() {
                 style={styles.input} 
                 placeholder="Juan Dela Cruz" 
                 placeholderTextColor={COLORS.textMuted} 
+              />
+
+              <Text style={[styles.label, styles.labelTop]}>Username</Text>
+              <TextInput 
+                value={username}
+                onChangeText={setUsername}
+                style={styles.input} 
+                placeholder="juancruz123" 
+                placeholderTextColor={COLORS.textMuted}
+                autoCapitalize="none"
               />
 
               <Text style={[styles.label, styles.labelTop]}>Email</Text>

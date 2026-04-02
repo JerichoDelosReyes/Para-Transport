@@ -91,7 +91,21 @@ export async function loginWithEmailPassword(email: string, password: string) {
   return data;
 }
 
+export async function checkUsernameExists(username: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id')
+    .eq('username', username)
+    .single();
+    
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error checking username:', error);
+  }
+  return !!data;
+}
+
 export async function registerWithEmailPassword(params: {
+  username: string;
   displayName: string;
   email: string;
   password: string;
@@ -101,6 +115,7 @@ export async function registerWithEmailPassword(params: {
     password: params.password,
     options: {
       data: {
+        username: params.username,
         display_name: params.displayName,
       }
     }

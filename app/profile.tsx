@@ -91,7 +91,7 @@ export default function ProfileScreen() {
           {/* Avatar Area */}
           <View style={[styles.avatarSection, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(user?.full_name || '')}</Text>
+              <Text style={styles.avatarText}>{getInitials(user?.username || user?.full_name || '')}</Text>
             </View>
 
             {/* Leaderboard Placement */}
@@ -116,7 +116,10 @@ export default function ProfileScreen() {
           {/* Top Info Area */}
           <View style={styles.infoArea}>
             <View style={styles.userInfo}>
-              <Text style={styles.name}>{user?.full_name || 'Passenger'}</Text>
+              <Text style={styles.name} numberOfLines={1}>{user?.full_name || 'Passenger'}</Text>
+              {user?.username ? (
+                <Text style={styles.username}>@{user.username}</Text>
+              ) : null}
             </View>
 
             <View style={styles.quickStatsRow}>
@@ -150,6 +153,9 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.gridValue}>{user?.total_trips || 0}</Text>
               <Text style={styles.gridLabel}>Total Trips</Text>
+              {(!user?.total_trips || user.total_trips === 0) && (
+                <Text style={styles.gridPrompt}>Take your first ride!</Text>
+              )}
             </View>
             
             <View style={styles.gridCard}>
@@ -158,6 +164,9 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.gridValue}>{(user?.total_distance || 0).toFixed(1)} <Text style={styles.gridValueSmall}>km</Text></Text>
               <Text style={styles.gridLabel}>Distance</Text>
+              {(!user?.total_distance || user.total_distance === 0) && (
+                <Text style={styles.gridPrompt}>Start exploring!</Text>
+              )}
             </View>
             
             <View style={styles.gridCard}>
@@ -166,6 +175,9 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.gridValue}><Text style={styles.gridValueSmall}>₱</Text>{(user?.spent || 0).toFixed(0)}</Text>
               <Text style={styles.gridLabel}>Total Fare</Text>
+              {(!user?.spent || user.spent === 0) && (
+                <Text style={styles.gridPrompt}>Save on rides!</Text>
+              )}
             </View>
 
             <View style={styles.gridCard}>
@@ -174,6 +186,9 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.gridValue}>{user?.streak_count || 0}</Text>
               <Text style={styles.gridLabel}>Current Streak</Text>
+              {(!user?.streak_count || user.streak_count === 0) && (
+                <Text style={styles.gridPrompt}>Build your streak!</Text>
+              )}
             </View>
           </View>
 
@@ -334,6 +349,11 @@ const styles = StyleSheet.create({
     color: COLORS.navy,
     marginBottom: 4,
   },
+  username: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    color: COLORS.textMuted,
+  },
   quickStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -402,6 +422,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 13,
     color: COLORS.textMuted,
+  },
+  gridPrompt: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#E8A020',
+    marginTop: 6,
   },
   sectionHeaderContainer: {
     flexDirection: 'row',

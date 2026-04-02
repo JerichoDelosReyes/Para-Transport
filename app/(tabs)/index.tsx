@@ -1427,7 +1427,7 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
               <Text style={[styles.searchInputText, {color: COLORS.textMuted, flex: 1, marginLeft: 6}]} numberOfLines={1}>
-                {destinationQuery ? `${originQuery || 'My Location'} → ${destinationQuery}` : `Saan tayo, ${(user?.full_name || 'Komyuter').split(' ')[0]}?`}
+                {destinationQuery ? `${originQuery || 'My Location'} → ${destinationQuery}` : `Saan tayo, ${user?.username || (user?.full_name || 'Komyuter').split(' ')[0]}?`}
               </Text>
               <TouchableOpacity 
                 onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon! (Requires a native voice plugin)')} 

@@ -1,9 +1,9 @@
 CREATE OR REPLACE FUNCTION get_top_leaderboard(limit_val INT DEFAULT 3)
-RETURNS TABLE(id TEXT, full_name TEXT, points INT)
+RETURNS TABLE(id TEXT, username TEXT, full_name TEXT, points INT)
 LANGUAGE sql
 SECURITY DEFINER
 AS $$
-  SELECT id, full_name, points
+  SELECT id, username, display_name AS full_name, points
   FROM public.users
   WHERE email != 'guest@para.ph' OR email IS NULL
   ORDER BY points DESC, id ASC

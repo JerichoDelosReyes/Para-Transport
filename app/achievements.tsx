@@ -9,13 +9,6 @@ import { supabase } from '../config/supabaseClient';
 
 import { BADGE_IMAGES } from '../constants/badgeImages';
 
-function getInitials(name: string) {
-  if (!name) return 'PR';
-  const parts = name.split(' ');
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return name.substring(0, 2).toUpperCase();
-}
-
 export default function AchievementsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -111,8 +104,8 @@ export default function AchievementsScreen() {
                   <>
                     {leaderboard.map((lbUser, index) => {
                       const isMe = lbUser.id === user?.id;
-                      // Determine the initials to show 
-                      const displayName = getInitials(lbUser.full_name || 'Anonymous User');
+                      // Determine the name to show 
+                      const displayName = lbUser.username ? `@${lbUser.username}` : (lbUser.full_name || 'Anonymous User');
                       
                       return (
                         <View key={lbUser.id || index} style={[styles.leaderboardCard, isMe && styles.leaderboardCardMe]}>
@@ -141,7 +134,7 @@ export default function AchievementsScreen() {
                           </View>
                           <View style={styles.lbInfo}>
                             <Text style={[styles.lbName, styles.lbNameMe]} numberOfLines={1}>
-                              {getInitials(user.full_name || 'Anonymous User')}
+                              {user.username ? `@${user.username}` : (user.full_name || 'Anonymous User')}
                             </Text>
                           </View>
                           <View style={styles.pointsContainer}>

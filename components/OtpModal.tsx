@@ -28,7 +28,7 @@ export default function OtpModal({ visible, email, otp, isLoading, errorMsg, onO
           <Text style={styles.label}>Verification Code</Text>
           <TextInput 
             value={otp}
-            onChangeText={onOtpChange}
+            onChangeText={(text) => onOtpChange(text.replace(/[^0-9]/g, ''))}
             style={styles.input} 
             placeholder="123456" 
             placeholderTextColor={COLORS.textMuted}

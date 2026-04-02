@@ -216,7 +216,7 @@ export default function RouteRecommenderPanel({
         ListHeaderComponent={listHeader}
         ListEmptyComponent={emptyList}
         ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-        ListFooterComponent={() => <View style={{ height: 200 }} />}
+        ListFooterComponent={() => <View style={{ height: 120 }} />}
         initialNumToRender={6}
         maxToRenderPerBatch={8}
         windowSize={7}
