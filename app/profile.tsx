@@ -22,6 +22,48 @@ export default function ProfileScreen() {
   const user = useStore((state) => state.user);
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
 
+  const [currentUserRank, setCurrentUserRank] = useState<number | null>(null);
+  const [isLoadingRank, setIsLoadingRank] = useState<boolean>(true);
+
+  useEffect(() => {
+    const fetchRank = async () => {
+      if (isGuestAccount || !user?.id) {
+        setIsLoadingRank(false);
+        return;
+      }
+      try {
+        setIsLoadingRank(true);
+        const { data, error } = await supabase.rpc('get_user_global_rank', { 
+          target_user_id: user.id, 
+          target_points: user.points || 0 
+        });
+        if (!error && data !== null) {
+          setCurrentUserRank(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch rank:', err);
+      } finally {
+        setIsLoadingRank(false);
+      }
+    };
+    fetchRank();
+  }, [user?.id, user?.points, isGuestAccount]);
+
+  const getRankStyle = (rank: number) => {
+    switch (rank) {
+      case 1:
+        return { backgroundColor: '#FEF08A', color: '#854D0E', emoji: '🥇' }; // Gold
+      case 2:
+        return { backgroundColor: '#E5E7EB', color: '#374151', emoji: '🥈' }; // Silver
+      case 3:
+        return { backgroundColor: '#FED7AA', color: '#92400E', emoji: '🥉' }; // Bronze
+      default:
+        return { backgroundColor: 'rgba(0,0,0,0.04)', color: COLORS.navy, emoji: '🏆' }; // Default
+    }
+  };
+
+  const rankStyle = currentUserRank !== null ? getRankStyle(currentUserRank) : null;
+
   return (
     <View style={styles.screen}>
       <View style={[styles.topSection, { paddingTop: insets.top }]}>
@@ -47,10 +89,28 @@ export default function ProfileScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Avatar Area */}
-          <View style={styles.avatarSection}>
+          <View style={[styles.avatarSection, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{getInitials(user?.full_name || '')}</Text>
             </View>
+
+            {/* Leaderboard Placement */}
+            {!isGuestAccount && (
+              isLoadingRank ? (
+                <View style={[styles.rankBadge, { width: 70, height: 42, justifyContent: 'center' }]}>
+                  <ActivityIndicator size="small" color={COLORS.navy} />
+                </View>
+              ) : (currentUserRank !== null && rankStyle !== null) ? (
+                <TouchableOpacity 
+                  activeOpacity={0.7} 
+                  onPress={() => router.navigate('/achievements')} 
+                  style={[styles.rankBadge, { backgroundColor: rankStyle.backgroundColor }]}
+                >
+                  <Text style={styles.rankEmoji}>{rankStyle.emoji}</Text>
+                  <Text style={[styles.rankNumber, { color: rankStyle.color }]}>#{currentUserRank}</Text>
+                </TouchableOpacity>
+              ) : null
+            )}
           </View>
 
           {/* Top Info Area */}
@@ -228,6 +288,23 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontWeight: '700',
     fontSize: 32,
+    color: COLORS.navy,
+  },
+  rankBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  rankEmoji: {
+    fontSize: 16,
+  },
+  rankNumber: {
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    fontSize: 15,
     color: COLORS.navy,
   },
   bottomSection: {
