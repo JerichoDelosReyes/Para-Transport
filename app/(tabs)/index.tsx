@@ -947,8 +947,26 @@ export default function HomeScreen() {
     };
   }, [baseTransitLegs, resolveWalkPathOnRoad]);
 
-  // Simulation — uses the actual searched route coordinates and transit legs
-  const sim = useSimulation(routeCoordinates, transitLegs);
+  // Derive a perfect, continuous coordinate path matching transitLegs sequences
+  const simCoordinates = useMemo(() => {
+    if (!transitLegs || transitLegs.length === 0) return routeCoordinates;
+    const flat: MapCoordinate[] = [];
+    for (let i = 0; i < transitLegs.length; i++) {
+      const legCoords = transitLegs[i].coordinates;
+      if (!legCoords || legCoords.length === 0) continue;
+      
+      if (i === transitLegs.length - 1) {
+        for (let j = 0; j < legCoords.length; j++) flat.push(legCoords[j]);
+      } else {
+        const maxJ = legCoords.length > 1 ? legCoords.length - 1 : 1;
+        for (let j = 0; j < maxJ; j++) flat.push(legCoords[j]);
+      }
+    }
+    return flat.length >= 2 ? flat : routeCoordinates;
+  }, [transitLegs, routeCoordinates]);
+
+  // Simulation — uses the contiguous coordinate list for real-world playback
+  const sim = useSimulation(simCoordinates, transitLegs);
 
   const topRightSummaryText = useMemo(() => {
     if (sim.state !== 'idle') {
@@ -990,18 +1008,18 @@ export default function HomeScreen() {
   }, [sim.state, sim.position, currentLocation]);
 
   const simPointIndex = useMemo(() => {
-    if (!sim.position || sim.state === 'idle' || routeCoordinates.length < 2) return -1;
+    if (!sim.position || sim.state === 'idle' || simCoordinates.length < 2) return -1;
     let bestIdx = 0;
     let bestDist = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < routeCoordinates.length; i++) {
-      const d = sqDistApprox(sim.position, routeCoordinates[i]);
+    for (let i = 0; i < simCoordinates.length; i++) {
+      const d = sqDistApprox(sim.position, simCoordinates[i]);
       if (d < bestDist) {
         bestDist = d;
         bestIdx = i;
       }
     }
     return bestIdx;
-  }, [sim.position, sim.state, routeCoordinates]);
+  }, [sim.position, sim.state, simCoordinates]);
 
   const visibleTransitLegs = useMemo(() => {
     if (simPointIndex < 0) return transitLegs;
@@ -1073,12 +1091,12 @@ export default function HomeScreen() {
   // Auto-follow camera during simulation playback
   useEffect(() => {
     if (sim.state === 'playing' && sim.position && simAutoFollow && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: sim.position.latitude,
-        longitude: sim.position.longitude,
-        latitudeDelta: 0.012,
-        longitudeDelta: 0.012,
-      }, 200);
+      mapRef.current.animateCamera({
+        center: {
+          latitude: sim.position.latitude,
+          longitude: sim.position.longitude,
+        },
+      }, { duration: 50 }); // Match the 50ms TICK_MS exactly for smoother 20fps camera tracking
     }
   }, [sim.position, sim.state, simAutoFollow]);
 
@@ -1399,22 +1417,21 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
 
-          {/* Simulation Play Button — only visible when a route has been searched */}
-          {routeCoordinates.length >= 2 && (
+          {/* Simulation Play Button (top row, only when idle) */}
+          {simCoordinates.length >= 2 && sim.state === 'idle' && (
             <TouchableOpacity
               style={styles.simPlayToggle}
               onPress={() => {
-                if (sim.state === 'idle') {
-                  setSimAutoFollow(true);
-                }
-                sim.togglePlayPause();
+                setSimAutoFollow(true);
+                sim.play();
               }}
               activeOpacity={0.85}
             >
               <Ionicons
-                name={'car'}
+                name="play"
                 size={20}
                 color={COLORS.navy}
+                style={{ marginLeft: 2 }}
               />
             </TouchableOpacity>
           )}
@@ -1479,6 +1496,71 @@ export default function HomeScreen() {
             ) : null}
           </View>
         ) : null}
+
+        {/* Simulation Panel */}
+        {sim.state !== 'idle' && (
+          <View style={[styles.simPanelWrapper]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              
+              {/* Play/Pause/Replay Button */}
+              <TouchableOpacity 
+                style={[styles.simPlayPauseBtn, { width: 44, height: 44, borderRadius: 22, flexShrink: 0 }]} 
+                onPress={() => {
+                  if (sim.state === 'finished') {
+                    sim.reset(); sim.play();
+                  } else {
+                    sim.togglePlayPause();
+                  }
+                }}
+              >
+                <Ionicons name={sim.state === 'playing' ? 'pause' : sim.state === 'finished' ? 'refresh' : 'play'} size={22} color="#FFFFFF" style={sim.state === 'playing' || sim.state === 'finished' ? {} : { marginLeft: 3 }} />
+              </TouchableOpacity>
+
+              {/* Title & Controls */}
+              <View style={{ flex: 1, justifyContent: 'center' }}>
+                <Text style={[styles.simPanelStatusText, { fontSize: 13 }]} numberOfLines={1}>
+                  {destinationQuery ? `${originQuery || 'My Location'} → ${destinationQuery}` : sim.currentSegInfo?.label || 'Walking...'}
+                </Text>
+                
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                  <TouchableOpacity 
+                    style={[styles.simSpeedPill, styles.simSpeedPillActive, { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                    onPress={() => sim.setSpeed(sim.speed === 0.8 ? 1 : sim.speed === 1 ? 2 : sim.speed === 2 ? 3 : 0.8)}
+                  >
+                    <Ionicons name="speedometer-outline" size={12} color="#FFFFFF" />
+                    <Text style={[styles.simSpeedPillText, styles.simSpeedPillTextActive, { fontSize: 11 }]}>
+                      {sim.speed}x
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <Text style={{ fontSize: 11, color: '#71717A', marginLeft: 8, marginRight: 4, fontWeight: '500' }} numberOfLines={1}>
+                    {sim.state === 'finished' ? 'Arrived' : `${Math.max(0, sim.remainingDistanceKm).toFixed(1)} km left`}
+                  </Text>
+                  {sim.currentSegInfo?.vehicleType === 'jeepney' ? (
+                    <Ionicons name="bus-outline" size={14} color="#71717A" />
+                  ) : sim.currentSegInfo?.vehicleType === 'bus' ? (
+                    <Ionicons name="bus" size={14} color="#71717A" />
+                  ) : sim.currentSegInfo?.vehicleType === 'tricycle' ? (
+                    <Ionicons name="bicycle" size={14} color="#71717A" />
+                  ) : (
+                    <Ionicons name="walk" size={14} color="#71717A" />
+                  )}
+                </View>
+              </View>
+
+              {/* Close Button */}
+              <TouchableOpacity style={{ alignSelf: 'flex-start', padding: 4, marginRight: -4, marginTop: -4 }} onPress={() => sim.reset()} hitSlop={{top: 8, bottom:8, left:8, right:8}}>
+                <Ionicons name="close" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Bottom Progress Bar */}
+            <View style={[styles.simProgressBarTrack, { height: 3, marginTop: 12, marginBottom: 0, backgroundColor: '#F3F4F6' }]}>
+              <View style={[styles.simProgressBarFill, { width: `${sim.progress * 100}%`, backgroundColor: '#E8A020' }]} />
+            </View>
+          </View>
+        )}
+
       </SafeAreaView>
       {/* Route Recommender Panel */}
       <RouteRecommenderPanel
@@ -2260,6 +2342,121 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
+  simPanelWrapper: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 100 : 110, // Above the tab bar
+    left: 70,
+    right: 70,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 100,
+  },
+  simPanelHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  simPanelStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  simPanelStatusText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0A1628',
+  },
+  simArrivedText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4CAF50',
+  },
+  simProgressBarTrack: {
+    height: 4,
+    backgroundColor: '#F3DFB0',
+    borderRadius: 2,
+    marginTop: 4,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  simProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#E8A020',
+    borderRadius: 2,
+  },
+  simMainControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 12,
+  },
+  simStopBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#DE5046',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  simStopSquare: {
+    width: 12,
+    height: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 3,
+  },
+  simPlayPauseBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E8A020',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  simReplayBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0A1628',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  simSpeedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  simSpeedLabel: {
+    fontSize: 13,
+    color: '#71717A',
+    marginRight: 4,
+  },
+  simSpeedPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+  },
+  simSpeedPillActive: {
+    backgroundColor: '#0A1628',
+  },
+  simSpeedPillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0A1628',
+  },
+  simSpeedPillTextActive: {
+    color: '#FFFFFF',
+  },
   liveUserMarker: {
     width: 34,
     height: 34,
@@ -2384,67 +2581,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#4CAF50',
     marginLeft: 8,
-  },
-  simProgressBarBg: {
-    width: '100%',
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(10,22,40,0.08)',
-  },
-  simProgressBarFill: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#E8A020',
-  },
-  simControlRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 20,
-    marginTop: 12,
-  },
-  simControlBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  simControlBtnMain: {
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  simSpeedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 10,
-  },
-  simSpeedLabel: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginRight: 2,
-  },
-  simSpeedChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: RADIUS.pill,
-    backgroundColor: 'rgba(10,22,40,0.05)',
-  },
-  simSpeedChipActive: {
-    backgroundColor: COLORS.navy,
-  },
-  simSpeedChipText: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.navy,
-  },
-  simSpeedChipTextActive: {
-    color: '#FFFFFF',
   },
   simFollowBtn: {
     width: 28,

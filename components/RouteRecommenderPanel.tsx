@@ -155,12 +155,6 @@ export default function RouteRecommenderPanel({
   const listHeader = useMemo(
     () => (
       <>
-        {destinationName || totalCount > 0 ? (
-          <Text style={styles.routeResultSubtitle}>
-            {routeSubtitle}
-          </Text>
-        ) : null}
-
         {matchedRoutes.length > 1 && (
           <View style={styles.rankTabsRow}>
             {RANK_TABS.map((tab) => (
