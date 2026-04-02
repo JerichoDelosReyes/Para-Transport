@@ -105,7 +105,7 @@ export default function AchievementsScreen() {
                     {leaderboard.map((lbUser, index) => {
                       const isMe = lbUser.id === user?.id;
                       // Determine the name to show 
-                      const displayName = lbUser.username ? `@${lbUser.username}` : (lbUser.full_name || 'Anonymous User');
+                      const displayName = lbUser.username ? `${lbUser.username}` : (lbUser.full_name || 'Anonymous User');
                       
                       return (
                         <View key={lbUser.id || index} style={[styles.leaderboardCard, isMe && styles.leaderboardCardMe]}>
@@ -134,7 +134,7 @@ export default function AchievementsScreen() {
                           </View>
                           <View style={styles.lbInfo}>
                             <Text style={[styles.lbName, styles.lbNameMe]} numberOfLines={1}>
-                              {user.username ? `@${user.username}` : (user.full_name || 'Anonymous User')}
+                              {user.username ? `${user.username}` : (user.full_name || 'Anonymous User')}
                             </Text>
                           </View>
                           <View style={styles.pointsContainer}>
