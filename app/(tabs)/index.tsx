@@ -23,6 +23,8 @@ const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https:
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
 const MAX_WALK_PATH_POINTS = 140;
 const WALK_PATH_CACHE_LIMIT = 400;
+const MAX_WALK_DETOUR_RATIO = 1.9;
+const MAX_RANKED_ROUTE_OPTIONS = 5;
 
 type MapCoordinate = {
   latitude: number;
@@ -61,6 +63,15 @@ const sampleCoordinates = (coordinates: MapCoordinate[], maxPoints: number): Map
   return sampled;
 };
 
+const pathLengthMeters = (coordinates: MapCoordinate[]): number => {
+  if (coordinates.length < 2) return 0;
+  let total = 0;
+  for (let i = 1; i < coordinates.length; i++) {
+    total += Math.sqrt(sqDistApprox(coordinates[i - 1], coordinates[i]));
+  }
+  return total;
+};
+
 const sqDistApprox = (a: MapCoordinate, b: MapCoordinate): number => {
   const DEG = 111_320;
   const dLat = (a.latitude - b.latitude) * DEG;
@@ -80,7 +91,7 @@ const makeWalkPathCacheKey = (from: MapCoordinate, to: MapCoordinate): string =>
 const fetchRoadPath = async (
   from: MapCoordinate,
   to: MapCoordinate,
-  profile: 'foot' | 'driving',
+  profile: 'foot',
 ): Promise<MapCoordinate[] | null> => {
   const coords = `${from.longitude},${from.latitude};${to.longitude},${to.latitude}`;
   const params = new URLSearchParams({
@@ -273,7 +284,7 @@ export default function HomeScreen() {
   const { routes: transitDataRoutes } = useRoutes();
 
   useEffect(() => {
-    setRankedRoutes(rankRoutes(matchedRoutes, rankTab));
+    setRankedRoutes(rankRoutes(matchedRoutes, rankTab).slice(0, MAX_RANKED_ROUTE_OPTIONS));
   }, [matchedRoutes, rankTab]);
 
   useEffect(() => {
@@ -726,11 +737,16 @@ export default function HomeScreen() {
       return reversed;
     }
 
-    let routedPath: MapCoordinate[] | null = null;
-    const profiles: Array<'foot' | 'driving'> = ['foot', 'driving'];
-    for (const profile of profiles) {
-      routedPath = await fetchRoadPath(from, to, profile);
-      if (routedPath && routedPath.length >= 2) break;
+    let routedPath = await fetchRoadPath(from, to, 'foot');
+
+    // If the route is too detoured for a walk leg, prefer a direct connector
+    // to avoid car-like one-way loops between board/alight points.
+    if (routedPath && routedPath.length >= 2) {
+      const directMeters = Math.sqrt(sqDistApprox(from, to));
+      const routedMeters = pathLengthMeters(routedPath);
+      if (directMeters > 0 && routedMeters / directMeters > MAX_WALK_DETOUR_RATIO) {
+        routedPath = null;
+      }
     }
 
     const fallbackPath = [from, to];

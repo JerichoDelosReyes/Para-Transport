@@ -12,9 +12,11 @@ type Props = {
 };
 
 export default function RouteResultCard({ matched, isSelected, onPress, badgeLabel }: Props) {
-  const { legs, distanceKm, estimatedFare, estimatedMinutes } = matched;
+  const { legs, distanceKm, estimatedMinutes } = matched;
   const isTransfer = legs.length > 1;
   const id = legs.map(l => l.route.properties.code).join('+');
+  const formatPeso = (value: number): string => String(Math.max(0, Math.round(value)));
+  const totalTransitFare = legs.reduce((sum, leg) => sum + Math.max(0, Math.round(leg.estimatedFare)), 0);
 
   return (
     <TouchableOpacity
@@ -74,7 +76,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
         <View style={styles.fareBreakdown}>
           {legs.map((leg, i) => (
             <Text key={i} style={styles.fareBreakdownText}>
-              {leg.route.properties.code}: ₱{leg.estimatedFare.toFixed(2)} ({leg.distanceKm.toFixed(1)} km)
+              {leg.route.properties.code}: ₱{formatPeso(leg.estimatedFare)} ({leg.distanceKm.toFixed(1)} km)
             </Text>
           ))}
         </View>
@@ -88,7 +90,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
         </View>
         <View style={styles.fareWrap}>
           {isTransfer && <Text style={styles.fareLabelText}>Total</Text>}
-          <Text style={styles.fareText}>₱{estimatedFare.toFixed(2)}</Text>
+          <Text style={styles.fareText}>₱{formatPeso(totalTransitFare)}</Text>
         </View>
       </View>
     </TouchableOpacity>

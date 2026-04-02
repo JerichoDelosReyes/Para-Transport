@@ -4,6 +4,8 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { supabase } from '../config/supabaseClient';
 import { BadgeData } from '../types/badges';
 
+export type FareDiscountType = 'regular' | 'student' | 'senior' | 'pwd';
+
 interface User {
   id?: string;
   full_name: string;
@@ -18,6 +20,7 @@ interface User {
   saved_places?: any[];
   commute_history?: any[];
   badges?: string[]; // Kept locally for now
+  fare_discount_type?: FareDiscountType;
 }
 
 type ChatbotPersistMessage = {
@@ -51,6 +54,7 @@ const createGuestUser = (): User => ({
   saved_places: [],
   commute_history: [],
   badges: [],
+  fare_discount_type: 'regular',
 });
 
 interface StoreState {
@@ -61,6 +65,7 @@ interface StoreState {
   setBadgesData: (badges: BadgeData[]) => void;
   fareMatrices: any[];
   setFareMatrices: (fares: any[]) => void;
+  setFareDiscountType: (fareDiscountType: FareDiscountType) => void;
   insightDismissed: boolean;
   selectedTransitRoute: any | null;
   pendingRouteSearch: { origin: any; destination: any } | null;
@@ -107,13 +112,27 @@ export const useStore = create<StoreState>()(
       setBadgesData: (badgesData) => set({ badgesData }),
       fareMatrices: [],
       setFareMatrices: (fareMatrices) => set({ fareMatrices }),
+      setFareDiscountType: (fareDiscountType) =>
+        set((state) => ({
+          user: {
+            ...state.user,
+            fare_discount_type: fareDiscountType,
+          },
+        })),
       insightDismissed: false,
       selectedTransitRoute: null,
       pendingRouteSearch: null,
       chatbotMessages: [],
       chatbotConversationState: {},
       unlockedBadgeToShow: null,
-      setUser: (user) => set({ user }),
+      setUser: (user) =>
+        set((state) => ({
+          user: {
+            ...state.user,
+            ...user,
+            fare_discount_type: user.fare_discount_type || state.user?.fare_discount_type || 'regular',
+          },
+        })),
       beginGuestSession: () =>
         set({
           user: createGuestUser(),
@@ -127,10 +146,12 @@ export const useStore = create<StoreState>()(
       beginAuthSession: (user) =>
         set((state) => ({
           user: {
+            ...state.user,
             ...user,
             commute_history: user.commute_history || state.user?.commute_history || [],
             saved_routes: user.saved_routes || state.user?.saved_routes || [],
             saved_places: user.saved_places || state.user?.saved_places || [],
+            fare_discount_type: user.fare_discount_type || state.user?.fare_discount_type || 'regular',
           },
           sessionMode: 'auth',
         })),
@@ -410,6 +431,7 @@ export const useStore = create<StoreState>()(
             commute_history: persistedState.user?.commute_history || currentState.user?.commute_history || [],
             saved_routes: persistedState.user?.saved_routes || currentState.user?.saved_routes || [],
             saved_places: persistedState.user?.saved_places || currentState.user?.saved_places || [],
+            fare_discount_type: persistedState.user?.fare_discount_type || currentState.user?.fare_discount_type || 'regular',
           },
           chatbotMessages: currentState.chatbotMessages || [],
           chatbotConversationState: currentState.chatbotConversationState || {},
