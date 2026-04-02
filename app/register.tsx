@@ -113,6 +113,17 @@ export default function RegisterScreen() {
       if (data?.user && !data.session) {
         setIsOtpSent(true);
       } else {
+        if (data?.user?.id) {
+          try {
+            await logUserAction(data.user.id, 'Registered new account');
+            await supabase.from('users').update({ 
+              username: username,
+              display_name: name 
+            }).eq('id', data.user.id);
+          } catch (e) {
+            console.warn('Could not auto-sync username to public.users', e);
+          }
+        }
         beginAuthSession({
           id: data?.user?.id,
           username: data?.user?.user_metadata?.username || username,
