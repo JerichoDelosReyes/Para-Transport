@@ -84,7 +84,15 @@ export function mapLoginError(error?: string): string {
 }
 
 export function mapRegisterError(error?: string): string {
-  if (error && error.toLowerCase().includes('already registered')) return 'This email is already registered.';
+  const normalized = (error || '').toLowerCase();
+  if (normalized.includes('already registered')) return 'This email is already registered.';
+  if (
+    normalized.includes('rate limit') ||
+    normalized.includes('too many') ||
+    normalized.includes('over_email_send_rate_limit')
+  ) {
+    return 'Too many attempts made in this device. Try again later.';
+  }
   return error || 'Account creation failed. Please try again.';
 }
 

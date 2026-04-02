@@ -3,7 +3,7 @@ RETURNS TABLE(id TEXT, username TEXT, full_name TEXT, points INT)
 LANGUAGE sql
 SECURITY DEFINER
 AS $$
-  SELECT id, username, COALESCE(display_name, full_name) AS full_name, points
+  SELECT id, username, COALESCE(display_name, username, full_name) AS full_name, points
   FROM public.users
   WHERE (email != 'guest@para.ph' OR email IS NULL) AND points > 0
   ORDER BY points DESC, id ASC

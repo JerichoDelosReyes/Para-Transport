@@ -86,7 +86,7 @@ export default function LoginScreen() {
       try {
         const { data: profile } = await supabase
           .from('users')
-          .select('username, display_name, points, streak_count, distance, trips, spent, badges, saved_routes, saved_places')
+          .select('username, display_name, points, streak_count, total_distance, total_trips, total_fare, badges, saved_routes, saved_places')
           .eq('email', email.trim().toLowerCase())
           .single();
         if (profile) userStats = profile;
@@ -118,7 +118,7 @@ export default function LoginScreen() {
         streak_count: userStats.streak_count || 0,
         total_distance: userStats.total_distance || 0,
         total_trips: userStats.total_trips || 0,
-        spent: userStats.spent || 0,
+        spent: userStats.total_fare || 0,
         saved_routes: userStats.saved_routes || [],
         saved_places: userStats.saved_places || [],
         badges: userStats.badges || []
@@ -178,7 +178,7 @@ export default function LoginScreen() {
       try {
         const { data: profile } = await supabase
           .from('users')
-          .select('username, display_name, points, streak_count, distance, trips, spent, badges, saved_routes, saved_places')
+          .select('username, display_name, points, streak_count, total_distance, total_trips, total_fare, badges, saved_routes, saved_places')
           .eq('email', email.trim().toLowerCase())
           .single();
         if (profile) userStats = profile;
@@ -207,7 +207,7 @@ export default function LoginScreen() {
         streak_count: userStats.streak_count || 0,
         total_distance: userStats.total_distance || 0,
         total_trips: userStats.total_trips || 0,
-        spent: userStats.spent || 0,
+        spent: userStats.total_fare || 0,
         saved_routes: userStats.saved_routes || [],
         saved_places: userStats.saved_places || [],
         badges: userStats.badges || []

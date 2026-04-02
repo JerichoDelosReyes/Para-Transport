@@ -236,6 +236,7 @@ export const useStore = create<StoreState>()(
               last_ride_at: newUser.last_ride_at,
               total_distance: newUser.total_distance,
               total_trips: newUser.total_trips,
+              total_fare: newUser.spent,
             })
             .eq('id', state.user.id)
             .then(({ error }) => {
@@ -406,9 +407,9 @@ export const useStore = create<StoreState>()(
           ...state.user,
           points: 0,
           streak_count: 0,
-          distance: 0,
+          total_distance: 0,
           spent: 0,
-          trips: 0,
+          total_trips: 0,
           badges: [],
           saved_routes: [],
           saved_places: [],
@@ -421,9 +422,9 @@ export const useStore = create<StoreState>()(
             .update({
               points: 0,
               streak_count: 0,
-              distance: 0,
-              spent: 0,
-              trips: 0,
+              total_distance: 0,
+              total_fare: 0,
+              total_trips: 0,
               badges: [],
               last_ride_at: null,
             })
@@ -441,7 +442,7 @@ export const useStore = create<StoreState>()(
           try {
             const { data, error } = await supabase
               .from('users')
-              .select('points, streak_count, total_distance, total_trips, spent, badges, last_ride_at')
+              .select('points, streak_count, total_distance, total_trips, total_fare, badges, last_ride_at')
               .eq('email', state.user.email)
               .single();
               
@@ -454,7 +455,7 @@ export const useStore = create<StoreState>()(
                   last_ride_at: data.last_ride_at ?? s.user.last_ride_at ?? null,
                   total_distance: data.total_distance ?? s.user.total_distance ?? 0,
                   total_trips: data.total_trips ?? s.user.total_trips ?? 0,
-                  spent: data.spent ?? s.user.spent ?? 0,
+                  spent: data.total_fare ?? s.user.spent ?? 0,
                   badges: data.badges ?? s.user.badges ?? [],
                   commute_history: s.user.commute_history || [],
                   saved_routes: s.user.saved_routes || [],
