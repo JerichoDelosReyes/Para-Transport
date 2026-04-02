@@ -238,7 +238,7 @@ export default function RegisterScreen() {
               <Text style={[styles.label, styles.labelTop]}>Username</Text>
               <TextInput 
                 value={username}
-                onChangeText={setUsername}
+                onChangeText={(text) => setUsername(text.replace(/\s/g, ''))}
                 style={styles.input} 
                 placeholder="juancruz123" 
                 placeholderTextColor={COLORS.textMuted}
