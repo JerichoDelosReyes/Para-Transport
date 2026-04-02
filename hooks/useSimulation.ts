@@ -100,6 +100,8 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
   const distanceTravelled = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const warnedLegIdx = useRef<number>(-1);
+  const warnedNearDest = useRef<boolean>(false);
+  const warnedArrived = useRef<boolean>(false);
   const previousLabelRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -123,7 +125,7 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
     }
 
     if (state === 'playing' && currentLabel !== previousLabelRef.current) {
-      if (previousLabelRef.current !== null) {
+      if (previousLabelRef.current !== null && !currentSegInfo.onTransit) {
         const modeDesc = currentSegInfo.onTransit 
           ? (currentSegInfo.vehicleType ? `Boarding ${currentSegInfo.vehicleType.charAt(0).toUpperCase() + currentSegInfo.vehicleType.slice(1).toLowerCase()}` : 'Boarding Transit') 
           : 'Walking';
@@ -257,9 +259,22 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
     if (coords.current.length < 2) return;
 
     distanceTravelled.current += BASE_SPEED * speed * (TICK_MS / 1000);
+    const distToDestination = totalDist.current - distanceTravelled.current;
 
-    if (distanceTravelled.current >= totalDist.current) {
+    if (distToDestination <= 0) {
       distanceTravelled.current = totalDist.current;
+      
+      if (!warnedArrived.current) {
+        warnedArrived.current = true;
+        Notifications.scheduleNotificationAsync({
+          content: {
+            title: "You've arrived!",
+            body: "You are now in the destination.",
+          },
+          trigger: null,
+        });
+      }
+
       const last = coords.current[coords.current.length - 1];
       setPosition(last);
       setProgress(1);
@@ -268,6 +283,15 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
       setState('finished');
       stopTimer();
       return;
+    } else if (distToDestination <= 200 && distToDestination > 0 && !warnedNearDest.current) {
+      warnedNearDest.current = true;
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Almost there!",
+          body: "You are near your destination.",
+        },
+        trigger: null,
+      });
     }
 
     // Check if we should warn about an upcoming leg transition
@@ -286,11 +310,13 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
         
         if (nextLeg) {
           const distStr = Math.round(distRemaining);
+          const nextModeRaw = nextLeg.transitInfo?.type || 'Walking';
+          const nextMode = nextModeRaw.charAt(0).toUpperCase() + nextModeRaw.slice(1).toLowerCase();
           
           Notifications.scheduleNotificationAsync({
             content: {
-              title: "Heads up!",
-              body: `You are now going to switch modes of transportation in ${distStr} meters`,
+              title: "Just a heads up!",
+              body: `You are now switching to ${nextMode} in ${distStr} meters.`,
             },
             trigger: null,
           });
@@ -344,6 +370,9 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
   const reset = useCallback(() => {
     stopTimer();
     distanceTravelled.current = 0;
+    warnedLegIdx.current = -1;
+    warnedNearDest.current = false;
+    warnedArrived.current = false;
     setState('idle');
     setPosition(null);
     setProgress(0);

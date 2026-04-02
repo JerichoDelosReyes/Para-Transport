@@ -119,7 +119,10 @@ export default function RoutesScreen() {
 
             {displayedHistory.length > 0 ? (
               displayedHistory.map((item: any, index: number) => {
-                const targetName = `${item.origin?.name || 'Current Location'} to ${item.destination?.name || 'Unknown'}`;
+                const getShortName = (name: string) => name ? name.split(',')[0].trim() : name;
+                const originName = item.origin?.name && item.origin.name !== 'Current Location' ? getShortName(item.origin.name) : 'Your Location';
+                const destName = item.destination?.name && item.destination.name !== 'Dropped Pin' ? getShortName(item.destination.name) : 'Pinned Location';
+                const targetName = `${originName} to ${destName}`;
                 const isSaved = user.saved_routes?.some((r: any) => 
                   r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
                 );
@@ -136,7 +139,7 @@ export default function RoutesScreen() {
                               saveRoute({
                                 id: Date.now(),
                                 name: targetName,
-                                legs: [{ mode: 'Custom Route', from: item.origin?.name || 'Current Location', to: item.destination?.name || 'Unknown', fromObj: item.origin || null, toObj: item.destination }],
+                                legs: [{ mode: 'Custom Route', from: originName, to: destName, fromObj: item.origin || null, toObj: item.destination }],
                                 total_fare: item.fare || 0,
                               });
                               Alert.alert('Saved', 'Route has been added to your Saved page.');
