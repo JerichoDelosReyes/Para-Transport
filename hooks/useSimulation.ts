@@ -100,7 +100,6 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
   const distanceTravelled = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const warnedLegIdx = useRef<number>(-1);
-  const warnedNearDest = useRef<boolean>(false);
   const warnedArrived = useRef<boolean>(false);
   const previousLabelRef = useRef<string | null>(null);
 
@@ -283,15 +282,6 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
       setState('finished');
       stopTimer();
       return;
-    } else if (distToDestination <= 200 && distToDestination > 0 && !warnedNearDest.current) {
-      warnedNearDest.current = true;
-      Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Almost there!",
-          body: "You are near your destination.",
-        },
-        trigger: null,
-      });
     }
 
     // Check if we should warn about an upcoming leg transition
@@ -371,7 +361,6 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
     stopTimer();
     distanceTravelled.current = 0;
     warnedLegIdx.current = -1;
-    warnedNearDest.current = false;
     warnedArrived.current = false;
     setState('idle');
     setPosition(null);

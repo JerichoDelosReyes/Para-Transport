@@ -164,6 +164,26 @@ export default function SearchScreen({
     };
   }, [activeQuery, activeField, recents]);
 
+  const handleSwapRoute = useCallback(() => {
+    const oldOriginText = originText;
+    const isDestCurrentLoc = destinationText === currentLocationLabel || destinationText.toLowerCase() === 'current location';
+    if (isDestCurrentLoc) {
+      setUsingCurrentLocation(true);
+      setOriginText('');
+    } else {
+      setUsingCurrentLocation(false);
+      setOriginText(destinationText);
+    }
+    
+    if (usingCurrentLocation) {
+      setDestinationText(currentLocationLabel || 'Current Location');
+    } else {
+      setDestinationText(oldOriginText);
+    }
+    setOriginPlace(null);
+    setSuggestions([]);
+  }, [originText, destinationText, usingCurrentLocation, currentLocationLabel]);
+
   const handleSelectPlace = useCallback(
     (place: PlaceResult) => {
       addRecent(place);
@@ -250,9 +270,10 @@ export default function SearchScreen({
 
         {/* Search Fields */}
         <View style={styles.fieldsContainer}>
-          {/* Origin */}
-          <View
-            style={[
+          <View style={{ flex: 1 }}>
+            {/* Origin */}
+            <View
+              style={[
               styles.fieldRow,
               activeField === 'origin' && styles.fieldRowActive,
             ]}
@@ -348,6 +369,12 @@ export default function SearchScreen({
               <Ionicons name="mic" size={20} color={COLORS.textMuted} />
             </TouchableOpacity>
           </View>
+          </View>
+          <TouchableOpacity onPress={handleSwapRoute} style={styles.swapBtnWrapper} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <View style={styles.swapBtn}>
+               <Ionicons name="swap-vertical" size={20} color={COLORS.navy} />
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Choose Current Location Button */}
@@ -481,8 +508,23 @@ const styles = StyleSheet.create({
     color: COLORS.navy,
   },
   fieldsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: SPACING.screenX,
     marginBottom: 4,
+  },
+  swapBtnWrapper: {
+    marginLeft: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  swapBtn: {
+    backgroundColor: '#F0F0F0',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   fieldRow: {
     flexDirection: 'row',
