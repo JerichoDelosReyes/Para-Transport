@@ -6,6 +6,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 const FALLBACK_GPX_PATH = 'E:/Downloads/export.gpx';
 const FALLBACK_FARE = 13;
+const CLEAR_ALL_FLAG = '--replace-all';
 const DELETE_ALL_FILTER_ID = '00000000-0000-0000-0000-000000000000';
 const MAX_SEGMENT_JOIN_GAP_METERS = 350;
 const MAX_INTERNAL_POINT_GAP_METERS = 900;
@@ -309,6 +310,19 @@ function extractFirstTag(xml, tagName) {
   return m ? cleanText(m[1]) : '';
 }
 
+function extractMetadata(gpxXml) {
+  const metadataMatch = gpxXml.match(/<metadata\b[^>]*>([\s\S]*?)<\/metadata>/i);
+  if (!metadataMatch) {
+    return { name: '', desc: '' };
+  }
+
+  const metadataXml = metadataMatch[1];
+  return {
+    name: extractFirstTag(metadataXml, 'name'),
+    desc: extractFirstTag(metadataXml, 'desc'),
+  };
+}
+
 function extractRelationTag(trackXml, fallbackId) {
   const hrefMatch = trackXml.match(/<link\b[^>]*\bhref=(['"])(.*?)\1/i);
   if (hrefMatch) {
@@ -378,27 +392,36 @@ function parseTrackSegments(trackXml) {
   return directPoints.length > 0 ? [directPoints] : [];
 }
 
-function parseGpxTracks(gpxXml) {
+function parseGpxTracks(gpxXml, sourcePath = '') {
   const tracks = [];
   const trackRegex = /<trk\b[\s\S]*?<\/trk>/gi;
   let trackMatch;
   let index = 0;
+  const metadata = extractMetadata(gpxXml);
+  const sourceFile = sourcePath ? path.basename(sourcePath) : '';
+  const sourceFileStem = sourcePath ? path.parse(sourcePath).name : 'gpx-track';
+  const sourceFileKey = slug(sourceFileStem) || 'GPX-TRACK';
 
   while ((trackMatch = trackRegex.exec(gpxXml)) !== null) {
     index += 1;
     const trackXml = trackMatch[0];
-    const name = extractFirstTag(trackXml, 'name');
+    const rawName = extractFirstTag(trackXml, 'name');
     const desc = extractFirstTag(trackXml, 'desc');
     const props = parseDescProperties(desc);
-    const fallbackId = `${index}-${slug(name || props.name || 'track') || 'track'}`;
+    const name = cleanText(rawName || props.name || metadata.name || '');
+    const fallbackName = name || (metadata.name ? `${metadata.name} (${index})` : '');
+    const fallbackId = `${sourceFileKey}-${index}-${slug(name || metadata.name || 'track') || 'track'}`;
     const sourceRelationId = extractRelationTag(trackXml, fallbackId);
     const segments = parseTrackSegments(trackXml);
     const pathCoords = stitchSegments(segments);
 
     tracks.push({
       index,
-      name,
+      name: fallbackName,
       desc,
+      metaName: metadata.name,
+      metaDesc: metadata.desc,
+      sourceFile,
       props,
       sourceRelationId,
       pathCoords,
@@ -453,7 +476,7 @@ function makeLabels(track) {
   const props = track.props || {};
   const fromLabelRaw = cleanText(props.from);
   const toLabelRaw = cleanText(props.to);
-  const trackName = cleanText(track.name || props.name);
+  const trackName = cleanText(track.name || props.name || track.metaName);
   const ref = cleanText(props.ref);
 
   const splitFromName = splitEndpoints(trackName);
@@ -488,6 +511,26 @@ function makeLabels(track) {
   const finalName = trackName || label;
   const viaHints = parseViaHints(track, label, finalName);
   return { name: finalName, label, fromLabel, toLabel, ref, viaHints };
+}
+
+function isStyleDescription(text) {
+  const value = cleanText(text).toLowerCase();
+  if (!value) return false;
+  return /(^|\s)stroke=|(^|\s)fill=|stroke-opacity=|stroke-width=/.test(value);
+}
+
+function buildDescription(track) {
+  const candidates = [track.desc, track.metaDesc];
+  for (const candidate of candidates) {
+    const cleaned = cleanText(candidate);
+    if (!cleaned || isStyleDescription(cleaned)) continue;
+    return cleaned;
+  }
+
+  if (track.sourceFile) {
+    return `Imported from GPX track ${track.index} (${track.sourceFile})`;
+  }
+  return `Imported from GPX track ${track.index}`;
 }
 
 function buildStops(pathCoords, fromLabel, toLabel, viaHints = []) {
@@ -553,97 +596,123 @@ async function main() {
     throw new Error('Missing EXPO_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
   }
 
-  const gpxPath = process.argv[2] ? path.resolve(process.argv[2]) : FALLBACK_GPX_PATH;
-  if (!fs.existsSync(gpxPath)) {
-    throw new Error(`GPX file not found: ${gpxPath}`);
-  }
+  const cliArgs = process.argv.slice(2);
+  const replaceAll = cliArgs.includes(CLEAR_ALL_FLAG);
+  const sourceArgs = cliArgs.filter((arg) => arg !== CLEAR_ALL_FLAG);
+  const gpxPaths = (sourceArgs.length > 0 ? sourceArgs : [FALLBACK_GPX_PATH]).map((inputPath) =>
+    path.resolve(inputPath)
+  );
 
-  const gpxXml = fs.readFileSync(gpxPath, 'utf8');
-  const tracks = parseGpxTracks(gpxXml);
-  if (tracks.length === 0) {
-    throw new Error('No <trk> entries found in GPX file.');
+  for (const gpxPath of gpxPaths) {
+    if (!fs.existsSync(gpxPath)) {
+      throw new Error(`GPX file not found: ${gpxPath}`);
+    }
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  // Remove previous records before importing this GPX set.
-  await deleteAllRows(supabase, 'jeepney_route_stops', 'id');
-  await deleteAllRows(supabase, 'jeepney_routes', 'id');
+  if (replaceAll) {
+    await deleteAllRows(supabase, 'jeepney_route_stops', 'id');
+    await deleteAllRows(supabase, 'jeepney_routes', 'id');
 
-  // Clear legacy generic tables too, if still present.
-  try {
-    await deleteAllRows(supabase, 'route_stops', 'id');
-    await deleteAllRows(supabase, 'routes', 'id');
-  } catch {
-    // Ignore if legacy tables do not exist or are not accessible.
+    try {
+      await deleteAllRows(supabase, 'route_stops', 'id');
+      await deleteAllRows(supabase, 'routes', 'id');
+    } catch {
+      // Ignore if legacy tables do not exist or are not accessible.
+    }
   }
 
+  let totalTracks = 0;
   let imported = 0;
   let skipped = 0;
 
-  for (const track of tracks) {
-    if (!isLikelyJeepneyRoute(track)) {
-      skipped += 1;
+  for (const gpxPath of gpxPaths) {
+    const gpxXml = fs.readFileSync(gpxPath, 'utf8');
+    const tracks = parseGpxTracks(gpxXml, gpxPath);
+    if (tracks.length === 0) {
+      console.warn(`No <trk> entries found in GPX file: ${gpxPath}`);
       continue;
     }
 
-    if (!Array.isArray(track.pathCoords) || track.pathCoords.length < 2) {
-      skipped += 1;
-      continue;
+    totalTracks += tracks.length;
+
+    for (const track of tracks) {
+      if (!isLikelyJeepneyRoute(track)) {
+        skipped += 1;
+        continue;
+      }
+
+      if (!Array.isArray(track.pathCoords) || track.pathCoords.length < 2) {
+        skipped += 1;
+        continue;
+      }
+
+      const relationId = track.sourceRelationId.split('/').pop() || String(track.index);
+      const { name, label, fromLabel, toLabel, ref, viaHints } = makeLabels(track);
+      const routeCodeBase = slug(ref || label || name || `JEEP-${relationId}`) || `JEEP-${relationId}`;
+      const routeCode = `${routeCodeBase}-${relationId}`;
+
+      const payload = {
+        source_relation_id: track.sourceRelationId,
+        route_code: routeCode,
+        name,
+        label,
+        from_label: fromLabel || null,
+        to_label: toLabel || null,
+        description: buildDescription(track),
+        operator: cleanText(track.props.operator),
+        network: cleanText(track.props.network),
+        fare_base: parseFare(track.props),
+        status: 'active',
+        path_data: track.pathCoords,
+        is_active: true,
+      };
+
+      const { data: routeRow, error: routeError } = await supabase
+        .from('jeepney_routes')
+        .upsert(payload, { onConflict: 'source_relation_id' })
+        .select('id')
+        .single();
+
+      if (routeError) {
+        console.error(`Route upsert failed (${track.sourceRelationId}): ${routeError.message}`);
+        skipped += 1;
+        continue;
+      }
+
+      const { error: clearStopsError } = await supabase
+        .from('jeepney_route_stops')
+        .delete()
+        .eq('route_id', routeRow.id);
+
+      if (clearStopsError) {
+        console.error(`Stop reset failed (${track.sourceRelationId}): ${clearStopsError.message}`);
+        skipped += 1;
+        continue;
+      }
+
+      const stops = buildStops(track.pathCoords, fromLabel, toLabel, viaHints).map((s) => ({
+        route_id: routeRow.id,
+        ...s,
+      }));
+
+      const { error: stopError } = await supabase
+        .from('jeepney_route_stops')
+        .insert(stops);
+
+      if (stopError) {
+        console.error(`Stop insert failed (${track.sourceRelationId}): ${stopError.message}`);
+        skipped += 1;
+        continue;
+      }
+
+      imported += 1;
     }
-
-    const relationId = track.sourceRelationId.split('/').pop() || String(track.index);
-    const { name, label, fromLabel, toLabel, ref, viaHints } = makeLabels(track);
-    const routeCodeBase = slug(ref || label || name || `JEEP-${relationId}`) || `JEEP-${relationId}`;
-    const routeCode = `${routeCodeBase}-${relationId}`;
-
-    const payload = {
-      source_relation_id: track.sourceRelationId,
-      route_code: routeCode,
-      name,
-      label,
-      from_label: fromLabel || null,
-      to_label: toLabel || null,
-      description: cleanText(track.desc) || `Imported from GPX track ${track.index}`,
-      operator: cleanText(track.props.operator),
-      network: cleanText(track.props.network),
-      fare_base: parseFare(track.props),
-      status: 'active',
-      path_data: track.pathCoords,
-      is_active: true,
-    };
-
-    const { data: routeRow, error: routeError } = await supabase
-      .from('jeepney_routes')
-      .upsert(payload, { onConflict: 'source_relation_id' })
-      .select('id')
-      .single();
-
-    if (routeError) {
-      console.error(`Route upsert failed (${track.sourceRelationId}): ${routeError.message}`);
-      skipped += 1;
-      continue;
-    }
-
-    const stops = buildStops(track.pathCoords, fromLabel, toLabel, viaHints).map((s) => ({
-      route_id: routeRow.id,
-      ...s,
-    }));
-
-    const { error: stopError } = await supabase
-      .from('jeepney_route_stops')
-      .insert(stops);
-
-    if (stopError) {
-      console.error(`Stop insert failed (${track.sourceRelationId}): ${stopError.message}`);
-      skipped += 1;
-      continue;
-    }
-
-    imported += 1;
   }
 
-  console.log(`Total GPX tracks: ${tracks.length}`);
+  console.log(`Processed GPX files: ${gpxPaths.length}`);
+  console.log(`Total GPX tracks: ${totalTracks}`);
   console.log(`Imported jeepney routes: ${imported}`);
   console.log(`Skipped tracks: ${skipped}`);
 }
