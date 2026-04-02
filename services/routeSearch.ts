@@ -76,6 +76,10 @@ const MAX_STATE_EXPANSIONS = 420;
 const MAX_FRONTIER_SIZE = 180;
 const MAX_NEIGHBORS_PER_STATE = 8;
 const MAX_NEIGHBOR_CANDIDATES = 28;
+const MAX_ENDPOINT_SNAP_CANDIDATES = 72;
+const DIRECT_PAIR_ENDPOINT_TIE_METERS = 40;
+const FORWARD_DEST_NEAREST_TIE_METERS = 35;
+const MAX_BASE_ENDPOINT_WALK_METERS = 280;
 const MIN_LEG_DISTANCE_KM = 0.05;
 const MAX_TOTAL_WALK_KM = 3.2;
 const MIN_FORWARD_PROGRESS_KM = 0.01;
@@ -174,6 +178,13 @@ type SnapResult = {
   longitude: number;
   distanceMeters: number;
   alongKm: number;
+};
+
+type DirectSnapPair = {
+  originSnap: SnapResult;
+  destinationSnap: SnapResult;
+  endpointDistanceMeters: number;
+  rideDistanceMeters: number;
 };
 
 type TransferSample = {
@@ -525,27 +536,28 @@ function snapPointToRouteForward(
   point: { latitude: number; longitude: number },
   index: RouteIndex,
   minAlongKm: number,
-  preferredDistanceMeters?: number,
+  nearestTieMeters?: number,
 ): SnapResult | null {
   const coords = index.coords;
   if (coords.length < 2) return null;
 
   const minAlongMeters = Math.max(0, minAlongKm * 1000);
-  const preferredDistSq =
-    typeof preferredDistanceMeters === 'number' && Number.isFinite(preferredDistanceMeters) && preferredDistanceMeters > 0
-      ? preferredDistanceMeters * preferredDistanceMeters
-      : null;
+  const tieMeters =
+    typeof nearestTieMeters === 'number' && Number.isFinite(nearestTieMeters) && nearestTieMeters > 0
+      ? nearestTieMeters
+      : 0;
 
-  let bestPreferredAlongMeters = Number.POSITIVE_INFINITY;
-  let bestPreferredDistSq = Number.POSITIVE_INFINITY;
-  let bestPreferredLat = coords[0].latitude;
-  let bestPreferredLng = coords[0].longitude;
-  let foundPreferred = false;
+  const candidates: Array<{
+    latitude: number;
+    longitude: number;
+    distanceMeters: number;
+    alongMeters: number;
+  }> = [];
 
-  let bestDistSq = Number.POSITIVE_INFINITY;
+  let bestDistMeters = Number.POSITIVE_INFINITY;
   let bestLat = coords[0].latitude;
   let bestLng = coords[0].longitude;
-  let bestAlongMeters = 0;
+  let bestAlongMeters = Number.POSITIVE_INFINITY;
   let found = false;
 
   for (let i = 0; i < coords.length - 1; i++) {
@@ -589,26 +601,25 @@ function snapPointToRouteForward(
 
     const projX = ax + t * abx;
     const projY = ay + t * aby;
-    const distSq = projX * projX + projY * projY;
+    const distanceMeters = Math.sqrt(projX * projX + projY * projY);
+    const latitude = point.latitude + projY / METERS_PER_DEG;
+    const longitude = point.longitude + projX / lonScale;
 
-    if (preferredDistSq !== null && distSq <= preferredDistSq) {
-      if (
-        !foundPreferred ||
-        alongMeters < bestPreferredAlongMeters ||
-        (Math.abs(alongMeters - bestPreferredAlongMeters) < 1e-6 && distSq < bestPreferredDistSq)
-      ) {
-        bestPreferredAlongMeters = alongMeters;
-        bestPreferredDistSq = distSq;
-        bestPreferredLat = point.latitude + projY / METERS_PER_DEG;
-        bestPreferredLng = point.longitude + projX / lonScale;
-        foundPreferred = true;
-      }
-    }
+    candidates.push({
+      latitude,
+      longitude,
+      distanceMeters,
+      alongMeters,
+    });
 
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq;
-      bestLat = point.latitude + projY / METERS_PER_DEG;
-      bestLng = point.longitude + projX / lonScale;
+    if (
+      !found ||
+      distanceMeters < bestDistMeters ||
+      (Math.abs(distanceMeters - bestDistMeters) < 1e-6 && alongMeters < bestAlongMeters)
+    ) {
+      bestDistMeters = distanceMeters;
+      bestLat = latitude;
+      bestLng = longitude;
       bestAlongMeters = alongMeters;
       found = true;
     }
@@ -616,21 +627,185 @@ function snapPointToRouteForward(
 
   if (!found) return null;
 
-  if (foundPreferred) {
-    return {
-      latitude: bestPreferredLat,
-      longitude: bestPreferredLng,
-      distanceMeters: Math.sqrt(bestPreferredDistSq),
-      alongKm: bestPreferredAlongMeters / 1000,
-    };
+  if (tieMeters > 0 && candidates.length > 1) {
+    const thresholdMeters = bestDistMeters + tieMeters;
+    let tieBest = candidates[0];
+    let tieFound = false;
+
+    for (const candidate of candidates) {
+      if (candidate.distanceMeters > thresholdMeters) continue;
+      if (
+        !tieFound ||
+        candidate.alongMeters < tieBest.alongMeters ||
+        (Math.abs(candidate.alongMeters - tieBest.alongMeters) < 1e-6 &&
+          candidate.distanceMeters < tieBest.distanceMeters)
+      ) {
+        tieBest = candidate;
+        tieFound = true;
+      }
+    }
+
+    if (tieFound) {
+      return {
+        latitude: tieBest.latitude,
+        longitude: tieBest.longitude,
+        distanceMeters: tieBest.distanceMeters,
+        alongKm: tieBest.alongMeters / 1000,
+      };
+    }
   }
 
   return {
     latitude: bestLat,
     longitude: bestLng,
-    distanceMeters: Math.sqrt(bestDistSq),
+    distanceMeters: bestDistMeters,
     alongKm: bestAlongMeters / 1000,
   };
+}
+
+function collectRouteSnapsWithinDistance(
+  point: { latitude: number; longitude: number },
+  index: RouteIndex,
+  maxDistanceMeters: number,
+): SnapResult[] {
+  const coords = index.coords;
+  if (coords.length < 2 || !Number.isFinite(maxDistanceMeters) || maxDistanceMeters <= 0) return [];
+
+  const maxDistSq = maxDistanceMeters * maxDistanceMeters;
+  const snaps: Array<SnapResult & { alongMeters: number }> = [];
+
+  for (let i = 0; i < coords.length - 1; i++) {
+    const a = coords[i];
+    const b = coords[i + 1];
+
+    const segStartMeters = index.cumulativeMeters[i] || 0;
+    const segEndMeters = index.cumulativeMeters[i + 1] || segStartMeters;
+    const segLenMeters = Math.max(0, segEndMeters - segStartMeters);
+
+    const refLat = (point.latitude + a.latitude + b.latitude) / 3;
+    const lonScale = lonScaleAtLat(refLat);
+
+    const ax = (a.longitude - point.longitude) * lonScale;
+    const ay = (a.latitude - point.latitude) * METERS_PER_DEG;
+    const bx = (b.longitude - point.longitude) * lonScale;
+    const by = (b.latitude - point.latitude) * METERS_PER_DEG;
+
+    const abx = bx - ax;
+    const aby = by - ay;
+    const lenSq = abx * abx + aby * aby;
+
+    let t = 0;
+    if (lenSq > 0) {
+      t = -(ax * abx + ay * aby) / lenSq;
+      if (t < 0) t = 0;
+      if (t > 1) t = 1;
+    }
+
+    const projX = ax + t * abx;
+    const projY = ay + t * aby;
+    const distSq = projX * projX + projY * projY;
+
+    if (distSq > maxDistSq) continue;
+
+    const alongMeters = segStartMeters + segLenMeters * t;
+    snaps.push({
+      latitude: point.latitude + projY / METERS_PER_DEG,
+      longitude: point.longitude + projX / lonScale,
+      distanceMeters: Math.sqrt(distSq),
+      alongKm: alongMeters / 1000,
+      alongMeters,
+    });
+  }
+
+  snaps.sort((a, b) => a.distanceMeters - b.distanceMeters || a.alongMeters - b.alongMeters);
+
+  // De-dupe near-identical along positions so repeated polyline points do not
+  // flood candidate pairs on looping/crossing routes.
+  const deduped: SnapResult[] = [];
+  const seenAlongBins = new Set<number>();
+
+  for (const snap of snaps) {
+    const bin = Math.round(snap.alongMeters / 20); // 20 m bins
+    if (seenAlongBins.has(bin)) continue;
+    seenAlongBins.add(bin);
+
+    deduped.push({
+      latitude: snap.latitude,
+      longitude: snap.longitude,
+      distanceMeters: snap.distanceMeters,
+      alongKm: snap.alongKm,
+    });
+
+    if (deduped.length >= MAX_ENDPOINT_SNAP_CANDIDATES) break;
+  }
+
+  return deduped;
+}
+
+function findBestDirectForwardPair(
+  origin: { latitude: number; longitude: number },
+  destination: { latitude: number; longitude: number },
+  index: RouteIndex,
+  bufferMeters: number,
+): DirectSnapPair | null {
+  const originSnaps = collectRouteSnapsWithinDistance(origin, index, bufferMeters);
+  const destinationSnaps = collectRouteSnapsWithinDistance(destination, index, bufferMeters);
+
+  if (originSnaps.length === 0 || destinationSnaps.length === 0) return null;
+
+  const pairs: DirectSnapPair[] = [];
+
+  for (const originSnap of originSnaps) {
+    for (const destinationSnap of destinationSnaps) {
+      const rideDistanceMeters = (destinationSnap.alongKm - originSnap.alongKm) * 1000;
+      if (rideDistanceMeters <= MIN_FORWARD_PROGRESS_KM * 1000) continue;
+
+      const endpointDistanceMeters = originSnap.distanceMeters + destinationSnap.distanceMeters;
+
+      pairs.push({
+        originSnap,
+        destinationSnap,
+        endpointDistanceMeters,
+        rideDistanceMeters,
+      });
+    }
+  }
+
+  if (pairs.length === 0) return null;
+
+  let minEndpointDistance = Number.POSITIVE_INFINITY;
+  for (const pair of pairs) {
+    if (pair.endpointDistanceMeters < minEndpointDistance) {
+      minEndpointDistance = pair.endpointDistanceMeters;
+    }
+  }
+
+  const endpointThreshold = minEndpointDistance + DIRECT_PAIR_ENDPOINT_TIE_METERS;
+  const nearEndpointPairs = pairs.filter((pair) => pair.endpointDistanceMeters <= endpointThreshold);
+
+  // Keep boarding/alighting nearest first, then break ties by shorter ride.
+  nearEndpointPairs.sort((a, b) => {
+    return (
+      a.endpointDistanceMeters - b.endpointDistanceMeters ||
+      a.originSnap.distanceMeters - b.originSnap.distanceMeters ||
+      a.destinationSnap.distanceMeters - b.destinationSnap.distanceMeters ||
+      a.rideDistanceMeters - b.rideDistanceMeters
+    );
+  });
+
+  if (nearEndpointPairs.length > 0) {
+    return nearEndpointPairs[0];
+  }
+
+  pairs.sort((a, b) => {
+    return (
+      a.endpointDistanceMeters - b.endpointDistanceMeters ||
+      a.originSnap.distanceMeters - b.originSnap.distanceMeters ||
+      a.destinationSnap.distanceMeters - b.destinationSnap.distanceMeters ||
+      a.rideDistanceMeters - b.rideDistanceMeters
+    );
+  });
+  return pairs[0] ?? null;
 }
 
 function buildLegFromAlong(route: JeepneyRoute, from: AlongPoint, to: AlongPoint): RouteLeg | null {
@@ -764,6 +939,31 @@ function buildMatchedRoute(legs: RouteLeg[], totalMinutes: number, totalFare: nu
   };
 }
 
+function pointDistanceMeters(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+): number {
+  return segmentDistanceMeters(a as RouteCoord, b as RouteCoord);
+}
+
+function endpointWalkMetersForMatchedRoute(
+  match: MatchedRoute,
+  origin: { latitude: number; longitude: number },
+  destination: { latitude: number; longitude: number },
+): number {
+  if (!match.legs || match.legs.length === 0) return Number.POSITIVE_INFINITY;
+  const first = match.legs[0];
+  const last = match.legs[match.legs.length - 1];
+
+  const startWalk = pointDistanceMeters(origin, first.boardingPoint);
+  const endWalk = pointDistanceMeters(last.alightingPoint, destination);
+  return startWalk + endWalk;
+}
+
+function matchedRouteSignature(match: MatchedRoute): string {
+  return match.legs.map((leg) => leg.route.properties.code).join('>');
+}
+
 /**
  * Find all transit routes (single or multi-transfer) from origin to destination.
  */
@@ -842,6 +1042,18 @@ export function findRoutesForDestination(
 
   nearOriginRanked.sort((a, b) => a.meters - b.meters);
   if (nearOriginRanked.length === 0) return [];
+
+  const compareMatchedRoutes = (a: MatchedRoute, b: MatchedRoute): number => {
+    const endpointWalkA = endpointWalkMetersForMatchedRoute(a, origin, destination);
+    const endpointWalkB = endpointWalkMetersForMatchedRoute(b, origin, destination);
+
+    return (
+      a.transferCount - b.transferCount ||
+      endpointWalkA - endpointWalkB ||
+      a.estimatedMinutes - b.estimatedMinutes ||
+      a.estimatedFare - b.estimatedFare
+    );
+  };
 
   const neighborMemo = new Map<string, NeighborCandidate[]>();
 
@@ -927,15 +1139,28 @@ export function findRoutesForDestination(
 
       const destCandidate = nearDestByCode.get(state.current.code);
       if (destCandidate) {
-        const forwardDestSnap = snapPointToRouteForward(
+        let directEntry = state.entry;
+        let forwardDestSnap = snapPointToRouteForward(
           destination,
           state.current.index,
           state.entry.alongKm + MIN_FORWARD_PROGRESS_KM,
-          bufferMeters,
+          FORWARD_DEST_NEAREST_TIE_METERS,
         );
 
+        if (state.legs.length === 0) {
+          const directPair = findBestDirectForwardPair(origin, destination, state.current.index, bufferMeters);
+          if (directPair) {
+            directEntry = {
+              latitude: directPair.originSnap.latitude,
+              longitude: directPair.originSnap.longitude,
+              alongKm: directPair.originSnap.alongKm,
+            };
+            forwardDestSnap = directPair.destinationSnap;
+          }
+        }
+
         if (forwardDestSnap && forwardDestSnap.distanceMeters <= bufferMeters) {
-          const finalLeg = buildLegFromAlong(state.current.route, state.entry, forwardDestSnap);
+          const finalLeg = buildLegFromAlong(state.current.route, directEntry, forwardDestSnap);
           if (finalLeg && (finalLeg.distanceKm >= MIN_LEG_DISTANCE_KM || state.legs.length === 0)) {
             const legs = [...state.legs, finalLeg];
             const totalDistanceKm = state.totalDistanceKm + finalLeg.distanceKm;
@@ -946,7 +1171,7 @@ export function findRoutesForDestination(
             const sig = legs.map((leg) => leg.route.properties.code).join('>');
             const prev = resultBySignature.get(sig);
 
-            if (!prev || matched.estimatedMinutes < prev.estimatedMinutes) {
+            if (!prev || compareMatchedRoutes(matched, prev) < 0) {
               resultBySignature.set(sig, matched);
             }
           }
@@ -1018,24 +1243,45 @@ export function findRoutesForDestination(
     }
 
     const matched = Array.from(resultBySignature.values());
-    matched.sort((a, b) => {
-      return (
-        a.transferCount - b.transferCount ||
-        a.estimatedMinutes - b.estimatedMinutes ||
-        a.estimatedFare - b.estimatedFare
-      );
-    });
+    matched.sort(compareMatchedRoutes);
 
     return matched.slice(0, MAX_MATCHED_RESULTS);
   };
 
   const baseMatches = runSearchWithSeedLimit(MAX_NEAR_CANDIDATES);
-  if (baseMatches.length > 0 || nearOriginRanked.length <= MAX_NEAR_CANDIDATES) {
+  if (nearOriginRanked.length <= MAX_NEAR_CANDIDATES) {
     return baseMatches;
   }
+
+  const bestBase = baseMatches[0];
+  const bestBaseEndpointWalk = bestBase
+    ? endpointWalkMetersForMatchedRoute(bestBase, origin, destination)
+    : Number.POSITIVE_INFINITY;
+
+  const shouldRetryExpandedSeeds =
+    baseMatches.length === 0 ||
+    (bestBase?.transferCount ?? 0) > 0 ||
+    bestBaseEndpointWalk > MAX_BASE_ENDPOINT_WALK_METERS;
+
+  if (!shouldRetryExpandedSeeds) return baseMatches;
 
   // Dense corridors can have many equally-near overlapping routes. Retry with
   // a wider seed set so opposite-direction lines are not dropped too early.
   const expandedSeedLimit = Math.min(nearOriginRanked.length, Math.max(MAX_NEAR_CANDIDATES * 3, 30));
-  return runSearchWithSeedLimit(expandedSeedLimit);
+  const expandedMatches = runSearchWithSeedLimit(expandedSeedLimit);
+  if (expandedMatches.length === 0) return baseMatches;
+  if (baseMatches.length === 0) return expandedMatches;
+
+  const merged = new Map<string, MatchedRoute>();
+  for (const match of [...baseMatches, ...expandedMatches]) {
+    const sig = matchedRouteSignature(match);
+    const prev = merged.get(sig);
+    if (!prev || compareMatchedRoutes(match, prev) < 0) {
+      merged.set(sig, match);
+    }
+  }
+
+  const combined = Array.from(merged.values());
+  combined.sort(compareMatchedRoutes);
+  return combined.slice(0, MAX_MATCHED_RESULTS);
 }

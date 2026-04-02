@@ -22,14 +22,19 @@ import { loadRoutes } from '../../services/routeService';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
+const ROUTING_NEAREST_BASE_URL = 'https://router.project-osrm.org/nearest/v1';
+const WALK_ROUTING_PROFILE = 'walking';
 const MAX_WALK_PATH_POINTS = 140;
 const WALK_PATH_CACHE_LIMIT = 400;
-const MAX_WALK_DETOUR_RATIO = 1.9;
 const MAX_RANKED_ROUTE_OPTIONS = 5;
 
 type MapCoordinate = {
   latitude: number;
   longitude: number;
+};
+
+type WalkPathResolveOptions = {
+  keepDestinationOnRoad?: boolean;
 };
 
 type MapRegion = {
@@ -187,7 +192,8 @@ const makeWalkPathCacheKey = (from: MapCoordinate, to: MapCoordinate): string =>
 const fetchRoadPath = async (
   from: MapCoordinate,
   to: MapCoordinate,
-  profile: 'foot',
+  profile: 'walking',
+  options?: WalkPathResolveOptions,
 ): Promise<MapCoordinate[] | null> => {
   const coords = `${from.longitude},${from.latitude};${to.longitude},${to.latitude}`;
   const params = new URLSearchParams({
@@ -212,8 +218,36 @@ const fetchRoadPath = async (
 
     // Keep exact segment endpoints so transfer joins stay visually connected.
     mapped[0] = from;
-    mapped[mapped.length - 1] = to;
+    if (!options?.keepDestinationOnRoad) {
+      mapped[mapped.length - 1] = to;
+    }
     return mapped;
+  } catch {
+    return null;
+  }
+};
+
+const fetchNearestRoadPoint = async (
+  point: MapCoordinate,
+  profile: 'walking',
+): Promise<MapCoordinate | null> => {
+  const coord = `${point.longitude},${point.latitude}`;
+  const params = new URLSearchParams({ number: '1' });
+  const url = `${ROUTING_NEAREST_BASE_URL}/${profile}/${coord}?${params.toString()}`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const location = data?.waypoints?.[0]?.location;
+    if (!Array.isArray(location) || location.length < 2) return null;
+
+    const longitude = Number(location[0]);
+    const latitude = Number(location[1]);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+    return { latitude, longitude };
   } catch {
     return null;
   }
@@ -892,34 +926,50 @@ export default function HomeScreen() {
   const resolveWalkPathOnRoad = useCallback(async (
     from: MapCoordinate,
     to: MapCoordinate,
+    options?: WalkPathResolveOptions,
   ): Promise<MapCoordinate[]> => {
-    const cacheKey = makeWalkPathCacheKey(from, to);
-    const reverseKey = makeWalkPathCacheKey(to, from);
+    const keepDestinationOnRoad = options?.keepDestinationOnRoad === true;
+    const destinationMode = options?.keepDestinationOnRoad ? 'road-end' : 'exact-end';
+    const cacheKey = `${makeWalkPathCacheKey(from, to)}|${destinationMode}`;
+    const reverseCacheAllowed = !keepDestinationOnRoad;
+    const reverseKey = `${makeWalkPathCacheKey(to, from)}|${destinationMode}`;
     const cache = walkPathCacheRef.current;
 
     const cached = cache.get(cacheKey);
     if (cached) return cached;
 
-    const reverseCached = cache.get(reverseKey);
+    const reverseCached = reverseCacheAllowed ? cache.get(reverseKey) : undefined;
     if (reverseCached && reverseCached.length >= 2) {
       const reversed = [...reverseCached].reverse();
       cache.set(cacheKey, reversed);
       return reversed;
     }
 
-    let routedPath = await fetchRoadPath(from, to, 'foot');
+    let routedPath = await fetchRoadPath(from, to, WALK_ROUTING_PROFILE, options);
+    let snappedDestination: MapCoordinate | null = null;
 
-    // If the route is too detoured for a walk leg, prefer a direct connector
-    // to avoid car-like one-way loops between board/alight points.
-    if (routedPath && routedPath.length >= 2) {
-      const directMeters = Math.sqrt(sqDistApprox(from, to));
-      const routedMeters = pathLengthMeters(routedPath);
-      if (directMeters > 0 && routedMeters / directMeters > MAX_WALK_DETOUR_RATIO) {
-        routedPath = null;
+    // Retry with nearest walkable-road snaps first so walking legs stay
+    // road-following even when exact endpoints are off-network.
+    if (!routedPath) {
+      const [snappedFrom, snappedTo] = await Promise.all([
+        fetchNearestRoadPoint(from, WALK_ROUTING_PROFILE),
+        fetchNearestRoadPoint(to, WALK_ROUTING_PROFILE),
+      ]);
+
+      if (snappedTo) snappedDestination = snappedTo;
+
+      if (snappedFrom && snappedTo) {
+        routedPath = await fetchRoadPath(snappedFrom, snappedTo, WALK_ROUTING_PROFILE, {
+          keepDestinationOnRoad: true,
+        });
+      } else if (keepDestinationOnRoad && snappedTo) {
+        routedPath = await fetchRoadPath(from, snappedTo, WALK_ROUTING_PROFILE, {
+          keepDestinationOnRoad: true,
+        });
       }
     }
 
-    const fallbackPath = [from, to];
+    const fallbackPath = [from, keepDestinationOnRoad && snappedDestination ? snappedDestination : to];
     const resolved = (routedPath && routedPath.length >= 2 ? routedPath : fallbackPath).map((pt) => ({
       latitude: pt.latitude,
       longitude: pt.longitude,
@@ -927,7 +977,9 @@ export default function HomeScreen() {
 
     // Ensure exact joins to transit legs.
     resolved[0] = from;
-    resolved[resolved.length - 1] = to;
+    if (!keepDestinationOnRoad) {
+      resolved[resolved.length - 1] = to;
+    }
 
     cache.set(cacheKey, resolved);
     if (cache.size > WALK_PATH_CACHE_LIMIT) {
@@ -1075,7 +1127,10 @@ export default function HomeScreen() {
         walkLegEntries.map(async ({ leg, idx }) => {
           const from = leg.coordinates[0];
           const to = leg.coordinates[leg.coordinates.length - 1];
-          const path = await resolveWalkPathOnRoad(from, to);
+          const isFinalDestinationWalk = idx === baseTransitLegs.length - 1;
+          const path = await resolveWalkPathOnRoad(from, to, {
+            keepDestinationOnRoad: isFinalDestinationWalk,
+          });
           return { idx, path };
         }),
       );
@@ -1089,11 +1144,13 @@ export default function HomeScreen() {
 
       for (const item of resolved) {
         if (!item.path || item.path.length < 2) continue;
+        const isFinalWalkLeg = item.idx === nextLegs.length - 1 && !nextLegs[item.idx].onTransit;
+        const preservedAlightAt = nextLegs[item.idx].alightAt;
         nextLegs[item.idx] = {
           ...nextLegs[item.idx],
           coordinates: item.path,
           boardAt: item.path[0],
-          alightAt: item.path[item.path.length - 1],
+          alightAt: isFinalWalkLeg ? preservedAlightAt : item.path[item.path.length - 1],
         };
       }
 
@@ -1256,6 +1313,37 @@ export default function HomeScreen() {
       showDrop: boolean;
     }> = [];
 
+    const transitLegsOnly = transitLegs
+      .map((leg, idx) => ({ leg, idx }))
+      .filter(({ leg }) => leg.onTransit && leg.coordinates.length >= 2);
+
+    // In planning mode, keep the UX simple: one board marker (first transit leg)
+    // and one drop-off marker (last transit leg), even if internal transfers exist.
+    if (simPointIndex < 0) {
+      if (transitLegsOnly.length === 0) return markers;
+
+      const first = transitLegsOnly[0];
+      const last = transitLegsOnly[transitLegsOnly.length - 1];
+
+      markers.push({
+        leg: first.leg,
+        idx: first.idx,
+        showBoard: true,
+        showDrop: first.idx === last.idx,
+      });
+
+      if (last.idx !== first.idx) {
+        markers.push({
+          leg: last.leg,
+          idx: last.idx,
+          showBoard: false,
+          showDrop: true,
+        });
+      }
+
+      return markers;
+    }
+
     let cursor = 0;
     for (let idx = 0; idx < transitLegs.length; idx++) {
       const leg = transitLegs[idx];
@@ -1266,11 +1354,6 @@ export default function HomeScreen() {
       cursor = legEnd;
 
       if (!leg.onTransit) continue;
-
-      if (simPointIndex < 0) {
-        markers.push({ leg, idx, showBoard: true, showDrop: true });
-        continue;
-      }
 
       const showBoard = simPointIndex < legStart;
       const showDrop = simPointIndex < legEnd;
