@@ -125,7 +125,16 @@ export default function AchievementsScreen() {
                       );
                     })}
                     
-                    {currentUserRank && user?.id && !leaderboard.some(lb => lb.id === user.id) && (
+                    {user?.points === 0 ? (
+                      <>
+                        <View style={styles.leaderboardDivider} />
+                        <View style={[styles.leaderboardCard, styles.leaderboardCardMe, { borderBottomWidth: 0, justifyContent: 'center' }]}>
+                          <Text style={[styles.lbName, { textAlign: 'center', color: '#666', fontStyle: 'italic' }]}>
+                            Take your first ride to get on the leaderboard!
+                          </Text>
+                        </View>
+                      </>
+                    ) : currentUserRank && user?.id && !leaderboard.some(lb => lb.id === user.id) ? (
                       <>
                         <View style={styles.leaderboardDivider} />
                         <View style={[styles.leaderboardCard, styles.leaderboardCardMe, { borderBottomWidth: 0 }]}>
@@ -143,7 +152,7 @@ export default function AchievementsScreen() {
                           </View>
                         </View>
                       </>
-                    )}
+                    ) : null}
                   </>
                 )}
               </View>

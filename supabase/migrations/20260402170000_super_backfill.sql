@@ -7,7 +7,7 @@ SECURITY DEFINER
 AS $$
   SELECT id, username, COALESCE(display_name, full_name) AS full_name, points
   FROM public.users
-  WHERE email != 'guest@para.ph' OR email IS NULL
+  WHERE (email != 'guest@para.ph' OR email IS NULL) AND points > 0
   ORDER BY points DESC, id ASC
   LIMIT limit_val;
 $$;
