@@ -299,7 +299,18 @@ export const useStore = create<StoreState>()(
       addHistory: (item: any) =>
         set((state) => {
           const currentHistory = state.user.commute_history || [];
-          const newHistory = [item, ...currentHistory.filter((h: any) => h.id !== item.id)].slice(0, 20);
+          const newHistory = [item, ...currentHistory.filter((h: any) => h.id !== item.id)].slice(0, 200);
+          
+          if (state.sessionMode === 'auth' && state.user.email) {
+            supabase
+              .from('users')
+              .update({ commute_history: newHistory })
+              .eq('email', state.user.email)
+              .then(({ error }) => {
+                if (error && error.code !== 'PGRST204') console.error('Error saving history to Supabase:', error);
+              });
+          }
+          
           return { user: { ...state.user, commute_history: newHistory } };
         }),
       updateLatestHistoryFare: (fare: number) =>
@@ -308,12 +319,35 @@ export const useStore = create<StoreState>()(
           if (currentHistory.length === 0) return state;
           const updatedHistory = [...currentHistory];
           updatedHistory[0] = { ...updatedHistory[0], fare: fare };
+          
+          if (state.sessionMode === 'auth' && state.user.email) {
+            supabase
+              .from('users')
+              .update({ commute_history: updatedHistory })
+              .eq('email', state.user.email)
+              .then(({ error }) => {
+                if (error && error.code !== 'PGRST204') console.error('Error updating history fare to Supabase:', error);
+              });
+          }
+          
           return { user: { ...state.user, commute_history: updatedHistory } };
         }),
       clearHistory: () =>
-        set((state) => ({
-          user: { ...state.user, commute_history: [] },
-        })),
+        set((state) => {
+          if (state.sessionMode === 'auth' && state.user.email) {
+            supabase
+              .from('users')
+              .update({ commute_history: [] })
+              .eq('email', state.user.email)
+              .then(({ error }) => {
+                if (error && error.code !== 'PGRST204') console.error('Error clearing history in Supabase:', error);
+              });
+          }
+          
+          return {
+            user: { ...state.user, commute_history: [] },
+          };
+        }),
       unlockBadge: (badgeId: string) =>
         set((state) => {
           const currentBadges = state.user.badges || [];
