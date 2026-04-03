@@ -1824,7 +1824,7 @@ export default function HomeScreen() {
           </View>
 
           {showTransitLayer && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
               <View style={styles.routeTypeSelectorRow}>
                 <TouchableOpacity
                   style={[
