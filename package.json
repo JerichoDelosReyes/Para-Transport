@@ -10,6 +10,7 @@
     "supabase:types": "supabase gen types typescript --project-id $PROJECT_ID > types/supabase.ts"
   },
   "dependencies": {
+    "@maplibre/maplibre-react-native": "^10.4.2",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "^2.2.0",

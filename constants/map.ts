@@ -1,12 +1,36 @@
 const mapTilerKey = process.env.EXPO_PUBLIC_MAPTILER_KEY;
 const mapTilerStyle = process.env.EXPO_PUBLIC_MAPTILER_STYLE || 'openstreetmap';
 const cartoLightNoLabelsUrl = 'https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png';
+const canonicalStyleUrl = 'https://paragisstorage.blob.core.windows.net/maps/style-latest.json';
+
+const styleUrlStrategy = process.env.EXPO_PUBLIC_PARAGIS_STYLE_STRATEGY || 'pinned';
+const pinnedStyleUrl = process.env.EXPO_PUBLIC_PARAGIS_STYLE_URL_PINNED || '';
+const fallbackStyleUrl =
+  process.env.EXPO_PUBLIC_PARAGIS_STYLE_URL_FALLBACK ||
+  process.env.EXPO_PUBLIC_PARAGIS_STYLE_URL ||
+  canonicalStyleUrl;
+
+const resolvedStyleUrl =
+  styleUrlStrategy === 'latest'
+    ? fallbackStyleUrl
+    : pinnedStyleUrl || fallbackStyleUrl;
 
 const mapTilerUrl = mapTilerKey
   ? `https://api.maptiler.com/maps/${mapTilerStyle}/{z}/{x}/{y}.jpg?key=${mapTilerKey}`
   : '';
 
 export const MAP_CONFIG = {
+  CANONICAL_STYLE_URL: canonicalStyleUrl,
+  STYLE_URL_STRATEGY: styleUrlStrategy,
+  STYLE_URL_PINNED_VERSION: pinnedStyleUrl,
+  STYLE_URL_FALLBACK: fallbackStyleUrl,
+  RESOLVED_STYLE_URL: resolvedStyleUrl,
+  FEATURE_USE_MAPLIBRE: process.env.EXPO_PUBLIC_FEATURE_USE_MAPLIBRE === '1',
+  THREE_D_CAMERA: {
+    minPitch: 0,
+    defaultPitch: 45,
+    maxPitch: 60,
+  },
   OSM_TILE_URL:
     process.env.EXPO_PUBLIC_OSM_TILE_URL ||
     process.env.EXPO_PUBLIC_LIGHT_TILE_URL ||
