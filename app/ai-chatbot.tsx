@@ -208,6 +208,10 @@ export default function AIChatbotScreen() {
 
     const messageText = inputText.trim();
     const userMessage: ChatMessage = { id: Date.now().toString(), text: messageText, isUser: true };
+    const conversationHistory: Array<{ text: string; isUser: boolean }> = [
+      ...messages.map((entry) => ({ text: entry.text, isUser: entry.isUser })),
+      { text: userMessage.text, isUser: true },
+    ];
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
     setCurrentState("PROCESSING");
@@ -227,6 +231,7 @@ export default function AIChatbotScreen() {
         message: messageText,
         mode: "companion",
         state: conversationState,
+        history: conversationHistory,
         routes,
         currentLocation,
         currentLocationLabel,

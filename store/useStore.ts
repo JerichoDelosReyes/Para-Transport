@@ -477,20 +477,16 @@ export const useStore = create<StoreState>()(
         sessionMode: state.sessionMode,
         insightDismissed: state.insightDismissed,
         selectedTransitRoute: state.selectedTransitRoute,
+        chatbotMessages: state.chatbotMessages,
+        chatbotConversationState: state.chatbotConversationState,
         dismissedBroadcasts: state.dismissedBroadcasts,
       }),
       merge: (persistedState: any, currentState: StoreState) => {
         if (!persistedState) return currentState;
 
-        const {
-          chatbotMessages: _ignoredChatbotMessages,
-          chatbotConversationState: _ignoredChatbotConversationState,
-          ...safePersistedState
-        } = persistedState;
-
         return {
           ...currentState,
-          ...safePersistedState,
+          ...persistedState,
           user: {
             ...currentState.user,
             ...(persistedState.user || {}),
@@ -499,8 +495,8 @@ export const useStore = create<StoreState>()(
             saved_places: persistedState.user?.saved_places || currentState.user?.saved_places || [],
             fare_discount_type: persistedState.user?.fare_discount_type || currentState.user?.fare_discount_type || 'regular',
           },
-          chatbotMessages: currentState.chatbotMessages || [],
-          chatbotConversationState: currentState.chatbotConversationState || {},
+          chatbotMessages: persistedState.chatbotMessages || currentState.chatbotMessages || [],
+          chatbotConversationState: persistedState.chatbotConversationState || currentState.chatbotConversationState || {},
         };
       },
       onRehydrateStorage: () => (state) => {

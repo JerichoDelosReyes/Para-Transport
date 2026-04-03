@@ -21,10 +21,16 @@ export type ChatbotConversationState = {
   pendingDestinationPlaceId?: string;
 };
 
+export type ChatbotHistoryMessage = {
+  text: string;
+  isUser: boolean;
+};
+
 export type ChatbotRequest = {
   message: string;
   mode?: ChatbotMode;
   state?: ChatbotConversationState;
+  history?: ChatbotHistoryMessage[];
   routes?: JeepneyRoute[];
   currentLocation?: Coordinate | null;
   currentLocationLabel?: string | null;
@@ -100,6 +106,11 @@ type DatasetShape = {
     powerWords: string[];
     curseWords: string[];
     laughterWords: string[];
+    tagalogHints?: string[];
+    englishHints?: string[];
+    angerWords?: string[];
+    empathyWords?: string[];
+    successWords?: string[];
   };
   fareNews: LocalizedVariants;
   routeResponses: {
@@ -157,6 +168,9 @@ const placeById = new Map<string, DatasetPlace>(dataset.places.map((place) => [p
 const companionPowerWordTokens = uniqueHints(dataset.companionLexicon?.powerWords ?? []);
 const companionCurseWordTokens = uniqueHints(dataset.companionLexicon?.curseWords ?? []);
 const companionLaughterTokens = uniqueHints(dataset.companionLexicon?.laughterWords ?? []);
+const companionAngerTokens = uniqueHints(dataset.companionLexicon?.angerWords ?? []);
+const companionEmpathyTokens = uniqueHints(dataset.companionLexicon?.empathyWords ?? []);
+const companionSuccessTokens = uniqueHints(dataset.companionLexicon?.successWords ?? []);
 
 const aliasIndex: Array<{ alias: string; place: DatasetPlace }> = [];
 for (const place of dataset.places) {
@@ -172,7 +186,7 @@ for (const badge of BADGES) {
   badgeAliasIndex.push({ alias: normalizeText(badge.id.replace(/_/g, ' ')), badge });
 }
 
-const TAGALOG_HINTS = [
+const DEFAULT_TAGALOG_HINTS = [
   'kumusta',
   'kamusta',
   'kumutsa',
@@ -209,7 +223,7 @@ const TAGALOG_HINTS = [
   'nasa',
 ];
 
-const ENGLISH_HINTS = [
+const DEFAULT_ENGLISH_HINTS = [
   'hi',
   'hello',
   'hey',
@@ -235,6 +249,16 @@ const ENGLISH_HINTS = [
   'sorry',
   'please',
 ];
+
+const TAGALOG_HINTS = uniqueLanguageHints([
+  ...DEFAULT_TAGALOG_HINTS,
+  ...(dataset.companionLexicon?.tagalogHints ?? []),
+]);
+
+const ENGLISH_HINTS = uniqueLanguageHints([
+  ...DEFAULT_ENGLISH_HINTS,
+  ...(dataset.companionLexicon?.englishHints ?? []),
+]);
 
 const TAGALOG_SOCIAL_CUES = /\b(kumusta|kamusta|kumutsa|kamutsa|musta|salamat|pasensya|pasensiya|sige|cge|gege|opo|magandang)\b/;
 
@@ -528,6 +552,21 @@ function uniqueHints(values: string[]): string[] {
   for (const raw of values) {
     const value = normalizeText(raw);
     if (!value || value.length < 3) continue;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    output.push(value);
+  }
+
+  return output;
+}
+
+function uniqueLanguageHints(values: string[]): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const raw of values) {
+    const value = normalizeText(raw);
+    if (!value || value.length < 2) continue;
     if (seen.has(value)) continue;
     seen.add(value);
     output.push(value);
@@ -849,14 +888,17 @@ function isPureSocialMessage(normalized: string): boolean {
 }
 
 function hasAngerIntent(normalized: string): boolean {
+  if (companionAngerTokens.some((token) => hintMatches(normalized, token))) return true;
   return /\b(angry|mad|upset|annoyed|frustrated|irritated|inis|galit|badtrip|bwisit|bwiset|nakakainis|nakakagalit|nafrustrate|na frustrate|stressed out|pikon)\b/.test(normalized);
 }
 
 function hasEmpathyIntent(normalized: string): boolean {
+  if (companionEmpathyTokens.some((token) => hintMatches(normalized, token))) return true;
   return /\b(sad|down|lonely|anxious|anxiety|stressed|stress|overwhelmed|pagod|lungkot|malungkot|naiiyak|nahihirapan|hirap na|nakakapagod|kabado|kinakabahan|burned out|burnout)\b/.test(normalized);
 }
 
 function hasSuccessIntent(normalized: string): boolean {
+  if (companionSuccessTokens.some((token) => hintMatches(normalized, token))) return true;
   return /\b(i did it|we did it|naabot ko|nagawa ko|nakarating ako|nakapasa ako|success|succeeded|passed|done na|tapos na|na solve|naayos ko|achievement unlocked|na unlock|na-unlock|panalo|yay)\b/.test(normalized);
 }
 
@@ -941,6 +983,43 @@ function buildDestinationRepromptLimitReply(language: BotLanguage): string {
 
 function hasCommuteTaskIntent(normalized: string): boolean {
   return /(fare|pamasahe|route|ruta|destination|papunta|where|saan|how to go|paano pumunta|terminal|stop|transit|jeepney|tricycle|from|mula|galing|to |going to|trivia|fun fact|did you know|alam mo ba|app|application|saved|achievements|profile|settings|pinpoint|pinned|drop pin|base fare|discounted fare|what can you do|anong kaya mo|mga ruta|route list|vermosa|how to get to|papuntang)/.test(normalized);
+}
+
+function findRouteTypo(normalized: string): string | null {
+  if (hasRouteIntent(normalized)) return null;
+
+  const words = normalized.split(' ').filter(Boolean);
+  for (const word of words) {
+    if (word.length < 4 || word.length > 8) continue;
+    if (!/^[a-z]+$/.test(word)) continue;
+
+    const singular = word.endsWith('s') ? word.slice(0, -1) : word;
+    if (singular === 'route') continue;
+    if (!singular.startsWith('r')) continue;
+
+    const distance = levenshteinDistance(singular, 'route');
+    if (distance <= 2) {
+      return word;
+    }
+  }
+
+  return null;
+}
+
+function buildRouteTypoReply(language: BotLanguage): string {
+  if (language === 'tl') {
+    return [
+      'May typo ata sa message mo.',
+      'Do you mean route?',
+      'Kung route help ito, sabihin mo lang ang destination mo at gagawan kita ng guide.',
+    ].join('\n\n');
+  }
+
+  return [
+    'I think there is a small typo in your message.',
+    'Do you mean route?',
+    'If you need route help, send your destination and I will guide you step by step.',
+  ].join('\n\n');
 }
 
 function findAppGuide(normalized: string): DatasetAppGuide | null {
@@ -1552,7 +1631,23 @@ function pickFareNewsReply(language: BotLanguage): string {
   return formatForChatDisplay(pickLocalized(dataset.fareNews, language));
 }
 
-async function callGroqFallback(message: string, language: BotLanguage): Promise<string | null> {
+function recentGroqHistory(history?: ChatbotHistoryMessage[]): Array<{ role: 'user' | 'assistant'; content: string }> {
+  if (!history || history.length === 0) return [];
+
+  return history
+    .map((entry) => ({
+      role: entry.isUser ? 'user' as const : 'assistant' as const,
+      content: entry.text.trim(),
+    }))
+    .filter((entry) => entry.content.length > 0)
+    .slice(-10);
+}
+
+async function callGroqFallback(
+  message: string,
+  language: BotLanguage,
+  history?: ChatbotHistoryMessage[],
+): Promise<string | null> {
   const rawKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || process.env.GROQ_API_KEY;
   const apiKey = rawKey?.trim();
   if (!apiKey) return null;
@@ -1572,6 +1667,16 @@ async function callGroqFallback(message: string, language: BotLanguage): Promise
     `Respond in ${requestedLanguage} and match mixed English/Filipino naturally.`,
   ].join('\n');
 
+  const historyTurns = recentGroqHistory(history);
+  const currentNormalized = normalizeText(message);
+  const historyAlreadyHasCurrentMessage = historyTurns.length > 0
+    && historyTurns[historyTurns.length - 1].role === 'user'
+    && normalizeText(historyTurns[historyTurns.length - 1].content) === currentNormalized;
+
+  const userTurns = historyAlreadyHasCurrentMessage
+    ? historyTurns
+    : [...historyTurns, { role: 'user' as const, content: message }];
+
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -1587,10 +1692,7 @@ async function callGroqFallback(message: string, language: BotLanguage): Promise
           role: 'system',
           content: strictPrompt,
         },
-        {
-          role: 'user',
-          content: message,
-        },
+        ...userTurns,
       ],
     }),
   });
@@ -1613,6 +1715,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const message = request.message.trim();
   const language = detectLanguage(message);
   const normalized = normalizeText(message);
+  const history = request.history ?? [];
   const mode = request.mode ?? 'assistant';
   const companionMode = mode === 'companion';
   const isTaskLikeMessage = hasCommuteTaskIntent(normalized);
@@ -1650,6 +1753,18 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       text: supportReply(buildCancelFollowUpReply(language)),
       language,
       state: {},
+      usedGroq: false,
+    };
+  }
+
+  const routeTypo = findRouteTypo(normalized);
+  const likelyRouteHelpMessage = /\b(help|assist|tulong|guide|need|kailangan|with|sa|to|from|papunta|paano|how)\b/.test(normalized)
+    || normalized.split(' ').filter(Boolean).length <= 4;
+  if (routeTypo && likelyRouteHelpMessage) {
+    return {
+      text: supportReply(buildRouteTypoReply(language)),
+      language,
+      state: currentState,
       usedGroq: false,
     };
   }
@@ -2125,7 +2240,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   }
 
   try {
-    const groqReply = await callGroqFallback(message, language);
+    const groqReply = await callGroqFallback(message, language, history);
     if (groqReply) {
       return {
         text: supportReply(formatForChatDisplay(groqReply), { includeClosing: true }),
