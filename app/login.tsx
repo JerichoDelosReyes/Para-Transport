@@ -86,7 +86,7 @@ export default function LoginScreen() {
       try {
         const { data: profile } = await supabase
           .from('users')
-          .select('username, display_name, points, streak_count, total_distance, total_trips, total_fare, badges, saved_routes, saved_places')
+          .select('username, display_name, full_name, points, streak_count, total_distance, total_trips, total_fare, badges, saved_routes, saved_places')
           .eq('email', email.trim().toLowerCase())
           .single();
         if (profile) userStats = profile;
@@ -180,7 +180,7 @@ export default function LoginScreen() {
       try {
         const { data: profile } = await supabase
           .from('users')
-          .select('username, display_name, points, streak_count, total_distance, total_trips, total_fare, badges, saved_routes, saved_places')
+          .select('username, display_name, full_name, points, streak_count, total_distance, total_trips, total_fare, badges, saved_routes, saved_places')
           .eq('email', email.trim().toLowerCase())
           .single();
         if (profile) userStats = profile;
