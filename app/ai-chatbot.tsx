@@ -188,6 +188,7 @@ export default function AIChatbotScreen() {
     try {
       const response = await getChatbotReply({
         message: messageText,
+        mode: "companion",
         state: conversationState,
         routes,
         currentLocation,

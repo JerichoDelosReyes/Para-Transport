@@ -4,6 +4,7 @@ import { findRoutesForDestination, rankRoutes } from './routeSearch';
 import { BADGES, type Badge } from '../constants/badges';
 
 export type BotLanguage = 'en' | 'tl';
+export type ChatbotMode = 'assistant' | 'companion';
 
 export type Coordinate = {
   latitude: number;
@@ -22,6 +23,7 @@ export type ChatbotConversationState = {
 
 export type ChatbotRequest = {
   message: string;
+  mode?: ChatbotMode;
   state?: ChatbotConversationState;
   routes?: JeepneyRoute[];
   currentLocation?: Coordinate | null;
@@ -84,6 +86,9 @@ type DatasetShape = {
     greetings: LocalizedVariants;
     thanks: LocalizedVariants;
     praise: LocalizedVariants;
+    userAnger: LocalizedVariants;
+    empathy: LocalizedVariants;
+    success: LocalizedVariants;
     userApology: LocalizedVariants;
     acknowledgement: LocalizedVariants;
     goodbye: LocalizedVariants;
@@ -794,6 +799,18 @@ function hasAcknowledgementIntent(normalized: string): boolean {
   return /\b(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po)\b/.test(normalized);
 }
 
+function hasAngerIntent(normalized: string): boolean {
+  return /\b(angry|mad|upset|annoyed|frustrated|irritated|inis|galit|badtrip|bwisit|bwiset|nakakainis|nakakagalit|nafrustrate|na frustrate|stressed out|pikon)\b/.test(normalized);
+}
+
+function hasEmpathyIntent(normalized: string): boolean {
+  return /\b(sad|down|lonely|anxious|anxiety|stressed|stress|overwhelmed|pagod|lungkot|malungkot|naiiyak|nahihirapan|hirap na|nakakapagod|kabado|kinakabahan|burned out|burnout)\b/.test(normalized);
+}
+
+function hasSuccessIntent(normalized: string): boolean {
+  return /\b(i did it|we did it|naabot ko|nagawa ko|nakarating ako|nakapasa ako|success|succeeded|passed|done na|tapos na|na solve|naayos ko|achievement unlocked|na unlock|na-unlock|panalo|yay)\b/.test(normalized);
+}
+
 function hasCancelIntent(normalized: string): boolean {
   return /\b(cancel|cancel it|stop|stop it|never\s?mind|nvm|forget it|forget that|scratch that|ignore that|drop it|skip muna|pass muna|wag na|huwag na|ayoko na|hindi na|di na)\b/.test(normalized);
 }
@@ -1439,6 +1456,13 @@ function pickSocialReply(language: BotLanguage, key: keyof DatasetShape['socialR
   return formatForChatDisplay(pickLocalized(dataset.socialResponses[key], language));
 }
 
+function pickCompanionLead(language: BotLanguage, normalized: string): string | null {
+  if (hasAngerIntent(normalized)) return pickSocialReply(language, 'userAnger');
+  if (hasEmpathyIntent(normalized)) return pickSocialReply(language, 'empathy');
+  if (hasSuccessIntent(normalized)) return pickSocialReply(language, 'success');
+  return null;
+}
+
 function pickFareNewsReply(language: BotLanguage): string {
   return formatForChatDisplay(pickLocalized(dataset.fareNews, language));
 }
@@ -1494,15 +1518,32 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const message = request.message.trim();
   const language = detectLanguage(message);
   const normalized = normalizeText(message);
+  const mode = request.mode ?? 'assistant';
+  const companionMode = mode === 'companion';
   const isTaskLikeMessage = hasCommuteTaskIntent(normalized);
   const hasPinReference = hasPinIntent(normalized);
   const currentState: ChatbotConversationState = request.state ?? {};
   const hasPendingFollowUp = hasPendingFollowUpState(currentState);
   const routes = request.routes ?? [];
+  const companionLead = companionMode && isTaskLikeMessage
+    ? pickCompanionLead(language, normalized)
+    : null;
+
+  const withCompanionLead = (content: string): string => {
+    if (!companionLead) return content;
+    const body = formatForChatDisplay(content);
+    if (!body) return companionLead;
+    return `${companionLead}\n\n${body}`;
+  };
+
+  const supportReply = (
+    content: string,
+    options?: { includeClosing?: boolean },
+  ): string => composeSupportReply(language, withCompanionLead(content), options);
 
   if (!message) {
     return {
-      text: composeSupportReply(language, fallbackText(language, 'unknown')),
+      text: supportReply(fallbackText(language, 'unknown')),
       language,
       state: currentState,
       usedGroq: false,
@@ -1511,7 +1552,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasPendingFollowUp && hasCancelIntent(normalized)) {
     return {
-      text: composeSupportReply(language, buildCancelFollowUpReply(language)),
+      text: supportReply(buildCancelFollowUpReply(language)),
       language,
       state: {},
       usedGroq: false,
@@ -1538,7 +1579,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasFareNewsIntent(normalized)) {
     return {
-      text: composeSupportReply(language, pickFareNewsReply(language)),
+      text: supportReply(pickFareNewsReply(language)),
       language,
       state: {},
       usedGroq: false,
@@ -1547,7 +1588,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasTriviaIntent(normalized)) {
     return {
-      text: composeSupportReply(language, pickTrivia(language)),
+      text: supportReply(pickTrivia(language)),
       language,
       state: {},
       usedGroq: false,
@@ -1561,7 +1602,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const matchedGuide = findAppGuide(normalized);
   if (matchedGuide && !hasRouteIntent(normalized) && !hasFareIntent(normalized) && !hasRouteListIntent(normalized)) {
     return {
-      text: composeSupportReply(language, pickAppGuideReply(matchedGuide, language), { includeClosing: true }),
+      text: supportReply(pickAppGuideReply(matchedGuide, language), { includeClosing: true }),
       language,
       state: {},
       usedGroq: false,
@@ -1570,7 +1611,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasCapabilityIntent(normalized)) {
     return {
-      text: composeSupportReply(language, buildCapabilitiesReply(language), { includeClosing: true }),
+      text: supportReply(buildCapabilitiesReply(language), { includeClosing: true }),
       language,
       state: {},
       usedGroq: false,
@@ -1579,7 +1620,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasFarePolicyIntent(normalized)) {
     return {
-      text: composeSupportReply(language, buildFarePolicyReply(language), { includeClosing: true }),
+      text: supportReply(buildFarePolicyReply(language), { includeClosing: true }),
       language,
       state: {},
       usedGroq: false,
@@ -1588,8 +1629,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasRouteListIntent(normalized)) {
     return {
-      text: composeSupportReply(
-        language,
+      text: supportReply(
         buildRouteListReply(language, routes, parsed.destination),
         { includeClosing: true },
       ),
@@ -1602,7 +1642,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   if (hasAchievementIntent(normalized)) {
     const mentionedBadge = findBadgeMention(normalized);
     return {
-      text: composeSupportReply(language, buildAchievementReply(language, mentionedBadge), { includeClosing: true }),
+      text: supportReply(buildAchievementReply(language, mentionedBadge), { includeClosing: true }),
       language,
       state: {},
       usedGroq: false,
@@ -1611,7 +1651,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasLandmarkIntent(normalized)) {
     return {
-      text: composeSupportReply(language, buildLandmarkReply(language, normalized, routes), { includeClosing: true }),
+      text: supportReply(buildLandmarkReply(language, normalized, routes), { includeClosing: true }),
       language,
       state: {},
       usedGroq: false,
@@ -1630,7 +1670,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     && !currentState.awaitingOriginIntent
   ) {
     return {
-      text: composeSupportReply(language, buildDestinationClarifyingQuestion(language, destinationHint.name)),
+      text: supportReply(buildDestinationClarifyingQuestion(language, destinationHint.name)),
       language,
       state: {
         pendingDestinationName: destinationHint.name,
@@ -1663,7 +1703,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       const nextState = nextDestinationRepromptState(currentState, 'fare');
       if (!nextState) {
         return {
-          text: composeSupportReply(language, buildDestinationRepromptLimitReply(language)),
+          text: supportReply(buildDestinationRepromptLimitReply(language)),
           language,
           state: {},
           usedGroq: false,
@@ -1671,7 +1711,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       }
 
       return {
-        text: composeSupportReply(language, fallbackText(language, 'missingDestination')),
+        text: supportReply(fallbackText(language, 'missingDestination')),
         language,
         state: nextState,
         usedGroq: false,
@@ -1685,8 +1725,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
     if (!originCoordinate) {
       return {
-        text: composeSupportReply(
-          language,
+        text: supportReply(
           template(fallbackText(language, 'askOrigin'), { destination: destinationPoint.name }),
         ),
         language,
@@ -1710,7 +1749,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
     if (!originFromMessage && currentState.awaitingOriginForDestinationId && !request.currentLocation) {
       return {
-        text: composeSupportReply(language, fallbackText(language, 'unknownOrigin')),
+        text: supportReply(fallbackText(language, 'unknownOrigin')),
         language,
         state: currentState,
         usedGroq: false,
@@ -1738,8 +1777,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       : fareBody;
 
     return {
-      text: composeSupportReply(
-        language,
+      text: supportReply(
         withClarification,
         { includeClosing: true },
       ),
@@ -1771,7 +1809,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       const nextState = nextDestinationRepromptState(currentState, 'route');
       if (!nextState) {
         return {
-          text: composeSupportReply(language, buildDestinationRepromptLimitReply(language)),
+          text: supportReply(buildDestinationRepromptLimitReply(language)),
           language,
           state: {},
           usedGroq: false,
@@ -1779,7 +1817,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       }
 
       return {
-        text: composeSupportReply(language, routeResponseText(language, 'askDestination')),
+        text: supportReply(routeResponseText(language, 'askDestination')),
         language,
         state: nextState,
         usedGroq: false,
@@ -1792,8 +1830,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
     if (!originCoordinate) {
       return {
-        text: composeSupportReply(
-          language,
+        text: supportReply(
           template(routeResponseText(language, 'askOrigin'), { destination: destinationPoint.name }),
         ),
         language,
@@ -1824,7 +1861,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
     if (!routePlan) {
       return {
-        text: composeSupportReply(language, routeResponseText(language, 'noRouteFound')),
+        text: supportReply(routeResponseText(language, 'noRouteFound')),
         language,
         state: {},
         usedGroq: false,
@@ -1845,11 +1882,37 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       : routeBody;
 
     return {
-      text: composeSupportReply(
-        language,
+      text: supportReply(
         withClarification,
         { includeClosing: true },
       ),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (companionMode && !isTaskLikeMessage && hasAngerIntent(normalized)) {
+    return {
+      text: pickSocialReply(language, 'userAnger'),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (companionMode && !isTaskLikeMessage && hasEmpathyIntent(normalized)) {
+    return {
+      text: pickSocialReply(language, 'empathy'),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (companionMode && !isTaskLikeMessage && hasSuccessIntent(normalized)) {
+    return {
+      text: pickSocialReply(language, 'success'),
       language,
       state: {},
       usedGroq: false,
@@ -1912,7 +1975,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (shouldAskGeneralClarification(normalized)) {
     return {
-      text: composeSupportReply(language, buildGeneralClarifyingQuestion(language)),
+      text: supportReply(buildGeneralClarifyingQuestion(language)),
       language,
       state: currentState,
       usedGroq: false,
@@ -1925,7 +1988,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     const groqReply = await callGroqFallback(message, language);
     if (groqReply) {
       return {
-        text: composeSupportReply(language, formatForChatDisplay(groqReply), { includeClosing: true }),
+        text: supportReply(formatForChatDisplay(groqReply), { includeClosing: true }),
         language,
         state: {},
         usedGroq: true,
@@ -1937,7 +2000,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (!inScope) {
     return {
-      text: composeSupportReply(language, fallbackText(language, 'outOfScope')),
+      text: supportReply(fallbackText(language, 'outOfScope')),
       language,
       state: {},
       usedGroq: false,
@@ -1945,7 +2008,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   }
 
   return {
-    text: composeSupportReply(language, buildGeneralClarifyingQuestion(language)),
+    text: supportReply(buildGeneralClarifyingQuestion(language)),
     language,
     state: currentState,
     usedGroq: false,

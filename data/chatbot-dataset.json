@@ -1,5 +1,5 @@
 {
-  "version": "2026-04-01",
+  "version": "2026-04-03",
   "farePolicy": {
     "currency": "PHP",
     "baseFarePhp": 14,
@@ -323,14 +323,50 @@
     },
     "praise": {
       "en": [
-        "Wow, nice! You just boosted my virtual fuel tank to full. I will keep making your commute smoother.",
-        "That was awesome to hear. Jeepie confidence level is now at turbo mode for your next route.",
-        "You are too kind. I will repay that with cleaner routes and smarter fare tips for you."
+        "Thank you, that means a lot. You just boosted my virtual fuel tank to full, and I will keep making your commute smoother.",
+        "Thank you for the kind words. Jeepie confidence level is now in turbo mode for your next route.",
+        "Thanks for that compliment. I will repay it with cleaner routes and smarter fare tips for you."
       ],
       "tl": [
-        "Wow, nice! Full tank tuloy ang virtual energy ko. Mas pagbubutihin ko pa ang route at fare guides mo.",
-        "Solid yan! Naka-turbo mode na si Jeepie para sa susunod mong biyahe.",
-        "Salamat sa papuri! Bawi ako sa mas malinaw na roadmap at mas swabeng commute tips."
+        "Salamat, malaking bagay yan. Full tank tuloy ang virtual energy ko at mas pagbubutihin ko pa ang route at fare guides mo.",
+        "Salamat sa kind words. Naka-turbo mode na si Jeepie para sa susunod mong biyahe.",
+        "Maraming salamat sa papuri. Bawi ako sa mas malinaw na roadmap at mas swabeng commute tips."
+      ]
+    },
+    "userAnger": {
+      "en": [
+        "I hear you, and I am sorry if this got frustrating. Let us fix this together step by step.",
+        "You are right to feel upset. I am sorry for the hassle, and I will help you get back on track now.",
+        "I understand the frustration, and I am sorry about that experience. I am with you, let us solve it quickly."
+      ],
+      "tl": [
+        "Naririnig kita, at pasensya na kung nakakainis ang nangyari. Ayusin natin ito nang step by step.",
+        "Valid ang inis mo. Pasensya na sa abala, at tutulungan kitang maayos ito ngayon.",
+        "Gets ko yung frustration mo, at humihingi ako ng paumanhin sa naging experience. Kasama mo ako, ayusin natin agad."
+      ]
+    },
+    "empathy": {
+      "en": [
+        "I am here with you. That sounds heavy, so let us take this one step at a time.",
+        "Thanks for sharing that. I know commuting stress can feel a lot, and I will help make this easier.",
+        "You are not alone in this. We can handle it together and keep things simple."
+      ],
+      "tl": [
+        "Nandito ako para sa'yo. Mukhang mabigat yan, kaya dahan-dahanin natin, one step at a time.",
+        "Salamat sa pag-share. Alam kong nakaka-stress ang biyahe minsan, at tutulungan kitang gawing mas madali ito.",
+        "Hindi ka nag-iisa dito. Kakayanin natin ito nang magkasama at simple lang ang approach."
+      ]
+    },
+    "success": {
+      "en": [
+        "That is a win, and I am proud of you. Great job pushing through.",
+        "Nice one, that is progress. I am happy to celebrate that success with you.",
+        "Love that update. You did great, and you should be proud of yourself."
+      ],
+      "tl": [
+        "Panalo yan, at proud ako sa'yo. Great job sa pagpupursige.",
+        "Nice, solid progress yan. Masaya akong i-celebrate ang success mo.",
+        "Ang ganda ng update na yan. Ang galing mo at deserve mong ipagmalaki yan."
       ]
     },
     "userApology": {
