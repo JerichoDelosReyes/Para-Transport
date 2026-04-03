@@ -450,7 +450,7 @@ export default function HomeScreen() {
         
         // Directly and automatically zoom to frame the specific selected plotted route
         mapRef.current?.fitToCoordinates(newCoords, {
-          edgePadding: { top: 140, right: 40, bottom: 360, left: 40 },
+          edgePadding: { top: 80, right: 30, bottom: 250, left: 30 },
           animated: true,
         });
       } else {
