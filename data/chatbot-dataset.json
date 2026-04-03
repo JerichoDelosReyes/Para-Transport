@@ -87,6 +87,42 @@
     "cvsu",
     "cavite state university imus"
   ],
+  "companionLexicon": {
+    "powerWords": [
+      "alright",
+      "all right",
+      "perfect",
+      "alright perfect",
+      "sounds good",
+      "looks good",
+      "gotcha",
+      "roger",
+      "solid",
+      "nice",
+      "awesome",
+      "great",
+      "ayos",
+      "sakto",
+      "galing",
+      "astig"
+    ],
+    "curseWords": [
+      "fuck",
+      "fucking",
+      "shit",
+      "bitch",
+      "asshole",
+      "putang ina",
+      "putangina",
+      "gago",
+      "tanga",
+      "ulol",
+      "bobo",
+      "punyeta",
+      "bwiset",
+      "bwisit"
+    ]
+  },
   "places": [
     {
       "id": "imus_crossing",
@@ -299,14 +335,14 @@
   "socialResponses": {
     "greetings": {
       "en": [
-        "Hi! I am Jeepie, your Para commute companion. I am here to help with fares, routes, transit tips, and quick commuting questions. Where are we heading today?",
-        "Hello! Jeepie here, your travel buddy inside Para. I can help with fare estimates, jeepney routes, and destination guidance.",
-        "Hey there! I am Jeepie, your road buddy in Para. Tell me your destination, and we can plan your route together."
+        "Hi! I am Jeepie, your Para commute companion. I can help with fares, routes, transit tips, and also how to use Para screens like Search, Saved, Profile, Settings, and Achievements. Where are we heading today?",
+        "Hello! Jeepie here, your travel buddy inside Para. I can help with fare estimates, jeepney routes, destination guidance, and app navigation if you are looking for a feature.",
+        "Hey there! I am Jeepie, your road buddy in Para. Tell me your destination, or ask me how to navigate any Para feature and we can handle it together."
       ],
       "tl": [
-        "Kumusta! Ako si Jeepie, ang commute companion mo sa Para. Nandito ako para tumulong sa pamasahe, ruta, transit tips, at biyahe concerns. Saan tayo ngayon?",
-        "Kamusta! Si Jeepie ito, ang ka-biayahe mo sa Para. Pwede kitang tulungan sa fare estimate, jeepney routes, at gabay sa destinasyon.",
-        "Kamusta! Ako si Jeepie, road buddy mo sa Para. Sabihin mo lang destination mo at planuhin natin ang biyahe mo."
+        "Kumusta! Ako si Jeepie, ang commute companion mo sa Para. Nandito ako para tumulong sa pamasahe, ruta, transit tips, at pati pag-navigate ng Para screens tulad ng Search, Saved, Profile, Settings, at Achievements. Saan tayo ngayon?",
+        "Kamusta! Si Jeepie ito, ang ka-biayahe mo sa Para. Pwede kitang tulungan sa fare estimate, jeepney routes, gabay sa destinasyon, at app navigation kung may hinahanap kang feature.",
+        "Kamusta! Ako si Jeepie, road buddy mo sa Para. Sabihin mo lang destination mo, o itanong kung paano gamitin ang kahit anong Para feature, at aayusin natin together."
       ]
     },
     "thanks": {
@@ -331,6 +367,30 @@
         "Salamat, malaking bagay yan. Full tank tuloy ang virtual energy ko at mas pagbubutihin ko pa ang route at fare guides mo.",
         "Salamat sa kind words. Naka-turbo mode na si Jeepie para sa susunod mong biyahe.",
         "Maraming salamat sa papuri. Bawi ako sa mas malinaw na roadmap at mas swabeng commute tips."
+      ]
+    },
+    "powerWords": {
+      "en": [
+        "Alright, perfect. Locked in. I am here if you want the next step.",
+        "Nice, that sounds good. Just send what you need next and I got you.",
+        "Solid. We are aligned. Tell me the next route, fare, or Para feature you want."
+      ],
+      "tl": [
+        "Alright, perfect. Locked in tayo. Nandito lang ako sa next step.",
+        "Nice, ayos yan. I-send mo lang ang next need mo at tulungan kita.",
+        "Solid, aligned tayo. Sabihin mo lang ang susunod na route, fare, o Para feature na kailangan mo."
+      ]
+    },
+    "profanity": {
+      "en": [
+        "I hear your frustration. Let us keep it respectful so I can help you better with your route, fare, or Para app issue.",
+        "No judgment, but let us keep the chat clean. Tell me what happened and I will help you fix it.",
+        "I am still here to help. Please rephrase without curses, and we can solve your commute concern fast."
+      ],
+      "tl": [
+        "Gets ko na frustrated ka. Keep natin respectful ang usapan para mas maayos kitang matulungan sa route, fare, o Para app concern mo.",
+        "Walang judgment, pero pakiusap na iwasan natin ang mura. Sabihin mo lang ang nangyari at tutulungan kitang ayusin ito.",
+        "Nandito pa rin ako para tumulong. Paki-rephrase lang nang walang mura, tapos ayusin natin agad ang commute concern mo."
       ]
     },
     "userAnger": {

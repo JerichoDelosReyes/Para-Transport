@@ -86,12 +86,18 @@ type DatasetShape = {
     greetings: LocalizedVariants;
     thanks: LocalizedVariants;
     praise: LocalizedVariants;
+    powerWords: LocalizedVariants;
+    profanity: LocalizedVariants;
     userAnger: LocalizedVariants;
     empathy: LocalizedVariants;
     success: LocalizedVariants;
     userApology: LocalizedVariants;
     acknowledgement: LocalizedVariants;
     goodbye: LocalizedVariants;
+  };
+  companionLexicon: {
+    powerWords: string[];
+    curseWords: string[];
   };
   fareNews: LocalizedVariants;
   routeResponses: {
@@ -146,6 +152,8 @@ type StopDestination = DestinationPoint;
 
 const dataset = datasetJson as DatasetShape;
 const placeById = new Map<string, DatasetPlace>(dataset.places.map((place) => [place.id, place]));
+const companionPowerWordTokens = uniqueHints(dataset.companionLexicon?.powerWords ?? []);
+const companionCurseWordTokens = uniqueHints(dataset.companionLexicon?.curseWords ?? []);
 
 const aliasIndex: Array<{ alias: string; place: DatasetPlace }> = [];
 for (const place of dataset.places) {
@@ -820,7 +828,7 @@ function hasUserApologyIntent(normalized: string): boolean {
 }
 
 function hasAcknowledgementIntent(normalized: string): boolean {
-  return /\b(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po)\b/.test(normalized);
+  return /\b(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po|alright|all right|perfect|sounds good|looks good|gotcha|roger)\b/.test(normalized);
 }
 
 const PURE_SOCIAL_PATTERNS: RegExp[] = [
@@ -829,7 +837,7 @@ const PURE_SOCIAL_PATTERNS: RegExp[] = [
   /^(good job|great job|nice one|wow nice|wow ang galing|ang galing|galing mo|idol|solid mo|amazing|awesome|ang husay|best ka|lupet mo|angas mo)( jeepie)?$/,
   /^(bye|goodbye|see you|see ya|ingat|paalam|hanggang sa muli|chat later|brb)( jeepie)?$/,
   /^(sorry|pasensya|pasensiya|my bad|patawad)( jeepie)?$/,
-  /^(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po)( jeepie)?$/,
+  /^(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po|alright|all right|perfect|sounds good|looks good|gotcha|roger|alright perfect|all right perfect|sige perfect)( jeepie)?$/,
 ];
 
 function isPureSocialMessage(normalized: string): boolean {
@@ -846,6 +854,14 @@ function hasEmpathyIntent(normalized: string): boolean {
 
 function hasSuccessIntent(normalized: string): boolean {
   return /\b(i did it|we did it|naabot ko|nagawa ko|nakarating ako|nakapasa ako|success|succeeded|passed|done na|tapos na|na solve|naayos ko|achievement unlocked|na unlock|na-unlock|panalo|yay)\b/.test(normalized);
+}
+
+function hasPowerWordsIntent(normalized: string): boolean {
+  return companionPowerWordTokens.some((token) => hintMatches(normalized, token));
+}
+
+function hasProfanityIntent(normalized: string): boolean {
+  return companionCurseWordTokens.some((token) => hintMatches(normalized, token));
 }
 
 function hasCancelIntent(normalized: string): boolean {
@@ -1625,6 +1641,15 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
+  if (hasProfanityIntent(normalized)) {
+    return {
+      text: supportReply(pickSocialReply(language, 'profanity')),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
   if (hasBuilderOriginIntent(normalized)) {
     return {
       text: builderOriginReply(language),
@@ -1988,6 +2013,15 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   if (companionMode && !isTaskLikeMessage && hasSuccessIntent(normalized)) {
     return {
       text: pickSocialReply(language, 'success'),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (!isTaskLikeMessage && hasPowerWordsIntent(normalized)) {
+    return {
+      text: pickSocialReply(language, 'powerWords'),
       language,
       state: {},
       usedGroq: false,
