@@ -351,6 +351,7 @@ function composeSupportReply(
 ): string {
   const body = formatForChatDisplay(content);
   const shouldAddClosing = Boolean(options?.includeClosing)
+    && !isStrictPolicyReply(body)
     && body.length < 520
     && Math.random() < 0.45;
   const closing = shouldAddClosing
@@ -367,6 +368,29 @@ function template(message: string, replacements: Record<string, string>): string
     output = output.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
   }
   return output;
+}
+
+const STRICT_OUT_OF_SCOPE_REPLY = 'I’m here to help with PARA, commuting, routes, fares, and app-related questions.';
+const ROUTE_DATA_UNAVAILABLE_REPLY = 'I’m not seeing enough data for that route yet in PARA.';
+const INFO_UNAVAILABLE_REPLY = 'That information is not available in my current data.';
+
+function isStrictPolicyReply(text: string): boolean {
+  const normalized = text.trim();
+  return normalized === STRICT_OUT_OF_SCOPE_REPLY
+    || normalized === ROUTE_DATA_UNAVAILABLE_REPLY
+    || normalized === INFO_UNAVAILABLE_REPLY;
+}
+
+function strictOutOfScopeReply(): string {
+  return STRICT_OUT_OF_SCOPE_REPLY;
+}
+
+function routeDataUnavailableReply(): string {
+  return ROUTE_DATA_UNAVAILABLE_REPLY;
+}
+
+function infoUnavailableReply(): string {
+  return INFO_UNAVAILABLE_REPLY;
 }
 
 const JEEPNEY_BASE_FARE_REGULAR = 13;
@@ -794,6 +818,19 @@ function hasAcknowledgementIntent(normalized: string): boolean {
   return /\b(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po)\b/.test(normalized);
 }
 
+const PURE_SOCIAL_PATTERNS: RegExp[] = [
+  /^(hi|hello|hey|yo|good morning|good afternoon|good evening|kumusta|kamusta|kumutsa|kamutsa|musta|uy|henlo)( jeepie)?$/,
+  /^(thanks|thank you|ty|salamat|maraming salamat|tenkyu)( jeepie)?$/,
+  /^(good job|great job|nice one|wow nice|wow ang galing|ang galing|galing mo|idol|solid mo|amazing|awesome|ang husay|best ka|lupet mo|angas mo)( jeepie)?$/,
+  /^(bye|goodbye|see you|see ya|ingat|paalam|hanggang sa muli|chat later|brb)( jeepie)?$/,
+  /^(sorry|pasensya|pasensiya|my bad|patawad)( jeepie)?$/,
+  /^(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po)( jeepie)?$/,
+];
+
+function isPureSocialMessage(normalized: string): boolean {
+  return PURE_SOCIAL_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
 function hasCancelIntent(normalized: string): boolean {
   return /\b(cancel|cancel it|stop|stop it|never\s?mind|nvm|forget it|forget that|scratch that|ignore that|drop it|skip muna|pass muna|wag na|huwag na|ayoko na|hindi na|di na)\b/.test(normalized);
 }
@@ -1070,7 +1107,7 @@ function buildLandmarkReply(language: BotLanguage, normalized: string, routes: J
   if (mentionedRoute) {
     const routeStops = routeLandmarks(mentionedRoute);
     if (routeStops.length === 0) {
-      return routeResponseText(language, 'landmarkNoData');
+      return routeDataUnavailableReply();
     }
 
     const intro = template(routeResponseText(language, 'landmarkRouteIntro'), {
@@ -1093,7 +1130,7 @@ function buildLandmarkReply(language: BotLanguage, normalized: string, routes: J
   const allLandmarks = routeStops.length > 0 ? routeStops : fallbackPlaces;
 
   if (allLandmarks.length === 0) {
-    return routeResponseText(language, 'landmarkNoData');
+    return infoUnavailableReply();
   }
 
   const shown = allLandmarks.slice(0, 20);
@@ -1129,9 +1166,7 @@ function routeContainsPlace(route: JeepneyRoute, place: DatasetPlace): boolean {
 
 function buildRouteListReply(language: BotLanguage, routes: JeepneyRoute[], destination?: DatasetPlace): string {
   if (routes.length === 0) {
-    return language === 'tl'
-      ? 'Wala pang loaded route data ngayon. Subukan ulit mamaya o magtanong gamit ang exact destination para makapagbigay ako ng best available guidance.'
-      : 'There is no loaded route data right now. Please try again later, or ask using an exact destination so I can provide the best available guidance.';
+    return infoUnavailableReply();
   }
 
   const filtered = destination ? routes.filter((route) => routeContainsPlace(route, destination)) : routes;
@@ -1236,7 +1271,7 @@ function estimateFare(
   routes: JeepneyRoute[],
   originPlace?: DatasetPlace,
   destinationPlace?: DatasetPlace,
-): EstimateResult {
+): EstimateResult | null {
   if (routes.length > 0) {
     const matched = rankRoutes(
       findRoutesForDestination(origin, destination.coordinate, routes),
@@ -1279,14 +1314,7 @@ function estimateFare(
     }
   }
 
-  const estimatedDistanceKm = Math.max(1, haversineKm(origin, destination.coordinate) * 1.35);
-  const normalFare = calculateNormalFare(estimatedDistanceKm);
-  return {
-    distanceKm: estimatedDistanceKm,
-    normalFare,
-    discountedFare: calculateDiscountedFare(estimatedDistanceKm),
-    routeHint: 'nearest jeepney route near your current area',
-  };
+  return null;
 }
 
 function findRoutePlan(
@@ -1352,42 +1380,50 @@ function buildRouteReply(params: {
 
   const primaryRoute = plan.routeNames[0] || (language === 'tl' ? 'unang available na ruta' : 'the first available route');
 
-  const steps = language === 'tl'
-    ? [
-      `1. ${usedGpsOrigin ? `Mula sa current location mo (${originLabel}),` : `Magsimula sa ${originLabel} at`} pumunta sa pinakamalapit na sakayan para sa ${primaryRoute}.`,
-      `2. Sumakay sa ${primaryRoute}.`,
-      ...plan.routeNames.slice(1).map((routeName, index) => `${index + 3}. Pagkatapos, lumipat sa ${routeName}.`),
-      `${plan.routeNames.length + 3}. Bumaba sa pinakamalapit na drop-off point papuntang ${destinationLabel}.`,
-      `${plan.routeNames.length + 4}. Optional: Maikling lakad na lang papunta sa exact destination mo.`,
-    ]
-    : [
-      `1. ${usedGpsOrigin ? `From your current location (${originLabel}),` : `Start at ${originLabel} and`} head to the nearest pickup point for ${primaryRoute}.`,
-      `2. Ride ${primaryRoute}.`,
-      ...plan.routeNames.slice(1).map((routeName, index) => `${index + 3}. Then transfer to ${routeName}.`),
-      `${plan.routeNames.length + 3}. Drop off at the nearest point heading to ${destinationLabel}.`,
-      `${plan.routeNames.length + 4}. Optional: Take a short walk to your exact destination.`,
+  if (language === 'tl') {
+    const steps = [
+      usedGpsOrigin
+        ? `Mula sa current location mo (${originLabel}), pumunta sa pinakamalapit na sakayan para sa ${primaryRoute}.`
+        : `Magsimula sa ${originLabel} at pumunta sa pinakamalapit na sakayan para sa ${primaryRoute}.`,
+      `Sumakay sa ${primaryRoute}.`,
+      ...plan.routeNames.slice(1).map((routeName) => `Pagkatapos, lumipat sa ${routeName}.`),
+      `Bumaba sa pinakamalapit na drop-off point papuntang ${destinationLabel}.`,
     ];
 
-  if (language === 'tl') {
+    const routeSteps = steps.map((step, index) => `Step ${index + 1}: ${step}`).join('\n');
+
     return [
       intro,
-      `Roadmap mula ${originLabel} papuntang ${destinationLabel}:`,
-      steps.join('\n'),
-      `Tantyang biyahe: mga ${plan.estimatedMinutes} minuto.`,
-      `Tantyang layo: ${plan.distanceKm.toFixed(1)} km.`,
-      `Tantyang fare: ${formatPhp(plan.estimatedFare)} (regular).`,
-      routeResponseText(language, 'routeSummaryOutro'),
+      'Ruta:',
+      routeSteps,
+      'Pamasahe:',
+      `Tantyang Pamasahe (Regular): ${formatPhp(plan.estimatedFare)}`,
+      'Note: Fare may vary depending on local rates.',
+      'Tip:',
+      `Tantyang biyahe: mga ${plan.estimatedMinutes} minuto, at tantyang layo: ${plan.distanceKm.toFixed(1)} km. Maghanda ng eksaktong pamasahe kapag kaya.`,
     ].join('\n\n');
   }
 
+  const steps = [
+    usedGpsOrigin
+      ? `From your current location (${originLabel}), head to the nearest pickup point for ${primaryRoute}.`
+      : `Start at ${originLabel} and head to the nearest pickup point for ${primaryRoute}.`,
+    `Ride ${primaryRoute}.`,
+    ...plan.routeNames.slice(1).map((routeName) => `Then transfer to ${routeName}.`),
+    `Drop off at the nearest point heading to ${destinationLabel}.`,
+  ];
+
+  const routeSteps = steps.map((step, index) => `Step ${index + 1}: ${step}`).join('\n');
+
   return [
     intro,
-    `Roadmap from ${originLabel} to ${destinationLabel}:`,
-    steps.join('\n'),
-    `Estimated trip: around ${plan.estimatedMinutes} minutes.`,
-    `Estimated distance: ${plan.distanceKm.toFixed(1)} km.`,
-    `Estimated fare: ${formatPhp(plan.estimatedFare)} (regular).`,
-    routeResponseText(language, 'routeSummaryOutro'),
+    'Route:',
+    routeSteps,
+    'Fare:',
+    `Estimated Fare (Regular): ${formatPhp(plan.estimatedFare)}`,
+    'Note: Fare may vary depending on local rates.',
+    'Tip:',
+    `Estimated trip: around ${plan.estimatedMinutes} minutes, and estimated distance: ${plan.distanceKm.toFixed(1)} km. Prepare exact fare when possible.`,
   ].join('\n\n');
 }
 
@@ -1401,18 +1437,38 @@ function buildFareReply(params: {
   const { language, originLabel, destinationLabel, estimate, usedGpsLocation } = params;
 
   if (language === 'tl') {
-    if (usedGpsLocation) {
-      return `Sige, check natin. Nakikita ko na nasa ${originLabel} ka ngayon. Puwede kang sumakay ng jeepney sa pinakamalapit na rutang ${estimate.routeHint} papuntang ${destinationLabel}. Tantyang layo ay ${estimate.distanceKm.toFixed(1)} km. Tantyang pamasahe ay ${formatPhp(estimate.normalFare)} para sa regular fare at ${formatPhp(estimate.discountedFare)} kung student, senior citizen, o PWD. Ingat sa biyahe!`;
-    }
+    const stepOne = usedGpsLocation
+      ? `Mula sa current location mo (${originLabel}), pumunta sa pinakamalapit na sakayan para sa rutang ${estimate.routeHint}.`
+      : `Mula ${originLabel}, pumunta sa pinakamalapit na sakayan para sa rutang ${estimate.routeHint}.`;
 
-    return `Sure, ito ang estimate ko. Mula ${originLabel} papuntang ${destinationLabel}, puwede kang sumakay sa rutang ${estimate.routeHint}. Tantyang layo ay ${estimate.distanceKm.toFixed(1)} km. Tantyang pamasahe ay ${formatPhp(estimate.normalFare)} para sa regular fare at ${formatPhp(estimate.discountedFare)} kung student, senior citizen, o PWD.`;
+    return [
+      'Ruta:',
+      `Step 1: ${stepOne}`,
+      `Step 2: Sumakay papuntang ${destinationLabel}.`,
+      'Pamasahe:',
+      `Tantyang Pamasahe (Regular): ${formatPhp(estimate.normalFare)}`,
+      `Tantyang Pamasahe (Student/Senior/PWD): ${formatPhp(estimate.discountedFare)}`,
+      'Note: Fare may vary depending on local rates.',
+      'Tip:',
+      `Tantyang layo: ${estimate.distanceKm.toFixed(1)} km. Maghanda ng eksaktong pamasahe kapag kaya.`,
+    ].join('\n\n');
   }
 
-  if (usedGpsLocation) {
-    return `Sure thing! I'm seeing here that you are on ${originLabel} right now. You can ride a jeepney on the nearest route ${estimate.routeHint} going to ${destinationLabel}. Estimated distance is about ${estimate.distanceKm.toFixed(1)} km. Estimated fare is ${formatPhp(estimate.normalFare)} for normal fare and ${formatPhp(estimate.discountedFare)} if you are a student, senior citizen, or PWD. Travel safe out there.`;
-  }
+  const stepOne = usedGpsLocation
+    ? `From your current location (${originLabel}), head to the nearest pickup point for route ${estimate.routeHint}.`
+    : `From ${originLabel}, head to the nearest pickup point for route ${estimate.routeHint}.`;
 
-  return `Got you! From ${originLabel} to ${destinationLabel}, you can ride a jeepney on route ${estimate.routeHint}. Estimated distance is about ${estimate.distanceKm.toFixed(1)} km. Estimated fare is ${formatPhp(estimate.normalFare)} for normal fare and ${formatPhp(estimate.discountedFare)} if you are a student, senior citizen, or PWD.`;
+  return [
+    'Route:',
+    `Step 1: ${stepOne}`,
+    `Step 2: Ride toward ${destinationLabel}.`,
+    'Fare:',
+    `Estimated Fare (Regular): ${formatPhp(estimate.normalFare)}`,
+    `Estimated Fare (Student/Senior/PWD): ${formatPhp(estimate.discountedFare)}`,
+    'Note: Fare may vary depending on local rates.',
+    'Tip:',
+    `Estimated distance: ${estimate.distanceKm.toFixed(1)} km. Prepare exact fare when possible.`,
+  ].join('\n\n');
 }
 
 function pickTrivia(language: BotLanguage): string {
@@ -1448,9 +1504,20 @@ async function callGroqFallback(message: string, language: BotLanguage): Promise
   const apiKey = rawKey?.trim();
   if (!apiKey) return null;
 
-  const outOfScopeMsg = pickLocalized(dataset.fallbackMessages.outOfScope, language);
-
   const requestedLanguage = language === 'tl' ? 'Tagalog' : 'English';
+  const strictPrompt = [
+    'You are Jeepie, the built-in assistant of the PARA mobile application.',
+    'You are not a general-purpose AI.',
+    'Only answer transportation and PARA app topics: public transport, routes, directions, fares, commute tips, and app features.',
+    'Do not invent or guess routes, fares, schedules, availability, traffic, or announcements.',
+    `If route data is missing, reply exactly with: ${ROUTE_DATA_UNAVAILABLE_REPLY}`,
+    `If data is unavailable, reply exactly with: ${INFO_UNAVAILABLE_REPLY}`,
+    `If the request is outside scope, reply exactly with: ${STRICT_OUT_OF_SCOPE_REPLY}`,
+    'Keep responses practical, concise, and commuter-friendly.',
+    'If giving fare, label it as estimated and include: Note: Fare may vary depending on local rates.',
+    'Do not mention internal system logic or model limitations.',
+    `Respond in ${requestedLanguage} and match mixed English/Filipino naturally.`,
+  ].join('\n');
 
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -1465,8 +1532,7 @@ async function callGroqFallback(message: string, language: BotLanguage): Promise
       messages: [
         {
           role: 'system',
-          content:
-            `You are Jeepie, Para app's commute companion. Only answer about commuting, fares, jeepneys, tricycles, transit routes, destinations, and app usage. If question is outside this scope, respond exactly with: ${outOfScopeMsg}. Respond in ${requestedLanguage}. Keep responses friendly, practical, concise, and focused on practical next steps. Return only the response body in 1-2 short paragraphs with no greeting and no sign-off because the app wraps your output.`,
+          content: strictPrompt,
         },
         {
           role: 'user',
@@ -1725,6 +1791,15 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       destinationPlace || undefined,
     );
 
+    if (!estimate) {
+      return {
+        text: routeDataUnavailableReply(),
+        language,
+        state: {},
+        usedGroq: false,
+      };
+    }
+
     const fareBody = buildFareReply({
       language,
       originLabel,
@@ -1824,7 +1899,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
     if (!routePlan) {
       return {
-        text: composeSupportReply(language, routeResponseText(language, 'noRouteFound')),
+        text: routeDataUnavailableReply(),
         language,
         state: {},
         usedGroq: false,
@@ -1856,7 +1931,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
-  if (!isTaskLikeMessage && hasGreetingIntent(normalized)) {
+  if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasGreetingIntent(normalized)) {
     return {
       text: pickSocialReply(language, 'greetings'),
       language,
@@ -1865,7 +1940,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
-  if (!isTaskLikeMessage && hasPraiseIntent(normalized)) {
+  if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasPraiseIntent(normalized)) {
     return {
       text: pickSocialReply(language, 'praise'),
       language,
@@ -1874,7 +1949,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
-  if (!isTaskLikeMessage && hasThanksIntent(normalized)) {
+  if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasThanksIntent(normalized)) {
     return {
       text: pickSocialReply(language, 'thanks'),
       language,
@@ -1883,7 +1958,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
-  if (!isTaskLikeMessage && hasGoodbyeIntent(normalized)) {
+  if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasGoodbyeIntent(normalized)) {
     return {
       text: pickSocialReply(language, 'goodbye'),
       language,
@@ -1892,7 +1967,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
-  if (!isTaskLikeMessage && hasUserApologyIntent(normalized)) {
+  if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasUserApologyIntent(normalized)) {
     return {
       text: pickSocialReply(language, 'userApology'),
       language,
@@ -1901,7 +1976,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
-  if (!isTaskLikeMessage && hasAcknowledgementIntent(normalized)) {
+  if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasAcknowledgementIntent(normalized)) {
     return {
       text: pickSocialReply(language, 'acknowledgement'),
       language,
@@ -1921,6 +1996,15 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   const inScope = isInScope(normalized);
 
+  if (!inScope) {
+    return {
+      text: strictOutOfScopeReply(),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
   try {
     const groqReply = await callGroqFallback(message, language);
     if (groqReply) {
@@ -1933,15 +2017,6 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     }
   } catch {
     // ignore and fall through to local unknown fallback
-  }
-
-  if (!inScope) {
-    return {
-      text: composeSupportReply(language, fallbackText(language, 'outOfScope')),
-      language,
-      state: {},
-      usedGroq: false,
-    };
   }
 
   return {
