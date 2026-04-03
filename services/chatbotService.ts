@@ -279,6 +279,90 @@ function hintMatches(normalized: string, token: string): boolean {
   return new RegExp(`\\b${escapeRegExp(normalizedToken)}\\b`).test(normalized);
 }
 
+function normalizeIntentText(text: string): string {
+  return normalizeText(text)
+    .replace(/(.)\1{2,}/g, '$1')
+    .trim();
+}
+
+function tokenizeWords(normalized: string): string[] {
+  return normalized.split(' ').filter(Boolean);
+}
+
+function hasAdjacentTransposition(a: string, b: string): boolean {
+  if (a.length !== b.length || a.length < 2) return false;
+
+  let firstMismatch = -1;
+  let mismatchCount = 0;
+
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] === b[i]) continue;
+    mismatchCount += 1;
+    if (firstMismatch === -1) firstMismatch = i;
+  }
+
+  if (mismatchCount !== 2 || firstMismatch < 0 || firstMismatch >= a.length - 1) return false;
+
+  return a[firstMismatch] === b[firstMismatch + 1]
+    && a[firstMismatch + 1] === b[firstMismatch]
+    && a.slice(firstMismatch + 2) === b.slice(firstMismatch + 2);
+}
+
+function fuzzyWordMatch(word: string, target: string): boolean {
+  if (!word || !target) return false;
+  if (word === target) return true;
+  if (word.length < 4 || target.length < 4) return false;
+  if (word[0] !== target[0]) return false;
+  if (Math.abs(word.length - target.length) > 2) return false;
+  if (hasAdjacentTransposition(word, target)) return true;
+
+  const maxLen = Math.max(word.length, target.length);
+  const maxDistance = maxLen >= 8 ? 2 : 1;
+  return levenshteinDistance(word, target) <= maxDistance;
+}
+
+function fuzzyHintMatches(normalized: string, token: string): boolean {
+  const normalizedToken = normalizeIntentText(token);
+  if (!normalizedToken) return false;
+
+  const sourceWords = tokenizeWords(normalized);
+  const targetWords = tokenizeWords(normalizedToken);
+  if (sourceWords.length === 0 || targetWords.length === 0) return false;
+
+  if (targetWords.length === 1) {
+    const target = targetWords[0];
+    return sourceWords.some((source) => fuzzyWordMatch(source, target));
+  }
+
+  if (targetWords.length > sourceWords.length) return false;
+
+  for (let i = 0; i <= sourceWords.length - targetWords.length; i += 1) {
+    let matched = true;
+
+    for (let j = 0; j < targetWords.length; j += 1) {
+      const source = sourceWords[i + j];
+      const target = targetWords[j];
+      if (source === target) continue;
+      if (!fuzzyWordMatch(source, target)) {
+        matched = false;
+        break;
+      }
+    }
+
+    if (matched) return true;
+  }
+
+  return false;
+}
+
+function matchesIntentHint(normalized: string, token: string): boolean {
+  return hintMatches(normalized, token) || fuzzyHintMatches(normalized, token);
+}
+
+function hasAnyIntentToken(normalized: string, tokens: string[]): boolean {
+  return tokens.some((token) => matchesIntentHint(normalized, token));
+}
+
 function scoreHintMatches(normalized: string, hints: string[]): number {
   return hints.reduce((count, token) => (hintMatches(normalized, token) ? count + 1 : count), 0);
 }
@@ -294,7 +378,7 @@ function normalizeText(text: string): string {
 }
 
 function detectLanguage(message: string): BotLanguage {
-  const normalized = normalizeText(message);
+  const normalized = normalizeIntentText(message);
 
   // Treat common kamusta/kumusta greetings as strong Tagalog intent.
   if (/\b(kamusta|kumusta|kamutsa|kumutsa|musta)\b/.test(normalized)) {
@@ -791,15 +875,45 @@ function shouldAskGeneralClarification(normalized: string): boolean {
 }
 
 function hasFareIntent(normalized: string): boolean {
-  return /(fare|pamasahe|magkano|bayad|how much|magkan[o0]|magkano po|how much fare|fare estimate|estimate fare|pamasahe papunta|pamasahe mula|how much should i pay)/.test(normalized);
+  if (/(fare|pamasahe|magkano|bayad|how much|magkan[o0]|magkano po|how much fare|fare estimate|estimate fare|pamasahe papunta|pamasahe mula|how much should i pay)/.test(normalized)) {
+    return true;
+  }
+
+  return hasAnyIntentToken(normalized, [
+    'fare',
+    'pamasahe',
+    'magkano',
+    'bayad',
+    'how much fare',
+    'fare estimate',
+    'estimate fare',
+  ]);
 }
 
 function hasRouteIntent(normalized: string): boolean {
-  return /(route|ruta|navigate|navigation|directions|papunta|paano pumunta|how to go|get there|go to|dalhin|sakay papunta|how do i get|pinpoint|pinned|drop pin|pin location)/.test(normalized);
+  if (/(route|ruta|navigate|navigation|directions|papunta|paano pumunta|how to go|get there|go to|dalhin|sakay papunta|how do i get|pinpoint|pinned|drop pin|pin location)/.test(normalized)) {
+    return true;
+  }
+
+  return hasAnyIntentToken(normalized, [
+    'route',
+    'ruta',
+    'navigate',
+    'navigation',
+    'directions',
+    'papunta',
+    'paano pumunta',
+    'how to go',
+    'get there',
+    'how do i get',
+    'drop pin',
+    'pinpoint',
+  ]);
 }
 
 function hasPinIntent(normalized: string): boolean {
-  return /(pin|pinned|pinpoint|drop pin|pin location)/.test(normalized);
+  return /(pin|pinned|pinpoint|drop pin|pin location)/.test(normalized)
+    || hasAnyIntentToken(normalized, ['pin', 'pinned', 'pinpoint', 'drop pin', 'pin location']);
 }
 
 function hasLandmarkIntent(normalized: string): boolean {
@@ -815,15 +929,53 @@ function hasFarePolicyIntent(normalized: string): boolean {
 }
 
 function hasCapabilityIntent(normalized: string): boolean {
-  return /(what can you do|what can jeepie do|how can you help|capabilities|features|functionality|help menu|anong kaya mo|ano kaya mo|anong pwede mong gawin|paano kita gamitin|pano kita gamitin|tulong mo|help options)/.test(normalized);
+  if (/(what can you do|what can jeepie do|how can you help|capabilities|features|functionality|help menu|anong kaya mo|ano kaya mo|anong pwede mong gawin|paano kita gamitin|pano kita gamitin|tulong mo|help options)/.test(normalized)) {
+    return true;
+  }
+
+  return hasAnyIntentToken(normalized, [
+    'what can you do',
+    'what can jeepie do',
+    'how can you help',
+    'capabilities',
+    'features',
+    'help options',
+    'anong kaya mo',
+    'ano kaya mo',
+    'tulong mo',
+  ]);
 }
 
 function hasAchievementIntent(normalized: string): boolean {
-  return /(achievement|achievements|badge|badges|unlock|how to get|paano makuha|route rookie|path explorer|urban navigator|streak)/.test(normalized);
+  if (/(achievement|achievements|badge|badges|unlock|how to get|paano makuha|route rookie|path explorer|urban navigator|streak)/.test(normalized)) {
+    return true;
+  }
+
+  return hasAnyIntentToken(normalized, [
+    'achievement',
+    'achievements',
+    'achivement',
+    'achivements',
+    'badge',
+    'badges',
+    'unlock',
+    'how to get',
+    'paano makuha',
+  ]);
 }
 
 function hasTriviaIntent(normalized: string): boolean {
-  return /(trivia|fun fact|did you know|alam mo ba|fact tungkol|fact about|random fact|kwento trivia|trivia naman)/.test(normalized);
+  if (/(trivia|fun fact|did you know|alam mo ba|fact tungkol|fact about|random fact|kwento trivia|trivia naman)/.test(normalized)) {
+    return true;
+  }
+
+  return hasAnyIntentToken(normalized, [
+    'trivia',
+    'fun fact',
+    'did you know',
+    'alam mo ba',
+    'random fact',
+  ]);
 }
 
 function hasBuilderIntent(normalized: string): boolean {
@@ -847,37 +999,76 @@ function builderOriginReply(language: BotLanguage): string {
 }
 
 function hasFareNewsIntent(normalized: string): boolean {
-  return /(why.*fare|bakit.*pamasahe|tumaas.*pamasahe|fare (increase|hike)|oil price|fuel price|giyera|gyera|war|bakit.*14|from 13 to 14|13 to 14)/.test(normalized);
+  if (/(why.*fare|bakit.*pamasahe|tumaas.*pamasahe|fare (increase|hike)|oil price|fuel price|giyera|gyera|war|bakit.*14|from 13 to 14|13 to 14)/.test(normalized)) {
+    return true;
+  }
+
+  return hasAnyIntentToken(normalized, [
+    'fare increase',
+    'fare hike',
+    'oil price',
+    'fuel price',
+    'giyera',
+    'gyera',
+    'war',
+  ]);
 }
 
 function hasGreetingIntent(normalized: string): boolean {
-  return /^(hi|hello|hey|yo|good morning|good afternoon|good evening|kumusta|kamusta|kumutsa|kamutsa|uy|musta|henlo)(\b|\s|!|\.)/.test(normalized)
-    || /\b(hi jeepie|hello jeepie|kumusta jeepie|kamusta jeepie|kumutsa jeepie|kamutsa jeepie|good day jeepie)\b/.test(normalized);
+  if (/^(hi|hello|hey|yo|good morning|good afternoon|good evening|kumusta|kamusta|kumutsa|kamutsa|uy|musta|henlo)(\b|\s|!|\.)/.test(normalized)) {
+    return true;
+  }
+
+  if (/\b(hi+|hello+|hey+|henlo+|kumusta+|kamusta+|musta+)\b/.test(normalized)) {
+    return true;
+  }
+
+  if (/\b(hi jeepie|hello jeepie|kumusta jeepie|kamusta jeepie|kumutsa jeepie|kamutsa jeepie|good day jeepie)\b/.test(normalized)) {
+    return true;
+  }
+
+  return hasAnyIntentToken(normalized, [
+    'hi',
+    'hello',
+    'hey',
+    'henlo',
+    'kumusta',
+    'kamusta',
+    'musta',
+    'good morning',
+    'good afternoon',
+    'good evening',
+  ]);
 }
 
 function hasThanksIntent(normalized: string): boolean {
-  return /\b(thanks|thank you|ty|salamat|maraming salamat|tenkyu)\b/.test(normalized);
+  return /\b(thanks|thank you|ty|salamat|maraming salamat|tenkyu)\b/.test(normalized)
+    || hasAnyIntentToken(normalized, ['thanks', 'thank you', 'salamat', 'maraming salamat', 'tenkyu']);
 }
 
 function hasPraiseIntent(normalized: string): boolean {
-  return /\b(good job|great job|nice one|wow nice|wow ang galing|ang galing|galing mo|idol|solid mo|amazing|awesome|ang husay|best ka|lupet mo|angas mo)\b/.test(normalized);
+  return /\b(good job|great job|nice one|wow nice|wow ang galing|ang galing|galing mo|idol|solid mo|amazing|awesome|ang husay|best ka|lupet mo|angas mo)\b/.test(normalized)
+    || hasAnyIntentToken(normalized, ['good job', 'great job', 'nice one', 'ang galing', 'awesome', 'amazing', 'angas mo']);
 }
 
 function hasGoodbyeIntent(normalized: string): boolean {
-  return /\b(bye|goodbye|see you|see ya|ingat|paalam|aalis na ko|aalis na ako|hanggang sa muli|chat later|brb)\b/.test(normalized);
+  return /\b(bye|goodbye|see you|see ya|ingat|paalam|aalis na ko|aalis na ako|hanggang sa muli|chat later|brb)\b/.test(normalized)
+    || hasAnyIntentToken(normalized, ['bye', 'goodbye', 'see you', 'ingat', 'paalam', 'chat later']);
 }
 
 function hasUserApologyIntent(normalized: string): boolean {
-  return /\b(sorry|pasensya|pasensiya|my bad|patawad)\b/.test(normalized);
+  return /\b(sorry|pasensya|pasensiya|my bad|patawad)\b/.test(normalized)
+    || hasAnyIntentToken(normalized, ['sorry', 'pasensya', 'pasensiya', 'my bad', 'patawad']);
 }
 
 function hasAcknowledgementIntent(normalized: string): boolean {
-  return /\b(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po|alright|all right|perfect|sounds good|looks good|gotcha|roger)\b/.test(normalized);
+  return /\b(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po|alright|all right|perfect|sounds good|looks good|gotcha|roger)\b/.test(normalized)
+    || hasAnyIntentToken(normalized, ['okay', 'noted', 'copy', 'gets', 'sige', 'alright', 'perfect', 'sounds good', 'gotcha', 'roger']);
 }
 
 const PURE_SOCIAL_PATTERNS: RegExp[] = [
-  /^(hi|hello|hey|yo|good morning|good afternoon|good evening|kumusta|kamusta|kumutsa|kamutsa|musta|uy|henlo)( jeepie)?$/,
-  /^(thanks|thank you|ty|salamat|maraming salamat|tenkyu)( jeepie)?$/,
+  /^(hi+|hello+|hey+|yo+|good morning|good afternoon|good evening|kumusta+|kamusta+|kumutsa+|kamutsa+|musta+|uy+|henlo+)( jeepie)?$/,
+  /^(thanks+|thank you+|ty+|salamat+|maraming salamat|tenkyu+)( jeepie)?$/,
   /^(good job|great job|nice one|wow nice|wow ang galing|ang galing|galing mo|idol|solid mo|amazing|awesome|ang husay|best ka|lupet mo|angas mo)( jeepie)?$/,
   /^(lol|lmao|lmfao|rofl|haha+|hehe+|hihi+)( jeepie)?$/,
   /^(bye|goodbye|see you|see ya|ingat|paalam|hanggang sa muli|chat later|brb)( jeepie)?$/,
@@ -1066,7 +1257,7 @@ function findAppGuideByAliases(normalized: string): DatasetAppGuide | null {
   let bestScore = 0;
 
   for (const [alias, guideId] of Object.entries(APP_GUIDE_ALIAS_TO_ID)) {
-    if (!hintMatches(normalized, alias)) continue;
+    if (!matchesIntentHint(normalized, alias)) continue;
     const score = normalizeText(alias).length;
     if (score > bestScore) {
       bestScore = score;
@@ -1103,7 +1294,7 @@ function findAppGuide(normalized: string): DatasetAppGuide | null {
     for (const rawIntent of guide.intents || []) {
       const intent = normalizeText(rawIntent);
       if (!intent) continue;
-      if (!hintMatches(normalized, intent)) continue;
+      if (!matchesIntentHint(normalized, intent)) continue;
 
       const score = intent.length;
       if (score > bestScore) {
@@ -1730,10 +1921,11 @@ async function callGroqFallback(
     'You are Jeepie, the built-in assistant of the PARA mobile application.',
     'You are not a general-purpose AI.',
     'Only answer transportation and PARA app topics: public transport, routes, directions, fares, commute tips, and app features.',
+    'For casual/friendly conversation, respond warmly and keep it related to commuting or the PARA app when possible.',
     'Do not invent or guess routes, fares, schedules, availability, traffic, or announcements.',
     `If route data is missing, reply exactly with: ${ROUTE_DATA_UNAVAILABLE_REPLY}`,
     `If data is unavailable, reply exactly with: ${INFO_UNAVAILABLE_REPLY}`,
-    `If the request is outside scope, reply exactly with: ${STRICT_OUT_OF_SCOPE_REPLY}`,
+    `If the user asks strict academic/technical tasks outside PARA commuting (for example math equations or coding problems), reply exactly with: ${STRICT_OUT_OF_SCOPE_REPLY}`,
     'Keep responses practical, concise, and commuter-friendly.',
     'If giving fare, label it as estimated and include: Note: Fare may vary depending on local rates.',
     'Do not mention internal system logic or model limitations.',
@@ -1741,10 +1933,10 @@ async function callGroqFallback(
   ].join('\n');
 
   const historyTurns = recentGroqHistory(history);
-  const currentNormalized = normalizeText(message);
+  const currentNormalized = normalizeIntentText(message);
   const historyAlreadyHasCurrentMessage = historyTurns.length > 0
     && historyTurns[historyTurns.length - 1].role === 'user'
-    && normalizeText(historyTurns[historyTurns.length - 1].content) === currentNormalized;
+    && normalizeIntentText(historyTurns[historyTurns.length - 1].content) === currentNormalized;
 
   const userTurns = historyAlreadyHasCurrentMessage
     ? historyTurns
@@ -1784,10 +1976,15 @@ function fallbackText(language: BotLanguage, key: keyof DatasetShape['fallbackMe
   return pickLocalized(entry, language);
 }
 
+function hasStrictAcademicIntent(normalized: string): boolean {
+  return /\b(solve|equation|algebra|geometry|trigonometry|calculus|derivative|integral|matrix|statistics|probability|physics|chemistry|biology|programming|coding|algorithm|python|java|javascript|typescript|c\+\+|homework|assignment|thesis|research paper)\b/.test(normalized)
+    || /\b\d+\s*[+\-*/^]\s*\d+\b/.test(normalized);
+}
+
 export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotResponse> {
   const message = request.message.trim();
   const language = detectLanguage(message);
-  const normalized = normalizeText(message);
+  const normalized = normalizeIntentText(message);
   const history = request.history ?? [];
   const mode = request.mode ?? 'assistant';
   const companionMode = mode === 'companion';
@@ -2307,6 +2504,25 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
+  const inScope = isInScope(normalized);
+  const strictAcademic = hasStrictAcademicIntent(normalized);
+
+  if (!strictAcademic) {
+    try {
+      const groqReply = await callGroqFallback(message, language, history);
+      if (groqReply) {
+        return {
+          text: supportReply(formatForChatDisplay(groqReply), { includeClosing: true }),
+          language,
+          state: {},
+          usedGroq: true,
+        };
+      }
+    } catch {
+      // ignore and fall through to deterministic fallback
+    }
+  }
+
   if (shouldAskGeneralClarification(normalized)) {
     return {
       text: supportReply(buildGeneralClarifyingQuestion(language)),
@@ -2316,34 +2532,9 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
-  const inScope = isInScope(normalized);
-
   if (!inScope) {
     return {
       text: strictOutOfScopeReply(),
-      language,
-      state: {},
-      usedGroq: false,
-    };
-  }
-
-  try {
-    const groqReply = await callGroqFallback(message, language, history);
-    if (groqReply) {
-      return {
-        text: supportReply(formatForChatDisplay(groqReply), { includeClosing: true }),
-        language,
-        state: {},
-        usedGroq: true,
-      };
-    }
-  } catch {
-    // ignore and fall through to local unknown fallback
-  }
-
-  if (!inScope) {
-    return {
-      text: composeSupportReply(language, fallbackText(language, 'outOfScope')),
       language,
       state: {},
       usedGroq: false,
