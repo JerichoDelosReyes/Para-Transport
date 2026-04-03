@@ -447,6 +447,12 @@ export default function HomeScreen() {
       const newCoords = route.legs.flatMap((leg: any) => leg.route.coordinates);
       if (newCoords && newCoords.length >= 2) {
         setRouteCoordinates(sampleCoordinates(newCoords, 700));
+        
+        // Directly and automatically zoom to frame the specific selected plotted route
+        mapRef.current?.fitToCoordinates(newCoords, {
+          edgePadding: { top: 140, right: 40, bottom: 360, left: 40 },
+          animated: true,
+        });
       } else {
         setRouteCoordinates([]);
       }
@@ -784,22 +790,15 @@ export default function HomeScreen() {
       setShowRecommender(true);
 
       if (results.length > 0) {
-        const allCoords = results.flatMap(m =>
-          m.legs.flatMap((l: any) => sampleCoordinates(l.route.coordinates, 40))
-        );
-        mapRef.current?.fitToCoordinates(allCoords, {
-          edgePadding: { top: 160, right: 50, bottom: 300, left: 50 },
-          animated: true,
-        });
-
-        // Delay route highlight by 300ms to allow bottom sheet intro animation to pop smoothly
-        setTimeout(() => {
-           const firstRanked = rankRoutes(results, 'easiest')[0];
-           if (firstRanked) {
-             const firstId = firstRanked.legs.map((l: any) => l.route.properties.code).join('+');
-             setSelectedRouteId(firstId);
-           }
-        }, 300);
+        const firstRanked = rankRoutes(results, 'easiest')[0];
+        if (firstRanked) {
+          const firstId = firstRanked.legs.map((l: any) => l.route.properties.code).join('+');
+          
+          // Delay route highlight by 300ms to allow bottom sheet intro animation to pop smoothly
+          setTimeout(() => {
+            setSelectedRouteId(firstId);
+          }, 300);
+        }
       } else {
         mapRef.current?.animateToRegion({...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01}, 600);
       }
