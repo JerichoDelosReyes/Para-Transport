@@ -43,6 +43,7 @@ export type MapLibreWrapperHandle = {
     pitch?: number;
     heading?: number;
     animationDuration?: number;
+    animationMode?: 'easeTo' | 'flyTo' | 'linearTo';
   }) => void;
 };
 
@@ -187,6 +188,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
           pitch: options.pitch,
           heading: options.heading,
           animationDuration: options.animationDuration,
+          animationMode: options.animationMode,
         });
       },
     }));

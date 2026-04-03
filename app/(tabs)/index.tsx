@@ -541,7 +541,6 @@ export default function HomeScreen() {
   }, [transitRoutes]);
   const [showTransitLayer, setShowTransitLayer] = useState(false);
   const [nearestStop, setNearestStop] = useState<any>(null);
-  const [currentCameraPitch, setCurrentCameraPitch] = useState<number>(MAP_CONFIG.THREE_D_CAMERA.defaultPitch);
   const user = useStore((state) => state.user);
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
   const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
@@ -593,13 +592,13 @@ export default function HomeScreen() {
     zoom?: number;
     heading?: number;
     pitch?: number;
+    animationMode?: 'easeTo' | 'flyTo' | 'linearTo';
   }, duration = 250) => {
     // Apply pitch guardrails: clamp between min and max allowed values
     let constrainedPitch = options.pitch;
     if (constrainedPitch !== undefined) {
       const { minPitch, maxPitch } = MAP_CONFIG.THREE_D_CAMERA;
       constrainedPitch = Math.max(minPitch, Math.min(maxPitch, constrainedPitch));
-      setCurrentCameraPitch(constrainedPitch);
     }
 
     mapRef.current?.setCamera({
@@ -608,7 +607,14 @@ export default function HomeScreen() {
       heading: options.heading,
       pitch: constrainedPitch,
       animationDuration: duration,
+      animationMode: options.animationMode,
     });
+  }, []);
+
+  const locateCameraDurationMs = useCallback((from: MapCoordinate, to: MapCoordinate): number => {
+    const distanceMeters = Math.sqrt(sqDistApprox(from, to));
+    // Smooth "hover" feel: farther pans take longer, clamped to practical bounds.
+    return clamp(Math.round(420 + distanceMeters * 0.45), 450, 1400);
   }, []);
 
   const fitToCoordinates = useCallback((coordinates: MapCoordinate[], duration = 600) => {
@@ -649,36 +655,46 @@ export default function HomeScreen() {
     animateToRegion(next, 250);
   };
 
-  const handle3DReset = () => {
-    animateCamera({
-      pitch: 0,
-      heading: 0,
-    }, 400);
-  };
-
   const handleLocateUser = useCallback(() => {
-    if (currentLocation) {
-      if (
-        currentLocation.latitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLatitude ||
-        currentLocation.latitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLatitude ||
-        currentLocation.longitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLongitude ||
-        currentLocation.longitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLongitude
-      ) {
-        Alert.alert('Out of Range', 'Your current location is outside the Philippines.');
-        return;
-      }
-      const next: MapRegion = {
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
-      setMapRegion(next);
-      animateToRegion(next, 500);
-    } else {
+    if (!currentLocation) {
       Alert.alert('Location Not Found', 'We are still getting your current location.');
+      return;
     }
-  }, [currentLocation]);
+
+    if (
+      currentLocation.latitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLatitude ||
+      currentLocation.latitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLatitude ||
+      currentLocation.longitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLongitude ||
+      currentLocation.longitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLongitude
+    ) {
+      Alert.alert('Out of Range', 'Your current location is outside the Philippines.');
+      return;
+    }
+
+    const next: MapRegion = {
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
+      latitudeDelta: mapRegion.latitudeDelta,
+      longitudeDelta: mapRegion.longitudeDelta,
+    };
+
+    const duration = locateCameraDurationMs(
+      { latitude: mapRegion.latitude, longitude: mapRegion.longitude },
+      currentLocation,
+    );
+
+    setMapRegion(next);
+    animateCamera(
+      {
+        center: currentLocation,
+        zoom: latDeltaToZoom(next.latitudeDelta),
+        heading: 0,
+        pitch: 0,
+        animationMode: 'easeTo',
+      },
+      duration,
+    );
+  }, [currentLocation, mapRegion.latitude, mapRegion.longitude, mapRegion.latitudeDelta, mapRegion.longitudeDelta, locateCameraDurationMs, animateCamera]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('tabPress', () => {
@@ -702,14 +718,24 @@ export default function HomeScreen() {
         const next: MapRegion = {
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
+          latitudeDelta: mapRegion.latitudeDelta,
+          longitudeDelta: mapRegion.longitudeDelta,
         };
+        const duration = locateCameraDurationMs(
+          { latitude: INITIAL_REGION.latitude, longitude: INITIAL_REGION.longitude },
+          currentLocation,
+        );
         setMapRegion(next);
-        animateToRegion(next, 500);
+        animateCamera({
+          center: currentLocation,
+          zoom: latDeltaToZoom(next.latitudeDelta),
+          heading: 0,
+          pitch: 0,
+          animationMode: 'easeTo',
+        }, duration);
       }
     }
-  }, [isMapLoaded, currentLocation, pendingRouteSearch, selectedTransitRoute]);
+  }, [isMapLoaded, currentLocation, pendingRouteSearch, selectedTransitRoute, mapRegion.latitudeDelta, mapRegion.longitudeDelta, locateCameraDurationMs, animateCamera]);
 
   // Search Expand Animation
   const searchOpacityAnim = useRef(new Animated.Value(0)).current;
@@ -1716,12 +1742,7 @@ export default function HomeScreen() {
     pitch?: number;
     heading?: number;
   }) => {
-    // Track pitch changes from user gestures (two-finger tilt)
-    if (payload.pitch !== undefined) {
-      const { minPitch, maxPitch } = MAP_CONFIG.THREE_D_CAMERA;
-      const constrainedPitch = Math.max(minPitch, Math.min(maxPitch, payload.pitch));
-      setCurrentCameraPitch(constrainedPitch);
-    }
+    // Reserved for future camera diagnostics hooks.
   }, []);
 
   const handleRouteTypeChange = useCallback((nextType: TransitRouteType) => {
@@ -1799,14 +1820,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </BlurView>
 
-        {currentCameraPitch > 0.5 && (
-          <BlurView intensity={35} tint="light" style={styles.reset3DGlassWrap}>
-            <TouchableOpacity style={styles.reset3DButton} onPress={handle3DReset} activeOpacity={0.8}>
-              <Ionicons name="compass" size={19} color={COLORS.navy} />
-            </TouchableOpacity>
-          </BlurView>
-        )}
-        
         <View style={[styles.chatbotWrap]}>
           <TouchableOpacity 
             style={styles.locateButton} 
@@ -2257,29 +2270,6 @@ const styles = StyleSheet.create({
   zoomButtonTop: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(10,22,40,0.12)',
-  },
-  reset3DGlassWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.65)',
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
-    shadowRadius: 14,
-    elevation: 6,
-    marginBottom: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  reset3DButton: {
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

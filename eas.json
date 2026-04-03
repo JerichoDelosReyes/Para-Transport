@@ -17,7 +17,7 @@
       "distribution": "internal",
       "ios": { "simulator": true },
       "environment": "preview",
-      "channel": "paraCloudBuild"
+      "channel": "paracloudbuild"
     }
   }
 }
