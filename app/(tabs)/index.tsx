@@ -1825,6 +1825,15 @@ export default function HomeScreen() {
 
           {showTransitLayer && (
             <View style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+              <TouchableOpacity
+                style={styles.nearestStopBtn}
+                onPress={handleFindNearestStop}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="navigate" size={14} color={COLORS.navy} />
+                <Text style={styles.nearestStopBtnText}>Nearest Stop</Text>
+              </TouchableOpacity>
+
               <View style={styles.routeTypeSelectorRow}>
                 <TouchableOpacity
                   style={[
@@ -1880,15 +1889,6 @@ export default function HomeScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={styles.nearestStopBtn}
-              onPress={handleFindNearestStop}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="navigate" size={14} color={COLORS.navy} />
-              <Text style={styles.nearestStopBtnText}>Nearest Stop</Text>
-            </TouchableOpacity>
           </View>
           )}
         </View>
