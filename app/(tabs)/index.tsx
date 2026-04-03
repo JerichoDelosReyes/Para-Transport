@@ -642,7 +642,14 @@ export default function HomeScreen() {
       longitudeDelta: clamp(mapRegion.longitudeDelta * 0.7, 0.0025, 0.4),
     };
     setMapRegion(next);
-    animateToRegion(next, 250);
+    animateCamera(
+      {
+        center: { latitude: next.latitude, longitude: next.longitude },
+        zoom: latDeltaToZoom(next.latitudeDelta),
+        animationMode: 'easeTo',
+      },
+      250,
+    );
   };
 
   const handleZoomOut = () => {
@@ -652,7 +659,14 @@ export default function HomeScreen() {
       longitudeDelta: clamp(mapRegion.longitudeDelta / 0.7, 0.0025, 0.4),
     };
     setMapRegion(next);
-    animateToRegion(next, 250);
+    animateCamera(
+      {
+        center: { latitude: next.latitude, longitude: next.longitude },
+        zoom: latDeltaToZoom(next.latitudeDelta),
+        animationMode: 'easeTo',
+      },
+      250,
+    );
   };
 
   const handleLocateUser = useCallback(() => {
@@ -1716,8 +1730,6 @@ export default function HomeScreen() {
   }, [sim.position, sim.state, simAutoFollow, animateCamera]);
 
   const handleRegionChangeComplete = (region: MapRegion) => {
-    if (USE_MAPLIBRE) return;
-
     let newLat = region.latitude;
     let newLng = region.longitude;
 
@@ -1742,8 +1754,17 @@ export default function HomeScreen() {
     pitch?: number;
     heading?: number;
   }) => {
-    // Reserved for future camera diagnostics hooks.
-  }, []);
+    if (payload.centerCoordinate && payload.zoom !== undefined) {
+      const zoom = payload.zoom;
+      const nextRegion: MapRegion = {
+        latitude: payload.centerCoordinate[1],
+        longitude: payload.centerCoordinate[0],
+        latitudeDelta: zoomToLatDelta(zoom),
+        longitudeDelta: zoomToLatDelta(zoom),
+      };
+      setMapRegion(nextRegion);
+    }
+  }, [setMapRegion]);
 
   const handleRouteTypeChange = useCallback((nextType: TransitRouteType) => {
     if (nextType === selectedRouteType) return;
