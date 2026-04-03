@@ -16,13 +16,16 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import { supabase } from '../config/supabaseClient';
 import OtpModal from '../components/OtpModal';
 import {
   registerWithEmailPassword,
+  checkUsernameExists,
   verifyEmailOtp,
   isEmailValid,
   isPasswordStrong,
   passwordValidationMessage,
+  validateUsername,
   mapRegisterError,
   logUserAction
 } from '../services/authService';
@@ -51,6 +54,7 @@ export default function RegisterScreen() {
   const beginAuthSession = useStore((state) => state.beginAuthSession);
 
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -65,10 +69,17 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     setErrorMsg('');
-    if (!name.trim() || !email.trim() || !password || !confirmPassword) {
+    if (!name.trim() || !username.trim() || !email.trim() || !password || !confirmPassword) {
       setErrorMsg('Please fill in all fields.');
       return;
     }
+    
+    const userErr = validateUsername(username);
+    if (userErr) {
+      setErrorMsg(userErr);
+      return;
+    }
+
     if (!isEmailValid(email)) {
       setErrorMsg('Please enter a valid email address.');
       return;
@@ -85,8 +96,17 @@ export default function RegisterScreen() {
 
     setIsLoading(true);
     try {
+      const usernameTaken = await checkUsernameExists(username);
+      if (usernameTaken) {
+        setErrorMsg('Username is already taken.');
+        setIsLoading(false);
+        return;
+      }
+
       const data = await registerWithEmailPassword({
-        displayName: name,
+        username,
+        displayName: username,
+        fullName: name,
         email,
         password,
       });
@@ -95,9 +115,22 @@ export default function RegisterScreen() {
       if (data?.user && !data.session) {
         setIsOtpSent(true);
       } else {
+        if (data?.user?.id) {
+          try {
+            await logUserAction(data.user.id, 'Registered new account');
+            await supabase.from('users').update({ 
+              username: username,
+              display_name: username,
+              full_name: name
+            }).eq('id', data.user.id);
+          } catch (e) {
+            console.warn('Could not auto-sync username to public.users', e);
+          }
+        }
         beginAuthSession({
           id: data?.user?.id,
-          full_name: data?.user?.user_metadata?.display_name || name,
+          username: data?.user?.user_metadata?.username || username,
+          full_name: data?.user?.user_metadata?.full_name || name,
           email: data?.user?.email || email,
           points: 0,
           streak_count: 0,
@@ -130,11 +163,23 @@ export default function RegisterScreen() {
       
       if (data?.user?.id) {
         await logUserAction(data.user.id, 'Registered new account');
+        
+        // Self-healing: make sure public.users has the username and display_name
+        try {
+          await supabase.from('users').update({ 
+            username: username,
+            display_name: username,
+            full_name: name
+          }).eq('id', data.user.id);
+        } catch (e) {
+          console.warn('Could not auto-sync username to public.users', e);
+        }
       }
 
       beginAuthSession({
         id: data?.user?.id,
-          full_name: data?.user?.user_metadata?.display_name || name,
+        username: data?.user?.user_metadata?.username || username,
+        full_name: data?.user?.user_metadata?.full_name || name,
         email: data?.user?.email || email,
         points: 0,
         streak_count: 0,
@@ -203,6 +248,16 @@ export default function RegisterScreen() {
                 style={styles.input} 
                 placeholder="Juan Dela Cruz" 
                 placeholderTextColor={COLORS.textMuted} 
+              />
+
+              <Text style={[styles.label, styles.labelTop]}>Username</Text>
+              <TextInput 
+                value={username}
+                onChangeText={(text) => setUsername(text.replace(/\s/g, ''))}
+                style={styles.input} 
+                placeholder="juancruz123" 
+                placeholderTextColor={COLORS.textMuted}
+                autoCapitalize="none"
               />
 
               <Text style={[styles.label, styles.labelTop]}>Email</Text>

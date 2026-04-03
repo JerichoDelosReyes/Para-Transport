@@ -31,11 +31,15 @@ export type PlaceResult = {
   longitude: number;
 };
 
+export type TransitRouteType = 'jeepney' | 'bus' | 'combo';
+
 type SearchScreenProps = {
   visible: boolean;
   currentLocationLabel?: string;
   initialOrigin?: string;
   initialDestination?: string;
+  selectedRouteType: TransitRouteType;
+  onSelectRouteType: (routeType: TransitRouteType) => void;
   onClose: () => void;
   onSelectRoute: (origin: PlaceResult | null, destination: PlaceResult) => void;
   onClearRoute?: (clearOrigin?: boolean, clearDestination?: boolean) => void;
@@ -46,6 +50,8 @@ export default function SearchScreen({
   currentLocationLabel,
   initialOrigin,
   initialDestination,
+  selectedRouteType,
+  onSelectRouteType,
   onClose,
   onSelectRoute,
   onClearRoute,
@@ -90,6 +96,46 @@ export default function SearchScreen({
 
   // Active query text
   const activeQuery = activeField === 'origin' ? originText : destinationText;
+
+  const resolvePlaceFromText = useCallback(async (query: string): Promise<PlaceResult | null> => {
+    const q = query.trim();
+    if (q.length < 2) return null;
+
+    const params = new URLSearchParams({
+      q: `${q}, Cavite, Philippines`,
+      format: 'json',
+      limit: '1',
+      countrycodes: 'ph',
+      addressdetails: '0',
+    });
+
+    try {
+      const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
+        headers: { 'Accept-Language': 'en' },
+      });
+      if (!res.ok) return null;
+
+      const data = await res.json();
+      const item = Array.isArray(data) ? data[0] : null;
+      if (!item) return null;
+
+      const dn = String(item.display_name || '').trim();
+      const parts = dn.split(',').map((p: string) => p.trim()).filter(Boolean);
+
+      const parsed: PlaceResult = {
+        id: String(item.place_id || `${Date.now()}`),
+        title: parts[0] || q,
+        subtitle: parts.slice(1).join(', ') || 'Philippines',
+        latitude: parseFloat(item.lat),
+        longitude: parseFloat(item.lon),
+      };
+
+      if (!Number.isFinite(parsed.latitude) || !Number.isFinite(parsed.longitude)) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, []);
 
   // Geocoding + fuzzy local search
   useEffect(() => {
@@ -164,8 +210,28 @@ export default function SearchScreen({
     };
   }, [activeQuery, activeField, recents]);
 
+  const handleSwapRoute = useCallback(() => {
+    const oldOriginText = originText;
+    const isDestCurrentLoc = destinationText === currentLocationLabel || destinationText.toLowerCase() === 'current location';
+    if (isDestCurrentLoc) {
+      setUsingCurrentLocation(true);
+      setOriginText('');
+    } else {
+      setUsingCurrentLocation(false);
+      setOriginText(destinationText);
+    }
+    
+    if (usingCurrentLocation) {
+      setDestinationText(currentLocationLabel || 'Current Location');
+    } else {
+      setDestinationText(oldOriginText);
+    }
+    setOriginPlace(null);
+    setSuggestions([]);
+  }, [originText, destinationText, usingCurrentLocation, currentLocationLabel]);
+
   const handleSelectPlace = useCallback(
-    (place: PlaceResult) => {
+    async (place: PlaceResult) => {
       addRecent(place);
 
       if (activeField === 'origin') {
@@ -176,13 +242,38 @@ export default function SearchScreen({
         setTimeout(() => destRef.current?.focus(), 100);
       } else {
         setDestinationText(place.title);
-        // Both fields filled → trigger route
-        const origin = usingCurrentLocation ? null : originPlace;
-        onSelectRoute(origin, place);
+
+        let resolvedOrigin: PlaceResult | null = null;
+        if (!usingCurrentLocation) {
+          resolvedOrigin = originPlace;
+
+          if (!resolvedOrigin && originText.trim().length > 0) {
+            resolvedOrigin = await resolvePlaceFromText(originText);
+            if (resolvedOrigin) {
+              setOriginPlace(resolvedOrigin);
+              setOriginText(resolvedOrigin.title);
+            }
+          }
+
+          if (!resolvedOrigin) {
+            Alert.alert('Origin Not Found', 'Please pick your origin from suggestions or use Current Location.');
+            return;
+          }
+        }
+
+        onSelectRoute(resolvedOrigin, place);
       }
       setSuggestions([]);
     },
-    [activeField, originPlace, usingCurrentLocation, addRecent, onSelectRoute],
+    [
+      activeField,
+      originPlace,
+      originText,
+      usingCurrentLocation,
+      addRecent,
+      onSelectRoute,
+      resolvePlaceFromText,
+    ],
   );
 
   const handleRecentPress = useCallback(
@@ -244,15 +335,87 @@ export default function SearchScreen({
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { flex: 1 }]}>Your Route</Text>
           <TouchableOpacity onPress={handleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name={isRouteSaved() ? "heart" : "heart-outline"} size={24} color={isRouteSaved() ? COLORS.primary : COLORS.navy} />
+            <Ionicons name={isRouteSaved() ? "bookmark" : "bookmark-outline"} size={24} color={isRouteSaved() ? COLORS.primary : COLORS.navy} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.routeTypeRow}>
+          <TouchableOpacity
+            style={[
+              styles.routeTypeChip,
+              selectedRouteType === 'jeepney' && styles.routeTypeChipActive,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => onSelectRouteType('jeepney')}
+          >
+            <Ionicons
+              name="bus-outline"
+              size={14}
+              color={selectedRouteType === 'jeepney' ? '#FFFFFF' : COLORS.navy}
+            />
+            <Text
+              style={[
+                styles.routeTypeChipText,
+                selectedRouteType === 'jeepney' && styles.routeTypeChipTextActive,
+              ]}
+            >
+              Jeepney
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.routeTypeChip,
+              selectedRouteType === 'combo' && styles.routeTypeChipActive,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => onSelectRouteType('combo')}
+          >
+            <Ionicons
+              name="shuffle-outline"
+              size={14}
+              color={selectedRouteType === 'combo' ? '#FFFFFF' : COLORS.navy}
+            />
+            <Text
+              style={[
+                styles.routeTypeChipText,
+                selectedRouteType === 'combo' && styles.routeTypeChipTextActive,
+              ]}
+            >
+              Jeep + Bus
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.routeTypeChip,
+              selectedRouteType === 'bus' && styles.routeTypeChipActive,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => onSelectRouteType('bus')}
+          >
+            <Ionicons
+              name="bus"
+              size={14}
+              color={selectedRouteType === 'bus' ? '#FFFFFF' : COLORS.navy}
+            />
+            <Text
+              style={[
+                styles.routeTypeChipText,
+                selectedRouteType === 'bus' && styles.routeTypeChipTextActive,
+              ]}
+            >
+              Bus
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* Search Fields */}
         <View style={styles.fieldsContainer}>
-          {/* Origin */}
-          <View
-            style={[
+          <View style={{ flex: 1 }}>
+            {/* Origin */}
+            <View
+              style={[
               styles.fieldRow,
               activeField === 'origin' && styles.fieldRowActive,
             ]}
@@ -348,6 +511,12 @@ export default function SearchScreen({
               <Ionicons name="mic" size={20} color={COLORS.textMuted} />
             </TouchableOpacity>
           </View>
+          </View>
+          <TouchableOpacity onPress={handleSwapRoute} style={styles.swapBtnWrapper} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <View style={styles.swapBtn}>
+               <Ionicons name="swap-vertical" size={20} color={COLORS.navy} />
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Choose Current Location Button */}
@@ -361,7 +530,7 @@ export default function SearchScreen({
               setActiveField('destination');
               setTimeout(() => destRef.current?.focus(), 100);
             } else {
-              setDestinationText('Current Location');
+              setDestinationText(currentLocationLabel || 'Current Location');
             }
           }}
         >
@@ -480,9 +649,56 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: COLORS.navy,
   },
+  routeTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: SPACING.screenX,
+    marginBottom: 10,
+  },
+  routeTypeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+  },
+  routeTypeChipActive: {
+    backgroundColor: '#0A1628',
+    borderColor: '#0A1628',
+  },
+  routeTypeChipText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  routeTypeChipTextActive: {
+    color: '#FFFFFF',
+  },
   fieldsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: SPACING.screenX,
     marginBottom: 4,
+  },
+  swapBtnWrapper: {
+    marginLeft: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  swapBtn: {
+    backgroundColor: '#F0F0F0',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   fieldRow: {
     flexDirection: 'row',

@@ -4,8 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 
-const FALLBACK_GPX_PATH = 'E:/Downloads/export.gpx';
-const FALLBACK_FARE = 13;
+const FALLBACK_GPX_PATH = 'E:/Downloads/Busr_outes.gpx';
+const FALLBACK_FARE = 15;
 const CLEAR_ALL_FLAG = '--replace-all';
 const DELETE_ALL_FILTER_ID = '00000000-0000-0000-0000-000000000000';
 const MAX_SEGMENT_JOIN_GAP_METERS = 350;
@@ -52,7 +52,7 @@ function cleanEndpoint(raw) {
   if (!text) return '';
 
   text = text
-    .replace(/^Jeepney Route[^:]*:\s*/i, '')
+    .replace(/^(Jeepney|Bus) Route[^:]*:\s*/i, '')
     .replace(/\b[a-z_]+=[^=]+(?=\s+[a-z_]+=|$)/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -431,7 +431,9 @@ function parseGpxTracks(gpxXml, sourcePath = '') {
   return tracks;
 }
 
-function isLikelyJeepneyRoute(track) {
+function isLikelyBusRoute(track) {
+  if (!String(track.sourceRelationId || '').startsWith('relation/')) return false;
+
   const props = track.props || {};
   const text = cleanText([
     track.name,
@@ -442,16 +444,28 @@ function isLikelyJeepneyRoute(track) {
     props.ref,
     props.bus,
     props.route,
+    props.type,
   ].filter(Boolean).join(' ')).toLowerCase();
 
   if (/uv\s*express|\buv\b|\bvan\b/.test(text)) return false;
   if (/\btricycle\b|\btric\b|\btrike\b/.test(text)) return false;
+  if (/\bjeep\b|\bjeepney\b|\bpuj\b|share_taxi/.test(text)) return false;
 
-  if (/jeep|puj|share_taxi|ltfrb/.test(text)) return true;
-  if (props.route && String(props.route).toLowerCase() !== 'bus') return false;
+  // The provided GPX also contains many regular roadway way-tracks.
+  // Keep only relation-like bus tracks with explicit route=bus signals.
+  const hasRouteBusTag = /\broute\s*=\s*bus\b/.test(text);
+  const hasTypeRouteTag = /\btype\s*=\s*route\b/.test(text);
+  const hasFromToTags = /\bfrom\s*=/.test(text) && /\bto\s*=/.test(text);
+  const hasBusRouteName = /\b(city\s+bus\s+route|bus\s+route|provincial\s+bus|school\s+bus|p2p)\b/.test(text);
+  const hasHighwayTag = /\bhighway\s*=/.test(text);
 
-  // If uncertain, keep it because this source is expected jeepney-focused.
-  return true;
+  if (!hasRouteBusTag) return false;
+
+  // Require stronger route evidence so named roads/highways are excluded.
+  if (hasTypeRouteTag || hasFromToTags || hasBusRouteName) return true;
+
+  // In rare cases, keep route=bus entries without highway road-way tags.
+  return !hasHighwayTag;
 }
 
 function parseFare(props) {
@@ -459,7 +473,7 @@ function parseFare(props) {
     props['fare:php'],
     props['fare:regular'],
     props.fare,
-    process.env.JEEPNEY_DEFAULT_FARE,
+    process.env.BUS_DEFAULT_FARE,
     FALLBACK_FARE,
   ];
 
@@ -491,7 +505,7 @@ function makeLabels(track) {
   } else if (ref) {
     label = ref;
   } else {
-    label = `Unnamed Jeepney Route ${track.index}`;
+    label = `Unnamed Bus Route ${track.index}`;
   }
 
   const splitFromLabel = splitEndpoints(label);
@@ -612,15 +626,8 @@ async function main() {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   if (replaceAll) {
-    await deleteAllRows(supabase, 'jeepney_route_stops', 'id');
-    await deleteAllRows(supabase, 'jeepney_routes', 'id');
-
-    try {
-      await deleteAllRows(supabase, 'route_stops', 'id');
-      await deleteAllRows(supabase, 'routes', 'id');
-    } catch {
-      // Ignore if legacy tables do not exist or are not accessible.
-    }
+    await deleteAllRows(supabase, 'bus_route_stops', 'id');
+    await deleteAllRows(supabase, 'bus_routes', 'id');
   }
 
   let totalTracks = 0;
@@ -638,7 +645,7 @@ async function main() {
     totalTracks += tracks.length;
 
     for (const track of tracks) {
-      if (!isLikelyJeepneyRoute(track)) {
+      if (!isLikelyBusRoute(track)) {
         skipped += 1;
         continue;
       }
@@ -650,7 +657,7 @@ async function main() {
 
       const relationId = track.sourceRelationId.split('/').pop() || String(track.index);
       const { name, label, fromLabel, toLabel, ref, viaHints } = makeLabels(track);
-      const routeCodeBase = slug(ref || label || name || `JEEP-${relationId}`) || `JEEP-${relationId}`;
+      const routeCodeBase = slug(ref || label || name || `BUS-${relationId}`) || `BUS-${relationId}`;
       const routeCode = `${routeCodeBase}-${relationId}`;
 
       const payload = {
@@ -670,7 +677,7 @@ async function main() {
       };
 
       const { data: routeRow, error: routeError } = await supabase
-        .from('jeepney_routes')
+        .from('bus_routes')
         .upsert(payload, { onConflict: 'source_relation_id' })
         .select('id')
         .single();
@@ -682,7 +689,7 @@ async function main() {
       }
 
       const { error: clearStopsError } = await supabase
-        .from('jeepney_route_stops')
+        .from('bus_route_stops')
         .delete()
         .eq('route_id', routeRow.id);
 
@@ -698,7 +705,7 @@ async function main() {
       }));
 
       const { error: stopError } = await supabase
-        .from('jeepney_route_stops')
+        .from('bus_route_stops')
         .insert(stops);
 
       if (stopError) {
@@ -713,7 +720,7 @@ async function main() {
 
   console.log(`Processed GPX files: ${gpxPaths.length}`);
   console.log(`Total GPX tracks: ${totalTracks}`);
-  console.log(`Imported jeepney routes: ${imported}`);
+  console.log(`Imported bus routes: ${imported}`);
   console.log(`Skipped tracks: ${skipped}`);
 }
 

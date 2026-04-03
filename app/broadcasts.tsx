@@ -53,38 +53,44 @@ export default function BroadcastsScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
-        </TouchableOpacity>
-        <Text style={styles.title}>BROADCASTS</Text>
-        <View style={{ width: 44 }} />
+      <View style={{ backgroundColor: COLORS.primary, paddingTop: insets.top }}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+            <View style={styles.iconButtonCircle}>
+              <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.headerTitleText}>BROADCASTS</Text>
+          <View style={{ width: 44, height: 44 }} />
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {loading ? (
-          <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
-        ) : broadcasts.length === 0 ? (
-          <Text style={styles.emptyText}>No recent broadcasts found.</Text>
-        ) : (
-          broadcasts.map((b) => (
-            <View key={b.id} style={styles.cardWrapper}>
-              <BlurView intensity={40} tint="dark" style={[styles.card, { backgroundColor: bgColors[b.type] || bgColors.info }]}>
-                {b.type === 'critical' ? (
-                  <Text style={[styles.icon, { color: '#FFF', fontSize: 28, fontWeight: '900', width: 28, textAlign: 'center' }]}>!!</Text>
-                ) : (
-                  <Ionicons name={icons[b.type] as any} size={28} color="#FFF" style={styles.icon} />
-                )}
-                <View style={styles.textContainer}>
-                  <Text style={styles.cardTitle}>{b.title}</Text>
-                  <Text style={styles.cardMessage}>{b.message}</Text>
-                  <Text style={styles.dateText}>{new Date(b.created_at).toLocaleDateString()} {new Date(b.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
-                </View>
-              </BlurView>
-            </View>
-          ))
-        )}
-      </ScrollView>
+      <View style={styles.bottomSection}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {loading ? (
+            <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
+          ) : broadcasts.length === 0 ? (
+            <Text style={styles.emptyText}>No recent broadcasts found.</Text>
+          ) : (
+            broadcasts.map((b) => (
+              <View key={b.id} style={styles.cardWrapper}>
+                <BlurView intensity={40} tint="dark" style={[styles.card, { backgroundColor: bgColors[b.type] || bgColors.info }]}>
+                  {b.type === 'critical' ? (
+                    <Text style={[styles.icon, { color: '#FFF', fontSize: 28, fontWeight: '900', width: 28, textAlign: 'center' }]}>!!</Text>
+                  ) : (
+                    <Ionicons name={icons[b.type] as any} size={28} color="#FFF" style={styles.icon} />
+                  )}
+                  <View style={styles.textContainer}>
+                    <Text style={styles.cardTitle}>{b.title}</Text>
+                    <Text style={styles.cardMessage}>{b.message}</Text>
+                    <Text style={styles.dateText}>{new Date(b.created_at).toLocaleDateString()} {new Date(b.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                  </View>
+                </BlurView>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      </View>
     </View>
   );
 }
@@ -93,24 +99,39 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: SPACING.screenX,
-    paddingBottom: 16,
-    backgroundColor: COLORS.background,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    paddingVertical: 14,
+    height: 64,
   },
-  backBtn: {
+  headerTitleText: {
+    fontFamily: 'Cubao',
+    fontSize: TYPOGRAPHY.screenTitle,
+    color: '#000000',
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconButtonCircle: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontFamily: 'Cubao', fontSize: 24, color: COLORS.navy },
-  content: { padding: SPACING.screenX, paddingBottom: 40 },
+  bottomSection: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: SPACING.screenX,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
   emptyText: { textAlign: 'center', color: COLORS.textMuted, marginTop: 40, fontFamily: 'Inter' },
   cardWrapper: {
     marginBottom: 16,

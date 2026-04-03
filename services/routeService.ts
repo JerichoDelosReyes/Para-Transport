@@ -2,12 +2,32 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabaseClient';
 import type { JeepneyRoute, RouteCoord, StopPoint } from '../types/routes';
 
-const CACHE_KEY = '@para_routes_cache_v4_clean_geometry';
+const CACHE_KEY = '@para_routes_cache_v5_compact_geometry';
 const CACHE_TTL_MS = 1000 * 60 * 60; // 1 hour
+const MAX_ROUTE_POINTS_BY_TYPE: Record<string, number> = {
+  jeepney: 900,
+  bus: 1200,
+  tricycle: 500,
+  uv: 700,
+};
 
 interface CachedData {
   routes: JeepneyRoute[];
   cachedAt: number;
+}
+
+function downsamplePath(pathData: number[][], maxPoints: number): number[][] {
+  if (!Array.isArray(pathData) || pathData.length <= maxPoints) return pathData;
+
+  const step = (pathData.length - 1) / (maxPoints - 1);
+  const sampled: number[][] = [];
+
+  for (let i = 0; i < maxPoints - 1; i++) {
+    sampled.push(pathData[Math.round(i * step)]);
+  }
+
+  sampled.push(pathData[pathData.length - 1]);
+  return sampled;
 }
 
 /** Transform a Supabase route row + its stops into the app's JeepneyRoute shape. */
@@ -17,8 +37,10 @@ function toJeepneyRoute(
   vehicleType: 'jeepney' | 'tricycle' | 'bus' | 'uv' = 'jeepney'
 ): JeepneyRoute {
   const pathData = Array.isArray(row.path_data) ? row.path_data : [];
+  const maxPoints = MAX_ROUTE_POINTS_BY_TYPE[vehicleType] || 800;
+  const compactPathData = downsamplePath(pathData, maxPoints);
 
-  const coordinates: RouteCoord[] = pathData.map((coord: number[]) => ({
+  const coordinates: RouteCoord[] = compactPathData.map((coord: number[]) => ({
     latitude: coord[1],
     longitude: coord[0],
   }));
@@ -66,7 +88,7 @@ export async function fetchRoutesFromSupabase(): Promise<JeepneyRoute[]> {
       // 1. Fetch routes
       const { data: routeRows, error: routeErr } = await supabase
         .from(table)
-        .select('*')
+        .select('id, source_relation_id, route_code, name, label, from_label, to_label, description, operator, network, fare_base, status, path_data, is_active')
         .eq('is_active', true)
         .order('label');
 
@@ -76,7 +98,7 @@ export async function fetchRoutesFromSupabase(): Promise<JeepneyRoute[]> {
       const routeIds = routeRows.map((r: any) => r.id);
       const { data: stopRows, error: stopErr } = await supabase
         .from(stopTable)
-        .select('*')
+        .select('route_id, stop_name, latitude, longitude, stop_order')
         .in('route_id', routeIds)
         .order('stop_order');
 

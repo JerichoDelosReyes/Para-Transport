@@ -62,8 +62,21 @@ export default function RoutesScreen() {
     });
   }, [user.commute_history, activeFilter]);
 
-  const displayedHistory = filteredHistory.slice(0, page * ITEMS_PER_PAGE);
-  const hasMore = displayedHistory.length < filteredHistory.length;
+  const totalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
+  const displayedHistory = filteredHistory.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  
+  const getPageNumbers = () => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (page <= 3) {
+      return [1, 2, 3, 4, '...', totalPages];
+    }
+    if (page >= totalPages - 2) {
+      return [1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', page - 1, page, page + 1, '...', totalPages];
+  };
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -106,7 +119,10 @@ export default function RoutesScreen() {
 
             {displayedHistory.length > 0 ? (
               displayedHistory.map((item: any, index: number) => {
-                const targetName = `${item.origin?.name || 'Current Location'} to ${item.destination?.name || 'Unknown'}`;
+                const getShortName = (name: string) => name ? name.split(',')[0].trim() : name;
+                const originName = item.origin?.name ? getShortName(item.origin.name) : 'Current Location';
+                const destName = item.destination?.name ? getShortName(item.destination.name) : 'Pinned Location';
+                const targetName = `${originName} to ${destName}`;
                 const isSaved = user.saved_routes?.some((r: any) => 
                   r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
                 );
@@ -123,7 +139,7 @@ export default function RoutesScreen() {
                               saveRoute({
                                 id: Date.now(),
                                 name: targetName,
-                                legs: [{ mode: 'Custom Route', from: item.origin?.name || 'Current Location', to: item.destination?.name || 'Unknown', fromObj: item.origin || null, toObj: item.destination }],
+                                legs: [{ mode: 'Custom Route', from: originName, to: destName, fromObj: item.origin || null, toObj: item.destination }],
                                 total_fare: item.fare || 0,
                               });
                               Alert.alert('Saved', 'Route has been added to your Saved page.');
@@ -155,7 +171,7 @@ export default function RoutesScreen() {
                             router.navigate('/(tabs)');
                           }}
                         >
-                          <Text style={styles.historyGhostButtonText}>View</Text>
+                          <Text style={styles.historyGhostButtonText}>View Route</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -167,14 +183,47 @@ export default function RoutesScreen() {
               </View>
             )}
 
-            {hasMore && (
-              <TouchableOpacity 
-                style={styles.loadMoreButton}
-                activeOpacity={0.8}
-                onPress={() => setPage(p => p + 1)}
-              >
-                <Text style={styles.loadMoreText}>Load More</Text>
-              </TouchableOpacity>
+            {totalPages > 1 && (
+              <View style={styles.paginationContainer}>
+                <TouchableOpacity 
+                  style={[styles.paginationArrow, page === 1 && styles.paginationArrowDisabled]}
+                  onPress={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="arrow-back" size={18} color={page === 1 ? 'rgba(10,22,40,0.3)' : '#0A1628'} />
+                </TouchableOpacity>
+                <View style={styles.paginationPill}>
+                  {getPageNumbers().map((pageNum, idx) => (
+                    <TouchableOpacity
+                      key={`${pageNum}-${idx}`}
+                      style={[
+                        styles.pageNumber, 
+                        page === pageNum && styles.pageNumberActive,
+                        pageNum === '...' && styles.pageNumberDots
+                      ]}
+                      onPress={() => typeof pageNum === 'number' ? setPage(pageNum) : null}
+                      activeOpacity={pageNum === '...' ? 1 : 0.8}
+                    >
+                      <Text style={[
+                        styles.pageNumberText, 
+                        page === pageNum && styles.pageNumberTextActive,
+                        pageNum === '...' && styles.pageNumberTextDots
+                      ]}>
+                        {pageNum}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TouchableOpacity 
+                  style={[styles.paginationArrow, page === totalPages && styles.paginationArrowDisabled]}
+                  onPress={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="arrow-forward" size={18} color={page === totalPages ? 'rgba(10,22,40,0.3)' : '#0A1628'} />
+                </TouchableOpacity>
+              </View>
             )}
           </>
         )}
@@ -380,19 +429,78 @@ const styles = StyleSheet.create({
     padding: SPACING.cardPadding,
     marginTop: 4,
   },
-  loadMoreButton: {
+  paginationContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    marginTop: 8,
+    justifyContent: 'center',
+    marginTop: 16,
     marginBottom: 48,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#F5C518',
+    gap: 12,
   },
-  loadMoreText: {
+  paginationArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  paginationArrowDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: 'rgba(10,22,40,0.04)',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  paginationPill: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    borderRadius: 24,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    alignItems: 'center',
+    gap: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  pageNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageNumberActive: {
+    backgroundColor: '#0A1628',
+  },
+  pageNumberDots: {
+    width: 16,
+    backgroundColor: 'transparent',
+  },
+  pageNumberText: {
     fontFamily: 'Inter',
-    fontWeight: '700',
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '600',
     color: '#0A1628',
+  },
+  pageNumberTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  pageNumberTextDots: {
+    color: '#0A1628',
+    opacity: 0.4,
   },
   emptyTitle: {
     marginTop: 8,

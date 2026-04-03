@@ -9,13 +9,6 @@ import { useStore } from '../../store/useStore';
 
 const { width } = Dimensions.get('window');
 
-function getInitials(name: string) {
-  if (!name) return 'PR';
-  const parts = name.split(' ');
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return name.substring(0, 2).toUpperCase();
-}
-
 function TabBarBackground() {
   const insets = useSafeAreaInsets();
   const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;

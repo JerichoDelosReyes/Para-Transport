@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Animated, KeyboardAvoidingView, Platform, FlatList, Keyboard, Alert } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Animated, KeyboardAvoidingView, Platform, FlatList, Keyboard, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -18,6 +18,7 @@ const CHATBOT_STATES = {
   ERROR: require("../assets/AIChatbot/ERROR.png"),
 };
 const JEEPIE_AVATAR = require("../assets/AIChatbot/Jeepie.png");
+const MIN_TYPING_DURATION_MS = 900;
 
 type ChatMessage = {
   id: string;
@@ -47,14 +48,15 @@ export default function AIChatbotScreen() {
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const floatAnim = useRef(new Animated.Value(0)).current;
   const greetingOpacity = useRef(new Animated.Value(1)).current;
+  const typingPulse = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const { routes } = useRoutes();
   const user = useStore((state: any) => state.user);
   const sessionMode = useStore((state: any) => state.sessionMode);
 
-  const authName = typeof user?.name === "string" ? user.name.trim() : "";
+  const authName = typeof user?.username === "string" ? user.username.trim() : "";
   const preferredName = sessionMode === "auth" && authName.length > 0
-    ? authName.split(" ")[0]
+    ? authName
     : null;
   const hasConversation = messages.length > 0;
 
@@ -135,6 +137,32 @@ export default function AIChatbotScreen() {
   }, []);
 
   useEffect(() => {
+    if (!isSending) {
+      typingPulse.stopAnimation();
+      typingPulse.setValue(0);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(typingPulse, {
+          toValue: 1,
+          duration: 720,
+          useNativeDriver: true,
+        }),
+        Animated.timing(typingPulse, {
+          toValue: 0,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    loop.start();
+    return () => loop.stop();
+  }, [isSending, typingPulse]);
+
+  useEffect(() => {
     let mounted = true;
 
     const loadLocation = async () => {
@@ -180,19 +208,36 @@ export default function AIChatbotScreen() {
 
     const messageText = inputText.trim();
     const userMessage: ChatMessage = { id: Date.now().toString(), text: messageText, isUser: true };
+    const conversationHistory: Array<{ text: string; isUser: boolean }> = [
+      ...messages.map((entry) => ({ text: entry.text, isUser: entry.isUser })),
+      { text: userMessage.text, isUser: true },
+    ];
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
     setCurrentState("PROCESSING");
     setIsSending(true);
+    const startedAt = Date.now();
+
+    const waitForTyping = async () => {
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, MIN_TYPING_DURATION_MS - elapsed);
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+    };
 
     try {
       const response = await getChatbotReply({
         message: messageText,
+        mode: "companion",
         state: conversationState,
+        history: conversationHistory,
         routes,
         currentLocation,
         currentLocationLabel,
       });
+
+      await waitForTyping();
 
       setConversationState(response.state);
 
@@ -222,6 +267,7 @@ export default function AIChatbotScreen() {
         })();
       }
     } catch {
+      await waitForTyping();
       setCurrentState("ERROR");
       setMessages((prev) => [
         ...prev,
@@ -366,6 +412,35 @@ export default function AIChatbotScreen() {
                   </View>
                 );
               }}
+              ListFooterComponent={() => 
+                isSending ? (
+                  <View style={[styles.aiMessageRow, { marginTop: 8 }]}>
+                    <View style={styles.aiMessageAvatarWrap}>
+                      <Image source={JEEPIE_AVATAR} style={styles.aiMessageAvatarImage} />
+                    </View>
+                    <View style={[styles.messageBubble, styles.aiBubble, styles.typingBubble]}>
+                      <View style={styles.typingDotsRow}>
+                        {[0, 1, 2].map((dotIndex) => {
+                          const start = dotIndex * 0.22;
+                          const dotOpacity = typingPulse.interpolate({
+                            inputRange: [start, start + 0.16, start + 0.34, 1],
+                            outputRange: [0.26, 0.92, 0.26, 0.26],
+                            extrapolate: "clamp",
+                          });
+
+                          return (
+                            <Animated.View
+                              key={dotIndex}
+                              style={[styles.typingDot, { opacity: dotOpacity }]}
+                            />
+                          );
+                        })}
+                      </View>
+                      <Text style={styles.typingText}>Jeepie is typing</Text>
+                    </View>
+                  </View>
+                ) : null
+              }
               style={styles.chatList}
             />
           </View>
@@ -378,7 +453,7 @@ export default function AIChatbotScreen() {
           <View style={[styles.inputWrapper, hasConversation ? styles.inputWrapperChat : null]}>
             <TextInput 
               style={styles.textInput}
-              placeholder="Ask Jeepie only"
+              placeholder="Ask Jeepie"
               placeholderTextColor={COLORS.textMuted}
               value={inputText}
               onChangeText={setInputText}
@@ -386,12 +461,16 @@ export default function AIChatbotScreen() {
             />
 
             <TouchableOpacity style={[styles.micButton, isSending ? { opacity: 0.6 } : null]} onPress={handleSend} disabled={isSending}>
-              <Ionicons 
-                name={inputText.trim() ? "send" : "mic"} 
-                size={22} 
-                color={"#FFFFFF"} 
-                style={inputText.trim() ? { transform: [{ translateX: 2 }, { translateY: -1 }] } : {}}
-              />
+              {isSending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons 
+                  name={inputText.trim() ? "send" : "mic"} 
+                  size={22} 
+                  color={"#FFFFFF"} 
+                  style={inputText.trim() ? { transform: [{ translateX: 2 }, { translateY: -1 }] } : {}}
+                />
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -473,7 +552,7 @@ const styles = StyleSheet.create({
   aiImagePortalKeyboard: { width: 160, height: 160, borderRadius: 80 },
   chatbotImage: { width: "100%", height: "100%", resizeMode: "contain" },
   aiShadow: { width: 120, height: 12, borderRadius: 6, backgroundColor: "rgba(10, 22, 40, 0.1)", marginTop: 30, transform: [{ scaleX: 2 }] },
-  chatBody: { flex: 1, backgroundColor: "rgba(255,255,255,0.32)" },
+  chatBody: { flex: 1, backgroundColor: "transparent" },
   chatList: { flex: 1 },
   chatContainer: { paddingHorizontal: 16, paddingVertical: 16, gap: 14, paddingBottom: 24 },
   userMessageRow: { width: "100%", alignItems: "flex-end" },
@@ -495,6 +574,28 @@ const styles = StyleSheet.create({
   messageText: { fontSize: 16, lineHeight: 22 },
   userMessageText: { color: "#FFFFFF" },
   aiMessageText: { color: COLORS.navy },
+  typingBubble: {
+    paddingVertical: 10,
+  },
+  typingDotsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    columnGap: 6,
+    marginBottom: 5,
+  },
+  typingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: COLORS.navy,
+    opacity: 0.26,
+  },
+  typingText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: "600",
+  },
   inputContainer: { paddingHorizontal: 24, paddingBottom: 20 },
   inputContainerChat: {
     paddingHorizontal: 12,

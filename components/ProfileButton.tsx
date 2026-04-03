@@ -27,7 +27,7 @@ export function ProfileButton() {
         <Image source={{ uri: photoUrl }} style={styles.avatarImage} />
       ) : (
         <Text style={styles.avatarInitials}>
-          {getInitials(user?.full_name || '')}
+          {getInitials(user?.username || user?.full_name || '')}
         </Text>
       )}
     </TouchableOpacity>

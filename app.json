@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Para",
-    "slug": "para",
+    "slug": "para-transport-test",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "para",
@@ -15,7 +15,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Para uses your location to find your current position and show routes to your destination."
+        "NSLocationWhenInUseUsageDescription": "Para uses your location to find your current position and show routes to your destination.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.para.app"
     },
@@ -27,7 +28,9 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
       ],
       "package": "com.para.app"
     },
@@ -35,12 +38,21 @@
       "favicon": "./assets/logo/appicon.png"
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/logo/appicon.png",
+          "color": "#E6F4FE"
+        }
+      ]
     ],
     "extra": {
       "eas": {
-        "projectId": "74b7647d-22db-4ce9-8579-4fcc01cdd341"
+        "projectId": "34665852-31df-4ca2-b87a-510e5909f06c"
       }
-    }
+    },
+    "owner": "noxen-cv"
   }
 }

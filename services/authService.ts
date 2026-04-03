@@ -37,6 +37,28 @@ export function validateRequiredFields(values: string[]): boolean {
   return values.every((value) => value.trim().length > 0);
 }
 
+const PROFANITY_LIST = [
+  'fuck', 'shit', 'bitch', 'ass', 'asshole', 'dick', 'cunt', 'pussy', 'bastard', 'slut', 'whore', 'faggot', 'motherfucker', 'cock', 'putangina', 'tangina', 'tngina', 'gago', 'gaga', 'tanga', 'putragis', 'bobo', 'tarantado', 'hayop', 'hinayupak', 'ulol', 'bading', 'bakla', 'pokpok', 'malandi', 'kantot', 'kantutan', 'kantotero', 'burat', 'pepe', 'pempem', 'suso', 'tite', 'titi', 'bayag', 'puke', 'puking', 'tae', 'tubol', 'inutil', 'pakyu', 'pucha'
+];
+
+export function validateUsername(username: string): string {
+  if (!username) return 'Username is required.';
+  if (username.length < 3) return 'Username must be at least 3 characters long.';
+  if (username.includes(' ')) return 'Username cannot contain spaces.';
+  
+  const alphanumericOnly = /^[a-zA-Z0-9_.-]+$/;
+  if (!alphanumericOnly.test(username)) return 'Username can only contain letters, numbers, underscores, and dashes.';
+  
+  const lowerUsername = username.toLowerCase();
+  for (const word of PROFANITY_LIST) {
+    if (lowerUsername.includes(word)) {
+      return 'Username contains inappropriate language.';
+    }
+  }
+
+  return '';
+}
+
 export function isEmailValid(email: string): boolean {
   return EMAIL_POLICY.test(email.trim());
 }
@@ -62,7 +84,15 @@ export function mapLoginError(error?: string): string {
 }
 
 export function mapRegisterError(error?: string): string {
-  if (error && error.toLowerCase().includes('already registered')) return 'This email is already registered.';
+  const normalized = (error || '').toLowerCase();
+  if (normalized.includes('already registered')) return 'This email is already registered.';
+  if (
+    normalized.includes('rate limit') ||
+    normalized.includes('too many') ||
+    normalized.includes('over_email_send_rate_limit')
+  ) {
+    return 'Too many attempts made in this device. Try again later.';
+  }
   return error || 'Account creation failed. Please try again.';
 }
 
@@ -91,8 +121,23 @@ export async function loginWithEmailPassword(email: string, password: string) {
   return data;
 }
 
+export async function checkUsernameExists(username: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id')
+    .eq('username', username)
+    .single();
+    
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error checking username:', error);
+  }
+  return !!data;
+}
+
 export async function registerWithEmailPassword(params: {
+  username: string;
   displayName: string;
+  fullName: string;
   email: string;
   password: string;
 }) {
@@ -101,11 +146,21 @@ export async function registerWithEmailPassword(params: {
     password: params.password,
     options: {
       data: {
+        username: params.username,
         display_name: params.displayName,
+        full_name: params.fullName,
       }
     }
   });
+  
   if (error) throw error;
+  
+  // Supabase returns an empty identities array if prevent email enumeration is enabled
+  // and the user already exists
+  if (data?.user?.identities && data.user.identities.length === 0) {
+    throw new Error('This email is already registered.');
+  }
+
   return data;
 }
 

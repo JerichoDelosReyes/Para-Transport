@@ -9,6 +9,7 @@ import { View, Animated, StyleSheet, Easing, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { AchievementPopup } from '../components/AchievementPopup';
+import { ensurePmtilesProtocol } from '../services/pmtilesProtocol';
 import { GlobalBroadcast } from '../components/GlobalBroadcast';
 import { supabase } from '../config/supabaseClient';
 import { useStore } from '../store/useStore';
