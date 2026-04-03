@@ -557,9 +557,47 @@ function pickRandom<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-function pickLocalized(variants: LocalizedVariants, language: BotLanguage): string {
-  const options = language === 'tl' ? variants.tl : variants.en;
-  return pickRandom(options);
+function normalizeForRepeatCheck(text: string): string {
+  return normalizeText(text).replace(/\s+/g, ' ').trim();
+}
+
+function lastAssistantReply(history?: ChatbotHistoryMessage[]): string | null {
+  if (!history || history.length === 0) return null;
+
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const entry = history[i];
+    if (entry.isUser) continue;
+
+    const value = entry.text?.trim();
+    if (value) return value;
+  }
+
+  return null;
+}
+
+function pickRandomTextVariant(items: string[], avoidText?: string | null): string {
+  if (items.length === 0) return '';
+  if (!avoidText) return pickRandom(items);
+
+  const avoidNormalized = normalizeForRepeatCheck(avoidText);
+  if (!avoidNormalized) return pickRandom(items);
+
+  const filtered = items.filter((item) => {
+    const normalizedItem = normalizeForRepeatCheck(item);
+    if (!normalizedItem) return false;
+    return !avoidNormalized.includes(normalizedItem);
+  });
+
+  return pickRandom(filtered.length > 0 ? filtered : items);
+}
+
+function pickLocalized(
+  variants: LocalizedVariants,
+  language: BotLanguage,
+  selection?: { avoidText?: string | null },
+): string {
+  const localizedOptions = language === 'tl' ? variants.tl : variants.en;
+  return pickRandomTextVariant(localizedOptions, selection?.avoidText);
 }
 
 function formatForChatDisplay(text: string): string {
@@ -640,6 +678,137 @@ function composeSupportReply(
 
   const chunks = [body, closing].filter(Boolean);
   return chunks.join('\n\n');
+}
+
+const REPEAT_BREAKER_SHORT: LocalizedVariants = {
+  en: [
+    'Thanks for checking in again. Want a route, fare estimate, or app help next?',
+    'Glad you followed up. Tell me your destination and I will tailor the next step.',
+    'No problem, we can continue. Share your next commute question and I will adjust the guidance.',
+  ],
+  tl: [
+    'Salamat sa follow-up. Route, fare estimate, o app help ba ang kailangan mo ngayon?',
+    'Ayos, tuloy tayo. Sabihin mo ang destination mo para ma-personalize ko ang next step.',
+    'Sige lang, game pa ako tumulong. I-send mo ang next commute question mo at iaangkop ko ang sagot.',
+  ],
+};
+
+const REPEAT_BREAKER_LONG: LocalizedVariants = {
+  en: [
+    'Let me rephrase that so it sounds less repetitive and more tailored to your trip.',
+    'I will put this in a fresher way so it feels more natural for your situation.',
+    'Here is the same guidance with a different wording to keep it more personal.',
+  ],
+  tl: [
+    'Ire-rephrase ko ito para hindi paulit-ulit at mas bagay sa trip mo.',
+    'Babaguhin ko ang wording para mas natural at mas personalized sa sitwasyon mo.',
+    'Pareho pa rin ang guidance, pero iibahin ko ang phrasing para mas personal ang dating.',
+  ],
+};
+
+function splitSentences(text: string): string[] {
+  return text
+    .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
+    ?.map((part) => part.trim())
+    .filter(Boolean) || [];
+}
+
+function dedupeConsecutiveSentences(text: string): string {
+  const paragraphs = text.split('\n\n');
+  const dedupedParagraphs: string[] = [];
+  let previousKey = '';
+
+  for (const rawParagraph of paragraphs) {
+    const paragraph = rawParagraph.trim();
+    if (!paragraph) continue;
+
+    if (paragraph.includes('\n')) {
+      const lines = paragraph
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const keptLines: string[] = [];
+      let previousLineKey = '';
+
+      for (const line of lines) {
+        const lineKey = normalizeForRepeatCheck(line);
+        if (lineKey && lineKey === previousLineKey) continue;
+        keptLines.push(line);
+        previousLineKey = lineKey;
+        previousKey = lineKey;
+      }
+
+      if (keptLines.length > 0) {
+        dedupedParagraphs.push(keptLines.join('\n'));
+      }
+      continue;
+    }
+
+    const sentences = splitSentences(paragraph);
+    if (sentences.length <= 1) {
+      const key = normalizeForRepeatCheck(paragraph);
+      if (!key || key !== previousKey) {
+        dedupedParagraphs.push(paragraph);
+        previousKey = key;
+      }
+      continue;
+    }
+
+    const keptSentences: string[] = [];
+    for (const sentence of sentences) {
+      const key = normalizeForRepeatCheck(sentence);
+      if (!key || key === previousKey) continue;
+      keptSentences.push(sentence);
+      previousKey = key;
+    }
+
+    if (keptSentences.length > 0) {
+      dedupedParagraphs.push(keptSentences.join(' '));
+    }
+  }
+
+  return dedupedParagraphs.join('\n\n').trim();
+}
+
+function diversifyReplyText(
+  language: BotLanguage,
+  text: string,
+  history: ChatbotHistoryMessage[],
+): string {
+  const formatted = formatForChatDisplay(text);
+  if (!formatted || isStrictPolicyReply(formatted)) return formatted;
+
+  const deduped = dedupeConsecutiveSentences(formatted);
+  const output = deduped || formatted;
+  if (isStrictPolicyReply(output)) return output;
+
+  const lastAssistant = lastAssistantReply(history);
+  if (!lastAssistant) return output;
+
+  const currentKey = normalizeForRepeatCheck(output);
+  const previousKey = normalizeForRepeatCheck(lastAssistant);
+  if (!currentKey || !previousKey || currentKey !== previousKey) return output;
+
+  const wordCount = output.split(/\s+/).filter(Boolean).length;
+  if (wordCount <= 14) {
+    return formatForChatDisplay(
+      pickLocalized(REPEAT_BREAKER_SHORT, language, { avoidText: lastAssistant }),
+    );
+  }
+
+  const lead = formatForChatDisplay(
+    pickLocalized(REPEAT_BREAKER_LONG, language, { avoidText: lastAssistant }),
+  );
+  if (!lead) return output;
+  return `${lead}\n\n${output}`;
+}
+
+function diversifyIfImmediateRepeat(
+  text: string,
+  language: BotLanguage,
+  history?: ChatbotHistoryMessage[],
+): string {
+  return diversifyReplyText(language, text, history ?? []);
 }
 
 function template(message: string, replacements: Record<string, string>): string {
@@ -2105,72 +2274,123 @@ function buildFareReply(params: {
   ].join('\n\n');
 }
 
-function pickTrivia(language: BotLanguage): string {
-  const entry = pickRandom(dataset.trivia);
-  const leadIn = pickLocalized(dataset.triviaLeadIns, language);
+function pickTrivia(language: BotLanguage, history?: ChatbotHistoryMessage[]): string {
+  const previous = lastAssistantReply(history);
+  const previousNormalized = previous ? normalizeForRepeatCheck(previous) : '';
+
+  const triviaPool = previousNormalized
+    ? dataset.trivia.filter((item) => {
+      const fact = language === 'tl' ? item.tl : item.en;
+      const normalizedFact = normalizeForRepeatCheck(fact);
+      return !normalizedFact || !previousNormalized.includes(normalizedFact);
+    })
+    : dataset.trivia;
+
+  const entry = pickRandom(triviaPool.length > 0 ? triviaPool : dataset.trivia);
+  const leadIn = pickLocalized(dataset.triviaLeadIns, language, { avoidText: previous });
   const fact = language === 'tl' ? entry.tl : entry.en;
-  const ending = language === 'tl'
-    ? pickRandom([
+  const endingOptions = language === 'tl'
+    ? [
       'Gusto mo pa ng isa pang trivia sa susunod?',
       'Kung trip mo, may isa pa akong fun fact mamaya.',
       'Sabihan mo lang ako kung gusto mo pa ng another trivia.',
-    ])
-    : pickRandom([
+    ]
+    : [
       'Want another one after this?',
       'If you like, I can share another fun fact next.',
       'Just say the word if you want more trivia.',
-    ]);
+    ];
+  const ending = pickRandomTextVariant(endingOptions, previous);
 
   const triviaBody = formatForChatDisplay(`${leadIn} ${fact}`);
-  return `${triviaBody}\n\n${ending}`;
+  return diversifyIfImmediateRepeat(`${triviaBody}\n\n${ending}`, language, history);
 }
 
-function pickSocialReply(language: BotLanguage, key: keyof DatasetShape['socialResponses']): string {
-  return formatForChatDisplay(pickLocalized(dataset.socialResponses[key], language));
+function pickSocialReply(
+  language: BotLanguage,
+  key: keyof DatasetShape['socialResponses'],
+  history?: ChatbotHistoryMessage[],
+): string {
+  const previous = lastAssistantReply(history);
+  return formatForChatDisplay(
+    pickLocalized(dataset.socialResponses[key], language, { avoidText: previous }),
+  );
 }
 
-function pickCompanionLead(language: BotLanguage, normalized: string): string | null {
-  if (hasAngerIntent(normalized)) return pickSocialReply(language, 'userAnger');
-  if (hasEmpathyIntent(normalized)) return pickSocialReply(language, 'empathy');
-  if (hasSuccessIntent(normalized)) return pickSocialReply(language, 'success');
+function pickCompanionLead(
+  language: BotLanguage,
+  normalized: string,
+  history?: ChatbotHistoryMessage[],
+): string | null {
+  if (hasAngerIntent(normalized)) return pickSocialReply(language, 'userAnger', history);
+  if (hasEmpathyIntent(normalized)) return pickSocialReply(language, 'empathy', history);
+  if (hasSuccessIntent(normalized)) return pickSocialReply(language, 'success', history);
   return null;
 }
 
-function pickFareNewsReply(language: BotLanguage): string {
-  return formatForChatDisplay(pickLocalized(dataset.fareNews, language));
+function pickFareNewsReply(language: BotLanguage, history?: ChatbotHistoryMessage[]): string {
+  const previous = lastAssistantReply(history);
+  const content = formatForChatDisplay(
+    pickLocalized(dataset.fareNews, language, { avoidText: previous }),
+  );
+  return diversifyIfImmediateRepeat(content, language, history);
 }
 
-function buildMildProfanityReply(language: BotLanguage): string {
+function buildMildProfanityReply(language: BotLanguage, history?: ChatbotHistoryMessage[]): string {
+  const previous = lastAssistantReply(history);
   const empathyLead = pickRandom([
-    pickSocialReply(language, 'userAnger'),
-    pickSocialReply(language, 'empathy'),
+    pickSocialReply(language, 'userAnger', history),
+    pickSocialReply(language, 'empathy', history),
   ]);
 
-  const helpRedirect = language === 'tl'
-    ? pickRandom([
+  const helpRedirectOptions = language === 'tl'
+    ? [
       'Gets ko na mabigat ang pakiramdam mo. Kung ready ka, sabihin mo lang ang route o pamasahe concern mo at tutulungan kita agad.',
       'Nandito pa rin ako para tumulong. I-type mo lang ang destination mo o tanong sa pamasahe, tapos aasikasuhin natin.',
-    ])
-    : pickRandom([
+    ]
+    : [
       'I get that you are frustrated. When you are ready, tell me your route or fare concern and I will help right away.',
       'I am still here to help. Send your destination or fare question, and we will sort it out step by step.',
-    ]);
+    ];
+  const helpRedirect = pickRandomTextVariant(helpRedirectOptions, previous);
 
-  return [empathyLead, helpRedirect].filter(Boolean).join('\n\n');
+  return diversifyIfImmediateRepeat(
+    [empathyLead, helpRedirect].filter(Boolean).join('\n\n'),
+    language,
+    history,
+  );
 }
 
-function buildHeavyProfanityBoundaryReply(language: BotLanguage): string {
-  if (language === 'tl') {
-    return [
-      'Gusto kitang tulungan, pero hindi ako magpapatuloy habang sunod-sunod ang mura.',
-      'Quick cooldown muna: mag-send ng isang mahinahong route o pamasahe question, tapos tutulong ako agad.',
-    ].join('\n\n');
-  }
+function buildHeavyProfanityBoundaryReply(language: BotLanguage, history?: ChatbotHistoryMessage[]): string {
+  const previous = lastAssistantReply(history);
 
-  return [
-    'I want to help, but I will not continue while the messages stay abusive.',
-    'Quick cooldown: send one calm route or fare question, and I will help right away.',
-  ].join('\n\n');
+  const options = language === 'tl'
+    ? [
+      [
+        'Gusto kitang tulungan, pero hindi ako magpapatuloy habang sunod-sunod ang mura.',
+        'Quick cooldown muna: mag-send ng isang mahinahong route o pamasahe question, tapos tutulong ako agad.',
+      ].join('\n\n'),
+      [
+        'Tutulong ako, pero hihinto muna tayo kapag tuloy-tuloy ang abusive na wording.',
+        'Cooldown muna sandali: isang calm na route o fare question lang, then sasagot ako agad.',
+      ].join('\n\n'),
+    ]
+    : [
+      [
+        'I want to help, but I will not continue while the messages stay abusive.',
+        'Quick cooldown: send one calm route or fare question, and I will help right away.',
+      ].join('\n\n'),
+      [
+        'I can still help, but I need the conversation to stay respectful first.',
+        'Take a short cooldown, then send one calm route or fare question and I will jump in immediately.',
+      ].join('\n\n'),
+    ];
+
+  return diversifyIfImmediateRepeat(
+    pickRandomTextVariant(options, previous),
+    language,
+    history,
+  );
 }
 
 function stripAutoTranslationParenthetical(text: string, language: BotLanguage): string {
@@ -2457,8 +2677,9 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const currentState: ChatbotConversationState = request.state ?? {};
   const hasPendingFollowUp = hasPendingFollowUpState(currentState);
   const routes = request.routes ?? [];
+  const ensureVariedReply = (text: string): string => diversifyIfImmediateRepeat(text, language, history);
   const companionLead = companionMode && isTaskLikeMessage
-    ? pickCompanionLead(language, normalized)
+    ? pickCompanionLead(language, normalized, history)
     : null;
 
   const withCompanionLead = (content: string): string => {
@@ -2471,7 +2692,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const supportReply = (
     content: string,
     options?: { includeClosing?: boolean },
-  ): string => composeSupportReply(language, withCompanionLead(content), options);
+  ): string => ensureVariedReply(composeSupportReply(language, withCompanionLead(content), options));
 
   if (!message) {
     return {
@@ -2506,8 +2727,8 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const profanitySeverity = classifyProfanitySeverity(normalized, history);
   if (profanitySeverity !== 'none') {
     const profanityReply = profanitySeverity === 'heavy'
-      ? composeSupportReply(language, buildHeavyProfanityBoundaryReply(language))
-      : supportReply(buildMildProfanityReply(language));
+      ? ensureVariedReply(composeSupportReply(language, buildHeavyProfanityBoundaryReply(language, history)))
+      : supportReply(buildMildProfanityReply(language, history));
 
     return {
       text: profanityReply,
@@ -2519,7 +2740,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasBuilderOriginIntent(normalized)) {
     return {
-      text: builderOriginReply(language),
+      text: ensureVariedReply(builderOriginReply(language)),
       language,
       state: {},
       usedGroq: false,
@@ -2528,7 +2749,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasBuilderIntent(normalized)) {
     return {
-      text: dataset.builderAnswer,
+      text: ensureVariedReply(dataset.builderAnswer),
       language,
       state: {},
       usedGroq: false,
@@ -2537,7 +2758,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasFareNewsIntent(normalized)) {
     return {
-      text: supportReply(pickFareNewsReply(language)),
+      text: supportReply(pickFareNewsReply(language, history)),
       language,
       state: {},
       usedGroq: false,
@@ -2546,7 +2767,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (hasTriviaIntent(normalized)) {
     return {
-      text: supportReply(pickTrivia(language)),
+      text: supportReply(pickTrivia(language, history)),
       language,
       state: {},
       usedGroq: false,
@@ -2876,7 +3097,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (companionMode && !isTaskLikeMessage && hasAngerIntent(normalized)) {
     return {
-      text: pickSocialReply(language, 'userAnger'),
+      text: ensureVariedReply(pickSocialReply(language, 'userAnger', history)),
       language,
       state: {},
       usedGroq: false,
@@ -2885,7 +3106,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (companionMode && !isTaskLikeMessage && hasEmpathyIntent(normalized)) {
     return {
-      text: pickSocialReply(language, 'empathy'),
+      text: ensureVariedReply(pickSocialReply(language, 'empathy', history)),
       language,
       state: {},
       usedGroq: false,
@@ -2894,7 +3115,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (companionMode && !isTaskLikeMessage && hasSuccessIntent(normalized)) {
     return {
-      text: pickSocialReply(language, 'success'),
+      text: ensureVariedReply(pickSocialReply(language, 'success', history)),
       language,
       state: {},
       usedGroq: false,
@@ -2903,7 +3124,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (!isTaskLikeMessage && hasLaughterIntent(normalized)) {
     return {
-      text: pickSocialReply(language, 'laughter'),
+      text: ensureVariedReply(pickSocialReply(language, 'laughter', history)),
       language,
       state: {},
       usedGroq: false,
@@ -2912,7 +3133,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (!isTaskLikeMessage && hasPowerWordsIntent(normalized)) {
     return {
-      text: pickSocialReply(language, 'powerWords'),
+      text: ensureVariedReply(pickSocialReply(language, 'powerWords', history)),
       language,
       state: {},
       usedGroq: false,
@@ -2921,7 +3142,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasGreetingIntent(normalized)) {
     return {
-      text: pickSocialReply(language, 'greetings'),
+      text: ensureVariedReply(pickSocialReply(language, 'greetings', history)),
       language,
       state: {},
       usedGroq: false,
@@ -2930,7 +3151,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasPraiseIntent(normalized)) {
     return {
-      text: pickSocialReply(language, 'praise'),
+      text: ensureVariedReply(pickSocialReply(language, 'praise', history)),
       language,
       state: {},
       usedGroq: false,
@@ -2939,7 +3160,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasThanksIntent(normalized)) {
     return {
-      text: pickSocialReply(language, 'thanks'),
+      text: ensureVariedReply(pickSocialReply(language, 'thanks', history)),
       language,
       state: {},
       usedGroq: false,
@@ -2948,7 +3169,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasGoodbyeIntent(normalized)) {
     return {
-      text: pickSocialReply(language, 'goodbye'),
+      text: ensureVariedReply(pickSocialReply(language, 'goodbye', history)),
       language,
       state: {},
       usedGroq: false,
@@ -2957,7 +3178,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasUserApologyIntent(normalized)) {
     return {
-      text: pickSocialReply(language, 'userApology'),
+      text: ensureVariedReply(pickSocialReply(language, 'userApology', history)),
       language,
       state: {},
       usedGroq: false,
@@ -2966,7 +3187,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (!isTaskLikeMessage && isPureSocialMessage(normalized) && hasAcknowledgementIntent(normalized)) {
     return {
-      text: pickSocialReply(language, 'acknowledgement'),
+      text: ensureVariedReply(pickSocialReply(language, 'acknowledgement', history)),
       language,
       state: {},
       usedGroq: false,
@@ -2980,11 +3201,11 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     const guardrailDecision = await callGroqGuardrail(message, language);
     if (!guardrailDecision.allow) {
       return {
-        text: composeSupportReply(
+        text: ensureVariedReply(composeSupportReply(
           language,
           buildGuardrailBlockedReply(language, guardrailDecision.category, guardrailDecision.reason),
           { includeClosing: true },
-        ),
+        )),
         language,
         state: {},
         usedGroq: false,
@@ -3017,7 +3238,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (!inScope) {
     return {
-      text: strictOutOfScopeReply(),
+      text: ensureVariedReply(strictOutOfScopeReply()),
       language,
       state: {},
       usedGroq: false,
