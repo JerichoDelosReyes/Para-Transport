@@ -415,6 +415,7 @@ export default function HomeScreen() {
   const [selectedRouteType, setSelectedRouteType] = useState<TransitRouteType>('jeepney');
   const [isRouting, setIsRouting] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
+  const [currentLocationLabel, setCurrentLocationLabel] = useState<string>('Current Location');
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
@@ -438,22 +439,59 @@ export default function HomeScreen() {
     setRankedRoutes(rankRoutes(matchedRoutes, rankTab).slice(0, MAX_RANKED_ROUTE_OPTIONS));
   }, [matchedRoutes, rankTab]);
 
+  const lastZoomedRouteIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     const route = matchedRoutes.find(m => m.legs.map((l: any) => l.route.properties.code).join('+') === selectedRouteId) || null;
     setSelectedRoute(route);
     if (route) {
       setRouteSummary({ distanceKm: route.distanceKm || 0, durationMin: route.estimatedMinutes || Math.round((route.distanceKm || 0) * 12) });
       const newCoords = route.legs.flatMap((leg: any) => leg.route.coordinates);
+      
       if (newCoords && newCoords.length >= 2) {
         setRouteCoordinates(sampleCoordinates(newCoords, 700));
+        
+        if (lastZoomedRouteIdRef.current !== selectedRouteId) {
+          lastZoomedRouteIdRef.current = selectedRouteId;
+          
+          // Build a trimmed bounding point array specific to the user's travel points
+          const trimCoords = [];
+          if (currentLocation) trimCoords.push(currentLocation);
+          const boardingPoint = route.legs[0]?.boardingPoint;
+          if (boardingPoint) trimCoords.push(boardingPoint);
+          const alightingPoint = route.legs[route.legs.length - 1]?.alightingPoint;
+          if (alightingPoint) trimCoords.push(alightingPoint);
+          if (destinationLocation) trimCoords.push(destinationLocation);
+
+          mapRef.current?.fitToCoordinates(trimCoords, {
+            edgePadding: { top: 80, right: 60, bottom: 300, left: 60 },
+            animated: true,
+          });
+        }
       } else {
         setRouteCoordinates([]);
+        
+        if (lastZoomedRouteIdRef.current !== selectedRouteId) {
+          lastZoomedRouteIdRef.current = selectedRouteId;
+          const originObj = route.legs[0]?.boardingPoint || currentLocation;
+          const destObj = route.legs[route.legs.length - 1]?.alightingPoint || destinationLocation;
+          
+          if (originObj && destObj) {
+            const midLat = (originObj.latitude + destObj.latitude) / 2;
+            const midLng = (originObj.longitude + destObj.longitude) / 2;
+            mapRef.current?.animateCamera({
+              center: { latitude: midLat, longitude: midLng },
+              zoom: 14,
+            }, { duration: 600 });
+          }
+        }
       }
     } else {
       setRouteSummary(null);
       setRouteCoordinates([]);
+      lastZoomedRouteIdRef.current = null;
     }
-  }, [selectedRouteId, matchedRoutes]);
+  }, [selectedRouteId, matchedRoutes, currentLocation, destinationLocation]);
 
   // Normalize route data to a unified transit shape
   const transitRoutes = useMemo(() => {
@@ -638,6 +676,20 @@ export default function HomeScreen() {
           longitude: initial.coords.longitude,
         });
 
+        try {
+          const geocoded = await Location.reverseGeocodeAsync({
+            latitude: initial.coords.latitude,
+            longitude: initial.coords.longitude,
+          });
+          if (geocoded && geocoded.length > 0) {
+            const top = geocoded[0];
+            const parts = [top.name || top.street, top.district || top.city].filter(Boolean);
+            if (parts.length > 0) {
+              setCurrentLocationLabel(parts.join(', '));
+            }
+          }
+        } catch (e) {}
+
         locationSubscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.Balanced,
@@ -681,8 +733,17 @@ export default function HomeScreen() {
 
   const handleSearchSelectRoute = useCallback(async (origin: PlaceResult | null, destination: PlaceResult) => {
     setIsSearchActive(false);
+
+    const actualOrigin = origin || (currentLocation ? {
+      id: 'current-location',
+      title: currentLocationLabel,
+      subtitle: '',
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude
+    } as PlaceResult : null);
+
     setDestinationQuery(destination.title);
-    setOriginQuery(origin?.title || '');
+    setOriginQuery(actualOrigin?.title || '');
     
     const destinationPoint: MapCoordinate = {
       latitude: destination.latitude,
@@ -690,8 +751,8 @@ export default function HomeScreen() {
     };
     setDestinationLocation(destinationPoint);
     
-    const startPoint = origin
-      ? { latitude: origin.latitude, longitude: origin.longitude }
+    const startPoint = actualOrigin
+      ? { latitude: actualOrigin.latitude, longitude: actualOrigin.longitude }
       : currentLocation;
       
     if (!startPoint) {
@@ -760,29 +821,22 @@ export default function HomeScreen() {
       setShowRecommender(true);
 
       if (results.length > 0) {
-        const allCoords = results.flatMap(m =>
-          m.legs.flatMap((l: any) => sampleCoordinates(l.route.coordinates, 40))
-        );
-        mapRef.current?.fitToCoordinates(allCoords, {
-          edgePadding: { top: 160, right: 50, bottom: 300, left: 50 },
-          animated: true,
-        });
-
-        // Delay route highlight by 300ms to allow bottom sheet intro animation to pop smoothly
-        setTimeout(() => {
-           const firstRanked = rankRoutes(results, 'easiest')[0];
-           if (firstRanked) {
-             const firstId = firstRanked.legs.map((l: any) => l.route.properties.code).join('+');
-             setSelectedRouteId(firstId);
-           }
-        }, 300);
+        const firstRanked = rankRoutes(results, 'easiest')[0];
+        if (firstRanked) {
+          const firstId = firstRanked.legs.map((l: any) => l.route.properties.code).join('+');
+          
+          // Delay route highlight by 300ms to allow bottom sheet intro animation to pop smoothly
+          setTimeout(() => {
+            setSelectedRouteId(firstId);
+          }, 300);
+        }
       } else {
         mapRef.current?.animateToRegion({...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01}, 600);
       }
 
       Keyboard.dismiss();
       
-      const h_origin = origin ? { name: origin.title, lat: origin.latitude, lon: origin.longitude } : null;
+      const h_origin = actualOrigin ? { name: actualOrigin.title, lat: actualOrigin.latitude, lon: actualOrigin.longitude } : null;
       const initialFare = results.length > 0 ? (results[0].estimatedFare || 0) : 0;
       addHistory({
         id: Date.now().toString(),
@@ -813,9 +867,24 @@ export default function HomeScreen() {
       return;
     }
 
+    let destTitle = 'Dropped Pin';
+    try {
+      const geocoded = await Location.reverseGeocodeAsync({
+        latitude: coordinate.latitude,
+        longitude: coordinate.longitude,
+      });
+      if (geocoded && geocoded.length > 0) {
+        const top = geocoded[0];
+        const parts = [top.name || top.street, top.district || top.city].filter(Boolean);
+        if (parts.length > 0) {
+          destTitle = parts.join(', ');
+        }
+      }
+    } catch (e) {}
+
     const destinationPlace: PlaceResult = {
       id: `pin-${Date.now()}`,
-      title: 'Dropped Pin',
+      title: destTitle,
       subtitle: `${coordinate.latitude.toFixed(5)}, ${coordinate.longitude.toFixed(5)}`,
       latitude: coordinate.latitude,
       longitude: coordinate.longitude,
@@ -1693,7 +1762,7 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
               <Text style={[styles.searchInputText, {color: COLORS.textMuted, flex: 1, marginLeft: 6}]} numberOfLines={1}>
-                {destinationQuery ? `${originQuery || 'My Location'} → ${destinationQuery}` : `Saan tayo, ${(user?.full_name || 'Komyuter').split(' ')[0]}?`}
+                {destinationQuery ? `${originQuery || currentLocationLabel} → ${destinationQuery}` : `Saan tayo, ${user?.username || 'Komyuter'}?`}
               </Text>
               <TouchableOpacity 
                 onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon! (Requires a native voice plugin)')} 
@@ -1881,7 +1950,7 @@ export default function HomeScreen() {
               {/* Title & Controls */}
               <View style={{ flex: 1, justifyContent: 'center' }}>
                 <Text style={[styles.simPanelStatusText, { fontSize: 13 }]} numberOfLines={1}>
-                  {destinationQuery ? `${originQuery || 'My Location'} → ${destinationQuery}` : sim.currentSegInfo?.label || 'Walking...'}
+                  {destinationQuery ? `${originQuery || currentLocationLabel} → ${destinationQuery}` : sim.currentSegInfo?.label || 'Walking...'}
                 </Text>
                 
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
@@ -1943,7 +2012,7 @@ export default function HomeScreen() {
       {/* Full-screen search */}
       <SearchScreen
         visible={isSearchActive}
-        currentLocationLabel="Current Location"
+        currentLocationLabel={currentLocationLabel}
         initialOrigin={pendingRouteSearch ? pendingRouteSearch.origin : originQuery}
         initialDestination={pendingRouteSearch ? pendingRouteSearch.destination : destinationQuery}
         selectedRouteType={selectedRouteType}

@@ -54,9 +54,9 @@ export default function AIChatbotScreen() {
   const user = useStore((state: any) => state.user);
   const sessionMode = useStore((state: any) => state.sessionMode);
 
-  const authName = typeof user?.name === "string" ? user.name.trim() : "";
+  const authName = typeof user?.username === "string" ? user.username.trim() : "";
   const preferredName = sessionMode === "auth" && authName.length > 0
-    ? authName.split(" ")[0]
+    ? authName
     : null;
   const hasConversation = messages.length > 0;
 

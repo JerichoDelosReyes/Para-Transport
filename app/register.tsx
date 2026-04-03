@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import { supabase } from '../config/supabaseClient';
 import OtpModal from '../components/OtpModal';
 import {
   registerWithEmailPassword,
@@ -104,7 +105,8 @@ export default function RegisterScreen() {
 
       const data = await registerWithEmailPassword({
         username,
-        displayName: name,
+        displayName: username,
+        fullName: name,
         email,
         password,
       });
@@ -118,7 +120,8 @@ export default function RegisterScreen() {
             await logUserAction(data.user.id, 'Registered new account');
             await supabase.from('users').update({ 
               username: username,
-              display_name: name 
+              display_name: username,
+              full_name: name
             }).eq('id', data.user.id);
           } catch (e) {
             console.warn('Could not auto-sync username to public.users', e);
@@ -127,7 +130,7 @@ export default function RegisterScreen() {
         beginAuthSession({
           id: data?.user?.id,
           username: data?.user?.user_metadata?.username || username,
-          full_name: data?.user?.user_metadata?.display_name || name,
+          full_name: data?.user?.user_metadata?.full_name || name,
           email: data?.user?.email || email,
           points: 0,
           streak_count: 0,
@@ -165,7 +168,8 @@ export default function RegisterScreen() {
         try {
           await supabase.from('users').update({ 
             username: username,
-            display_name: name 
+            display_name: username,
+            full_name: name
           }).eq('id', data.user.id);
         } catch (e) {
           console.warn('Could not auto-sync username to public.users', e);
@@ -175,7 +179,7 @@ export default function RegisterScreen() {
       beginAuthSession({
         id: data?.user?.id,
         username: data?.user?.user_metadata?.username || username,
-        full_name: data?.user?.user_metadata?.display_name || name,
+        full_name: data?.user?.user_metadata?.full_name || name,
         email: data?.user?.email || email,
         points: 0,
         streak_count: 0,

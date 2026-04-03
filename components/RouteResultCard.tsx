@@ -39,7 +39,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
                 <Ionicons name="walk-outline" size={14} color={COLORS.textMuted} style={{ marginHorizontal: 2 }} />
               )}
               <View style={[styles.codeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
-                <Text style={styles.codeText}>{leg.route.properties.code}</Text>
+                <Text style={styles.codeText}>{leg.route.properties.name || leg.route.properties.code}</Text>
               </View>
             </React.Fragment>
           ))}
@@ -65,10 +65,21 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
 
       {/* Via stops */}
       {legs.length === 1 && (() => {
-        const viaStops = legs[0].route.stops.map(s => s.label).join(' → ');
-        return viaStops ? (
-          <Text style={styles.viaText} numberOfLines={1}>Via {viaStops}</Text>
-        ) : null;
+        const { fromLabel, toLabel } = legs[0].route.properties;
+        if (fromLabel && toLabel) {
+          return (
+            <Text style={styles.viaText} numberOfLines={1}>
+              {fromLabel} → {toLabel}
+            </Text>
+          );
+        } else if (fromLabel || toLabel) {
+          return (
+            <Text style={styles.viaText} numberOfLines={1}>
+              {fromLabel || toLabel}
+            </Text>
+          );
+        }
+        return null;
       })()}
 
       {/* Per-leg fare breakdown for transfers */}

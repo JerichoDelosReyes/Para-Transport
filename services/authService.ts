@@ -137,6 +137,7 @@ export async function checkUsernameExists(username: string): Promise<boolean> {
 export async function registerWithEmailPassword(params: {
   username: string;
   displayName: string;
+  fullName: string;
   email: string;
   password: string;
 }) {
@@ -147,6 +148,7 @@ export async function registerWithEmailPassword(params: {
       data: {
         username: params.username,
         display_name: params.displayName,
+        full_name: params.fullName,
       }
     }
   });
