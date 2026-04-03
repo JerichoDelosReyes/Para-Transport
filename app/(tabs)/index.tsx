@@ -19,6 +19,7 @@ import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
 import { loadRoutes } from '../../services/routeService';
 import { MapLibreWrapper, type MapLibreWrapperHandle, type MapLineInput, type MapMarkerInput } from '../../components/MapLibreWrapper';
+import { mapDiagnostics } from '../../services/mapDiagnosticsService';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
@@ -558,6 +559,18 @@ export default function HomeScreen() {
   const [simAutoFollow, setSimAutoFollow] = useState(true);
   const [simBlink, setSimBlink] = useState(true);
 
+  // Setup diagnostics callbacks
+  useEffect(() => {
+    mapDiagnostics.onBlankMapDetectedCallback((details) => {
+      console.warn('[MapScreen] Blank map detected:', details);
+      // Could show user alert or retry logic here
+    });
+
+    return () => {
+      // Optional: cleanup or report diagnostics on unmount
+    };
+  }, []);
+
   const selectedOptionLabel = useMemo(() => {
     if (!selectedRouteId) return 'Current Route';
     return selectedRoute?.legs.map((l: any) => l.route.properties.code).join('+') || 'Current Route';
@@ -923,45 +936,59 @@ export default function HomeScreen() {
   const handleMapLongPress = useCallback(async (coordinatePair: [number, number]) => {
     if (isRouting) return;
 
-    const coordinate: MapCoordinate = {
-      latitude: coordinatePair[1],
-      longitude: coordinatePair[0],
-    };
-
-    if (
-      coordinate.latitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLatitude ||
-      coordinate.latitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLatitude ||
-      coordinate.longitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLongitude ||
-      coordinate.longitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLongitude
-    ) {
-      Alert.alert('Out of Range', 'Please choose a destination inside the Philippines map area.');
-      return;
-    }
-
-    let destTitle = 'Dropped Pin';
     try {
-      const geocoded = await Location.reverseGeocodeAsync({
+      const coordinate: MapCoordinate = {
+        latitude: coordinatePair[1],
+        longitude: coordinatePair[0],
+      };
+
+      if (
+        coordinate.latitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLatitude ||
+        coordinate.latitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLatitude ||
+        coordinate.longitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLongitude ||
+        coordinate.longitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLongitude
+      ) {
+        mapDiagnostics.logEvent('warn', 'Long-press outside Philippines bounds', {
+          lat: coordinate.latitude,
+          lng: coordinate.longitude,
+        });
+        Alert.alert('Out of Range', 'Please choose a destination inside the Philippines map area.');
+        return;
+      }
+
+      let destTitle = 'Dropped Pin';
+      try {
+        const geocoded = await Location.reverseGeocodeAsync({
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
+        });
+        if (geocoded && geocoded.length > 0) {
+          const top = geocoded[0];
+          const parts = [top.name || top.street, top.district || top.city].filter(Boolean);
+          if (parts.length > 0) {
+            destTitle = parts.join(', ');
+          }
+        }
+      } catch (e) {
+        mapDiagnostics.logEvent('info', 'Geocode reverse lookup (non-critical error)', {
+          lat: coordinate.latitude,
+          lng: coordinate.longitude,
+        });
+      }
+
+      const destinationPlace: PlaceResult = {
+        id: `pin-${Date.now()}`,
+        title: destTitle,
+        subtitle: `${coordinate.latitude.toFixed(5)}, ${coordinate.longitude.toFixed(5)}`,
         latitude: coordinate.latitude,
         longitude: coordinate.longitude,
-      });
-      if (geocoded && geocoded.length > 0) {
-        const top = geocoded[0];
-        const parts = [top.name || top.street, top.district || top.city].filter(Boolean);
-        if (parts.length > 0) {
-          destTitle = parts.join(', ');
-        }
-      }
-    } catch (e) {}
+      };
 
-    const destinationPlace: PlaceResult = {
-      id: `pin-${Date.now()}`,
-      title: destTitle,
-      subtitle: `${coordinate.latitude.toFixed(5)}, ${coordinate.longitude.toFixed(5)}`,
-      latitude: coordinate.latitude,
-      longitude: coordinate.longitude,
-    };
-
-    await handleSearchSelectRoute(null, destinationPlace);
+      await handleSearchSelectRoute(null, destinationPlace);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      mapDiagnostics.logInitError(error, 'handleMapLongPress');
+    }
   }, [handleSearchSelectRoute, isRouting]);
 
   // Automatically process pending route searches (e.g. from Saved routes page)
@@ -1634,6 +1661,19 @@ export default function HomeScreen() {
 
     return markers;
   }, [activeUserPosition, destinationLocation, visibleTransitMarkers, destinationQuery, visibleTransitStops, nearestStop?.id]);
+
+  // Log marker/line updates for diagnostics
+  useEffect(() => {
+    if (mapMarkers.length > 0) {
+      mapDiagnostics.logOverlayEvent('marker', mapMarkers.length, 'updated');
+    }
+  }, [mapMarkers.length]);
+
+  useEffect(() => {
+    if (mapLines.length > 0) {
+      mapDiagnostics.logOverlayEvent('line', mapLines.length, 'updated');
+    }
+  }, [mapLines.length]);
 
   // Auto-follow camera during simulation playback
   useEffect(() => {

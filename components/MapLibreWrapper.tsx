@@ -1,8 +1,9 @@
-import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import MapLibreGL from '@maplibre/maplibre-react-native';
 import { MAP_CONFIG } from '../constants/map';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/theme';
+import { mapDiagnostics } from '../services/mapDiagnosticsService';
 
 type LngLat = [number, number];
 
@@ -153,6 +154,24 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
     const cameraRef = useRef<any>(null);
     const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
     const selectedMarker = markers.find((m) => m.id === selectedMarkerId);
+    const mapInitStartRef = useRef<number>(Date.now());
+
+    // Log initialization
+    useEffect(() => {
+      try {
+        mapDiagnostics.logStyleResolution(
+          MAP_CONFIG.STYLE_URL_STRATEGY,
+          styleURL,
+          MAP_CONFIG.STYLE_URL_PINNED_VERSION,
+          MAP_CONFIG.STYLE_URL_FALLBACK,
+        );
+        mapDiagnostics.logMapInitStart(initialCenterCoordinate, initialZoomLevel ?? 13);
+        mapInitStartRef.current = Date.now();
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        mapDiagnostics.logInitError(error, 'initialization setup');
+      }
+    }, []);
 
     useImperativeHandle(ref, () => ({
       flyTo: (coordinate, duration = 600) => {
@@ -174,6 +193,30 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
 
     const lineSource = useMemo(() => toFeatureCollection(lines), [lines]);
 
+    const handleMapReady = async () => {
+      try {
+        const duration = Date.now() - mapInitStartRef.current;
+        mapDiagnostics.logMapReady(duration);
+
+        // Blank-map detection: check if the style has loaded
+        // If map is ready but no visible tiles, likely a style/network issue
+        if (!styleURL) {
+          mapDiagnostics.logBlankMapDetected({
+            reason: 'No style URL provided',
+            styleURL: styleURL || '(empty)',
+          });
+        }
+
+        // Call user's onMapReady callback
+        if (onMapReady) {
+          onMapReady();
+        }
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        mapDiagnostics.logInitError(error, 'map ready handler');
+      }
+    };
+
     return (
       <MapLibreGL.MapView
         style={{ flex: 1 }}
@@ -183,7 +226,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
         pitchEnabled={pitchEnabled}
         zoomEnabled
         scrollEnabled
-        onDidFinishLoadingMap={onMapReady}
+        onDidFinishLoadingMap={handleMapReady}
         onPress={onMapTouchStart}
         onLongPress={(event: any) => {
           const coords = event?.geometry?.coordinates;
