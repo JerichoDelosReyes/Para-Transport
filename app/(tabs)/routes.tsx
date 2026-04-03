@@ -120,8 +120,8 @@ export default function RoutesScreen() {
             {displayedHistory.length > 0 ? (
               displayedHistory.map((item: any, index: number) => {
                 const getShortName = (name: string) => name ? name.split(',')[0].trim() : name;
-                const originName = item.origin?.name && item.origin.name !== 'Current Location' ? getShortName(item.origin.name) : 'Your Location';
-                const destName = item.destination?.name && item.destination.name !== 'Dropped Pin' ? getShortName(item.destination.name) : 'Pinned Location';
+                const originName = item.origin?.name ? getShortName(item.origin.name) : 'Current Location';
+                const destName = item.destination?.name ? getShortName(item.destination.name) : 'Pinned Location';
                 const targetName = `${originName} to ${destName}`;
                 const isSaved = user.saved_routes?.some((r: any) => 
                   r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)

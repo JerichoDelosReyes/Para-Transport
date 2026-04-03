@@ -530,7 +530,7 @@ export default function SearchScreen({
               setActiveField('destination');
               setTimeout(() => destRef.current?.focus(), 100);
             } else {
-              setDestinationText('Current Location');
+              setDestinationText(currentLocationLabel || 'Current Location');
             }
           }}
         >
