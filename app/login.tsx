@@ -93,14 +93,16 @@ export default function LoginScreen() {
       } catch (err) {}
 
       const finalUsername = data?.user?.user_metadata?.username || userStats.username || '';
-      const finalDisplayName = data?.user?.user_metadata?.display_name || userStats.display_name || 'Commuter';
+      const finalDisplayName = data?.user?.user_metadata?.display_name || userStats.display_name || finalUsername;
+      const finalFullName = data?.user?.user_metadata?.full_name || userStats.full_name || 'Commuter';
 
       // Self-healing: If the local DB users table didn't have the username or display_name, update it so leaderboard works!
       if (data?.user?.id && (!userStats.username || !userStats.display_name)) {
         try {
           await supabase.from('users').update({
             username: finalUsername,
-            display_name: finalDisplayName
+            display_name: finalDisplayName,
+            full_name: finalFullName
           }).eq('id', data.user.id);
         } catch (e) {
           console.warn('Failed self healing user row', e);
@@ -112,7 +114,7 @@ export default function LoginScreen() {
       beginAuthSession({
         id: data?.user?.id,
         username: finalUsername,
-        full_name: finalDisplayName,
+        full_name: finalFullName,
         email: data?.user?.email || email,
         points: userStats.points || 0,
         streak_count: userStats.streak_count || 0,
@@ -185,13 +187,15 @@ export default function LoginScreen() {
       } catch (err) {}
       
       const finalUsername = data?.user?.user_metadata?.username || userStats.username || '';
-      const finalDisplayName = data?.user?.user_metadata?.display_name || userStats.display_name || 'Commuter';
+      const finalDisplayName = data?.user?.user_metadata?.display_name || userStats.display_name || finalUsername;
+      const finalFullName = data?.user?.user_metadata?.full_name || userStats.full_name || 'Commuter';
 
       if (data?.user?.id && (!userStats.username || !userStats.display_name)) {
         try {
           await supabase.from('users').update({
             username: finalUsername,
-            display_name: finalDisplayName
+            display_name: finalDisplayName,
+            full_name: finalFullName
           }).eq('id', data.user.id);
         } catch (e) {
           console.warn('Failed self healing user row', e);
@@ -201,7 +205,7 @@ export default function LoginScreen() {
       beginAuthSession({
         id: data?.user?.id,
         username: finalUsername,
-        full_name: finalDisplayName,
+        full_name: finalFullName,
         email: data?.user?.email || email,
         points: userStats.points || 0,
         streak_count: userStats.streak_count || 0,
