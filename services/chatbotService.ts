@@ -45,6 +45,15 @@ export type ChatbotResponse = {
   usedGroq: boolean;
 };
 
+type GuardrailCategory = 'safe' | 'out_of_scope' | 'unsafe';
+
+type GuardrailDecision = {
+  allow: boolean;
+  category: GuardrailCategory;
+  reason?: string;
+  confidence?: number;
+};
+
 type DatasetPlace = {
   id: string;
   name: string;
@@ -77,6 +86,31 @@ type DatasetAppGuide = {
   tl: string[];
 };
 
+type DatasetIntentGroup = {
+  id: string;
+  intents: string[];
+  threshold?: number;
+};
+
+type DatasetIntentSynonymGroups = {
+  shared?: Record<string, string>;
+  en?: Record<string, string>;
+  tl?: Record<string, string>;
+};
+
+type DatasetIntentConfig = {
+  collapseRepeatedChars?: boolean;
+  intentSynonyms?: DatasetIntentSynonymGroups;
+};
+
+type DatasetMatchingConfig = {
+  fuzzyMinWordLength?: number;
+  fuzzyLongWordLength?: number;
+  fuzzyMaxDistanceShort?: number;
+  fuzzyMaxDistanceLong?: number;
+  intentGroupThreshold?: number;
+};
+
 type DatasetShape = {
   farePolicy: {
     baseFarePhp: number;
@@ -86,6 +120,10 @@ type DatasetShape = {
     roundToNearestQuarter: boolean;
   };
   topicKeywords: string[];
+  intentConfig?: DatasetIntentConfig;
+  matchingConfig?: DatasetMatchingConfig;
+  intentGroups?: DatasetIntentGroup[];
+  appGuideAliasMap?: Record<string, string>;
   places: DatasetPlace[];
   farePairs: DatasetFarePair[];
   trivia: DatasetTrivia[];
@@ -165,7 +203,30 @@ type DestinationPoint = {
 
 type StopDestination = DestinationPoint;
 
+type NormalizedIntentGroup = {
+  id: string;
+  intents: string[];
+  threshold: number;
+};
+
 const dataset = datasetJson as DatasetShape;
+const DEFAULT_INTENT_GROUP_THRESHOLD = 0.62;
+const DEFAULT_MATCHING_CONFIG: Required<DatasetMatchingConfig> = {
+  fuzzyMinWordLength: 4,
+  fuzzyLongWordLength: 8,
+  fuzzyMaxDistanceShort: 1,
+  fuzzyMaxDistanceLong: 2,
+  intentGroupThreshold: DEFAULT_INTENT_GROUP_THRESHOLD,
+};
+const matchingConfig: Required<DatasetMatchingConfig> = {
+  ...DEFAULT_MATCHING_CONFIG,
+  ...(dataset.matchingConfig ?? {}),
+};
+const intentSynonymMap = buildIntentSynonymMap(dataset.intentConfig?.intentSynonyms);
+const intentGroups = buildIntentGroups(dataset.intentGroups ?? [], matchingConfig.intentGroupThreshold);
+const intentGroupById = new Map<string, NormalizedIntentGroup>(
+  intentGroups.map((group) => [group.id, group]),
+);
 const placeById = new Map<string, DatasetPlace>(dataset.places.map((place) => [place.id, place]));
 const companionPowerWordTokens = uniqueHints(dataset.companionLexicon?.powerWords ?? []);
 const companionCurseWordTokens = uniqueHints(dataset.companionLexicon?.curseWords ?? []);
@@ -264,6 +325,92 @@ const ENGLISH_HINTS = uniqueLanguageHints([
 
 const TAGALOG_SOCIAL_CUES = /\b(kumusta|kamusta|kumutsa|kamutsa|musta|salamat|pasensya|pasensiya|sige|cge|gege|opo|magandang)\b/;
 
+function buildIntentSynonymMap(groups?: DatasetIntentSynonymGroups): Record<string, string> {
+  if (!groups) return {};
+
+  const output: Record<string, string> = {};
+  const buckets = [groups.shared, groups.en, groups.tl];
+
+  for (const bucket of buckets) {
+    if (!bucket) continue;
+
+    for (const [rawKey, rawValue] of Object.entries(bucket)) {
+      const key = normalizeText(rawKey);
+      const value = normalizeText(rawValue);
+      if (!key || !value || key === value) continue;
+      output[key] = value;
+    }
+  }
+
+  return output;
+}
+
+function buildIntentGroups(
+  groups: DatasetIntentGroup[],
+  defaultThreshold: number,
+): NormalizedIntentGroup[] {
+  return groups
+    .map((group) => {
+      const id = normalizeText(group.id);
+      const intents = uniqueLanguageHints(group.intents || []).map((intent) => normalizeIntentText(intent));
+      const threshold = typeof group.threshold === 'number'
+        ? Math.max(0.4, Math.min(1, group.threshold))
+        : defaultThreshold;
+
+      return {
+        id,
+        intents,
+        threshold,
+      };
+    })
+    .filter((group) => Boolean(group.id) && group.intents.length > 0);
+}
+
+function applyIntentSynonyms(normalized: string): string {
+  if (!normalized || Object.keys(intentSynonymMap).length === 0) return normalized;
+
+  let output = ` ${normalized} `;
+
+  for (const [from, to] of Object.entries(intentSynonymMap)) {
+    output = output.replace(new RegExp(`\\b${escapeRegExp(from)}\\b`, 'g'), to);
+  }
+
+  return output.replace(/\s+/g, ' ').trim();
+}
+
+function scoreIntentGroupMatch(normalized: string, group: NormalizedIntentGroup): number {
+  let best = 0;
+
+  for (const token of group.intents) {
+    if (hintMatches(normalized, token)) {
+      best = Math.max(best, 1);
+      continue;
+    }
+
+    if (fuzzyHintMatches(normalized, token)) {
+      best = Math.max(best, 0.82);
+      continue;
+    }
+
+    const tokenWords = tokenizeWords(token);
+    if (tokenWords.length <= 1) continue;
+
+    const partialHits = tokenWords.filter((word) => hintMatches(normalized, word)).length;
+    if (partialHits === 0) continue;
+    best = Math.max(best, partialHits / tokenWords.length);
+  }
+
+  return best;
+}
+
+function hasIntentGroup(normalized: string, groupId: string): boolean {
+  const group = intentGroupById.get(normalizeText(groupId));
+  if (!group) return false;
+
+  const score = scoreIntentGroupMatch(normalized, group);
+  return score >= group.threshold;
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -280,9 +427,14 @@ function hintMatches(normalized: string, token: string): boolean {
 }
 
 function normalizeIntentText(text: string): string {
-  return normalizeText(text)
-    .replace(/(.)\1{2,}/g, '$1')
-    .trim();
+  let normalized = normalizeText(text);
+
+  if (dataset.intentConfig?.collapseRepeatedChars !== false) {
+    normalized = normalized.replace(/(.)\1{2,}/g, '$1');
+  }
+
+  normalized = applyIntentSynonyms(normalized);
+  return normalized.trim();
 }
 
 function tokenizeWords(normalized: string): string[] {
@@ -311,13 +463,15 @@ function hasAdjacentTransposition(a: string, b: string): boolean {
 function fuzzyWordMatch(word: string, target: string): boolean {
   if (!word || !target) return false;
   if (word === target) return true;
-  if (word.length < 4 || target.length < 4) return false;
+  if (word.length < matchingConfig.fuzzyMinWordLength || target.length < matchingConfig.fuzzyMinWordLength) return false;
   if (word[0] !== target[0]) return false;
   if (Math.abs(word.length - target.length) > 2) return false;
   if (hasAdjacentTransposition(word, target)) return true;
 
   const maxLen = Math.max(word.length, target.length);
-  const maxDistance = maxLen >= 8 ? 2 : 1;
+  const maxDistance = maxLen >= matchingConfig.fuzzyLongWordLength
+    ? matchingConfig.fuzzyMaxDistanceLong
+    : matchingConfig.fuzzyMaxDistanceShort;
   return levenshteinDistance(word, target) <= maxDistance;
 }
 
@@ -875,6 +1029,8 @@ function shouldAskGeneralClarification(normalized: string): boolean {
 }
 
 function hasFareIntent(normalized: string): boolean {
+  if (hasIntentGroup(normalized, 'fare')) return true;
+
   if (/(fare|pamasahe|magkano|bayad|how much|magkan[o0]|magkano po|how much fare|fare estimate|estimate fare|pamasahe papunta|pamasahe mula|how much should i pay)/.test(normalized)) {
     return true;
   }
@@ -891,6 +1047,8 @@ function hasFareIntent(normalized: string): boolean {
 }
 
 function hasRouteIntent(normalized: string): boolean {
+  if (hasIntentGroup(normalized, 'route')) return true;
+
   if (/(route|ruta|navigate|navigation|directions|papunta|paano pumunta|how to go|get there|go to|dalhin|sakay papunta|how do i get|pinpoint|pinned|drop pin|pin location)/.test(normalized)) {
     return true;
   }
@@ -912,23 +1070,33 @@ function hasRouteIntent(normalized: string): boolean {
 }
 
 function hasPinIntent(normalized: string): boolean {
+  if (hasIntentGroup(normalized, 'pin')) return true;
+
   return /(pin|pinned|pinpoint|drop pin|pin location)/.test(normalized)
     || hasAnyIntentToken(normalized, ['pin', 'pinned', 'pinpoint', 'drop pin', 'pin location']);
 }
 
 function hasLandmarkIntent(normalized: string): boolean {
+  if (hasIntentGroup(normalized, 'landmark')) return true;
+
   return /(landmark|landmarks|stops|stop list|terminal list|hintuan|palatandaan|anong stop|anong landmark|available stops)/.test(normalized);
 }
 
 function hasRouteListIntent(normalized: string): boolean {
+  if (hasIntentGroup(normalized, 'route_list')) return true;
+
   return /(route list|list of routes|list routes|available routes|what routes are available|which routes are available|mga ruta|anong mga ruta|ano mga ruta|lista ng ruta|available na ruta)/.test(normalized);
 }
 
 function hasFarePolicyIntent(normalized: string): boolean {
+  if (hasIntentGroup(normalized, 'fare_policy')) return true;
+
   return /(base fare|minimum fare|regular fare|discounted fare|discount fare|student fare|senior fare|pwd fare|fare policy|fare rules|what is the fare right now|fare right now|current fare|magkano base|magkano minimum|magkano student|magkano senior|magkano pwd|pamasahe ngayon|magkano pamasahe ngayon|base pamasahe|discount sa pamasahe)/.test(normalized);
 }
 
 function hasCapabilityIntent(normalized: string): boolean {
+  if (hasIntentGroup(normalized, 'capability')) return true;
+
   if (/(what can you do|what can jeepie do|how can you help|capabilities|features|functionality|help menu|anong kaya mo|ano kaya mo|anong pwede mong gawin|paano kita gamitin|pano kita gamitin|tulong mo|help options)/.test(normalized)) {
     return true;
   }
@@ -947,6 +1115,8 @@ function hasCapabilityIntent(normalized: string): boolean {
 }
 
 function hasAchievementIntent(normalized: string): boolean {
+  if (hasIntentGroup(normalized, 'achievement')) return true;
+
   if (/(achievement|achievements|badge|badges|unlock|how to get|paano makuha|route rookie|path explorer|urban navigator|streak)/.test(normalized)) {
     return true;
   }
@@ -965,6 +1135,8 @@ function hasAchievementIntent(normalized: string): boolean {
 }
 
 function hasTriviaIntent(normalized: string): boolean {
+  if (hasIntentGroup(normalized, 'trivia')) return true;
+
   if (/(trivia|fun fact|did you know|alam mo ba|fact tungkol|fact about|random fact|kwento trivia|trivia naman)/.test(normalized)) {
     return true;
   }
@@ -1175,6 +1347,20 @@ function buildDestinationRepromptLimitReply(language: BotLanguage): string {
 }
 
 function hasCommuteTaskIntent(normalized: string): boolean {
+  if (
+    hasIntentGroup(normalized, 'fare')
+    || hasIntentGroup(normalized, 'route')
+    || hasIntentGroup(normalized, 'pin')
+    || hasIntentGroup(normalized, 'landmark')
+    || hasIntentGroup(normalized, 'route_list')
+    || hasIntentGroup(normalized, 'fare_policy')
+    || hasIntentGroup(normalized, 'capability')
+    || hasIntentGroup(normalized, 'achievement')
+    || hasIntentGroup(normalized, 'trivia')
+  ) {
+    return true;
+  }
+
   return /(fare|pamasahe|route|ruta|destination|papunta|where|saan|how to go|paano pumunta|terminal|stop|transit|jeepney|tricycle|from|mula|galing|to |going to|trivia|fun fact|did you know|alam mo ba|app|application|saved|achievements|profile|settings|pinpoint|pinned|drop pin|base fare|discounted fare|what can you do|anong kaya mo|mga ruta|route list|vermosa|how to get to|papuntang)/.test(normalized);
 }
 
@@ -1215,7 +1401,7 @@ function buildRouteTypoReply(language: BotLanguage): string {
   ].join('\n\n');
 }
 
-const APP_GUIDE_ALIAS_TO_ID: Record<string, string> = {
+const DEFAULT_APP_GUIDE_ALIAS_TO_ID: Record<string, string> = {
   saved: 'saved',
   'saved routes': 'saved',
   favorite: 'saved',
@@ -1246,6 +1432,22 @@ const APP_GUIDE_ALIAS_TO_ID: Record<string, string> = {
   capabilities: 'jeepie_capabilities',
   features: 'jeepie_capabilities',
 };
+
+function buildAppGuideAliasMap(source?: Record<string, string>): Record<string, string> {
+  const merged: Record<string, string> = { ...DEFAULT_APP_GUIDE_ALIAS_TO_ID };
+  if (!source) return merged;
+
+  for (const [rawAlias, rawGuideId] of Object.entries(source)) {
+    const alias = normalizeText(rawAlias);
+    const guideId = rawGuideId.trim();
+    if (!alias || !guideId) continue;
+    merged[alias] = guideId;
+  }
+
+  return merged;
+}
+
+const APP_GUIDE_ALIAS_TO_ID: Record<string, string> = buildAppGuideAliasMap(dataset.appGuideAliasMap);
 
 function findAppGuideById(id?: string): DatasetAppGuide | null {
   if (!id) return null;
@@ -1934,6 +2136,128 @@ function recentGroqHistory(history?: ChatbotHistoryMessage[]): Array<{ role: 'us
     .slice(-10);
 }
 
+function parseGuardrailDecision(raw: string): GuardrailDecision | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const jsonCandidate = trimmed.match(/\{[\s\S]*\}/)?.[0] ?? trimmed;
+
+  try {
+    const parsed = JSON.parse(jsonCandidate) as {
+      allow?: unknown;
+      category?: unknown;
+      reason?: unknown;
+      confidence?: unknown;
+    };
+
+    const allow = parsed.allow === true || parsed.allow === 'true';
+    const categoryRaw = typeof parsed.category === 'string' ? normalizeText(parsed.category) : 'safe';
+    const category: GuardrailCategory = categoryRaw === 'unsafe' || categoryRaw === 'out of scope' || categoryRaw === 'out_of_scope'
+      ? (categoryRaw === 'unsafe' ? 'unsafe' : 'out_of_scope')
+      : 'safe';
+    const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : undefined;
+    const confidence = typeof parsed.confidence === 'number'
+      ? Math.max(0, Math.min(1, parsed.confidence))
+      : undefined;
+
+    return {
+      allow,
+      category,
+      reason,
+      confidence,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function callGroqGuardrail(
+  message: string,
+  language: BotLanguage,
+): Promise<GuardrailDecision> {
+  const rawKey = process.env.EXPO_PUBLIC_GROQ_GUARDRAIL_API_KEY
+    || process.env.GROQ_GUARDRAIL_API_KEY
+    || process.env.EXPO_PUBLIC_GROQ_API_KEY
+    || process.env.GROQ_API_KEY;
+  const apiKey = rawKey?.trim();
+
+  // Fail-open policy: if key is unavailable, allow fallback path to continue.
+  if (!apiKey) {
+    return {
+      allow: true,
+      category: 'safe',
+    };
+  }
+
+  const requestedLanguage = language === 'tl' ? 'Tagalog' : 'English';
+  const guardrailPrompt = [
+    'You are a strict safety guardrail classifier for Jeepie, PARA app assistant.',
+    'Decide whether the user message can be sent to the main assistant model.',
+    'Allow if message is about PARA app, commuting, routes, fares, directions, transport, or harmless social chat.',
+    'Block unsafe requests or prompts that are clearly outside scope.',
+    'Return JSON only with this exact schema:',
+    '{"allow":true|false,"category":"safe|out_of_scope|unsafe","reason":"short reason","confidence":0.0}',
+    `Write reason in ${requestedLanguage}.`,
+    'Do not add markdown or extra text.',
+  ].join('\n');
+
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        temperature: 0,
+        max_tokens: 90,
+        messages: [
+          {
+            role: 'system',
+            content: guardrailPrompt,
+          },
+          {
+            role: 'user',
+            content: message,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      return {
+        allow: true,
+        category: 'safe',
+      };
+    }
+
+    const data = await response.json();
+    const text = data?.choices?.[0]?.message?.content;
+    if (typeof text !== 'string') {
+      return {
+        allow: true,
+        category: 'safe',
+      };
+    }
+
+    const decision = parseGuardrailDecision(text);
+    if (!decision) {
+      return {
+        allow: true,
+        category: 'safe',
+      };
+    }
+
+    return decision;
+  } catch {
+    return {
+      allow: true,
+      category: 'safe',
+    };
+  }
+}
+
 async function callGroqFallback(
   message: string,
   language: BotLanguage,
@@ -2004,6 +2328,40 @@ async function callGroqFallback(
 function fallbackText(language: BotLanguage, key: keyof DatasetShape['fallbackMessages']): string {
   const entry = dataset.fallbackMessages[key];
   return pickLocalized(entry, language);
+}
+
+function buildGuardrailBlockedReply(
+  language: BotLanguage,
+  category: GuardrailCategory,
+  reason?: string,
+): string {
+  const safeReason = reason ? formatForChatDisplay(reason) : '';
+
+  if (language === 'tl') {
+    if (category === 'unsafe') {
+      return [
+        safeReason || 'Hindi ko ma-assist ang request na iyan.',
+        'Pwede kitang tulungan sa routes, fares, at PARA app features.',
+      ].join('\n\n');
+    }
+
+    return [
+      safeReason || 'Mukhang wala ito sa sakop ko ngayon.',
+      'Nandito ako para sa commuting help: route guidance, fare estimate, at PARA app usage.',
+    ].join('\n\n');
+  }
+
+  if (category === 'unsafe') {
+    return [
+      safeReason || 'I cannot assist with that request.',
+      'I can still help with routes, fares, commuting guidance, and PARA app features.',
+    ].join('\n\n');
+  }
+
+  return [
+    safeReason || 'That request looks outside my scope right now.',
+    'I can help with commuting topics such as route guidance, fare estimates, and PARA app usage.',
+  ].join('\n\n');
 }
 
 function hasStrictAcademicIntent(normalized: string): boolean {
@@ -2538,6 +2896,20 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const strictAcademic = hasStrictAcademicIntent(normalized);
 
   if (!strictAcademic) {
+    const guardrailDecision = await callGroqGuardrail(message, language);
+    if (!guardrailDecision.allow) {
+      return {
+        text: composeSupportReply(
+          language,
+          buildGuardrailBlockedReply(language, guardrailDecision.category, guardrailDecision.reason),
+          { includeClosing: true },
+        ),
+        language,
+        state: {},
+        usedGroq: false,
+      };
+    }
+
     try {
       const groqReply = await callGroqFallback(message, language, history);
       if (groqReply) {

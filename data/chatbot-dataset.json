@@ -87,6 +87,189 @@
     "cvsu",
     "cavite state university imus"
   ],
+  "intentConfig": {
+    "collapseRepeatedChars": true,
+    "intentSynonyms": {
+      "shared": {
+        "pls": "please",
+        "plz": "please",
+        "tnx": "thanks",
+        "thx": "thanks",
+        "fav": "favorite",
+        "fave": "favorite"
+      },
+      "en": {
+        "how much cost": "fare estimate",
+        "cost": "fare",
+        "price": "fare",
+        "payment": "fare",
+        "path": "route",
+        "directions": "route",
+        "navigate": "route",
+        "book mark": "bookmark",
+        "bookmarking": "bookmark",
+        "capability": "capabilities"
+      },
+      "tl": {
+        "magkanu": "magkano",
+        "magkan0": "magkano",
+        "pamasahi": "pamasahe",
+        "san": "saan",
+        "pde": "pwede",
+        "puede": "pwede",
+        "direksyon": "ruta",
+        "saan papunta": "paano pumunta"
+      }
+    }
+  },
+  "matchingConfig": {
+    "fuzzyMinWordLength": 4,
+    "fuzzyLongWordLength": 8,
+    "fuzzyMaxDistanceShort": 1,
+    "fuzzyMaxDistanceLong": 2,
+    "intentGroupThreshold": 0.62
+  },
+  "intentGroups": [
+    {
+      "id": "fare",
+      "intents": [
+        "fare",
+        "pamasahe",
+        "magkano",
+        "how much",
+        "fare estimate",
+        "estimate fare",
+        "bayad",
+        "presyo",
+        "cost"
+      ]
+    },
+    {
+      "id": "route",
+      "intents": [
+        "route",
+        "ruta",
+        "paano pumunta",
+        "papunta",
+        "how to go",
+        "navigate",
+        "directions",
+        "get there",
+        "how do i get"
+      ]
+    },
+    {
+      "id": "pin",
+      "intents": [
+        "pin",
+        "pinned",
+        "pinpoint",
+        "drop pin",
+        "pin location"
+      ]
+    },
+    {
+      "id": "landmark",
+      "intents": [
+        "landmark",
+        "landmarks",
+        "stops",
+        "stop list",
+        "terminal list",
+        "hintuan",
+        "palatandaan"
+      ]
+    },
+    {
+      "id": "route_list",
+      "intents": [
+        "route list",
+        "list of routes",
+        "available routes",
+        "mga ruta",
+        "lista ng ruta"
+      ]
+    },
+    {
+      "id": "fare_policy",
+      "intents": [
+        "base fare",
+        "minimum fare",
+        "regular fare",
+        "discounted fare",
+        "fare policy",
+        "fare rules",
+        "pamasahe ngayon"
+      ]
+    },
+    {
+      "id": "capability",
+      "intents": [
+        "what can you do",
+        "what can jeepie do",
+        "how can you help",
+        "capabilities",
+        "features",
+        "anong kaya mo",
+        "ano kaya mo",
+        "help options"
+      ]
+    },
+    {
+      "id": "achievement",
+      "intents": [
+        "achievement",
+        "achievements",
+        "achivement",
+        "achivements",
+        "badge",
+        "badges",
+        "unlock",
+        "paano makuha"
+      ]
+    },
+    {
+      "id": "trivia",
+      "intents": [
+        "trivia",
+        "fun fact",
+        "did you know",
+        "alam mo ba",
+        "random fact"
+      ]
+    }
+  ],
+  "appGuideAliasMap": {
+    "saved": "saved",
+    "saved routes": "saved",
+    "favorite": "saved",
+    "favorites": "saved",
+    "favourite": "saved",
+    "favourites": "saved",
+    "bookmark": "saved",
+    "bookmarks": "saved",
+    "achievement": "achievements",
+    "achievements": "achievements",
+    "achivement": "achievements",
+    "achivements": "achievements",
+    "acheivement": "achievements",
+    "acheivements": "achievements",
+    "badge": "achievements",
+    "badges": "achievements",
+    "profile": "profile_settings",
+    "settings": "profile_settings",
+    "account": "profile_settings",
+    "account settings": "profile_settings",
+    "search": "search_and_pin",
+    "pin": "search_and_pin",
+    "pin location": "search_and_pin",
+    "drop pin": "search_and_pin",
+    "pinpoint": "search_and_pin",
+    "chatbot": "chatbot_help",
+    "jeepie": "chatbot_help",
+    "capabilities": "jeepie_capabilities",
+    "features": "jeepie_capabilities"
+  },
   "companionLexicon": {
     "powerWords": [
       "alright",
