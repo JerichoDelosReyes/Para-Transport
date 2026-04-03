@@ -46,9 +46,9 @@ export default function AIChatbotScreen() {
   const [isSending, setIsSending] = useState(false);
   const [isTagalogGreeting, setIsTagalogGreeting] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const [typingFrame, setTypingFrame] = useState(0);
   const floatAnim = useRef(new Animated.Value(0)).current;
   const greetingOpacity = useRef(new Animated.Value(1)).current;
+  const typingPulse = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const { routes } = useRoutes();
   const user = useStore((state: any) => state.user);
@@ -138,16 +138,29 @@ export default function AIChatbotScreen() {
 
   useEffect(() => {
     if (!isSending) {
-      setTypingFrame(0);
+      typingPulse.stopAnimation();
+      typingPulse.setValue(0);
       return;
     }
 
-    const interval = setInterval(() => {
-      setTypingFrame((prev) => (prev + 1) % 3);
-    }, 260);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(typingPulse, {
+          toValue: 1,
+          duration: 720,
+          useNativeDriver: true,
+        }),
+        Animated.timing(typingPulse, {
+          toValue: 0,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
 
-    return () => clearInterval(interval);
-  }, [isSending]);
+    loop.start();
+    return () => loop.stop();
+  }, [isSending, typingPulse]);
 
   useEffect(() => {
     let mounted = true;
@@ -402,15 +415,21 @@ export default function AIChatbotScreen() {
                     </View>
                     <View style={[styles.messageBubble, styles.aiBubble, styles.typingBubble]}>
                       <View style={styles.typingDotsRow}>
-                        {[0, 1, 2].map((dotIndex) => (
-                          <View
-                            key={dotIndex}
-                            style={[
-                              styles.typingDot,
-                              typingFrame === dotIndex ? styles.typingDotActive : null,
-                            ]}
-                          />
-                        ))}
+                        {[0, 1, 2].map((dotIndex) => {
+                          const start = dotIndex * 0.22;
+                          const dotOpacity = typingPulse.interpolate({
+                            inputRange: [start, start + 0.16, start + 0.34, 1],
+                            outputRange: [0.26, 0.92, 0.26, 0.26],
+                            extrapolate: "clamp",
+                          });
+
+                          return (
+                            <Animated.View
+                              key={dotIndex}
+                              style={[styles.typingDot, { opacity: dotOpacity }]}
+                            />
+                          );
+                        })}
                       </View>
                       <Text style={styles.typingText}>Jeepie is typing</Text>
                     </View>
@@ -565,11 +584,7 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 3.5,
     backgroundColor: COLORS.navy,
-    opacity: 0.28,
-  },
-  typingDotActive: {
-    opacity: 0.9,
-    transform: [{ scale: 1.15 }],
+    opacity: 0.26,
   },
   typingText: {
     fontSize: 12,

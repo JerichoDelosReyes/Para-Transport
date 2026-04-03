@@ -86,6 +86,7 @@ type DatasetShape = {
     greetings: LocalizedVariants;
     thanks: LocalizedVariants;
     praise: LocalizedVariants;
+    laughter: LocalizedVariants;
     powerWords: LocalizedVariants;
     profanity: LocalizedVariants;
     userAnger: LocalizedVariants;
@@ -98,6 +99,7 @@ type DatasetShape = {
   companionLexicon: {
     powerWords: string[];
     curseWords: string[];
+    laughterWords: string[];
   };
   fareNews: LocalizedVariants;
   routeResponses: {
@@ -154,6 +156,7 @@ const dataset = datasetJson as DatasetShape;
 const placeById = new Map<string, DatasetPlace>(dataset.places.map((place) => [place.id, place]));
 const companionPowerWordTokens = uniqueHints(dataset.companionLexicon?.powerWords ?? []);
 const companionCurseWordTokens = uniqueHints(dataset.companionLexicon?.curseWords ?? []);
+const companionLaughterTokens = uniqueHints(dataset.companionLexicon?.laughterWords ?? []);
 
 const aliasIndex: Array<{ alias: string; place: DatasetPlace }> = [];
 for (const place of dataset.places) {
@@ -835,6 +838,7 @@ const PURE_SOCIAL_PATTERNS: RegExp[] = [
   /^(hi|hello|hey|yo|good morning|good afternoon|good evening|kumusta|kamusta|kumutsa|kamutsa|musta|uy|henlo)( jeepie)?$/,
   /^(thanks|thank you|ty|salamat|maraming salamat|tenkyu)( jeepie)?$/,
   /^(good job|great job|nice one|wow nice|wow ang galing|ang galing|galing mo|idol|solid mo|amazing|awesome|ang husay|best ka|lupet mo|angas mo)( jeepie)?$/,
+  /^(lol|lmao|lmfao|rofl|haha+|hehe+|hihi+)( jeepie)?$/,
   /^(bye|goodbye|see you|see ya|ingat|paalam|hanggang sa muli|chat later|brb)( jeepie)?$/,
   /^(sorry|pasensya|pasensiya|my bad|patawad)( jeepie)?$/,
   /^(ok|okay|okie|noted|copy|gets|sige|cge|gege|ayt|ayos|opo|oo|noted po|alright|all right|perfect|sounds good|looks good|gotcha|roger|alright perfect|all right perfect|sige perfect)( jeepie)?$/,
@@ -858,6 +862,15 @@ function hasSuccessIntent(normalized: string): boolean {
 
 function hasPowerWordsIntent(normalized: string): boolean {
   return companionPowerWordTokens.some((token) => hintMatches(normalized, token));
+}
+
+function hasLaughterIntent(normalized: string): boolean {
+  if (companionLaughterTokens.some((token) => hintMatches(normalized, token))) return true;
+
+  return /\b(lol|lmao|lmfao|rofl)\b/.test(normalized)
+    || /\b(ha){2,}[a-z]*\b/.test(normalized)
+    || /\b(he){2,}[a-z]*\b/.test(normalized)
+    || /\b(hi){2,}[a-z]*\b/.test(normalized);
 }
 
 function hasProfanityIntent(normalized: string): boolean {
@@ -2013,6 +2026,15 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   if (companionMode && !isTaskLikeMessage && hasSuccessIntent(normalized)) {
     return {
       text: pickSocialReply(language, 'success'),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (!isTaskLikeMessage && hasLaughterIntent(normalized)) {
+    return {
+      text: pickSocialReply(language, 'laughter'),
       language,
       state: {},
       usedGroq: false,

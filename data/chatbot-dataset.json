@@ -121,6 +121,21 @@
       "punyeta",
       "bwiset",
       "bwisit"
+    ],
+    "laughterWords": [
+      "lol",
+      "lmao",
+      "lmfao",
+      "rofl",
+      "haha",
+      "hahaha",
+      "hahahaha",
+      "hehe",
+      "hehehe",
+      "hihi",
+      "huhuhu",
+      "tawa",
+      "natawa"
     ]
   },
   "places": [
@@ -367,6 +382,18 @@
         "Salamat, malaking bagay yan. Full tank tuloy ang virtual energy ko at mas pagbubutihin ko pa ang route at fare guides mo.",
         "Salamat sa kind words. Naka-turbo mode na si Jeepie para sa susunod mong biyahe.",
         "Maraming salamat sa papuri. Bawi ako sa mas malinaw na roadmap at mas swabeng commute tips."
+      ]
+    },
+    "laughter": {
+      "en": [
+        "Hahaha, I like that energy. I am laughing with you. What should we do next?",
+        "LOL, good vibes. I am here if you want route, fare, or app help next.",
+        "Haha nice one. Send the next thing you need and I got you."
+      ],
+      "tl": [
+        "Hahaha, solid ang vibes. Natawa rin ako. Ano next natin?",
+        "LOL, good vibes yan. Nandito ako kung route, fare, o app help ang next mo.",
+        "Haha nice, aliw yan. I-send mo lang next need mo at tulungan kita."
       ]
     },
     "powerWords": {
