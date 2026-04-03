@@ -8,10 +8,11 @@ type Props = {
   matched: MatchedRoute;
   isSelected: boolean;
   onPress: (id: string) => void;
+  onPressStartJourney?: () => void;
   badgeLabel?: string;
 };
 
-export default function RouteResultCard({ matched, isSelected, onPress, badgeLabel }: Props) {
+export default function RouteResultCard({ matched, isSelected, onPress, badgeLabel, onPressStartJourney }: Props) {
   const { legs, distanceKm, estimatedMinutes } = matched;
   const isTransfer = legs.length > 1;
   const id = legs.map(l => l.route.properties.code).join('+');
@@ -104,6 +105,17 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
           <Text style={styles.fareText}>₱{formatPeso(totalTransitFare)}</Text>
         </View>
       </View>
+
+      {/* Start Journey Button for Selected Route */}
+      {isSelected && onPressStartJourney && (
+        <TouchableOpacity
+          style={styles.startJourneyBtn}
+          activeOpacity={0.9}
+          onPress={() => onPressStartJourney()}
+        >
+          <Text style={styles.startJourneyText}>Start Journey</Text>
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 }
@@ -247,5 +259,25 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  startJourneyBtn: {
+    marginTop: 16,
+    height: 56,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  startJourneyText: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.navy,
   },
 });

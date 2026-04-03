@@ -12,6 +12,8 @@ import type { JeepneyRoute } from '../../types/routes';
 import { ROUTE_COLORS } from '../../constants/routeVisuals';
 import SearchScreen, { PlaceResult, TransitRouteType } from '../../components/SearchScreen';
 import { buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
+import { GuidanceStep, generateGuidanceSteps, calculateDistance } from '../../utils/guidanceEngine';
+import * as Haptics from 'expo-haptics';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
@@ -546,6 +548,14 @@ export default function HomeScreen() {
   const [showRecommender, setShowRecommender] = useState(false);
   const [simAutoFollow, setSimAutoFollow] = useState(true);
   const [simBlink, setSimBlink] = useState(true);
+
+  // Active Journey Guidance state
+  const [isGuidanceActive, setIsGuidanceActive] = useState(false);
+  const [guidanceSteps, setGuidanceSteps] = useState<GuidanceStep[]>([]);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const guidancePanY = useRef(new Animated.Value(-200)).current;
+  const guidanceStepFadeAnim = useRef(new Animated.Value(1)).current;
+  const [journeySummaryData, setJourneySummaryData] = useState<{distanceMeters: number; startTime: number} | null>(null);
 
   const selectedOptionLabel = useMemo(() => {
     if (!selectedRouteId) return 'Current Route';
@@ -1489,6 +1499,156 @@ export default function HomeScreen() {
     }
   }, [selectedRouteType, setSelectedTransitRoute, sim]);
 
+  const stopGuidance = React.useCallback(() => {
+    Animated.timing(guidancePanY, {
+      toValue: -200,
+      duration: 300,
+      useNativeDriver: true
+    }).start(() => {
+      setIsGuidanceActive(false);
+      setGuidanceSteps([]);
+      setCurrentStepIndex(0);
+      setJourneySummaryData(null);
+    });
+  }, [guidancePanY]);
+
+  const startGuidance = React.useCallback(async (id: string, targetRoute: MatchedRoute) => {
+    setSelectedRouteId(id);
+    
+    Location.getLastKnownPositionAsync().then(locationPos => {
+      const startLoc = locationPos ? locationPos.coords : currentLocation;
+      if (!startLoc || !destinationLocation) {
+        Alert.alert('Location Required', 'Cannot start journey without location data.');
+        return;
+      }
+      
+      const steps = generateGuidanceSteps(
+        targetRoute, 
+        startLoc, 
+        destinationLocation
+      );
+      
+      setGuidanceSteps(steps);
+      setCurrentStepIndex(0);
+      setJourneySummaryData({
+        distanceMeters: Math.round((targetRoute.distanceKm || 0) * 1000),
+        startTime: Date.now()
+      });
+      setIsGuidanceActive(true);
+      setShowRecommender(false);
+      setIsSearchActive(false);
+      
+      Animated.spring(guidancePanY, {
+        toValue: 0,
+        tension: 60,
+        friction: 12,
+        useNativeDriver: true
+      }).start();
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    });
+  }, [currentLocation, destinationLocation, guidancePanY]);
+
+  // Step progression & Off-route logic
+  const boardTimeRef = React.useRef(0);
+  const isAdvancingRef = React.useRef(false);
+
+  const handleGuidanceLocationUpdate = React.useCallback((latitude: number, longitude: number, isSim: boolean = false, isSimFinished: boolean = false) => {
+    if (!isGuidanceActive || guidanceSteps.length === 0 || currentStepIndex >= guidanceSteps.length) return;
+    if (isAdvancingRef.current) return;
+    
+    const currentStep = guidanceSteps[currentStepIndex];
+    if (!currentStep) return;
+    
+    const dist = calculateDistance(latitude, longitude, currentStep.coordinate.latitude, currentStep.coordinate.longitude);
+  
+    let shouldAdvance = false;
+    
+    if (isSim) {
+      if (isSimFinished) {
+        shouldAdvance = true;
+      } else if (dist <= 150) {
+        shouldAdvance = true;
+      }
+    } else {
+      if (currentStep.type === 'board') {
+        if (dist <= 30) {
+          if (boardTimeRef.current === 0) boardTimeRef.current = Date.now();
+          else if (Date.now() - boardTimeRef.current > 5000) shouldAdvance = true;
+        } else {
+          boardTimeRef.current = 0;
+        }
+      } else if (currentStep.type === 'ride' || currentStep.type === 'transfer' || currentStep.type === 'alight') {
+        if (dist <= 50) shouldAdvance = true;
+      } else if (currentStep.type === 'walk' || currentStep.type === 'arrive') {
+        if (dist <= 20) shouldAdvance = true;
+      }
+    }
+
+    if (shouldAdvance) {
+      isAdvancingRef.current = true;
+      boardTimeRef.current = 0;
+      if (currentStep.type === 'arrive') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setTimeout(() => {
+          setIsGuidanceActive(false);
+          isAdvancingRef.current = false;
+          const timePassedSecs = Math.round((Date.now() - (journeySummaryData?.startTime || Date.now())) / 1000);
+          const actualMinutes = Math.max(1, Math.round(timePassedSecs / 60));
+          
+          router.navigate({
+            pathname: '/journey-summary',
+            params: {
+              distance: (journeySummaryData?.distanceMeters || 0) / 1000,
+              time: actualMinutes,
+              fare: selectedRoute?.estimatedFare || 0,
+              points: Math.round(((journeySummaryData?.distanceMeters || 0) / 1000) * 5)
+            }
+          });
+        }, 2000);
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        Animated.timing(guidanceStepFadeAnim, {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: true
+        }).start(() => {
+            setCurrentStepIndex(prev => prev + 1);
+            Animated.timing(guidanceStepFadeAnim, {
+                toValue: 1,
+                duration: 150,
+                useNativeDriver: true
+            }).start(() => {
+                // Free the lock only after complete transition!
+                isAdvancingRef.current = false;
+            });
+        });
+      }
+    }
+  }, [isGuidanceActive, guidanceSteps, currentStepIndex, guidanceStepFadeAnim, router, journeySummaryData, selectedRoute]);
+
+  // Real GPS step progression
+  React.useEffect(() => {
+    if (!isGuidanceActive || guidanceSteps.length === 0) return;
+    if (sim.state !== 'idle') return;
+    
+    let locationSubscriber: Location.LocationSubscription | null = null;
+    const startWatching = async () => {
+      locationSubscriber = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 5 },
+        (loc) => handleGuidanceLocationUpdate(loc.coords.latitude, loc.coords.longitude)
+      );
+    };
+    startWatching();
+    return () => { if (locationSubscriber) locationSubscriber.remove(); };
+  }, [isGuidanceActive, guidanceSteps, sim.state, handleGuidanceLocationUpdate]);
+
+  // Simulation step progression
+  React.useEffect(() => {
+    if (!isGuidanceActive || sim.state === 'idle' || !sim.position) return;
+    handleGuidanceLocationUpdate(sim.position.latitude, sim.position.longitude, true, sim.state === 'finished');
+  }, [isGuidanceActive, sim.state, sim.position, handleGuidanceLocationUpdate]);
+
   return (
     <View style={styles.screen}>
       <MapView
@@ -1734,7 +1894,7 @@ export default function HomeScreen() {
       {/* Map Loading Indicator */}
       {!isMapLoaded && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#E8A020" />
+          <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
       )}
 
@@ -1742,7 +1902,7 @@ export default function HomeScreen() {
       {isRouting && (
         <View style={styles.routingOverlay}>
           <BlurView intensity={40} tint="dark" style={styles.routingCard}>
-            <ActivityIndicator size="small" color="#E8A020" />
+            <ActivityIndicator size="small" color={COLORS.primary} />
             <Text style={styles.routingText}>Finding your route…</Text>
           </BlurView>
         </View>
@@ -1772,7 +1932,59 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <ProfileButton />
             </TouchableOpacity>
-        </View>
+                </View>
+
+        {/* Guidance Overlay */}
+        {isGuidanceActive && guidanceSteps.length > 0 && (
+          <Animated.View style={[styles.guidanceCardContainer, { transform: [{ translateY: guidancePanY }] }]}>
+            <View style={styles.guidanceCard}>
+              <TouchableOpacity style={styles.guidanceCloseBtn} onPress={stopGuidance}>
+                <Ionicons name="close" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+              <View style={styles.guidanceIconBox}>
+                <Ionicons 
+                  name={
+                    guidanceSteps[currentStepIndex].type === 'walk' ? 'walk' :
+                    guidanceSteps[currentStepIndex].type === 'board' ? 'bus' :
+                    guidanceSteps[currentStepIndex].type === 'ride' ? 'arrow-forward' :
+                    guidanceSteps[currentStepIndex].type === 'transfer' ? 'swap-horizontal' :
+                    guidanceSteps[currentStepIndex].type === 'alight' ? 'arrow-down' : 'checkmark-circle'
+                  } 
+                  size={24} color={COLORS.primary} 
+                />
+              </View>
+              <View style={styles.guidanceTextWrap}>
+                <Animated.View style={{ opacity: guidanceStepFadeAnim }}>
+                  <Text style={styles.guidanceInstruction}>{guidanceSteps[currentStepIndex]?.instruction}</Text>
+                  {currentStepIndex + 1 < guidanceSteps.length && (
+                    <Text style={styles.guidanceNextInstruction}>
+                      <Text style={{fontWeight:'700'}}>Then: </Text>
+                      {guidanceSteps[currentStepIndex + 1]?.instruction}
+                    </Text>
+                  )}
+                </Animated.View>
+              </View>
+              <View style={styles.guidanceEtaWrap}>
+                <Text style={styles.guidanceEta}>{Math.ceil((guidanceSteps[currentStepIndex]?.durationSeconds || 0) / 60)}</Text>
+                <Text style={styles.guidanceEtaMin}>min</Text>
+              </View>
+            </View>
+            <View style={styles.guidanceProgressBar}>
+              {guidanceSteps.map((step, idx) => (
+                <View key={step.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={[
+                    styles.guidanceDot,
+                    idx < currentStepIndex && styles.guidanceDotDone,
+                    idx === currentStepIndex && styles.guidanceDotActive
+                  ]} />
+                  {idx < guidanceSteps.length - 1 && (
+                    <View style={[styles.guidanceLine, idx < currentStepIndex && styles.guidanceLineDone]} />
+                  )}
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+        )}
 
         {/* Transit layer controls */}
         <View style={styles.transitControlsContainer}>
@@ -1896,7 +2108,7 @@ export default function HomeScreen() {
         {nearestStop && showTransitLayer && (
           <View style={styles.nearestStopCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="location" size={16} color="#E8A020" />
+              <Ionicons name="location" size={16} color={COLORS.primary} />
               <Text style={styles.nearestStopName}>{nearestStop.name}</Text>
             </View>
             <TouchableOpacity onPress={() => setNearestStop(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -1990,7 +2202,7 @@ export default function HomeScreen() {
 
             {/* Bottom Progress Bar */}
             <View style={[styles.simProgressBarTrack, { height: 3, marginTop: 12, marginBottom: 0, backgroundColor: '#F3F4F6' }]}>
-              <View style={[styles.simProgressBarFill, { width: `${sim.progress * 100}%`, backgroundColor: '#E8A020' }]} />
+              <View style={[styles.simProgressBarFill, { width: `${sim.progress * 100}%`, backgroundColor: COLORS.primary }]} />
             </View>
           </View>
         )}
@@ -2006,6 +2218,10 @@ export default function HomeScreen() {
         selectedRoute={selectedRouteId}
         setSelectedRoute={(id: string | null) => setSelectedRouteId(id)}
         destinationName={destinationQuery}
+        onStartJourney={(id) => {
+          const route = matchedRoutes.find(m => m.legs.map(l => l.route.properties.code).join('+') === id);
+          if (route) startGuidance(id, route);
+        }}
         routeTypeLabel={selectedRouteTypeLabel}
         onClose={() => {
           setShowRecommender(false);
@@ -2047,6 +2263,110 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  guidanceCardContainer: {
+    position: 'absolute',
+    top: 70,
+    left: 16,
+    right: 16,
+    zIndex: 999,
+  },
+  guidanceCloseBtn: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    zIndex: 10,
+    padding: 4,
+  },
+
+  guidanceCard: {
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.card,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.8)',
+  },
+  guidanceIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(245,197,24,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  guidanceTextWrap: {
+    flex: 1,
+  },
+  guidanceInstruction: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.navy,
+    marginBottom: 4,
+  },
+  guidanceNextInstruction: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  guidanceEtaWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  guidanceEta: {
+    fontFamily: 'Inter',
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  guidanceEtaMin: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    marginTop: -2,
+  },
+  guidanceProgressBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingHorizontal: 8,
+  },
+  guidanceDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E0E0E0',
+  },
+  guidanceDotDone: {
+    backgroundColor: COLORS.primary,
+  },
+  guidanceDotActive: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.primary,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  guidanceLine: {
+    width: 24,
+    height: 2,
+    backgroundColor: '#E0E0E0',
+    marginHorizontal: 4,
+  },
+  guidanceLineDone: {
+    backgroundColor: COLORS.primary,
+  },
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -2282,7 +2602,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#E8A020',
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -2361,8 +2681,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   modePillActive: {
-    backgroundColor: '#E8A020',
-    borderColor: '#E8A020',
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   modePillText: {
     fontFamily: 'Inter',
@@ -2498,7 +2818,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#E8A020',
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2.5,
@@ -2718,7 +3038,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   nearestStopMarker: {
-    backgroundColor: '#E8A020',
+    backgroundColor: COLORS.primary,
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -2841,7 +3161,7 @@ const styles = StyleSheet.create({
   simPanelStatusText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0A1628',
+    color: COLORS.navy,
   },
   simArrivedText: {
     fontSize: 13,
@@ -2858,7 +3178,7 @@ const styles = StyleSheet.create({
   },
   simProgressBarFill: {
     height: '100%',
-    backgroundColor: '#E8A020',
+    backgroundColor: COLORS.primary,
     borderRadius: 2,
   },
   simMainControls: {
@@ -2886,7 +3206,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#E8A020',
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2921,7 +3241,7 @@ const styles = StyleSheet.create({
   simSpeedPillText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0A1628',
+    color: COLORS.navy,
   },
   simSpeedPillTextActive: {
     color: '#FFFFFF',
@@ -2979,7 +3299,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#E8A020',
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,

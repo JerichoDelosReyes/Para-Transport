@@ -22,6 +22,7 @@ type Props = {
   destinationName?: string;
   routeTypeLabel?: string;
   onClose: () => void;
+  onStartJourney?: (id: string) => void;
 };
 
 const RANK_TABS = [
@@ -41,6 +42,7 @@ export default function RouteRecommenderPanel({
   onClose,
   destinationName,
   routeTypeLabel,
+  onStartJourney,
 }: Props) {
   // Start off-screen at 0 (bound safely behind bottom edge)
   const panY = useRef(new Animated.Value(0)).current; 
@@ -136,10 +138,11 @@ export default function RouteRecommenderPanel({
           onPress={(pressedId: string) => {
             setSelectedRoute(selectedRoute === pressedId ? null : pressedId);
           }}
+          onPressStartJourney={() => onStartJourney?.(id)}
         />
       );
     },
-    [rankTab, rankedRoutes.length, selectedRoute, setSelectedRoute]
+    [rankTab, rankedRoutes.length, selectedRoute, setSelectedRoute, onStartJourney]
   );
 
   const keyExtractor = useMemo(
