@@ -1895,6 +1895,33 @@ function pickFareNewsReply(language: BotLanguage): string {
   return formatForChatDisplay(pickLocalized(dataset.fareNews, language));
 }
 
+function stripAutoTranslationParenthetical(text: string, language: BotLanguage): string {
+  if (!text.includes('(') || !text.includes(')')) return text;
+
+  const englishMarker = /\b(i|im|i am|you|your|the|is|are|was|were|thanks|thank|good|hello|route|fare|app|how|what|where|why|can|please|sorry)\b/i;
+  const tagalogMarker = /\b(ako|ikaw|ka|ko|po|opo|salamat|kamusta|mabuti|paano|saan|gusto|pwede|puwede|naman|rin|din|lang|kita|mo)\b/i;
+
+  const cleaned = text.replace(/\(([^)]+)\)/g, (full, inside: string) => {
+    const value = normalizeIntentText(inside);
+    if (!value) return '';
+
+    const words = value.split(' ').filter(Boolean);
+    if (words.length < 2) return full;
+
+    const looksEnglish = englishMarker.test(value);
+    const looksTagalog = tagalogMarker.test(value);
+
+    if (language === 'tl' && looksEnglish && !looksTagalog) return '';
+    if (language === 'en' && looksTagalog && !looksEnglish) return '';
+    return full;
+  });
+
+  return cleaned
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.!?])/g, '$1')
+    .trim();
+}
+
 function recentGroqHistory(history?: ChatbotHistoryMessage[]): Array<{ role: 'user' | 'assistant'; content: string }> {
   if (!history || history.length === 0) return [];
 
@@ -1922,6 +1949,9 @@ async function callGroqFallback(
     'You are not a general-purpose AI.',
     'Only answer transportation and PARA app topics: public transport, routes, directions, fares, commute tips, and app features.',
     'For casual/friendly conversation, respond warmly and keep it related to commuting or the PARA app when possible.',
+    'Respond using one language only for each reply.',
+    'Do not add direct translations in parentheses.',
+    'Do not restate the same sentence in another language.',
     'Do not invent or guess routes, fares, schedules, availability, traffic, or announcements.',
     `If route data is missing, reply exactly with: ${ROUTE_DATA_UNAVAILABLE_REPLY}`,
     `If data is unavailable, reply exactly with: ${INFO_UNAVAILABLE_REPLY}`,
@@ -1929,7 +1959,7 @@ async function callGroqFallback(
     'Keep responses practical, concise, and commuter-friendly.',
     'If giving fare, label it as estimated and include: Note: Fare may vary depending on local rates.',
     'Do not mention internal system logic or model limitations.',
-    `Respond in ${requestedLanguage} and match mixed English/Filipino naturally.`,
+    `Respond in ${requestedLanguage}.`,
   ].join('\n');
 
   const historyTurns = recentGroqHistory(history);
@@ -1968,7 +1998,7 @@ async function callGroqFallback(
   const text = data?.choices?.[0]?.message?.content;
   if (typeof text !== 'string') return null;
 
-  return text.trim();
+  return stripAutoTranslationParenthetical(text.trim(), language);
 }
 
 function fallbackText(language: BotLanguage, key: keyof DatasetShape['fallbackMessages']): string {
