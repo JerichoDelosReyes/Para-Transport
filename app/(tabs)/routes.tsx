@@ -1,132 +1,88 @@
-﻿import { useState, useMemo, useEffect } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, InteractionManager, Alert, Image } from 'react-native';
+﻿import { ScrollView, StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
+import { useState, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
-import { useJeepneyRoutes, JeepneyRoute } from '../../hooks/useJeepneyRoutes';
 import { useStore } from '../../store/useStore';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
-import { ROUTE_COLORS, ROUTE_LABELS } from '../../constants/routeVisuals';
-import { getRouteDisplayRef, MAP_ENABLED_ROUTE_CODES } from '../../constants/routeCatalog';
 
-const FILTER_MODES = ['All', 'Jeepney', 'Tricycle', 'Bus'] as const;
-const MODE_TO_ROUTE_TYPE: Record<(typeof FILTER_MODES)[number], string | null> = {
-  All: null,
-  Jeepney: 'jeepney',
-  Tricycle: 'tricycle',
-  Bus: 'bus',
-};
-
-const TYPE_ORDER = ['tricycle', 'jeepney', 'bus'];
-const VEHICLE_ICONS: Record<string, any> = {
-  jeepney: require('../../assets/icons/jeepney-icon.png'),
-  bus: require('../../assets/icons/bus-icon.png'),
-  tricycle: require('../../assets/icons/tricycle-icon.png'),
-};
-
-function normalizeGpxRoute(r: JeepneyRoute) {
-  return {
-    id: r.properties.code,
-    type: r.properties.type,
-    color: (ROUTE_COLORS as Record<string, string>)[r.properties.type] || '#FF6B35',
-    ref: getRouteDisplayRef(r.properties.code, r.properties.code),
-    name: r.properties.name,
-    from: r.stops[0]?.label || '',
-    to: r.stops[r.stops.length - 1]?.label || '',
-    operator: r.properties.operator || '',
-    coordinates: r.coordinates,
-    stops: r.stops.map((s, idx) => ({
-      id: `${r.properties.code}-stop-${idx}`,
-      coordinate: s.coordinate,
-      name: s.label,
-      operator: r.properties.operator || '',
-    })),
-    verified: true,
-    fare: r.properties.fare,
-  };
-}
+const HISTORY_FILTERS = ['All', 'Today', 'Yesterday', 'Older'] as const;
+type HistoryFilter = typeof HISTORY_FILTERS[number];
+const ITEMS_PER_PAGE = 10;
 
 export default function RoutesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
   const bottomPadding = 48 + bottomSpace + 16;
-  const [activeTab, setActiveTab] = useState<'transit' | 'history'>('history');
-  const [selectedMode, setSelectedMode] = useState<(typeof FILTER_MODES)[number]>('All');
-  const [isReady, setIsReady] = useState(false);
-  const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
   const user = useStore((state) => state.user);
   const setPendingRouteSearch = useStore((state) => state.setPendingRouteSearch);
   const saveRoute = useStore((state) => state.saveRoute);
   const removeSavedRoute = useStore((state) => state.removeSavedRoute);
+  const isGuestAccount = useStore((state) => state.sessionMode === 'guest');
 
-  useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() => {
-      setIsReady(true);
-    });
-    return () => task.cancel();
-  }, []);
+  const [activeFilter, setActiveFilter] = useState<HistoryFilter>('All');
+  const [page, setPage] = useState(1);
 
-  const { routes: gpxRoutes, loading: gpxLoading } = useJeepneyRoutes();
+  const handleFilterChange = (filter: HistoryFilter) => {
+    setActiveFilter(filter);
+    setPage(1);
+  };
 
-  const verifiedRoutes = useMemo(
-    () => gpxRoutes.map(normalizeGpxRoute),
-    [gpxRoutes]
-  );
+  const filteredHistory = useMemo(() => {
+    const history = user.commute_history || [];
+    if (!history.length) return [];
 
-  const filteredVerifiedRoutes = useMemo(() => {
-    const targetType = MODE_TO_ROUTE_TYPE[selectedMode];
-    if (!targetType) return verifiedRoutes;
-    return verifiedRoutes.filter((r) => r.type === targetType);
-  }, [verifiedRoutes, selectedMode]);
+    const now = new Date();
+    const todayStr = now.toDateString();
+    
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toDateString();
 
-  const grouped = useMemo(() => {
-    const groups: Record<string, any[]> = {};
-    for (const type of TYPE_ORDER) {
-      groups[type] = [];
-    }
-    for (const route of filteredVerifiedRoutes) {
-      if (groups[route.type]) {
-        groups[route.type].push(route);
+    return history.filter((item: any) => {
+      if (activeFilter === 'All') return true;
+      if (!item.timestamp) return activeFilter === 'Older';
+      
+      const itemDate = new Date(item.timestamp);
+      const itemStr = itemDate.toDateString();
+
+      if (activeFilter === 'Today') {
+        return itemStr === todayStr;
       }
-    }
-    return groups;
-  }, [filteredVerifiedRoutes]);
+      if (activeFilter === 'Yesterday') {
+        return itemStr === yesterdayStr;
+      }
+      if (activeFilter === 'Older') {
+        return itemStr !== todayStr && itemStr !== yesterdayStr;
+      }
+      return true;
+    });
+  }, [user.commute_history, activeFilter]);
 
-  const totalTransitCount = filteredVerifiedRoutes.length;
-
-  const handleTransitRoutePress = (route: any) => {
-    const isMapEnabled = MAP_ENABLED_ROUTE_CODES.includes(route.id as any);
-    if (!isMapEnabled) {
-      Alert.alert('UI Only', 'This route is visible in Routes, but map implementation is not enabled yet.');
-      return;
+  const totalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
+  const displayedHistory = filteredHistory.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  
+  const getPageNumbers = () => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
     }
-    setSelectedTransitRoute(route);
-    router.navigate('/(tabs)');
+    if (page <= 3) {
+      return [1, 2, 3, 4, '...', totalPages];
+    }
+    if (page >= totalPages - 2) {
+      return [1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', page - 1, page, page + 1, '...', totalPages];
   };
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Routes</Text>
+        <Text style={styles.headerTitle}>History</Text>
         <ProfileButton />
-      </View>
-
-      <View style={styles.tabSwitcher}>
-        <TouchableOpacity
-          style={[styles.switchTab, activeTab === 'history' && styles.switchTabActive]}
-          onPress={() => setActiveTab('history')}
-        >
-          <Text style={[styles.switchTabText, activeTab === 'history' && styles.switchTabTextActive]}>HISTORY</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.switchTab, activeTab === 'transit' && styles.switchTabActive]}
-          onPress={() => setActiveTab('transit')}
-        >
-          <Text style={[styles.switchTabText, activeTab === 'transit' && styles.switchTabTextActive]}>TRANSIT</Text>
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -134,156 +90,142 @@ export default function RoutesScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
-        {activeTab === 'transit' ? (
-          <View>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                TRANSIT ROUTES {totalTransitCount > 0 ? `(${totalTransitCount})` : ''}
-              </Text>
-            </View>
-
+        {isGuestAccount ? (
+          <View style={styles.emptyState}>
+            <JeepIllustration width={220} height={150} />
+            <Text style={styles.emptyTitle}>Sign in to view history.</Text>
+          </View>
+        ) : !user.commute_history || user.commute_history.length === 0 ? (
+          <View style={styles.emptyState}>
+            <JeepIllustration width={220} height={150} />
+            <Text style={styles.emptyTitle}>Wala pang history.</Text>
+          </View>
+        ) : (
+          <>
             <View style={styles.quickActionsContainer}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScroll}>
-                {FILTER_MODES.map((mode) => (
+                {HISTORY_FILTERS.map((mode) => (
                   <TouchableOpacity
                     key={mode}
-                    style={[styles.modePill, selectedMode === mode && styles.modePillActive]}
-                    onPress={() => setSelectedMode(mode)}
+                    style={[styles.modePill, activeFilter === mode && styles.modePillActive]}
+                    onPress={() => handleFilterChange(mode)}
                     activeOpacity={0.85}
                   >
-                    <Text style={[styles.modePillText, selectedMode === mode && styles.modePillTextActive]}>{mode}</Text>
+                    <Text style={[styles.modePillText, activeFilter === mode && styles.modePillTextActive]}>{mode}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
 
-            {(!isReady || gpxLoading) ? (
-              <View style={styles.skeletonContainer}>
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <View key={i} style={styles.skeletonCard} />
-                ))}
-              </View>
-            ) : totalTransitCount === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No transit routes found.</Text>
-              </View>
-            ) : (
-              <>
-                {TYPE_ORDER.map((type) => {
-                  const group = grouped[type];
-                  if (!group || group.length === 0) return null;
-                  return (
-                    <View key={type} style={styles.group}>
-                      <View style={styles.groupHeader}>
-                        <View style={[styles.groupDot, { backgroundColor: ROUTE_COLORS[type as keyof typeof ROUTE_COLORS] }]} />
-                        <Text style={styles.groupTitle}>
-                          {ROUTE_LABELS[type as keyof typeof ROUTE_LABELS]} ({group.length})
-                        </Text>
-                      </View>
-                      {group.map((route) => (
-                        <TouchableOpacity
-                          key={route.id}
-                          style={styles.routeCard}
-                          activeOpacity={0.85}
-                          onPress={() => handleTransitRoutePress(route)}
-                        >
-                          <View style={[styles.routeIcon, { backgroundColor: route.color + '20' }]}>
-                            {VEHICLE_ICONS[route.type] ? (
-                              <Image source={VEHICLE_ICONS[route.type]} style={[styles.routeIconImage, { tintColor: route.color }]} />
-                            ) : (
-                              <Ionicons name="bus" size={18} color={route.color} />
-                            )}
-                          </View>
-                          <View style={styles.routeInfo}>
-                            <Text style={styles.routeName} numberOfLines={1}>
-                              {route.ref ? `[${route.ref}] ` : ''}{route.name}
-                            </Text>
-                            {(route.from || route.to) ? (
-                              <Text style={styles.routeMeta} numberOfLines={1}>
-                                {route.from}{route.from && route.to ? ' -> ' : ''}{route.to}
-                              </Text>
-                            ) : null}
-                            {route.operator ? (
-                              <Text style={styles.routeOperator} numberOfLines={1}>
-                                {route.operator}
-                              </Text>
-                            ) : null}
-                          </View>
-                          <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  );
-                })}
-              </>
-            )}
-          </View>
-        ) : user.commute_history && user.commute_history.length > 0 ? (
-          <View style={{ paddingTop: 0 }}>
-            <View style={{ gap: SPACING.cardGap }}>
-              {user.commute_history.map((item: any, index: number) => {
-                const targetName = `${item.origin?.name || 'Current Location'} to ${item.destination?.name || 'Unknown'}`;
+            {displayedHistory.length > 0 ? (
+              displayedHistory.map((item: any, index: number) => {
+                const getShortName = (name: string) => name ? name.split(',')[0].trim() : name;
+                const originName = item.origin?.name ? getShortName(item.origin.name) : 'Current Location';
+                const destName = item.destination?.name ? getShortName(item.destination.name) : 'Pinned Location';
+                const targetName = `${originName} to ${destName}`;
                 const isSaved = user.saved_routes?.some((r: any) => 
                   r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
                 );
                 return (
-                  <View key={item.id || index} style={styles.historyCard}>
-                    <View style={styles.historyCardTop}>
-                      <Text style={styles.historyRouteName} numberOfLines={1}>
-                        {targetName}
-                      </Text>
-                      <TouchableOpacity
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        onPress={() => {
-                          if (!isSaved) {
-                            saveRoute({
-                              id: Date.now(),
-                              name: targetName,
-                              legs: [{ mode: 'Custom Route', from: item.origin?.name || 'Current Location', to: item.destination?.name || 'Unknown', fromObj: item.origin || null, toObj: item.destination }],
-                              total_fare: item.fare || 0,
-                            });
-                            Alert.alert('Saved', 'Route has been added to your Saved page.');
-                          } else {
-                            const routeToRemove = user.saved_routes?.find((r: any) => 
-                              r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
-                            );
-                            if (routeToRemove) {
-                               removeSavedRoute(routeToRemove.id);
+                    <View key={item.id || index} style={styles.historyCard}>
+                      <View style={styles.historyCardTop}>
+                        <Text style={styles.historyRouteName} numberOfLines={1}>
+                          {targetName}
+                        </Text>
+                        <TouchableOpacity
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          onPress={() => {
+                            if (!isSaved) {
+                              saveRoute({
+                                id: Date.now(),
+                                name: targetName,
+                                legs: [{ mode: 'Custom Route', from: originName, to: destName, fromObj: item.origin || null, toObj: item.destination }],
+                                total_fare: item.fare || 0,
+                              });
+                              Alert.alert('Saved', 'Route has been added to your Saved page.');
+                            } else {
+                              const routeToRemove = user.saved_routes?.find((r: any) => 
+                                r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
+                              );
+                              if (routeToRemove) {
+                                removeSavedRoute(routeToRemove.id);
+                              }
                             }
-                          }
-                        }}
-                      >
-                        <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={18} color={isSaved ? COLORS.primary : COLORS.textMuted} />
-                      </TouchableOpacity>
+                          }}
+                        >
+                          <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={18} color={isSaved ? COLORS.primary : COLORS.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                      <View>
+                        <Text style={styles.historyLegSummary}>Recent Search</Text>
+                        <Text style={[styles.historyLegSummary, { marginTop: 2, fontSize: 10, color: '#9CA3AF' }]}>
+                          {item.timestamp ? (new Date(item.timestamp).toLocaleDateString() + ' at ' + new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'Recent'}
+                        </Text>
+                      </View>
+                      <View style={[styles.historyCardBottom, { justifyContent: 'flex-end' }]}>
+                        <TouchableOpacity 
+                          style={styles.historyGhostButton} 
+                          activeOpacity={0.9} 
+                          onPress={() => {
+                            setPendingRouteSearch({ origin: item.origin || null, destination: item.destination });
+                            router.navigate('/(tabs)');
+                          }}
+                        >
+                          <Text style={styles.historyGhostButtonText}>View Route</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                    <View>
-                      <Text style={styles.historyLegSummary}>Recent Search</Text>
-                      <Text style={[styles.historyLegSummary, { marginTop: 2, fontSize: 10, color: '#9CA3AF' }]}>
-                        {item.timestamp ? (new Date(item.timestamp).toLocaleDateString() + ' at ' + new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'Recent'}
+                  );
+              })
+            ) : (
+              <View style={styles.emptyFilterState}>
+                <Text style={styles.emptyTitle}>No history found.</Text>
+              </View>
+            )}
+
+            {totalPages > 1 && (
+              <View style={styles.paginationContainer}>
+                <TouchableOpacity 
+                  style={[styles.paginationArrow, page === 1 && styles.paginationArrowDisabled]}
+                  onPress={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="arrow-back" size={18} color={page === 1 ? 'rgba(10,22,40,0.3)' : '#0A1628'} />
+                </TouchableOpacity>
+                <View style={styles.paginationPill}>
+                  {getPageNumbers().map((pageNum, idx) => (
+                    <TouchableOpacity
+                      key={`${pageNum}-${idx}`}
+                      style={[
+                        styles.pageNumber, 
+                        page === pageNum && styles.pageNumberActive,
+                        pageNum === '...' && styles.pageNumberDots
+                      ]}
+                      onPress={() => typeof pageNum === 'number' ? setPage(pageNum) : null}
+                      activeOpacity={pageNum === '...' ? 1 : 0.8}
+                    >
+                      <Text style={[
+                        styles.pageNumberText, 
+                        page === pageNum && styles.pageNumberTextActive,
+                        pageNum === '...' && styles.pageNumberTextDots
+                      ]}>
+                        {pageNum}
                       </Text>
-                    </View>
-                    <View style={[styles.historyCardBottom, { justifyContent: 'flex-end' }]}>
-                      <TouchableOpacity 
-                        style={styles.historyGhostButton} 
-                        activeOpacity={0.9} 
-                        onPress={() => {
-                          setPendingRouteSearch({ origin: item.origin || null, destination: item.destination });
-                          router.navigate('/(tabs)');
-                        }}
-                      >
-                        <Text style={styles.historyGhostButtonText}>View</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <JeepIllustration width={220} height={150} />
-            <Text style={styles.emptyTitle}>Wala pang history.</Text>
-          </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TouchableOpacity 
+                  style={[styles.paginationArrow, page === totalPages && styles.paginationArrowDisabled]}
+                  onPress={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="arrow-forward" size={18} color={page === totalPages ? 'rgba(10,22,40,0.3)' : '#0A1628'} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -336,8 +278,10 @@ const styles = StyleSheet.create({
     color: '#0A1628',
   },
   content: {
-    padding: SPACING.screenX,
-    paddingTop: 24,
+    paddingHorizontal: SPACING.screenX,
+    paddingTop: 20,
+    paddingBottom: 24,
+    gap: SPACING.cardGap,
   },
   sectionHeader: {
     marginBottom: 20,
@@ -475,6 +419,88 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.06)',
     backgroundColor: COLORS.card,
     padding: SPACING.cardPadding,
+  },
+  emptyFilterState: {
+    alignItems: 'center',
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: COLORS.card,
+    padding: SPACING.cardPadding,
+    marginTop: 4,
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    marginBottom: 48,
+    gap: 12,
+  },
+  paginationArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  paginationArrowDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: 'rgba(10,22,40,0.04)',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  paginationPill: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
+    borderRadius: 24,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    alignItems: 'center',
+    gap: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  pageNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageNumberActive: {
+    backgroundColor: '#0A1628',
+  },
+  pageNumberDots: {
+    width: 16,
+    backgroundColor: 'transparent',
+  },
+  pageNumberText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0A1628',
+  },
+  pageNumberTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  pageNumberTextDots: {
+    color: '#0A1628',
+    opacity: 0.4,
   },
   emptyTitle: {
     marginTop: 8,

@@ -31,11 +31,15 @@ export type PlaceResult = {
   longitude: number;
 };
 
+export type TransitRouteType = 'jeepney' | 'bus' | 'combo';
+
 type SearchScreenProps = {
   visible: boolean;
   currentLocationLabel?: string;
   initialOrigin?: string;
   initialDestination?: string;
+  selectedRouteType: TransitRouteType;
+  onSelectRouteType: (routeType: TransitRouteType) => void;
   onClose: () => void;
   onSelectRoute: (origin: PlaceResult | null, destination: PlaceResult) => void;
   onClearRoute?: (clearOrigin?: boolean, clearDestination?: boolean) => void;
@@ -46,6 +50,8 @@ export default function SearchScreen({
   currentLocationLabel,
   initialOrigin,
   initialDestination,
+  selectedRouteType,
+  onSelectRouteType,
   onClose,
   onSelectRoute,
   onClearRoute,
@@ -56,15 +62,13 @@ export default function SearchScreen({
   const [originPlace, setOriginPlace] = useState<PlaceResult | null>(null);
   const [destinationText, setDestinationText] = useState('');
   const [usingCurrentLocation, setUsingCurrentLocation] = useState(true);
-  const [destinationPlace, setDestinationPlace] = useState<PlaceResult | null>(null);
-  const [activeTab, setActiveTab] = useState<'recent' | 'favorites'>('recent');
 
   const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
   const [isFetching, setIsFetching] = useState(false);
 
-  const { recents, addRecent, clearRecents } = useRecentSearches();
-  const unlockBadge = useStore((state) => state.unlockBadge);
-  const { savePlace, removeSavedPlace, user } = useStore();
+  const { recents, addRecent } = useRecentSearches();
+  const { saveRoute, removeSavedRoute, user, sessionMode } = useStore();
+  const isGuestAccount = sessionMode === 'guest';
 
   const originRef = useRef<TextInput>(null);
   const destRef = useRef<TextInput>(null);
@@ -92,6 +96,46 @@ export default function SearchScreen({
 
   // Active query text
   const activeQuery = activeField === 'origin' ? originText : destinationText;
+
+  const resolvePlaceFromText = useCallback(async (query: string): Promise<PlaceResult | null> => {
+    const q = query.trim();
+    if (q.length < 2) return null;
+
+    const params = new URLSearchParams({
+      q: `${q}, Cavite, Philippines`,
+      format: 'json',
+      limit: '1',
+      countrycodes: 'ph',
+      addressdetails: '0',
+    });
+
+    try {
+      const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
+        headers: { 'Accept-Language': 'en' },
+      });
+      if (!res.ok) return null;
+
+      const data = await res.json();
+      const item = Array.isArray(data) ? data[0] : null;
+      if (!item) return null;
+
+      const dn = String(item.display_name || '').trim();
+      const parts = dn.split(',').map((p: string) => p.trim()).filter(Boolean);
+
+      const parsed: PlaceResult = {
+        id: String(item.place_id || `${Date.now()}`),
+        title: parts[0] || q,
+        subtitle: parts.slice(1).join(', ') || 'Philippines',
+        latitude: parseFloat(item.lat),
+        longitude: parseFloat(item.lon),
+      };
+
+      if (!Number.isFinite(parsed.latitude) || !Number.isFinite(parsed.longitude)) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, []);
 
   // Geocoding + fuzzy local search
   useEffect(() => {
@@ -166,8 +210,28 @@ export default function SearchScreen({
     };
   }, [activeQuery, activeField, recents]);
 
+  const handleSwapRoute = useCallback(() => {
+    const oldOriginText = originText;
+    const isDestCurrentLoc = destinationText === currentLocationLabel || destinationText.toLowerCase() === 'current location';
+    if (isDestCurrentLoc) {
+      setUsingCurrentLocation(true);
+      setOriginText('');
+    } else {
+      setUsingCurrentLocation(false);
+      setOriginText(destinationText);
+    }
+    
+    if (usingCurrentLocation) {
+      setDestinationText(currentLocationLabel || 'Current Location');
+    } else {
+      setDestinationText(oldOriginText);
+    }
+    setOriginPlace(null);
+    setSuggestions([]);
+  }, [originText, destinationText, usingCurrentLocation, currentLocationLabel]);
+
   const handleSelectPlace = useCallback(
-    (place: PlaceResult) => {
+    async (place: PlaceResult) => {
       addRecent(place);
 
       if (activeField === 'origin') {
@@ -178,14 +242,38 @@ export default function SearchScreen({
         setTimeout(() => destRef.current?.focus(), 100);
       } else {
         setDestinationText(place.title);
-        setDestinationPlace(place);
-        // Both fields filled → trigger route
-        const origin = usingCurrentLocation ? null : originPlace;
-        onSelectRoute(origin, place);
+
+        let resolvedOrigin: PlaceResult | null = null;
+        if (!usingCurrentLocation) {
+          resolvedOrigin = originPlace;
+
+          if (!resolvedOrigin && originText.trim().length > 0) {
+            resolvedOrigin = await resolvePlaceFromText(originText);
+            if (resolvedOrigin) {
+              setOriginPlace(resolvedOrigin);
+              setOriginText(resolvedOrigin.title);
+            }
+          }
+
+          if (!resolvedOrigin) {
+            Alert.alert('Origin Not Found', 'Please pick your origin from suggestions or use Current Location.');
+            return;
+          }
+        }
+
+        onSelectRoute(resolvedOrigin, place);
       }
       setSuggestions([]);
     },
-    [activeField, originPlace, usingCurrentLocation, addRecent, onSelectRoute],
+    [
+      activeField,
+      originPlace,
+      originText,
+      usingCurrentLocation,
+      addRecent,
+      onSelectRoute,
+      resolvePlaceFromText,
+    ],
   );
 
   const handleRecentPress = useCallback(
@@ -197,55 +285,44 @@ export default function SearchScreen({
 
   
 
-  const isPlaceSaved = useCallback((placeId: string) => {
-    return user.saved_places?.some((p) => p.id === placeId) || false;
-  }, [user.saved_places]);
+  const isRouteSaved = () => {
+    const org = usingCurrentLocation ? (currentLocationLabel || 'Current Location') : originText;
+    const dst = destinationText;
+    if (!org || !dst) return false;
+    const routeId = `${org} - ${dst}`;
+    return user.saved_routes?.some(r => r.id === routeId) || false;
+  };
 
-  const toggleFavorite = useCallback((place: PlaceResult) => {
-    if (isPlaceSaved(place.id)) {
-      removeSavedPlace(place.id);
+  const handleFavorite = () => {
+    const org = usingCurrentLocation ? (currentLocationLabel || 'Current Location') : originText;
+    const dst = destinationText;
+    
+    if (!org || !dst) {
+      Alert.alert('Missing Fields', 'Please enter both origin and destination to save the route.');
+      return;
+    }
+
+    const routeId = `${org} - ${dst}`;
+    
+    if (isRouteSaved()) {
+      removeSavedRoute(routeId);
+      Alert.alert('Removed', 'Route has been removed from your Saved page.');
     } else {
-      savePlace(place);
+      saveRoute({
+        id: routeId,
+        name: `${org} to ${dst}`,
+        legs: [{ mode: 'Custom Route', from: org, to: dst, fare: 0, km: 0, minutes: 0, instructions: 'Custom saved route' }],
+        total_fare: 0,
+        total_km: 0,
+        estimated_minutes: 0,
+      });
+      Alert.alert('Saved!', 'Route has been saved to your Saved page.');
     }
-  }, [isPlaceSaved, removeSavedPlace, savePlace]);
+  };
 
-  const handleSwap = useCallback(() => {
-    const tempUsingCurrent = usingCurrentLocation;
-    const tempOriginText = originText;
-    const tempOriginPlace = originPlace;
-
-    setOriginText(destinationText);
-    setOriginPlace(destinationPlace);
-
-    const newDestText = tempUsingCurrent && !tempOriginText 
-      ? (currentLocationLabel || 'Current Location') 
-      : tempOriginText;
-    setDestinationText(newDestText);
-    setDestinationPlace(tempOriginPlace);
-
-    if (tempUsingCurrent) {
-      setUsingCurrentLocation(false);
-    }
-    
-    // Switch active field to destination to encourage flow
-    setActiveField('destination');
-    
-    // Achievement System: Adaptive Commuter
-    setTimeout(() => {
-      const user = useStore.getState().user;
-      if (!user.badges?.includes('adaptive_commuter')) {
-        unlockBadge('adaptive_commuter');
-      }
-    }, 1000);
-  }, [
-    usingCurrentLocation, 
-    originText, 
-    originPlace,
-    destinationText, 
-    destinationPlace, 
-    currentLocationLabel,
-    unlockBadge
-  ]);
+  const displayOrigin = usingCurrentLocation
+    ? currentLocationLabel || 'Current Location'
+    : originText;
 
   return (
     <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>
@@ -257,14 +334,88 @@ export default function SearchScreen({
             <Ionicons name="arrow-back" size={24} color={COLORS.navy} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { flex: 1 }]}>Your Route</Text>
+          <TouchableOpacity onPress={handleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name={isRouteSaved() ? "bookmark" : "bookmark-outline"} size={24} color={isRouteSaved() ? COLORS.primary : COLORS.navy} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.routeTypeRow}>
+          <TouchableOpacity
+            style={[
+              styles.routeTypeChip,
+              selectedRouteType === 'jeepney' && styles.routeTypeChipActive,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => onSelectRouteType('jeepney')}
+          >
+            <Ionicons
+              name="bus-outline"
+              size={14}
+              color={selectedRouteType === 'jeepney' ? '#FFFFFF' : COLORS.navy}
+            />
+            <Text
+              style={[
+                styles.routeTypeChipText,
+                selectedRouteType === 'jeepney' && styles.routeTypeChipTextActive,
+              ]}
+            >
+              Jeepney
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.routeTypeChip,
+              selectedRouteType === 'combo' && styles.routeTypeChipActive,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => onSelectRouteType('combo')}
+          >
+            <Ionicons
+              name="shuffle-outline"
+              size={14}
+              color={selectedRouteType === 'combo' ? '#FFFFFF' : COLORS.navy}
+            />
+            <Text
+              style={[
+                styles.routeTypeChipText,
+                selectedRouteType === 'combo' && styles.routeTypeChipTextActive,
+              ]}
+            >
+              Jeep + Bus
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.routeTypeChip,
+              selectedRouteType === 'bus' && styles.routeTypeChipActive,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => onSelectRouteType('bus')}
+          >
+            <Ionicons
+              name="bus"
+              size={14}
+              color={selectedRouteType === 'bus' ? '#FFFFFF' : COLORS.navy}
+            />
+            <Text
+              style={[
+                styles.routeTypeChipText,
+                selectedRouteType === 'bus' && styles.routeTypeChipTextActive,
+              ]}
+            >
+              Bus
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Search Fields */}
-        <View style={styles.fieldsContainerOuter}>
-          <View style={styles.fieldsContainer}>
-          {/* Origin */}
-          <View
-            style={[
+        <View style={styles.fieldsContainer}>
+          <View style={{ flex: 1 }}>
+            {/* Origin */}
+            <View
+              style={[
               styles.fieldRow,
               activeField === 'origin' && styles.fieldRowActive,
             ]}
@@ -360,18 +511,10 @@ export default function SearchScreen({
               <Ionicons name="mic" size={20} color={COLORS.textMuted} />
             </TouchableOpacity>
           </View>
-        </View>
-
-          <TouchableOpacity 
-            style={styles.swapBtn} 
-            onPress={handleSwap}
-            activeOpacity={0.7}
-          >
-            <View style={styles.swapBtnOuter}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="arrow-down-outline" size={20} color={COLORS.primary} style={{ marginRight: -4 }} />
-                <Ionicons name="arrow-up-outline" size={20} color={COLORS.primary} style={{ marginLeft: -4 }} />
-              </View>
+          </View>
+          <TouchableOpacity onPress={handleSwapRoute} style={styles.swapBtnWrapper} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <View style={styles.swapBtn}>
+               <Ionicons name="swap-vertical" size={20} color={COLORS.navy} />
             </View>
           </TouchableOpacity>
         </View>
@@ -387,7 +530,7 @@ export default function SearchScreen({
               setActiveField('destination');
               setTimeout(() => destRef.current?.focus(), 100);
             } else {
-              setDestinationText('Current Location');
+              setDestinationText(currentLocationLabel || 'Current Location');
             }
           }}
         >
@@ -400,8 +543,7 @@ export default function SearchScreen({
         {/* Divider */}
         <View style={styles.divider} />
 
-        
-        {/* Suggestions or Recents/Favorites */}
+        {/* Suggestions or Recents */}
         {activeQuery.trim().length >= 2 ? (
           <>
             {isFetching && suggestions.length === 0 ? (
@@ -432,9 +574,6 @@ export default function SearchScreen({
                         {item.subtitle}
                       </Text>
                     </View>
-                    <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <Ionicons name={isPlaceSaved(item.id) ? "star" : "star-outline"} size={22} color={isPlaceSaved(item.id) ? '#E8A020' : COLORS.textMuted} />
-                    </TouchableOpacity>
                   </TouchableOpacity>
                 )}
                 ListEmptyComponent={
@@ -447,34 +586,12 @@ export default function SearchScreen({
           </>
         ) : (
           <>
-            <View style={styles.tabContainer}>
-              <TouchableOpacity 
-                style={[styles.tabBtn, activeTab === 'recent' && styles.tabBtnActive]} 
-                onPress={() => setActiveTab('recent')}
-              >
-                <Ionicons name="time" size={18} color={activeTab === 'recent' ? COLORS.primary : COLORS.textMuted} />
-                <Text style={[styles.tabText, activeTab === 'recent' && styles.tabTextActive]}>Recent</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.tabBtn, activeTab === 'favorites' && styles.tabBtnActive]} 
-                onPress={() => setActiveTab('favorites')}
-              >
-                <Ionicons name="star" size={18} color={activeTab === 'favorites' ? COLORS.primary : COLORS.textMuted} />
-                <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>Favorites</Text>
-              </TouchableOpacity>
-            </View>
-
-            {activeTab === 'recent' ? (
+            {!isGuestAccount && recents.length > 0 && (
               <>
-                {recents.length > 0 && (
-                  <TouchableOpacity
-                    onPress={clearRecents}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={{ alignSelf: 'flex-end', paddingHorizontal: 16, paddingBottom: 6 }}
-                  >
-                    <Text style={{ fontFamily: 'Inter', fontSize: 12, color: COLORS.textMuted }}>Clear</Text>
-                  </TouchableOpacity>
-                )}
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="time-outline" size={16} color={COLORS.navy} />
+                  <Text style={styles.sectionTitle}>Recent</Text>
+                </View>
                 <FlatList
                   data={recents}
                   keyExtractor={(item) => item.id}
@@ -497,44 +614,10 @@ export default function SearchScreen({
                           {item.subtitle}
                         </Text>
                       </View>
-                      <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                        <Ionicons name={isPlaceSaved(item.id) ? "star" : "star-outline"} size={22} color={isPlaceSaved(item.id) ? '#E8A020' : COLORS.textMuted} />
-                      </TouchableOpacity>
                     </TouchableOpacity>
                   )}
-                  ListEmptyComponent={<Text style={styles.emptyText}>No recent searches.</Text>}
                 />
               </>
-            ) : (
-              <FlatList
-                data={user.saved_places || []}
-                keyExtractor={(item) => item.id}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.listContent}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.resultRow}
-                    activeOpacity={0.7}
-                    onPress={() => handleRecentPress(item)}
-                  >
-                    <View style={styles.resultIcon}>
-                      <Ionicons name="location" size={18} color="#4A90D9" />
-                    </View>
-                    <View style={styles.resultTextWrap}>
-                      <Text style={styles.resultTitle} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.resultSubtitle} numberOfLines={2}>
-                        {item.subtitle}
-                      </Text>
-                    </View>
-                    <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <Ionicons name="star" size={22} color="#E8A020" />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                )}
-                ListEmptyComponent={<Text style={styles.emptyText}>No favorite places yet.</Text>}
-              />
             )}
           </>
         )}
@@ -566,63 +649,56 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: COLORS.navy,
   },
-  fieldsContainerOuter: {
+  routeTypeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     paddingHorizontal: SPACING.screenX,
-    marginBottom: 4,
+    marginBottom: 10,
   },
-  swapBtn: {
-    justifyContent: 'center',
-    paddingLeft: 12,
-  },
-  swapBtnOuter: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    marginHorizontal: SPACING.screenX,
-    marginTop: 12,
-    marginBottom: 8,
-    backgroundColor: '#F5F6F8',
-    borderRadius: 12,
-    padding: 4,
-  },
-  tabBtn: {
-    flex: 1,
+  routeTypeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
     gap: 6,
-  },
-  tabBtnActive: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.pill,
     backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.08)',
   },
-  tabText: {
+  routeTypeChipActive: {
+    backgroundColor: '#0A1628',
+    borderColor: '#0A1628',
+  },
+  routeTypeChipText: {
     fontFamily: 'Inter',
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.navy,
   },
-  tabTextActive: {
-    color: COLORS.primary,
+  routeTypeChipTextActive: {
+    color: '#FFFFFF',
   },
   fieldsContainer: {
-    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: SPACING.screenX,
     marginBottom: 4,
+  },
+  swapBtnWrapper: {
+    marginLeft: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  swapBtn: {
+    backgroundColor: '#F0F0F0',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   fieldRow: {
     flexDirection: 'row',
@@ -696,6 +772,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: SPACING.screenX,
+    paddingBottom: 350,
   },
   currentLocationBtn: {
     flexDirection: 'row',

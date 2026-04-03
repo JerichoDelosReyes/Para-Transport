@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Image, TouchableOpacity, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { BADGES } from '../constants/badges';
 import { BADGE_IMAGES } from '../constants/badgeImages';
 import { useStore } from '../store/useStore';
 
@@ -11,6 +10,7 @@ export function AchievementPopup() {
   const insets = useSafeAreaInsets();
   
   const badgeId = useStore(state => state.unlockedBadgeToShow);
+  const badgesData = useStore(state => state.badgesData);
   const clearBadge = useStore(state => state.clearUnlockedBadge);
 
   const handleClose = () => {
@@ -41,7 +41,7 @@ export function AchievementPopup() {
 
   if (!badgeId) return null;
 
-  const badge = BADGES.find(b => b.id === badgeId);
+  const badge = badgesData.find((b: any) => b.id === badgeId);
   if (!badge) return null;
 
   return (
@@ -57,14 +57,14 @@ export function AchievementPopup() {
         >
           <View style={styles.content}>
             <View style={styles.iconContainer}>
-              {BADGE_IMAGES[badge.id] ? (
+              {badge.icon_url || BADGE_IMAGES[badge.id] ? (
                 <Image 
-                  source={BADGE_IMAGES[badge.id]} 
+                  source={(badge.icon_url && badge.icon_url.startsWith('http')) ? { uri: badge.icon_url } : BADGE_IMAGES[badge.id]} 
                   style={styles.badgeImage} 
                   resizeMode="contain" 
                 />
               ) : (
-                <Text style={styles.iconTxt}>{badge.icon}</Text>
+                <Text style={styles.iconTxt}>🏆</Text>
               )}
             </View>
             <View style={styles.textContainer}>
