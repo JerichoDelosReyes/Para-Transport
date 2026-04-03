@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
-import MapView, { Marker, Polyline, Callout, LongPressEvent } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
@@ -19,6 +18,7 @@ import { findRoutesForDestination, rankRoutes, MatchedRoute, RankMode } from '..
 import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
 import { loadRoutes } from '../../services/routeService';
+import { MapLibreWrapper, type MapLibreWrapperHandle, type MapLineInput, type MapMarkerInput } from '../../components/MapLibreWrapper';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
@@ -197,6 +197,19 @@ const routeTypeLabel = (routeType: TransitRouteType): string => {
 };
 
 const roundCoordForKey = (value: number): string => value.toFixed(5);
+
+const toLngLat = (coordinate: MapCoordinate): [number, number] => [coordinate.longitude, coordinate.latitude];
+
+const latDeltaToZoom = (latitudeDelta: number): number => {
+  const safeDelta = Math.max(0.00001, latitudeDelta);
+  const zoom = Math.log2(360 / safeDelta);
+  return Math.max(0, Math.min(20, zoom));
+};
+
+const zoomToLatDelta = (zoomLevel: number): number => {
+  const safeZoom = Math.max(0, Math.min(20, zoomLevel));
+  return 360 / Math.pow(2, safeZoom);
+};
 
 const makeWalkPathCacheKey = (from: MapCoordinate, to: MapCoordinate): string => {
   return `${roundCoordForKey(from.latitude)},${roundCoordForKey(from.longitude)}|${roundCoordForKey(to.latitude)},${roundCoordForKey(to.longitude)}`;
@@ -463,10 +476,7 @@ export default function HomeScreen() {
           if (alightingPoint) trimCoords.push(alightingPoint);
           if (destinationLocation) trimCoords.push(destinationLocation);
 
-          mapRef.current?.fitToCoordinates(trimCoords, {
-            edgePadding: { top: 80, right: 60, bottom: 300, left: 60 },
-            animated: true,
-          });
+          fitToCoordinates(trimCoords, 600);
         }
       } else {
         setRouteCoordinates([]);
@@ -479,10 +489,10 @@ export default function HomeScreen() {
           if (originObj && destObj) {
             const midLat = (originObj.latitude + destObj.latitude) / 2;
             const midLng = (originObj.longitude + destObj.longitude) / 2;
-            mapRef.current?.animateCamera({
+            animateCamera({
               center: { latitude: midLat, longitude: midLng },
               zoom: 14,
-            }, { duration: 600 });
+            }, 600);
           }
         }
       }
@@ -537,7 +547,7 @@ export default function HomeScreen() {
   const addHistory = useStore((state) => state.addHistory);
   const updateLatestHistoryFare = useStore((state) => state.updateLatestHistoryFare);
   const addTripStats = useStore((state) => state.addTripStats);
-  const mapRef = useRef<MapView | null>(null);
+  const mapRef = useRef<MapLibreWrapperHandle | null>(null);
   const navigation = useNavigation<any>();
   const walkPathCacheRef = useRef<Map<string, MapCoordinate[]>>(new Map());
   const walkPathRequestRef = useRef(0);
@@ -554,6 +564,47 @@ export default function HomeScreen() {
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+  const animateToRegion = useCallback((region: MapRegion, duration = 250) => {
+    mapRef.current?.setCamera({
+      centerCoordinate: [region.longitude, region.latitude],
+      zoomLevel: latDeltaToZoom(region.latitudeDelta),
+      animationDuration: duration,
+    });
+  }, []);
+
+  const animateCamera = useCallback((options: {
+    center?: MapCoordinate;
+    zoom?: number;
+    heading?: number;
+    pitch?: number;
+  }, duration = 250) => {
+    mapRef.current?.setCamera({
+      centerCoordinate: options.center ? toLngLat(options.center) : undefined,
+      zoomLevel: options.zoom,
+      heading: options.heading,
+      pitch: options.pitch,
+      animationDuration: duration,
+    });
+  }, []);
+
+  const fitToCoordinates = useCallback((coordinates: MapCoordinate[], duration = 600) => {
+    if (coordinates.length === 0) return;
+    if (coordinates.length === 1) {
+      mapRef.current?.flyTo(toLngLat(coordinates[0]), duration);
+      return;
+    }
+
+    const bounds = buildBoundsFromCoordinates(coordinates);
+    if (!bounds) return;
+
+    mapRef.current?.fitBounds(
+      [bounds.maxLng, bounds.maxLat],
+      [bounds.minLng, bounds.minLat],
+      [80, 60, 300, 60],
+      duration,
+    );
+  }, []);
+
   const handleZoomIn = () => {
     const next: MapRegion = {
       ...mapRegion,
@@ -561,7 +612,7 @@ export default function HomeScreen() {
       longitudeDelta: clamp(mapRegion.longitudeDelta * 0.7, 0.0025, 0.4),
     };
     setMapRegion(next);
-    mapRef.current?.animateToRegion(next, 250);
+    animateToRegion(next, 250);
   };
 
   const handleZoomOut = () => {
@@ -571,7 +622,7 @@ export default function HomeScreen() {
       longitudeDelta: clamp(mapRegion.longitudeDelta / 0.7, 0.0025, 0.4),
     };
     setMapRegion(next);
-    mapRef.current?.animateToRegion(next, 250);
+    animateToRegion(next, 250);
   };
 
   const handleLocateUser = useCallback(() => {
@@ -592,7 +643,7 @@ export default function HomeScreen() {
         longitudeDelta: 0.01,
       };
       setMapRegion(next);
-      mapRef.current?.animateToRegion(next, 500);
+      animateToRegion(next, 500);
     } else {
       Alert.alert('Location Not Found', 'We are still getting your current location.');
     }
@@ -624,7 +675,7 @@ export default function HomeScreen() {
           longitudeDelta: 0.01,
         };
         setMapRegion(next);
-        mapRef.current?.animateToRegion(next, 500);
+        animateToRegion(next, 500);
       }
     }
   }, [isMapLoaded, currentLocation, pendingRouteSearch, selectedTransitRoute]);
@@ -756,7 +807,7 @@ export default function HomeScreen() {
       : currentLocation;
       
     if (!startPoint) {
-      mapRef.current?.animateToRegion({...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01}, 600);
+      animateToRegion({ ...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 600);
       return;
     }
 
@@ -831,7 +882,7 @@ export default function HomeScreen() {
           }, 300);
         }
       } else {
-        mapRef.current?.animateToRegion({...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01}, 600);
+        animateToRegion({ ...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 600);
       }
 
       Keyboard.dismiss();
@@ -853,10 +904,14 @@ export default function HomeScreen() {
     }
   }, [currentLocation, routesBySelectedType, selectedRouteType, selectedRouteTypeLabel, addHistory]);
 
-  const handleMapLongPress = useCallback(async (event: LongPressEvent) => {
+  const handleMapLongPress = useCallback(async (coordinatePair: [number, number]) => {
     if (isRouting) return;
 
-    const { coordinate } = event.nativeEvent;
+    const coordinate: MapCoordinate = {
+      latitude: coordinatePair[1],
+      longitude: coordinatePair[0],
+    };
+
     if (
       coordinate.latitude < MAP_CONFIG.PHILIPPINES_BOUNDS.minLatitude ||
       coordinate.latitude > MAP_CONFIG.PHILIPPINES_BOUNDS.maxLatitude ||
@@ -1016,7 +1071,7 @@ export default function HomeScreen() {
         longitudeDelta: 0.005,
       };
       //mapRegionRef.current = nearestRegion;
-      mapRef.current?.animateToRegion(nearestRegion, 600);
+      animateToRegion(nearestRegion, 600);
     }
   }, [currentLocation, transitStops]);
 
@@ -1436,18 +1491,120 @@ export default function HomeScreen() {
     return markers;
   }, [transitLegs, simPointIndex]);
 
+  const mapLines = useMemo<MapLineInput[]>(() => {
+    const lines: MapLineInput[] = [];
+
+    visibleTransitLegs.forEach((leg, idx) => {
+      if (!leg.coordinates || leg.coordinates.length < 2) return;
+      lines.push({
+        id: `route-seg-${idx}`,
+        coordinates: leg.coordinates.map(toLngLat),
+        color: leg.onTransit ? '#E8A020' : '#888888',
+        width: leg.onTransit ? 5 : 3,
+      });
+    });
+
+    if (!destinationLocation) {
+      visibleTransitRoutes.forEach((route: any) => {
+        if (!route.coordinates || route.coordinates.length < 2) return;
+        lines.push({
+          id: `transit-route-${route.id}`,
+          coordinates: route.coordinates.map(toLngLat),
+          color: selectedTransitRoute?.id === route.id ? route.color : `${route.color}AA`,
+          width: selectedTransitRoute?.id === route.id ? 5 : 3,
+        });
+      });
+    }
+
+    return lines;
+  }, [visibleTransitLegs, destinationLocation, visibleTransitRoutes, selectedTransitRoute?.id]);
+
+  const mapMarkers = useMemo<MapMarkerInput[]>(() => {
+    const markers: MapMarkerInput[] = [];
+
+    if (activeUserPosition) {
+      markers.push({
+        id: 'active-user-position',
+        coordinate: toLngLat(activeUserPosition),
+        children: (
+          <View style={styles.liveUserMarker}>
+            <View style={styles.liveUserCore}>
+              <Ionicons name="person" size={13} color="#FFFFFF" />
+            </View>
+          </View>
+        ),
+      });
+    }
+
+    if (destinationLocation) {
+      markers.push({
+        id: 'destination-marker',
+        coordinate: toLngLat(destinationLocation),
+        children: (
+          <View style={styles.alightMarker}>
+            <Ionicons name="location" size={14} color="#FFFFFF" />
+          </View>
+        ),
+      });
+    }
+
+    visibleTransitMarkers.forEach(({ leg, idx, showBoard, showDrop }) => {
+      if (showBoard) {
+        markers.push({
+          id: `board-${idx}`,
+          coordinate: toLngLat(leg.boardAt),
+          children: (
+            <View style={styles.boardMarker}>
+              <Ionicons name="arrow-up-circle" size={14} color="#FFFFFF" />
+            </View>
+          ),
+        });
+      }
+
+      if (showDrop) {
+        markers.push({
+          id: `drop-${idx}`,
+          coordinate: toLngLat(leg.alightAt),
+          children: (
+            <View style={styles.alightMarker}>
+              <Ionicons name="arrow-down-circle" size={14} color="#FFFFFF" />
+            </View>
+          ),
+        });
+      }
+    });
+
+    if (!destinationLocation) {
+      visibleTransitStops.forEach((stop: any) => {
+        markers.push({
+          id: `transit-stop-${stop.id}`,
+          coordinate: toLngLat(stop.coordinate),
+          children: (
+            <View style={[
+              styles.transitStopMarker,
+              nearestStop?.id === stop.id && styles.nearestStopMarker,
+            ]}>
+              <Ionicons name="ellipse" size={6} color="#FFFFFF" />
+            </View>
+          ),
+        });
+      });
+    }
+
+    return markers;
+  }, [activeUserPosition, destinationLocation, visibleTransitMarkers, destinationQuery, visibleTransitStops, nearestStop?.id]);
 
   // Auto-follow camera during simulation playback
   useEffect(() => {
     if (sim.state === 'playing' && sim.position && simAutoFollow && mapRef.current) {
-      mapRef.current.animateCamera({
+      animateCamera({
         center: {
           latitude: sim.position.latitude,
           longitude: sim.position.longitude,
         },
-      }, { duration: 50 }); // Match the 50ms TICK_MS exactly for smoother 20fps camera tracking
+      }, 50); // Match the 50ms TICK_MS exactly for smoother 20fps camera tracking
     }
-  }, [sim.position, sim.state, simAutoFollow]);
+  }, [sim.position, sim.state, simAutoFollow, animateCamera]);
 
   const handleRegionChangeComplete = (region: MapRegion) => {
     let newLat = region.latitude;
@@ -1462,7 +1619,7 @@ export default function HomeScreen() {
     if (newLat !== region.latitude || newLng !== region.longitude) {
       const fixedRegion = { ...region, latitude: newLat, longitude: newLng };
       setMapRegion(fixedRegion);
-      mapRef.current?.animateToRegion(fixedRegion, 100);
+      animateToRegion(fixedRegion, 100);
     } else {
       setMapRegion(region); // Important: Keep track of panning/zooming so buttons zoom in on the CURRENT view instead of snapping back to the initial coord
     }
@@ -1491,171 +1648,38 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screen}>
-      <MapView
+      <MapLibreWrapper
         ref={mapRef}
-        style={StyleSheet.absoluteFillObject}
-        mapType="standard"
-        initialRegion={INITIAL_REGION}
-        showsUserLocation={false}
-        showsMyLocationButton={false}
-        showsCompass={false}
-        onMapReady={() => setIsMapLoaded(true)}
-        onRegionChangeComplete={handleRegionChangeComplete}
-        onLongPress={handleMapLongPress}
-        onTouchStart={() => {
-          setIsMapInteracted(true);
-          // Disable auto-follow when user touches map during simulation
-          if (sim.state === 'playing') setSimAutoFollow(false);
-        }}
-        pitchEnabled={false}
-        rotateEnabled={false}
+        styleURL={MAP_CONFIG.RESOLVED_STYLE_URL}
+        initialCenterCoordinate={[INITIAL_REGION.longitude, INITIAL_REGION.latitude]}
+        initialZoomLevel={latDeltaToZoom(INITIAL_REGION.latitudeDelta)}
         minZoomLevel={10}
         maxZoomLevel={18}
-        liteMode={Platform.OS === 'android' && !isMapInteracted}
-      >
-        
+        pitchEnabled
+        rotateEnabled
+        lines={mapLines}
+        markers={mapMarkers}
+        onMapReady={() => setIsMapLoaded(true)}
+        onCameraChanged={(payload) => {
+          const center = payload.centerCoordinate;
+          if (!center) return;
 
-        {activeUserPosition && (
-          <Marker
-            coordinate={activeUserPosition}
-            tracksViewChanges={sim.state !== 'idle'}
-            anchor={{ x: 0.5, y: 0.5 }}
-            flat={sim.state !== 'idle'}
-          >
-            <View style={styles.liveUserMarker}>
-              <View style={styles.liveUserCore}>
-                <Ionicons name="person" size={13} color="#FFFFFF" />
-              </View>
-              {sim.state !== 'idle' && simBlink && sim.currentSegInfo ? (
-                <View style={[
-                  styles.liveUserBadge,
-                  { backgroundColor: sim.currentSegInfo.color || '#E8A020' },
-                ]}>
-                  {sim.currentSegInfo?.vehicleType === 'jeepney' ? (
-                    <Image source={require('../../assets/icons/jeepney-icon.png')} style={styles.liveUserBadgeIcon} />
-                  ) : sim.currentSegInfo?.vehicleType === 'bus' ? (
-                    <Image source={require('../../assets/icons/bus-icon.png')} style={styles.liveUserBadgeIcon} />
-                  ) : sim.currentSegInfo?.vehicleType === 'tricycle' ? (
-                    <Image source={require('../../assets/icons/tricycle-icon.png')} style={styles.liveUserBadgeIcon} />
-                  ) : (
-                    <Ionicons name="walk" size={11} color="#FFFFFF" />
-                  )}
-                </View>
-              ) : null}
-            </View>
-          </Marker>
-        )}
+          const zoom = payload.zoom ?? latDeltaToZoom(mapRegion.latitudeDelta);
+          const nextRegion: MapRegion = {
+            latitude: center[1],
+            longitude: center[0],
+            latitudeDelta: zoomToLatDelta(zoom),
+            longitudeDelta: zoomToLatDelta(zoom),
+          };
 
-        {destinationLocation && (
-          <Marker
-            coordinate={destinationLocation}
-            title="Destination"
-            description={destinationQuery}
-            tracksViewChanges={false}
-          />
-        )}
-
-        {/* Render searched route: mode-colored for transit, dashed for walking */}
-        {visibleTransitLegs.map((leg, idx) => {
-          return (
-            <Polyline
-              key={`route-seg-${idx}`}
-              coordinates={leg.coordinates}
-              strokeColor={leg.onTransit ? '#E8A020' : '#888888'}
-              strokeWidth={leg.onTransit ? 5 : 3}
-              lineDashPattern={leg.onTransit ? undefined : [10, 6]}
-              lineCap="round"
-              lineJoin="round"
-            />
-          );
-        })}
-
-        {/* Board & drop-off markers for each transit leg */}
-        {visibleTransitMarkers.map(({ leg, idx, showBoard, showDrop }) => (
-          <React.Fragment key={`board-alight-${idx}`}>
-            {/* Board marker */}
-            {showBoard ? (
-              <Marker
-                coordinate={leg.boardAt}
-                tracksViewChanges={false}
-                anchor={{ x: 0.5, y: 0.5 }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <View style={styles.boardMarker}>
-                  <Ionicons name="arrow-up-circle" size={14} color="#FFFFFF" />
-                </View>
-                <Callout tooltip>
-                  <View style={styles.stopCallout}>
-                    <Text style={styles.stopCalloutLabel}>Board Here</Text>
-                    <Text style={styles.stopCalloutType}>
-                      Ride {leg.transitInfo?.type || 'transit'}
-                    </Text>
-                  </View>
-                </Callout>
-              </Marker>
-            ) : null}
-
-            {/* Drop-off marker */}
-            {showDrop ? (
-              <Marker
-                coordinate={leg.alightAt}
-                tracksViewChanges={false}
-                anchor={{ x: 0.5, y: 0.5 }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <View style={styles.alightMarker}>
-                  <Ionicons name="arrow-down-circle" size={14} color="#FFFFFF" />
-                </View>
-                <Callout tooltip>
-                  <View style={styles.stopCallout}>
-                    <Text style={styles.stopCalloutLabel}>Drop-off Point</Text>
-                    <Text style={styles.stopCalloutType}>
-                      Drop off here
-                    </Text>
-                  </View>
-                </Callout>
-              </Marker>
-            ) : null}
-          </React.Fragment>
-        ))}
-
-        {/* Transit route polylines (hidden when a search route is active) */}
-        {!destinationLocation && visibleTransitRoutes.map((route: any) => (
-          <Polyline
-            key={`transit-route-${route.id}`}
-            coordinates={route.coordinates}
-            strokeColor={selectedTransitRoute?.id === route.id ? route.color : route.color + 'AA'}
-            strokeWidth={selectedTransitRoute?.id === route.id ? 5 : 3}
-            lineCap="round"
-            lineJoin="round"
-          />
-        ))}
-
-        {/* Transit stop markers (hidden when a search route is active) */}
-        {!destinationLocation && visibleTransitStops.map((stop: any) => (
-          <Marker
-            key={`transit-stop-${stop.id}`}
-            coordinate={stop.coordinate}
-            tracksViewChanges={false}
-            anchor={{ x: 0.5, y: 0.5 }}
-          >
-            <View style={[
-              styles.transitStopMarker,
-              nearestStop?.id === stop.id && styles.nearestStopMarker,
-            ]}>
-              <Ionicons name="ellipse" size={6} color="#FFFFFF" />
-            </View>
-            <Callout tooltip>
-              <View style={styles.stopCallout}>
-                <Text style={styles.stopCalloutLabel}>{stop.name}</Text>
-                {stop.operator ? <Text style={styles.stopCalloutType}>{stop.operator}</Text> : null}
-              </View>
-            </Callout>
-          </Marker>
-        ))}
-
-
-      </MapView>
+          handleRegionChangeComplete(nextRegion);
+        }}
+        onMapLongPress={handleMapLongPress}
+        onMapTouchStart={() => {
+          setIsMapInteracted(true);
+          if (sim.state === 'playing') setSimAutoFollow(false);
+        }}
+      />
 
       {/* Map Controls */}
       <View style={styles.mapControls}>

@@ -21,6 +21,12 @@ export type MapLineInput = {
 
 export type MapLibreWrapperHandle = {
   flyTo: (coordinate: LngLat, duration?: number) => void;
+  fitBounds: (
+    northEast: LngLat,
+    southWest: LngLat,
+    padding?: number | number[],
+    duration?: number,
+  ) => void;
   setCamera: (options: {
     centerCoordinate?: LngLat;
     zoomLevel?: number;
@@ -96,6 +102,9 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
     useImperativeHandle(ref, () => ({
       flyTo: (coordinate, duration = 600) => {
         cameraRef.current?.flyTo(coordinate, duration);
+      },
+      fitBounds: (northEast, southWest, padding = 48, duration = 600) => {
+        cameraRef.current?.fitBounds(northEast, southWest, padding, duration);
       },
       setCamera: (options) => {
         cameraRef.current?.setCamera({
