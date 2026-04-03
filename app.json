@@ -28,6 +28,8 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
       ],
       "package": "com.para.app"
@@ -51,6 +53,12 @@
         "projectId": "34665852-31df-4ca2-b87a-510e5909f06c"
       }
     },
-    "owner": "noxen-cv"
+    "owner": "noxen-cv",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/34665852-31df-4ca2-b87a-510e5909f06c"
+    }
   }
 }

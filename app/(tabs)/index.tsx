@@ -2187,7 +2187,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   safeArea: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     pointerEvents: 'box-none',
     zIndex: 2,
   },

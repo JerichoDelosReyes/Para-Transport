@@ -10,7 +10,6 @@
     "supabase:types": "supabase gen types typescript --project-id $PROJECT_ID > types/supabase.ts"
   },
   "dependencies": {
-    "@maplibre/maplibre-react-native": "^10.4.2",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo/vector-icons": "^15.1.1",
     "@maplibre/maplibre-react-native": "^10.4.2",
@@ -33,6 +32,7 @@
     "expo-router": "~6.0.23",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
+    "expo-updates": "~29.0.16",
     "expo-web-browser": "~15.0.10",
     "framer-motion": "^12.38.0",
     "nativewind": "^4.2.3",
