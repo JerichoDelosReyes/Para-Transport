@@ -20,6 +20,8 @@ const mapTilerUrl = mapTilerKey
   : '';
 
 export const MAP_CONFIG = {
+  MAP_RENDERER: 'maplibre',
+  MAPLIBRE_STYLE_URL: process.env.EXPO_PUBLIC_MAPLIBRE_STYLE_URL || canonicalStyleUrl,
   CANONICAL_STYLE_URL: canonicalStyleUrl,
   STYLE_URL_STRATEGY: styleUrlStrategy,
   STYLE_URL_PINNED_VERSION: pinnedStyleUrl,

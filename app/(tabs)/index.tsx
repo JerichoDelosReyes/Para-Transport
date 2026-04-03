@@ -60,6 +60,7 @@ const INITIAL_REGION: MapRegion = {
 };
 
 const PH_BOUNDS = MAP_CONFIG.PHILIPPINES_BOUNDS;
+const USE_MAPLIBRE = MAP_CONFIG.MAP_RENDERER === 'maplibre';
 
 const toMapCoordinates = (coordinates: number[][]): MapCoordinate[] =>
   coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
@@ -423,6 +424,7 @@ const candidateHasMode = (candidate: RecommenderCandidate, mode: string): boolea
 export default function HomeScreen() {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState<string | null>(null);
   const [isMapInteracted, setIsMapInteracted] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
   const [originQuery, setOriginQuery] = useState('');
@@ -1688,6 +1690,8 @@ export default function HomeScreen() {
   }, [sim.position, sim.state, simAutoFollow, animateCamera]);
 
   const handleRegionChangeComplete = (region: MapRegion) => {
+    if (USE_MAPLIBRE) return;
+
     let newLat = region.latitude;
     let newLng = region.longitude;
 
@@ -1863,6 +1867,9 @@ export default function HomeScreen() {
       {!isMapLoaded && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#E8A020" />
+          {mapLoadError ? (
+            <Text style={{ marginTop: 10, color: COLORS.textMuted, fontSize: 12 }}>{mapLoadError}</Text>
+          ) : null}
         </View>
       )}
 
