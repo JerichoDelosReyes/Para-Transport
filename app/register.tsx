@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MinimalistJeep from '../assets/illustrations/minimalistic-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import { supabase } from '../config/supabaseClient';
 import OtpModal from '../components/OtpModal';
 import {
   registerWithEmailPassword,

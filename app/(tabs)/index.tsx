@@ -439,28 +439,59 @@ export default function HomeScreen() {
     setRankedRoutes(rankRoutes(matchedRoutes, rankTab).slice(0, MAX_RANKED_ROUTE_OPTIONS));
   }, [matchedRoutes, rankTab]);
 
+  const lastZoomedRouteIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     const route = matchedRoutes.find(m => m.legs.map((l: any) => l.route.properties.code).join('+') === selectedRouteId) || null;
     setSelectedRoute(route);
     if (route) {
       setRouteSummary({ distanceKm: route.distanceKm || 0, durationMin: route.estimatedMinutes || Math.round((route.distanceKm || 0) * 12) });
       const newCoords = route.legs.flatMap((leg: any) => leg.route.coordinates);
+      
       if (newCoords && newCoords.length >= 2) {
         setRouteCoordinates(sampleCoordinates(newCoords, 700));
         
-        // Directly and automatically zoom to frame the specific selected plotted route
-        mapRef.current?.fitToCoordinates(newCoords, {
-          edgePadding: { top: 80, right: 30, bottom: 250, left: 30 },
-          animated: true,
-        });
+        if (lastZoomedRouteIdRef.current !== selectedRouteId) {
+          lastZoomedRouteIdRef.current = selectedRouteId;
+          
+          // Build a trimmed bounding point array specific to the user's travel points
+          const trimCoords = [];
+          if (currentLocation) trimCoords.push(currentLocation);
+          const boardingPoint = route.legs[0]?.boardingPoint;
+          if (boardingPoint) trimCoords.push(boardingPoint);
+          const alightingPoint = route.legs[route.legs.length - 1]?.alightingPoint;
+          if (alightingPoint) trimCoords.push(alightingPoint);
+          if (destinationLocation) trimCoords.push(destinationLocation);
+
+          mapRef.current?.fitToCoordinates(trimCoords, {
+            edgePadding: { top: 80, right: 60, bottom: 300, left: 60 },
+            animated: true,
+          });
+        }
       } else {
         setRouteCoordinates([]);
+        
+        if (lastZoomedRouteIdRef.current !== selectedRouteId) {
+          lastZoomedRouteIdRef.current = selectedRouteId;
+          const originObj = route.legs[0]?.boardingPoint || currentLocation;
+          const destObj = route.legs[route.legs.length - 1]?.alightingPoint || destinationLocation;
+          
+          if (originObj && destObj) {
+            const midLat = (originObj.latitude + destObj.latitude) / 2;
+            const midLng = (originObj.longitude + destObj.longitude) / 2;
+            mapRef.current?.animateCamera({
+              center: { latitude: midLat, longitude: midLng },
+              zoom: 14,
+            }, { duration: 600 });
+          }
+        }
       }
     } else {
       setRouteSummary(null);
       setRouteCoordinates([]);
+      lastZoomedRouteIdRef.current = null;
     }
-  }, [selectedRouteId, matchedRoutes]);
+  }, [selectedRouteId, matchedRoutes, currentLocation, destinationLocation]);
 
   // Normalize route data to a unified transit shape
   const transitRoutes = useMemo(() => {
