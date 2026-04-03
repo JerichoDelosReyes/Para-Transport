@@ -24,6 +24,7 @@ import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
 import { findRoutesForDestination, rankRoutes, MatchedRoute, RankMode } from '../../services/routeSearch';
+import { loadRoutes } from '../../services/routeService';
 import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
 import LOCAL_PLACES from '../../data/local_places';
@@ -417,6 +418,7 @@ const candidateHasMode = (candidate: RecommenderCandidate, mode: string): boolea
 };
 
 export default function HomeScreen() {
+  const navigation = useNavigation<any>();
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [mapLoadError, setMapLoadError] = useState<string | null>(null);
@@ -550,6 +552,8 @@ export default function HomeScreen() {
   const addTripStats = useStore((state) => state.addTripStats);
   const mapRef = useRef<MapView | null>(null);
   const mapLibreCameraRef = useRef<MapLibreCameraRef | null>(null);
+  const walkPathCacheRef = useRef<Map<string, MapCoordinate[]>>(new Map());
+  const walkPathRequestRef = useRef(0);
   const tripStatRecordedRef = useRef(false);
   const hasInitiallyPannedRef = useRef(false);
   const [showRecommender, setShowRecommender] = useState(false);
@@ -1369,6 +1373,28 @@ export default function HomeScreen() {
 
   // Simulation — uses the contiguous coordinate list for real-world playback
   const sim = useSimulation(simCoordinates, transitLegs);
+
+  const handleRouteTypeChange = useCallback((nextType: TransitRouteType) => {
+    if (nextType === selectedRouteType) return;
+
+    setSelectedRouteType(nextType);
+    setNearestStop(null);
+    setSelectedTransitRoute(null);
+    setShowRecommender(false);
+    setMatchedRoutes([]);
+    setRankedRoutes([]);
+    setSelectedRouteId(null);
+    setSelectedRoute(null);
+    setTransitLegs([]);
+    setRouteCoordinates([]);
+    setRouteSummary(null);
+    setDestinationLocation(null);
+    setDestinationQuery('');
+
+    if (sim.state !== 'idle') {
+      sim.reset();
+    }
+  }, [selectedRouteType, setSelectedTransitRoute, sim]);
 
   const topRightSummaryText = useMemo(() => {
     if (sim.state !== 'idle') {
