@@ -31,7 +31,7 @@ export type PlaceResult = {
   longitude: number;
 };
 
-export type TransitRouteType = 'jeepney' | 'bus';
+export type TransitRouteType = 'jeepney' | 'bus' | 'combo';
 
 type SearchScreenProps = {
   visible: boolean;
@@ -96,6 +96,46 @@ export default function SearchScreen({
 
   // Active query text
   const activeQuery = activeField === 'origin' ? originText : destinationText;
+
+  const resolvePlaceFromText = useCallback(async (query: string): Promise<PlaceResult | null> => {
+    const q = query.trim();
+    if (q.length < 2) return null;
+
+    const params = new URLSearchParams({
+      q: `${q}, Cavite, Philippines`,
+      format: 'json',
+      limit: '1',
+      countrycodes: 'ph',
+      addressdetails: '0',
+    });
+
+    try {
+      const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
+        headers: { 'Accept-Language': 'en' },
+      });
+      if (!res.ok) return null;
+
+      const data = await res.json();
+      const item = Array.isArray(data) ? data[0] : null;
+      if (!item) return null;
+
+      const dn = String(item.display_name || '').trim();
+      const parts = dn.split(',').map((p: string) => p.trim()).filter(Boolean);
+
+      const parsed: PlaceResult = {
+        id: String(item.place_id || `${Date.now()}`),
+        title: parts[0] || q,
+        subtitle: parts.slice(1).join(', ') || 'Philippines',
+        latitude: parseFloat(item.lat),
+        longitude: parseFloat(item.lon),
+      };
+
+      if (!Number.isFinite(parsed.latitude) || !Number.isFinite(parsed.longitude)) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, []);
 
   // Geocoding + fuzzy local search
   useEffect(() => {
@@ -191,7 +231,7 @@ export default function SearchScreen({
   }, [originText, destinationText, usingCurrentLocation, currentLocationLabel]);
 
   const handleSelectPlace = useCallback(
-    (place: PlaceResult) => {
+    async (place: PlaceResult) => {
       addRecent(place);
 
       if (activeField === 'origin') {
@@ -202,13 +242,38 @@ export default function SearchScreen({
         setTimeout(() => destRef.current?.focus(), 100);
       } else {
         setDestinationText(place.title);
-        // Both fields filled → trigger route
-        const origin = usingCurrentLocation ? null : originPlace;
-        onSelectRoute(origin, place);
+
+        let resolvedOrigin: PlaceResult | null = null;
+        if (!usingCurrentLocation) {
+          resolvedOrigin = originPlace;
+
+          if (!resolvedOrigin && originText.trim().length > 0) {
+            resolvedOrigin = await resolvePlaceFromText(originText);
+            if (resolvedOrigin) {
+              setOriginPlace(resolvedOrigin);
+              setOriginText(resolvedOrigin.title);
+            }
+          }
+
+          if (!resolvedOrigin) {
+            Alert.alert('Origin Not Found', 'Please pick your origin from suggestions or use Current Location.');
+            return;
+          }
+        }
+
+        onSelectRoute(resolvedOrigin, place);
       }
       setSuggestions([]);
     },
-    [activeField, originPlace, usingCurrentLocation, addRecent, onSelectRoute],
+    [
+      activeField,
+      originPlace,
+      originText,
+      usingCurrentLocation,
+      addRecent,
+      onSelectRoute,
+      resolvePlaceFromText,
+    ],
   );
 
   const handleRecentPress = useCallback(
@@ -295,6 +360,29 @@ export default function SearchScreen({
               ]}
             >
               Jeepney
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.routeTypeChip,
+              selectedRouteType === 'combo' && styles.routeTypeChipActive,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => onSelectRouteType('combo')}
+          >
+            <Ionicons
+              name="shuffle-outline"
+              size={14}
+              color={selectedRouteType === 'combo' ? '#FFFFFF' : COLORS.navy}
+            />
+            <Text
+              style={[
+                styles.routeTypeChipText,
+                selectedRouteType === 'combo' && styles.routeTypeChipTextActive,
+              ]}
+            >
+              Jeep + Bus
             </Text>
           </TouchableOpacity>
 
@@ -564,6 +652,7 @@ const styles = StyleSheet.create({
   routeTypeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     paddingHorizontal: SPACING.screenX,
     marginBottom: 10,

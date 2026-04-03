@@ -22,14 +22,19 @@ import { loadRoutes } from '../../services/routeService';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
+const ROUTING_NEAREST_BASE_URL = 'https://router.project-osrm.org/nearest/v1';
+const WALK_ROUTING_PROFILE = 'walking';
 const MAX_WALK_PATH_POINTS = 140;
 const WALK_PATH_CACHE_LIMIT = 400;
-const MAX_WALK_DETOUR_RATIO = 1.9;
 const MAX_RANKED_ROUTE_OPTIONS = 5;
 
 type MapCoordinate = {
   latitude: number;
   longitude: number;
+};
+
+type WalkPathResolveOptions = {
+  keepDestinationOnRoad?: boolean;
 };
 
 type MapRegion = {
@@ -160,22 +165,35 @@ const pointInBounds = (point: MapCoordinate, bounds: MapBounds): boolean => {
   );
 };
 
-const normalizeTransitRouteType = (value: unknown): TransitRouteType | null => {
+type VehicleRouteType = 'jeepney' | 'bus';
+
+const normalizeTransitRouteType = (value: unknown): VehicleRouteType | null => {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized.includes('bus')) return 'bus';
   if (normalized.includes('jeepney')) return 'jeepney';
   return null;
 };
 
+const selectedTypeAllowsRouteType = (
+  selectedType: TransitRouteType,
+  routeType: VehicleRouteType | null,
+): boolean => {
+  if (!routeType) return false;
+  if (selectedType === 'combo') return routeType === 'jeepney' || routeType === 'bus';
+  return routeType === selectedType;
+};
+
 const routeMatchesSelectedType = (
   route: JeepneyRoute,
   selectedType: TransitRouteType,
 ): boolean => {
-  return normalizeTransitRouteType(route?.properties?.type) === selectedType;
+  return selectedTypeAllowsRouteType(selectedType, normalizeTransitRouteType(route?.properties?.type));
 };
 
 const routeTypeLabel = (routeType: TransitRouteType): string => {
-  return routeType === 'bus' ? 'Bus' : 'Jeepney';
+  if (routeType === 'bus') return 'Bus';
+  if (routeType === 'jeepney') return 'Jeepney';
+  return 'Jeep + Bus';
 };
 
 const roundCoordForKey = (value: number): string => value.toFixed(5);
@@ -187,7 +205,8 @@ const makeWalkPathCacheKey = (from: MapCoordinate, to: MapCoordinate): string =>
 const fetchRoadPath = async (
   from: MapCoordinate,
   to: MapCoordinate,
-  profile: 'foot',
+  profile: 'walking',
+  options?: WalkPathResolveOptions,
 ): Promise<MapCoordinate[] | null> => {
   const coords = `${from.longitude},${from.latitude};${to.longitude},${to.latitude}`;
   const params = new URLSearchParams({
@@ -212,8 +231,36 @@ const fetchRoadPath = async (
 
     // Keep exact segment endpoints so transfer joins stay visually connected.
     mapped[0] = from;
-    mapped[mapped.length - 1] = to;
+    if (!options?.keepDestinationOnRoad) {
+      mapped[mapped.length - 1] = to;
+    }
     return mapped;
+  } catch {
+    return null;
+  }
+};
+
+const fetchNearestRoadPoint = async (
+  point: MapCoordinate,
+  profile: 'walking',
+): Promise<MapCoordinate | null> => {
+  const coord = `${point.longitude},${point.latitude}`;
+  const params = new URLSearchParams({ number: '1' });
+  const url = `${ROUTING_NEAREST_BASE_URL}/${profile}/${coord}?${params.toString()}`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const location = data?.waypoints?.[0]?.location;
+    if (!Array.isArray(location) || location.length < 2) return null;
+
+    const longitude = Number(location[0]);
+    const latitude = Number(location[1]);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+    return { latitude, longitude };
   } catch {
     return null;
   }
@@ -656,9 +703,48 @@ export default function HomeScreen() {
       setIsRouting(true);
 
       let routesForSearch = routesBySelectedType;
-      if (routesForSearch.length === 0) {
+
+      const bufferCandidates = [500, 900, 1400, 2200];
+      let yieldedBeforeMatching = false;
+      const yieldBeforeMatching = async () => {
+        if (yieldedBeforeMatching) return;
+        yieldedBeforeMatching = true;
+        await new Promise<void>((resolve) => {
+          InteractionManager.runAfterInteractions(() => resolve());
+        });
+      };
+
+      const runRouteMatch = (candidateRoutes: JeepneyRoute[]): MatchedRoute[] => {
+        let matched: MatchedRoute[] = [];
+        for (const bufferMeters of bufferCandidates) {
+          matched = findRoutesForDestination(
+            startPoint,
+            destinationPoint,
+            candidateRoutes,
+            bufferMeters,
+          );
+          if (matched.length > 0) break;
+        }
+        return matched;
+      };
+
+      // Fast path: match against already loaded routes first.
+      let results: MatchedRoute[] = [];
+      if (routesForSearch.length > 0) {
+        await yieldBeforeMatching();
+        results = runRouteMatch(routesForSearch);
+      }
+
+      // Fallback path: refresh from source only when local set is empty
+      // or when the first pass finds no candidates.
+      if (results.length === 0) {
         const loaded = await loadRoutes();
-        routesForSearch = loaded.routes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
+        const latestByType = loaded.routes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
+        if (latestByType.length > 0) {
+          routesForSearch = latestByType;
+          await yieldBeforeMatching();
+          results = runRouteMatch(routesForSearch);
+        }
       }
 
       if (routesForSearch.length === 0) {
@@ -667,26 +753,6 @@ export default function HomeScreen() {
           `No ${selectedRouteTypeLabel.toLowerCase()} routes are loaded yet. Try switching to the other route type.`,
         );
         return;
-      }
-
-      // Yield one frame before heavy matching so the search UI can settle.
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => resolve());
-      });
-
-      // Retry with wider route proximity buffers so destination searches
-      // still return candidates when geocoded points are slightly off-route.
-      const bufferCandidates = [500, 900, 1400, 2200];
-      let results: MatchedRoute[] = [];
-
-      for (const bufferMeters of bufferCandidates) {
-        results = findRoutesForDestination(
-          startPoint,
-          destinationPoint,
-          routesForSearch,
-          bufferMeters,
-        );
-        if (results.length > 0) break;
       }
 
       setMatchedRoutes(results);
@@ -888,34 +954,50 @@ export default function HomeScreen() {
   const resolveWalkPathOnRoad = useCallback(async (
     from: MapCoordinate,
     to: MapCoordinate,
+    options?: WalkPathResolveOptions,
   ): Promise<MapCoordinate[]> => {
-    const cacheKey = makeWalkPathCacheKey(from, to);
-    const reverseKey = makeWalkPathCacheKey(to, from);
+    const keepDestinationOnRoad = options?.keepDestinationOnRoad === true;
+    const destinationMode = options?.keepDestinationOnRoad ? 'road-end' : 'exact-end';
+    const cacheKey = `${makeWalkPathCacheKey(from, to)}|${destinationMode}`;
+    const reverseCacheAllowed = !keepDestinationOnRoad;
+    const reverseKey = `${makeWalkPathCacheKey(to, from)}|${destinationMode}`;
     const cache = walkPathCacheRef.current;
 
     const cached = cache.get(cacheKey);
     if (cached) return cached;
 
-    const reverseCached = cache.get(reverseKey);
+    const reverseCached = reverseCacheAllowed ? cache.get(reverseKey) : undefined;
     if (reverseCached && reverseCached.length >= 2) {
       const reversed = [...reverseCached].reverse();
       cache.set(cacheKey, reversed);
       return reversed;
     }
 
-    let routedPath = await fetchRoadPath(from, to, 'foot');
+    let routedPath = await fetchRoadPath(from, to, WALK_ROUTING_PROFILE, options);
+    let snappedDestination: MapCoordinate | null = null;
 
-    // If the route is too detoured for a walk leg, prefer a direct connector
-    // to avoid car-like one-way loops between board/alight points.
-    if (routedPath && routedPath.length >= 2) {
-      const directMeters = Math.sqrt(sqDistApprox(from, to));
-      const routedMeters = pathLengthMeters(routedPath);
-      if (directMeters > 0 && routedMeters / directMeters > MAX_WALK_DETOUR_RATIO) {
-        routedPath = null;
+    // Retry with nearest walkable-road snaps first so walking legs stay
+    // road-following even when exact endpoints are off-network.
+    if (!routedPath) {
+      const [snappedFrom, snappedTo] = await Promise.all([
+        fetchNearestRoadPoint(from, WALK_ROUTING_PROFILE),
+        fetchNearestRoadPoint(to, WALK_ROUTING_PROFILE),
+      ]);
+
+      if (snappedTo) snappedDestination = snappedTo;
+
+      if (snappedFrom && snappedTo) {
+        routedPath = await fetchRoadPath(snappedFrom, snappedTo, WALK_ROUTING_PROFILE, {
+          keepDestinationOnRoad: true,
+        });
+      } else if (keepDestinationOnRoad && snappedTo) {
+        routedPath = await fetchRoadPath(from, snappedTo, WALK_ROUTING_PROFILE, {
+          keepDestinationOnRoad: true,
+        });
       }
     }
 
-    const fallbackPath = [from, to];
+    const fallbackPath = [from, keepDestinationOnRoad && snappedDestination ? snappedDestination : to];
     const resolved = (routedPath && routedPath.length >= 2 ? routedPath : fallbackPath).map((pt) => ({
       latitude: pt.latitude,
       longitude: pt.longitude,
@@ -923,7 +1005,9 @@ export default function HomeScreen() {
 
     // Ensure exact joins to transit legs.
     resolved[0] = from;
-    resolved[resolved.length - 1] = to;
+    if (!keepDestinationOnRoad) {
+      resolved[resolved.length - 1] = to;
+    }
 
     cache.set(cacheKey, resolved);
     if (cache.size > WALK_PATH_CACHE_LIMIT) {
@@ -937,7 +1021,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!selectedTransitRoute) return;
     const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
-    if (selectedType && selectedType !== selectedRouteType) {
+    if (selectedType && !selectedTypeAllowsRouteType(selectedRouteType, selectedType)) {
       setSelectedTransitRoute(null);
     }
   }, [selectedTransitRoute, selectedRouteType, setSelectedTransitRoute]);
@@ -946,7 +1030,7 @@ export default function HomeScreen() {
   const visibleTransitRoutes = useMemo(() => {
     if (selectedTransitRoute) {
       const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
-      if (selectedType && selectedType !== selectedRouteType) return [];
+      if (selectedType && !selectedTypeAllowsRouteType(selectedRouteType, selectedType)) return [];
       return selectedTransitRoute.coordinates ? [selectedTransitRoute] : [];
     }
     if (!showTransitLayer) return [];
@@ -962,7 +1046,7 @@ export default function HomeScreen() {
   const visibleTransitStops = useMemo(() => {
     if (selectedTransitRoute?.stops?.length > 0) {
       const selectedType = normalizeTransitRouteType((selectedTransitRoute as any).type);
-      if (!selectedType || selectedType === selectedRouteType) {
+      if (!selectedType || selectedTypeAllowsRouteType(selectedRouteType, selectedType)) {
         return selectedTransitRoute.stops;
       }
       return [];
@@ -1071,7 +1155,10 @@ export default function HomeScreen() {
         walkLegEntries.map(async ({ leg, idx }) => {
           const from = leg.coordinates[0];
           const to = leg.coordinates[leg.coordinates.length - 1];
-          const path = await resolveWalkPathOnRoad(from, to);
+          const isFinalDestinationWalk = idx === baseTransitLegs.length - 1;
+          const path = await resolveWalkPathOnRoad(from, to, {
+            keepDestinationOnRoad: isFinalDestinationWalk,
+          });
           return { idx, path };
         }),
       );
@@ -1085,11 +1172,13 @@ export default function HomeScreen() {
 
       for (const item of resolved) {
         if (!item.path || item.path.length < 2) continue;
+        const isFinalWalkLeg = item.idx === nextLegs.length - 1 && !nextLegs[item.idx].onTransit;
+        const preservedAlightAt = nextLegs[item.idx].alightAt;
         nextLegs[item.idx] = {
           ...nextLegs[item.idx],
           coordinates: item.path,
           boardAt: item.path[0],
-          alightAt: item.path[item.path.length - 1],
+          alightAt: isFinalWalkLeg ? preservedAlightAt : item.path[item.path.length - 1],
         };
       }
 
@@ -1651,6 +1740,24 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={[
                 styles.routeTypeSelectorButton,
+                selectedRouteType === 'combo' && styles.routeTypeSelectorButtonActive,
+              ]}
+              activeOpacity={0.85}
+              onPress={() => handleRouteTypeChange('combo')}
+            >
+              <Text
+                style={[
+                  styles.routeTypeSelectorText,
+                  selectedRouteType === 'combo' && styles.routeTypeSelectorTextActive,
+                ]}
+              >
+                Combo
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.routeTypeSelectorButton,
                 selectedRouteType === 'bus' && styles.routeTypeSelectorButtonActive,
               ]}
               activeOpacity={0.85}
@@ -1728,7 +1835,10 @@ export default function HomeScreen() {
 
         {selectedTransitRoute &&
         (!normalizeTransitRouteType((selectedTransitRoute as any).type) ||
-          normalizeTransitRouteType((selectedTransitRoute as any).type) === selectedRouteType) ? (
+          selectedTypeAllowsRouteType(
+            selectedRouteType,
+            normalizeTransitRouteType((selectedTransitRoute as any).type),
+          )) ? (
           <View style={styles.transitRouteCard}>
             <View style={styles.transitRouteHeader}>
               <View style={[styles.transitTypeBadge, { backgroundColor: selectedTransitRoute.color || '#1E88E5' }]}>
