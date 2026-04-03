@@ -37,6 +37,7 @@
       "favicon": "./assets/logo/appicon.png"
     },
     "plugins": [
+      "@maplibre/maplibre-react-native",
       "expo-web-browser",
       [
         "expo-notifications",
