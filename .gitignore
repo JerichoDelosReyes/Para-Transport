@@ -45,3 +45,4 @@ yarn-error.*
 client_*.json
 client_*.plist
 
+docs/api/futureImplementations/*
