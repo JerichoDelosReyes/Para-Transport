@@ -39,7 +39,8 @@ export function GlobalBroadcast() {
       
       if (!unmounted && data && data.length > 0) {
         // Filter out those already dismissed
-        const unseenBroadcasts = data.filter((b) => !dismissedBroadcasts.includes(b.id));
+        const currentDismissed = useStore.getState().dismissedBroadcasts;
+        const unseenBroadcasts = data.filter((b) => !currentDismissed.includes(b.id));
         setBroadcasts(unseenBroadcasts);
       }
     };
@@ -51,29 +52,32 @@ export function GlobalBroadcast() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'broadcasts' },
         (payload) => {
+          const currentDismissed = useStore.getState().dismissedBroadcasts;
+          
           if (payload.eventType === 'INSERT') {
             const newBcast = payload.new as BroadcastMessage;
-            if (newBcast.is_active && !dismissedBroadcasts.includes(newBcast.id)) {
+            if (newBcast.is_active && !currentDismissed.includes(newBcast.id)) {
               setBroadcasts((prev) => [newBcast, ...prev]);
             }
           } else if (payload.eventType === 'UPDATE') {
             const upd = payload.new as BroadcastMessage;
             if (!upd.is_active) {
               setBroadcasts((prev) => prev.filter((b) => b.id !== upd.id));
-              if (activeBroadcast?.id === upd.id) dismissCurrent();
+              // Dismissed via separate effect using activeBroadcast state
             } else {
-              setBroadcasts((prev) => {
-                const copy = [...prev];
-                const idx = copy.findIndex((b) => b.id === upd.id);
-                if (idx !== -1) copy[idx] = upd;
-                else copy.unshift(upd);
-                return copy;
-              });
+              if (!currentDismissed.includes(upd.id)) {
+                setBroadcasts((prev) => {
+                  const copy = [...prev];
+                  const idx = copy.findIndex((b) => b.id === upd.id);
+                  if (idx !== -1) copy[idx] = upd;
+                  else copy.unshift(upd);
+                  return copy;
+                });
+              }
             }
           } else if (payload.eventType === 'DELETE') {
             const del = payload.old as { id: string };
             setBroadcasts((prev) => prev.filter((b) => b.id !== del.id));
-            if (activeBroadcast?.id === del.id) dismissCurrent();
           }
         }
       )
@@ -83,7 +87,7 @@ export function GlobalBroadcast() {
       unmounted = true;
       supabase.removeChannel(channel);
     };
-  }, [activeBroadcast, dismissedBroadcasts]);
+  }, []); // Run only once instead of detaching relentlessly
 
   // Show logic
   useEffect(() => {

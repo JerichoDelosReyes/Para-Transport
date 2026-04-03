@@ -124,19 +124,6 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
     }
 
     if (state === 'playing' && currentLabel !== previousLabelRef.current) {
-      if (previousLabelRef.current !== null && !currentSegInfo.onTransit) {
-        const modeDesc = currentSegInfo.onTransit 
-          ? (currentSegInfo.vehicleType ? `Boarding ${currentSegInfo.vehicleType.charAt(0).toUpperCase() + currentSegInfo.vehicleType.slice(1).toLowerCase()}` : 'Boarding Transit') 
-          : 'Walking';
-
-        Notifications.scheduleNotificationAsync({
-          content: {
-            title: modeDesc,
-            body: currentLabel,
-          },
-          trigger: null,
-        });
-      }
       previousLabelRef.current = currentLabel;
     }
   }, [currentSegInfo?.label, currentSegInfo?.onTransit, currentSegInfo?.vehicleType, state]);

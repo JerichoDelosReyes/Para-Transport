@@ -1,61 +1,83 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 
 export default function JourneySummaryScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
+  
+  const distance = Number(params.distance || 6).toFixed(1);
+  const fare = Number(params.fare || 29).toFixed(2);
+  const points = Number(params.points || 35);
+  const time = Number(params.time || 15);
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={{ flex: 1, backgroundColor: COLORS.background }}><View style={styles.content}>
-        <Text style={styles.title}>JOURNEY SUMMARY</Text>
+    <View style={styles.screen}>
+      <View style={[styles.topSection, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>JOURNEY SUMMARY</Text>
+        </View>
+      </View>
 
+      <View style={styles.content}>
         <View style={styles.metricsWrap}>
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Distance</Text>
-            <Text style={styles.metricValue}>6.0 km</Text>
+            <Text style={styles.metricValue}>{distance} km</Text>
           </View>
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Fare</Text>
-            <Text style={styles.metricValue}>₱29.00</Text>
+            <Text style={styles.metricValue}>₱{fare}</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Time Elapsed</Text>
+            <Text style={styles.metricValue}>{time} min</Text>
           </View>
         </View>
 
         <View style={styles.pointsCard}>
           <Text style={styles.pointsLabel}>Points Earned</Text>
-          <Text style={styles.pointsValue}>+35</Text>
+          <Text style={styles.pointsValue}>+{points}</Text>
           <Text style={styles.badge}>🏅</Text>
         </View>
       </View>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <TouchableOpacity style={styles.primaryButton} activeOpacity={0.9} onPress={() => router.replace('/(tabs)')}>
           <Text style={styles.primaryText}>Confirm Fare</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.9}>
-          <Text style={styles.secondaryText}>Share</Text>
-        </TouchableOpacity>
-      </View></View>
-    </SafeAreaView>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  topSection: {
     backgroundColor: COLORS.primary,
+    zIndex: 10,
+  },
+  header: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    height: 64,
+  },
+  headerTitle: {
+    fontFamily: 'Cubao',
+    fontSize: TYPOGRAPHY.screenTitle,
+    color: '#000000',
   },
   content: {
     flex: 1,
     paddingHorizontal: SPACING.screenX,
     paddingTop: 28,
     gap: SPACING.sectionGap,
-  },
-  title: {
-    fontFamily: 'Cubao',
-    fontSize: TYPOGRAPHY.screenTitle,
-    color: COLORS.navy,
   },
   metricsWrap: {
     gap: SPACING.cardGap,
@@ -103,7 +125,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: SPACING.screenX,
-    paddingBottom: 24,
+    paddingTop: 16,
     gap: SPACING.cardGap,
   },
   primaryButton: {
@@ -124,21 +146,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.body,
     fontWeight: '700',
     color: '#0A1628',
-  },
-  secondaryButton: {
-    height: 56,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DFDFDF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  secondaryText: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.body,
-    fontWeight: '600',
-    color: COLORS.navy,
   },
 });
