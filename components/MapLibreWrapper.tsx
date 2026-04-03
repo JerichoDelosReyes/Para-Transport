@@ -1,14 +1,23 @@
-import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
-import { View } from 'react-native';
+import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import MapLibreGL from '@maplibre/maplibre-react-native';
 import { MAP_CONFIG } from '../constants/map';
+import { COLORS, TYPOGRAPHY, SPACING } from '../constants/theme';
 
 type LngLat = [number, number];
+
+export type MapMarkerMetadata = {
+  label?: string;
+  type?: string;
+  subtitle?: string;
+  routeName?: string;
+};
 
 export type MapMarkerInput = {
   id: string;
   coordinate: LngLat;
   children?: React.ReactElement;
+  metadata?: MapMarkerMetadata;
 };
 
 export type MapLineInput = {
@@ -58,6 +67,50 @@ export type MapLibreWrapperProps = {
   children?: React.ReactNode;
 };
 
+// Callout component for displaying marker metadata
+interface MapCalloutProps {
+  metadata?: MapMarkerMetadata;
+  onClose: () => void;
+}
+
+const MapCallout: React.FC<MapCalloutProps> = ({ metadata, onClose }) => {
+  if (!metadata) return null;
+
+  return (
+    <View style={styles.calloutContainer}>
+      <View style={styles.calloutContent}>
+        {metadata.label && (
+          <Text style={styles.calloutLabel} numberOfLines={1}>
+            {metadata.label}
+          </Text>
+        )}
+        {metadata.type && (
+          <Text style={styles.calloutType} numberOfLines={2}>
+            {metadata.type}
+          </Text>
+        )}
+        {metadata.routeName && (
+          <Text style={styles.calloutRoute} numberOfLines={1}>
+            Route: {metadata.routeName}
+          </Text>
+        )}
+        {metadata.subtitle && (
+          <Text style={styles.calloutSubtitle} numberOfLines={1}>
+            {metadata.subtitle}
+          </Text>
+        )}
+      </View>
+      <TouchableOpacity
+        style={styles.calloutClose}
+        onPress={onClose}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Text style={styles.calloutCloseText}>×</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 const toFeatureCollection = (lines: MapLineInput[]) => ({
   type: 'FeatureCollection',
   features: lines
@@ -98,6 +151,8 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
     ref,
   ) => {
     const cameraRef = useRef<any>(null);
+    const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+    const selectedMarker = markers.find((m) => m.id === selectedMarkerId);
 
     useImperativeHandle(ref, () => ({
       flyTo: (coordinate, duration = 600) => {
@@ -171,15 +226,38 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
           </MapLibreGL.ShapeSource>
         ) : null}
 
-        {markers.map((marker) => (
-          <MapLibreGL.PointAnnotation
-            key={marker.id}
-            id={marker.id}
-            coordinate={marker.coordinate}
-          >
-            {marker.children || <View style={{ width: 10, height: 10 }} />}
-          </MapLibreGL.PointAnnotation>
-        ))}
+        {markers.map((marker) => {
+          const isSelected = selectedMarkerId === marker.id;
+          const hasMetadata = !!marker.metadata;
+
+          return (
+            <MapLibreGL.PointAnnotation
+              key={marker.id}
+              id={marker.id}
+              coordinate={marker.coordinate}
+              onSelected={() => setSelectedMarkerId(marker.id)}
+            >
+              <>
+                <TouchableOpacity
+                  onPress={() => setSelectedMarkerId(marker.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {marker.children || <View style={{ width: 10, height: 10 }} />}
+                </TouchableOpacity>
+                {isSelected && hasMetadata ? (
+                  <MapLibreGL.Callout title={marker.metadata?.label || ''}>
+                    <MapCallout
+                      metadata={marker.metadata}
+                      onClose={() => setSelectedMarkerId(null)}
+                    />
+                  </MapLibreGL.Callout>
+                ) : (
+                  <View />
+                )}
+              </>
+            </MapLibreGL.PointAnnotation>
+          );
+        })}
 
         {children}
       </MapLibreGL.MapView>
@@ -188,3 +266,66 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
 );
 
 MapLibreWrapper.displayName = 'MapLibreWrapper';
+
+const styles = StyleSheet.create({
+  calloutContainer: {
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minWidth: 160,
+    maxWidth: 260,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(10,22,40,0.15)',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  calloutContent: {
+    flex: 1,
+    marginRight: 8,
+  },
+  calloutLabel: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.navy,
+    marginBottom: 2,
+  },
+  calloutType: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginBottom: 3,
+  },
+  calloutRoute: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: '#666666',
+    marginBottom: 2,
+    fontWeight: '500',
+  },
+  calloutSubtitle: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  calloutClose: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -4,
+  },
+  calloutCloseText: {
+    fontSize: 20,
+    fontWeight: '300',
+    color: '#999999',
+  },
+});

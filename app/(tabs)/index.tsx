@@ -1533,6 +1533,10 @@ export default function HomeScreen() {
             </View>
           </View>
         ),
+        metadata: {
+          label: 'Your Location',
+          type: 'Current position',
+        },
       });
     }
 
@@ -1545,6 +1549,10 @@ export default function HomeScreen() {
             <Ionicons name="location" size={14} color="#FFFFFF" />
           </View>
         ),
+        metadata: {
+          label: destinationQuery || 'Destination',
+          type: 'Drop-off point',
+        },
       });
     }
 
@@ -1558,6 +1566,12 @@ export default function HomeScreen() {
               <Ionicons name="arrow-up-circle" size={14} color="#FFFFFF" />
             </View>
           ),
+          metadata: {
+            label: leg.transitInfo?.name || `Route ${idx + 1}`,
+            type: 'Board here',
+            routeName: leg.transitInfo?.name,
+            subtitle: leg.boardLabel,
+          },
         });
       }
 
@@ -1570,6 +1584,12 @@ export default function HomeScreen() {
               <Ionicons name="arrow-down-circle" size={14} color="#FFFFFF" />
             </View>
           ),
+          metadata: {
+            label: leg.transitInfo?.name || `Route ${idx + 1}`,
+            type: 'Alight here',
+            routeName: leg.transitInfo?.name,
+            subtitle: leg.alightLabel,
+          },
         });
       }
     });
@@ -1587,6 +1607,11 @@ export default function HomeScreen() {
               <Ionicons name="ellipse" size={6} color="#FFFFFF" />
             </View>
           ),
+          metadata: {
+            label: stop.name || `Stop ${stop.id}`,
+            type: 'Transit stop',
+            subtitle: `ID: ${stop.id}`,
+          },
         });
       });
     }
