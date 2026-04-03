@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, Platform, Keyboard, TouchableWithoutFeedback, Alert, StatusBar, Image, InteractionManager } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
 import MapView, { Marker, Polyline, Callout, LongPressEvent } from 'react-native-maps';
@@ -9,6 +9,14 @@ import * as Location from 'expo-location';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import type { JeepneyRoute } from '../../types/routes';
+import * as Notifications from 'expo-notifications';
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 import { ROUTE_COLORS } from '../../constants/routeVisuals';
 import SearchScreen, { PlaceResult, TransitRouteType } from '../../components/SearchScreen';
 import { buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
@@ -409,6 +417,7 @@ const candidateHasMode = (candidate: RecommenderCandidate, mode: string): boolea
 };
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isMapInteracted, setIsMapInteracted] = useState(false);
@@ -1500,6 +1509,7 @@ export default function HomeScreen() {
   }, [selectedRouteType, setSelectedTransitRoute, sim]);
 
   const stopGuidance = React.useCallback(() => {
+    Notifications.dismissAllNotificationsAsync();
     Animated.timing(guidancePanY, {
       toValue: -200,
       duration: 300,
@@ -1546,6 +1556,19 @@ export default function HomeScreen() {
       }).start();
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Notifications.requestPermissionsAsync().then(({ status }) => {
+          if (status === 'granted') {
+            Notifications.scheduleNotificationAsync({
+              content: {
+                title: 'Navigating with PARA 📍',
+                body: 'You are currently in a journey. Stay alert!',
+                sticky: true,
+                autoDismiss: false,
+              },
+              trigger: null,
+            });
+          }
+        });
     });
   }, [currentLocation, destinationLocation, guidancePanY]);
 
@@ -1589,6 +1612,7 @@ export default function HomeScreen() {
       isAdvancingRef.current = true;
       boardTimeRef.current = 0;
       if (currentStep.type === 'arrive') {
+          Notifications.dismissAllNotificationsAsync();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setTimeout(() => {
           setIsGuidanceActive(false);
@@ -1937,8 +1961,8 @@ export default function HomeScreen() {
         {/* Guidance Overlay */}
         {isGuidanceActive && guidanceSteps.length > 0 && (
           <Animated.View style={[styles.guidanceCardContainer, { transform: [{ translateY: guidancePanY }] }]}>
-            <View style={styles.guidanceCard}>
-              <TouchableOpacity style={styles.guidanceCloseBtn} onPress={stopGuidance}>
+            <View style={[styles.guidanceCard, { paddingTop: Math.max(insets.top, 24) + 16, position: 'relative' }]}>
+              <TouchableOpacity style={[styles.guidanceCloseBtn, { top: Math.max(insets.top, 24) + 8, right: 16 }]} onPress={stopGuidance}>
                 <Ionicons name="close" size={20} color={COLORS.textMuted} />
               </TouchableOpacity>
               <View style={styles.guidanceIconBox}>
@@ -2265,9 +2289,9 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   guidanceCardContainer: {
     position: 'absolute',
-    top: 70,
-    left: 16,
-    right: 16,
+    top: 0,
+    left: 0,
+    right: 0,
     zIndex: 999,
   },
   guidanceCloseBtn: {
@@ -2280,17 +2304,20 @@ const styles = StyleSheet.create({
 
   guidanceCard: {
     backgroundColor: COLORS.background,
-    borderRadius: RADIUS.card,
-    padding: 16,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.8)',
+    borderTopWidth: 0,
   },
   guidanceIconBox: {
     width: 48,
