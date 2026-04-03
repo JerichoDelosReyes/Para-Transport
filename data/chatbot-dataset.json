@@ -241,13 +241,33 @@
   ],
   "appGuideAliasMap": {
     "saved": "saved",
+    "saved route": "saved",
     "saved routes": "saved",
+    "where is saved route": "saved",
+    "where are saved routes": "saved",
+    "where is saved": "saved",
+    "how to navigate to saved routes": "saved",
+    "how to do saved routes": "saved",
+    "what are saved routes": "saved",
+    "how to save route": "saved",
+    "how do i save route": "saved",
+    "save route": "saved",
     "favorite": "saved",
     "favorites": "saved",
     "favourite": "saved",
     "favourites": "saved",
     "bookmark": "saved",
     "bookmarks": "saved",
+    "history": "history_routes",
+    "trip history": "history_routes",
+    "route history": "history_routes",
+    "recent history": "history_routes",
+    "commute history": "history_routes",
+    "history page": "history_routes",
+    "history tab": "history_routes",
+    "where is history": "history_routes",
+    "where is the history": "history_routes",
+    "how to navigate to history": "history_routes",
     "achievement": "achievements",
     "achievements": "achievements",
     "achivement": "achievements",
@@ -257,9 +277,25 @@
     "badge": "achievements",
     "badges": "achievements",
     "profile": "profile_settings",
+    "where is profile": "profile_settings",
+    "where is the profile": "profile_settings",
+    "profile page": "profile_settings",
+    "profile screen": "profile_settings",
+    "open profile": "profile_settings",
     "settings": "profile_settings",
+    "where is settings": "profile_settings",
+    "where is the settings": "profile_settings",
+    "open settings": "profile_settings",
     "account": "profile_settings",
     "account settings": "profile_settings",
+    "app navigation": "app_navigation",
+    "navigation": "app_navigation",
+    "navigation help": "app_navigation",
+    "how to navigate app": "app_navigation",
+    "how to use app": "app_navigation",
+    "where is home": "app_navigation",
+    "where is routes": "history_routes",
+    "where is saved tab": "saved",
     "search": "search_and_pin",
     "pin": "search_and_pin",
     "pin location": "search_and_pin",
@@ -1456,16 +1492,67 @@
     },
     {
       "id": "saved",
-      "intents": ["how to go to saved", "saved", "saved routes", "bookmark", "bookmarks", "favorite", "favorites", "favourite", "favourites", "where is saved", "paano pumunta sa saved", "saan makikita saved"],
+      "intents": [
+        "how to go to saved",
+        "how to navigate to saved routes",
+        "how to do saved routes",
+        "saved",
+        "saved route",
+        "saved routes",
+        "what are saved routes",
+        "where is saved",
+        "where is saved route",
+        "where are saved routes",
+        "how to save route",
+        "how do i save route",
+        "save route",
+        "bookmark",
+        "bookmarks",
+        "favorite",
+        "favorites",
+        "favourite",
+        "favourites",
+        "paano pumunta sa saved",
+        "saan makikita saved"
+      ],
       "en": [
-        "Open the Saved tab from the bottom navigation to view bookmarked routes. You can open route details there and remove saved items anytime.",
-        "To check saved routes, tap Saved on the bottom tabs. It shows your bookmarked trips and lets you quickly reopen them.",
-        "Go to the Saved screen from the tabs below. Your saved routes are listed there with quick View actions."
+        "Saved routes are your bookmarked trips for quick access later. To open them, tap the Saved tab in the bottom navigation.",
+        "To save a route, go to Home, set origin and destination in Search, then tap the bookmark icon on the result. After that, open the Saved tab to see it.",
+        "If you are asking where saved routes are, they are in the Saved tab at the bottom. You can reopen or remove a saved route there anytime."
       ],
       "tl": [
-        "Buksan ang Saved tab sa bottom navigation para makita ang mga na-bookmark mong ruta. Pwede mo ring i-open o alisin ang saved items doon.",
-        "Para i-check ang saved routes, i-tap ang Saved sa ibabang tabs. Nandoon ang mga naka-bookmark mong biyahe.",
-        "Pumunta sa Saved screen mula sa tabs sa ibaba. Makikita mo roon ang listahan ng saved routes at quick View actions."
+        "Ang saved routes ay mga naka-bookmark mong biyahe para mabilis mong mabalikan. Para makita ito, i-tap ang Saved tab sa ibabang navigation.",
+        "Para mag-save ng route, pumunta sa Home, ilagay ang origin at destination sa Search, tapos i-tap ang bookmark icon sa result. Pagkatapos, buksan ang Saved tab.",
+        "Kung ang tanong mo ay kung nasaan ang saved routes, nasa Saved tab ito sa ibaba. Pwede mong i-open o alisin ang saved route doon kahit kailan."
+      ]
+    },
+    {
+      "id": "history_routes",
+      "intents": [
+        "history",
+        "trip history",
+        "route history",
+        "recent history",
+        "commute history",
+        "where is history",
+        "where is the history",
+        "how to navigate to history",
+        "history page",
+        "history tab",
+        "where are my previous routes",
+        "where can i see history",
+        "saan history",
+        "saan makikita history"
+      ],
+      "en": [
+        "To view history, open the Routes tab in the bottom navigation. The page title there is History and it lists your recent route searches.",
+        "History is inside the Routes tab. You can filter by All, Today, Yesterday, or Older, then tap View Route to reopen a past trip.",
+        "If you want to move a history item to Saved, open Routes (History), then tap the bookmark icon on that history card."
+      ],
+      "tl": [
+        "Para makita ang history, buksan ang Routes tab sa ibabang navigation. Ang page title doon ay History at makikita mo ang recent route searches mo.",
+        "Nasa loob ng Routes tab ang history. Pwede mong i-filter sa All, Today, Yesterday, o Older, tapos i-tap ang View Route para buksan ulit ang dating biyahe.",
+        "Kung gusto mong i-save ang item mula history, buksan ang Routes (History) tapos i-tap ang bookmark icon sa history card."
       ]
     },
     {
@@ -1512,16 +1599,62 @@
     },
     {
       "id": "profile_settings",
-      "intents": ["profile", "settings", "edit profile", "how to edit profile", "account settings", "paano mag edit profile", "saan settings"],
+      "intents": [
+        "profile",
+        "where is profile",
+        "where is the profile",
+        "profile page",
+        "profile screen",
+        "open profile",
+        "settings",
+        "where is settings",
+        "where is the settings",
+        "open settings",
+        "edit profile",
+        "how to edit profile",
+        "account settings",
+        "paano mag edit profile",
+        "saan settings",
+        "saan profile"
+      ],
       "en": [
-        "Open Profile to view your account details, then go to Edit Profile or Settings to update your information and app preferences.",
-        "For account changes, visit your Profile screen and tap Edit Profile. For app preferences, open Settings.",
-        "You can manage personal info in Profile and adjust behavior options in Settings."
+        "To open Profile, tap your avatar/profile button on the header. Inside Profile, tap the gear icon on the top-right to open Settings.",
+        "For account changes, open Profile first, then tap Edit Profile. For app preferences, go to Settings from the Profile screen.",
+        "If you are asking where Profile is: it opens from the avatar button. Settings is inside Profile via the gear icon."
       ],
       "tl": [
-        "Buksan ang Profile para makita ang account details mo, tapos pumunta sa Edit Profile o Settings para mag-update ng impormasyon at preferences.",
-        "Para sa account changes, pumunta sa Profile screen at i-tap ang Edit Profile. Para sa app preferences, buksan ang Settings.",
-        "Pwede mong i-manage ang personal info sa Profile at i-adjust ang options sa Settings."
+        "Para buksan ang Profile, i-tap ang avatar/profile button sa header. Sa loob ng Profile, i-tap ang gear icon sa upper-right para sa Settings.",
+        "Para sa account changes, buksan muna ang Profile tapos i-tap ang Edit Profile. Para sa app preferences, pumunta sa Settings mula Profile.",
+        "Kung ang tanong mo ay kung nasaan ang Profile: galing ito sa avatar button. Ang Settings naman ay nasa gear icon sa Profile."
+      ]
+    },
+    {
+      "id": "app_navigation",
+      "intents": [
+        "app navigation",
+        "navigation",
+        "navigation help",
+        "how to navigate app",
+        "how to use app",
+        "where is home",
+        "where is routes",
+        "where is saved",
+        "where is profile",
+        "where is settings",
+        "saan home",
+        "saan routes",
+        "saan saved",
+        "saan profile"
+      ],
+      "en": [
+        "Quick navigation guide: Home is the center tab, Saved is the left tab, and Routes (History) is the right tab. Tap your avatar button to open Profile, then use the gear icon for Settings.",
+        "You can navigate the app from bottom tabs: Saved, Home, and Routes. For account pages, open Profile from the avatar button and open Settings from the Profile header.",
+        "If you tell me what screen you need (Saved, History, Profile, Settings, Search/Pin), I can give step-by-step navigation."
+      ],
+      "tl": [
+        "Quick navigation guide: Home ang center tab, Saved ang left tab, at Routes (History) ang right tab. I-tap ang avatar button para sa Profile, tapos gear icon para sa Settings.",
+        "Pwede mong i-navigate ang app gamit ang bottom tabs: Saved, Home, at Routes. Para sa account pages, buksan ang Profile mula avatar button at Settings mula Profile header.",
+        "Kung sabihin mo kung anong screen ang kailangan mo (Saved, History, Profile, Settings, Search/Pin), bibigyan kita ng step-by-step navigation."
       ]
     },
     {
