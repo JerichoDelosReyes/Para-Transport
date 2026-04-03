@@ -538,6 +538,7 @@ export default function HomeScreen() {
   }, [transitRoutes]);
   const [showTransitLayer, setShowTransitLayer] = useState(false);
   const [nearestStop, setNearestStop] = useState<any>(null);
+  const [currentCameraPitch, setCurrentCameraPitch] = useState<number>(MAP_CONFIG.THREE_D_CAMERA.defaultPitch);
   const user = useStore((state) => state.user);
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
   const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
@@ -578,11 +579,19 @@ export default function HomeScreen() {
     heading?: number;
     pitch?: number;
   }, duration = 250) => {
+    // Apply pitch guardrails: clamp between min and max allowed values
+    let constrainedPitch = options.pitch;
+    if (constrainedPitch !== undefined) {
+      const { minPitch, maxPitch } = MAP_CONFIG.THREE_D_CAMERA;
+      constrainedPitch = Math.max(minPitch, Math.min(maxPitch, constrainedPitch));
+      setCurrentCameraPitch(constrainedPitch);
+    }
+
     mapRef.current?.setCamera({
       centerCoordinate: options.center ? toLngLat(options.center) : undefined,
       zoomLevel: options.zoom,
       heading: options.heading,
-      pitch: options.pitch,
+      pitch: constrainedPitch,
       animationDuration: duration,
     });
   }, []);
@@ -623,6 +632,13 @@ export default function HomeScreen() {
     };
     setMapRegion(next);
     animateToRegion(next, 250);
+  };
+
+  const handle3DReset = () => {
+    animateCamera({
+      pitch: 0,
+      heading: 0,
+    }, 400);
   };
 
   const handleLocateUser = useCallback(() => {
@@ -1650,6 +1666,20 @@ export default function HomeScreen() {
     }
   };
 
+  const handleCameraChange = useCallback((payload: {
+    centerCoordinate?: [number, number];
+    zoom?: number;
+    pitch?: number;
+    heading?: number;
+  }) => {
+    // Track pitch changes from user gestures (two-finger tilt)
+    if (payload.pitch !== undefined) {
+      const { minPitch, maxPitch } = MAP_CONFIG.THREE_D_CAMERA;
+      const constrainedPitch = Math.max(minPitch, Math.min(maxPitch, payload.pitch));
+      setCurrentCameraPitch(constrainedPitch);
+    }
+  }, []);
+
   const handleRouteTypeChange = useCallback((nextType: TransitRouteType) => {
     if (nextType === selectedRouteType) return;
 
@@ -1698,6 +1728,7 @@ export default function HomeScreen() {
           };
 
           handleRegionChangeComplete(nextRegion);
+          handleCameraChange(payload);
         }}
         onMapLongPress={handleMapLongPress}
         onMapTouchStart={() => {
@@ -1723,6 +1754,14 @@ export default function HomeScreen() {
             <Ionicons name="remove" size={20} color={COLORS.navy} />
           </TouchableOpacity>
         </BlurView>
+
+        {currentCameraPitch > 0.5 && (
+          <BlurView intensity={35} tint="light" style={styles.reset3DGlassWrap}>
+            <TouchableOpacity style={styles.reset3DButton} onPress={handle3DReset} activeOpacity={0.8}>
+              <Ionicons name="compass" size={19} color={COLORS.navy} />
+            </TouchableOpacity>
+          </BlurView>
+        )}
         
         <View style={[styles.chatbotWrap]}>
           <TouchableOpacity 
@@ -2171,6 +2210,29 @@ const styles = StyleSheet.create({
   zoomButtonTop: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(10,22,40,0.12)',
+  },
+  reset3DGlassWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.65)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 6,
+    marginBottom: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reset3DButton: {
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
