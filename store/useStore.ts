@@ -45,6 +45,7 @@ type SessionMode = 'guest' | 'auth' | null;
 
 const createGuestUser = (): User => ({
   full_name: 'Komyuter',
+  username: 'Komyuter',
   email: 'guest@para.ph',
   points: 0,
   streak_count: 0,
