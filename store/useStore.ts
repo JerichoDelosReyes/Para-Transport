@@ -39,6 +39,8 @@ type ChatbotPersistState = {
   pendingDestinationName?: string;
   pendingDestinationCoordinate?: { latitude: number; longitude: number };
   pendingDestinationPlaceId?: string;
+  lastTopic?: 'app-guide';
+  lastAppGuideId?: string;
 };
 
 type SessionMode = 'guest' | 'auth' | null;
@@ -477,16 +479,20 @@ export const useStore = create<StoreState>()(
         sessionMode: state.sessionMode,
         insightDismissed: state.insightDismissed,
         selectedTransitRoute: state.selectedTransitRoute,
-        chatbotMessages: state.chatbotMessages,
-        chatbotConversationState: state.chatbotConversationState,
         dismissedBroadcasts: state.dismissedBroadcasts,
       }),
       merge: (persistedState: any, currentState: StoreState) => {
         if (!persistedState) return currentState;
 
+        const {
+          chatbotMessages: _ignoredChatbotMessages,
+          chatbotConversationState: _ignoredChatbotConversationState,
+          ...safePersistedState
+        } = persistedState;
+
         return {
           ...currentState,
-          ...persistedState,
+          ...safePersistedState,
           user: {
             ...currentState.user,
             ...(persistedState.user || {}),
@@ -495,8 +501,8 @@ export const useStore = create<StoreState>()(
             saved_places: persistedState.user?.saved_places || currentState.user?.saved_places || [],
             fare_discount_type: persistedState.user?.fare_discount_type || currentState.user?.fare_discount_type || 'regular',
           },
-          chatbotMessages: persistedState.chatbotMessages || currentState.chatbotMessages || [],
-          chatbotConversationState: persistedState.chatbotConversationState || currentState.chatbotConversationState || {},
+          chatbotMessages: currentState.chatbotMessages || [],
+          chatbotConversationState: currentState.chatbotConversationState || {},
         };
       },
       onRehydrateStorage: () => (state) => {

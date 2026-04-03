@@ -1273,7 +1273,7 @@
     },
     {
       "id": "saved",
-      "intents": ["how to go to saved", "saved", "saved routes", "bookmark", "where is saved", "paano pumunta sa saved", "saan makikita saved"],
+      "intents": ["how to go to saved", "saved", "saved routes", "bookmark", "bookmarks", "favorite", "favorites", "favourite", "favourites", "where is saved", "paano pumunta sa saved", "saan makikita saved"],
       "en": [
         "Open the Saved tab from the bottom navigation to view bookmarked routes. You can open route details there and remove saved items anytime.",
         "To check saved routes, tap Saved on the bottom tabs. It shows your bookmarked trips and lets you quickly reopen them.",

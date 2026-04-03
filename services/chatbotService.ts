@@ -19,6 +19,8 @@ export type ChatbotConversationState = {
   pendingDestinationName?: string;
   pendingDestinationCoordinate?: Coordinate;
   pendingDestinationPlaceId?: string;
+  lastTopic?: 'app-guide';
+  lastAppGuideId?: string;
 };
 
 export type ChatbotHistoryMessage = {
@@ -1022,6 +1024,77 @@ function buildRouteTypoReply(language: BotLanguage): string {
   ].join('\n\n');
 }
 
+const APP_GUIDE_ALIAS_TO_ID: Record<string, string> = {
+  saved: 'saved',
+  'saved routes': 'saved',
+  favorite: 'saved',
+  favorites: 'saved',
+  favourite: 'saved',
+  favourites: 'saved',
+  bookmark: 'saved',
+  bookmarks: 'saved',
+  achievement: 'achievements',
+  achievements: 'achievements',
+  achivement: 'achievements',
+  achivements: 'achievements',
+  acheivement: 'achievements',
+  acheivements: 'achievements',
+  badge: 'achievements',
+  badges: 'achievements',
+  profile: 'profile_settings',
+  settings: 'profile_settings',
+  account: 'profile_settings',
+  'account settings': 'profile_settings',
+  search: 'search_and_pin',
+  pin: 'search_and_pin',
+  'pin location': 'search_and_pin',
+  'drop pin': 'search_and_pin',
+  pinpoint: 'search_and_pin',
+  chatbot: 'chatbot_help',
+  jeepie: 'chatbot_help',
+  capabilities: 'jeepie_capabilities',
+  features: 'jeepie_capabilities',
+};
+
+function findAppGuideById(id?: string): DatasetAppGuide | null {
+  if (!id) return null;
+  return (dataset.appGuides || []).find((guide) => guide.id === id) || null;
+}
+
+function findAppGuideByAliases(normalized: string): DatasetAppGuide | null {
+  let bestId: string | null = null;
+  let bestScore = 0;
+
+  for (const [alias, guideId] of Object.entries(APP_GUIDE_ALIAS_TO_ID)) {
+    if (!hintMatches(normalized, alias)) continue;
+    const score = normalizeText(alias).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestId = guideId;
+    }
+  }
+
+  return bestId ? findAppGuideById(bestId) : null;
+}
+
+function isLikelyAppGuideFollowUp(normalized: string): boolean {
+  const shortMessage = normalized.split(' ').filter(Boolean).length <= 5;
+  return shortMessage
+    || /\b(how about|what about|about|next|also|then|naman|paano naman|eh yung|eh yong|yung|yong)\b/.test(normalized);
+}
+
+function findAppGuideFromConversationContext(
+  normalized: string,
+  currentState: ChatbotConversationState,
+): DatasetAppGuide | null {
+  if (currentState.lastTopic !== 'app-guide') return null;
+  if (!isLikelyAppGuideFollowUp(normalized)) return null;
+
+  return findAppGuideByAliases(normalized)
+    || findAppGuide(normalized)
+    || findAppGuideById(currentState.lastAppGuideId);
+}
+
 function findAppGuide(normalized: string): DatasetAppGuide | null {
   let bestGuide: DatasetAppGuide | null = null;
   let bestScore = 0;
@@ -1818,12 +1891,27 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const parsed = parseFareEndpoints(normalized, mentions);
   const pendingDestination = statePendingDestination(currentState);
 
-  const matchedGuide = findAppGuide(normalized);
-  if (matchedGuide && !hasRouteIntent(normalized) && !hasFareIntent(normalized) && !hasRouteListIntent(normalized)) {
+  const aliasGuide = findAppGuideByAliases(normalized);
+  const matchedGuide = aliasGuide ?? findAppGuide(normalized);
+  const contextGuide = !matchedGuide
+    ? findAppGuideFromConversationContext(normalized, currentState)
+    : null;
+  const resolvedGuide = matchedGuide ?? contextGuide;
+
+  if (
+    resolvedGuide
+    && !hasFareIntent(normalized)
+    && !hasRouteListIntent(normalized)
+    && mentions.length === 0
+    && !parsed.destination
+  ) {
     return {
-      text: supportReply(pickAppGuideReply(matchedGuide, language), { includeClosing: true }),
+      text: supportReply(pickAppGuideReply(resolvedGuide, language), { includeClosing: true }),
       language,
-      state: {},
+      state: {
+        lastTopic: 'app-guide',
+        lastAppGuideId: resolvedGuide.id,
+      },
       usedGroq: false,
     };
   }
