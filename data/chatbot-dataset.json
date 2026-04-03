@@ -346,11 +346,27 @@
     "curseWords": [
       "fuck",
       "fucking",
+      "fck",
+      "wtf",
       "shit",
       "bitch",
       "asshole",
+      "dumb",
+      "dumbass",
+      "idiot",
+      "moron",
+      "stupid",
+      "shunga",
       "putang ina",
       "putangina",
+      "potang ina",
+      "potangina",
+      "tangina",
+      "taena",
+      "taena mo",
+      "pota",
+      "puta mo",
+      "pakyu",
       "gago",
       "tanga",
       "ulol",
@@ -1240,14 +1256,14 @@
     },
     "profanity": {
       "en": [
-        "I hear your frustration. Let us keep it respectful so I can help you better with your route, fare, or Para app issue.",
-        "No judgment, but let us keep the chat clean. Tell me what happened and I will help you fix it.",
-        "I am still here to help. Please rephrase without curses, and we can solve your commute concern fast."
+        "I hear your frustration, and I am still here with you. Let us keep it respectful so I can help you better with your route, fare, or Para app issue.",
+        "No judgment. I know this can be stressful, so let us keep the chat clean and focus on fixing your commute concern.",
+        "I get that you are upset. Please rephrase without curses, and I will help you solve this quickly."
       ],
       "tl": [
-        "Gets ko na frustrated ka. Keep natin respectful ang usapan para mas maayos kitang matulungan sa route, fare, o Para app concern mo.",
-        "Walang judgment, pero pakiusap na iwasan natin ang mura. Sabihin mo lang ang nangyari at tutulungan kitang ayusin ito.",
-        "Nandito pa rin ako para tumulong. Paki-rephrase lang nang walang mura, tapos ayusin natin agad ang commute concern mo."
+        "Gets ko na frustrated ka, at nandito pa rin ako para tumulong. Keep natin respectful ang usapan para mas maayos kitang matulungan sa route, fare, o Para app concern mo.",
+        "Walang judgment. Alam kong nakaka-stress ito, pero pakiusap na iwasan natin ang mura para maayos natin agad ang concern mo.",
+        "Naiintindihan ko yung inis mo. Paki-rephrase lang nang walang mura, at tutulungan kitang i-fix ito nang mabilis."
       ]
     },
     "userAnger": {

@@ -1281,7 +1281,50 @@ function hasLaughterIntent(normalized: string): boolean {
 }
 
 function hasProfanityIntent(normalized: string): boolean {
-  return companionCurseWordTokens.some((token) => hintMatches(normalized, token));
+  if (companionCurseWordTokens.some((token) => hintMatches(normalized, token))) return true;
+
+  return /\b(fck|wtf|fuck|fucking|shit|bitch|asshole|dumb|dumbass|idiot|moron|stupid|putangina|putang ina|potangina|potang ina|tangina|taena|pota|pakyu|gago|tanga|ulol|bobo|punyeta|bwiset|bwisit|tarantado|kupal|inutil|demonyo|hayop|hayup|lintik)\b/.test(normalized);
+}
+
+type ProfanitySeverity = 'none' | 'mild' | 'heavy';
+
+function countProfanityOccurrences(normalized: string): number {
+  let total = 0;
+
+  for (const token of companionCurseWordTokens) {
+    const pattern = new RegExp(`\\b${escapeRegExp(token)}\\b`, 'g');
+    const matches = normalized.match(pattern);
+    if (matches) {
+      total += matches.length;
+    }
+  }
+
+  return total;
+}
+
+function lastUserMessageWasProfane(history: ChatbotHistoryMessage[]): boolean {
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const entry = history[i];
+    if (!entry.isUser) continue;
+
+    const normalized = normalizeIntentText(entry.text || '');
+    return Boolean(normalized) && hasProfanityIntent(normalized);
+  }
+
+  return false;
+}
+
+function classifyProfanitySeverity(normalized: string, history: ChatbotHistoryMessage[]): ProfanitySeverity {
+  if (!hasProfanityIntent(normalized)) return 'none';
+
+  const repeatedInCurrentMessage = countProfanityOccurrences(normalized) >= 2;
+  const repeatedAcrossTurns = lastUserMessageWasProfane(history);
+
+  if (repeatedInCurrentMessage || repeatedAcrossTurns) {
+    return 'heavy';
+  }
+
+  return 'mild';
 }
 
 function hasCancelIntent(normalized: string): boolean {
@@ -2097,6 +2140,39 @@ function pickFareNewsReply(language: BotLanguage): string {
   return formatForChatDisplay(pickLocalized(dataset.fareNews, language));
 }
 
+function buildMildProfanityReply(language: BotLanguage): string {
+  const empathyLead = pickRandom([
+    pickSocialReply(language, 'userAnger'),
+    pickSocialReply(language, 'empathy'),
+  ]);
+
+  const helpRedirect = language === 'tl'
+    ? pickRandom([
+      'Gets ko na mabigat ang pakiramdam mo. Kung ready ka, sabihin mo lang ang route o pamasahe concern mo at tutulungan kita agad.',
+      'Nandito pa rin ako para tumulong. I-type mo lang ang destination mo o tanong sa pamasahe, tapos aasikasuhin natin.',
+    ])
+    : pickRandom([
+      'I get that you are frustrated. When you are ready, tell me your route or fare concern and I will help right away.',
+      'I am still here to help. Send your destination or fare question, and we will sort it out step by step.',
+    ]);
+
+  return [empathyLead, helpRedirect].filter(Boolean).join('\n\n');
+}
+
+function buildHeavyProfanityBoundaryReply(language: BotLanguage): string {
+  if (language === 'tl') {
+    return [
+      'Gusto kitang tulungan, pero hindi ako magpapatuloy habang sunod-sunod ang mura.',
+      'Quick cooldown muna: mag-send ng isang mahinahong route o pamasahe question, tapos tutulong ako agad.',
+    ].join('\n\n');
+  }
+
+  return [
+    'I want to help, but I will not continue while the messages stay abusive.',
+    'Quick cooldown: send one calm route or fare question, and I will help right away.',
+  ].join('\n\n');
+}
+
 function stripAutoTranslationParenthetical(text: string, language: BotLanguage): string {
   if (!text.includes('(') || !text.includes(')')) return text;
 
@@ -2427,9 +2503,14 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
-  if (hasProfanityIntent(normalized)) {
+  const profanitySeverity = classifyProfanitySeverity(normalized, history);
+  if (profanitySeverity !== 'none') {
+    const profanityReply = profanitySeverity === 'heavy'
+      ? composeSupportReply(language, buildHeavyProfanityBoundaryReply(language))
+      : supportReply(buildMildProfanityReply(language));
+
     return {
-      text: supportReply(pickSocialReply(language, 'profanity')),
+      text: profanityReply,
       language,
       state: {},
       usedGroq: false,
