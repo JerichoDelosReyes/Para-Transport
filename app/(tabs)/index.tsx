@@ -1775,119 +1775,122 @@ export default function HomeScreen() {
         </View>
 
         {/* Transit layer controls */}
-        <View style={styles.transitControlsRow}>
-          <TouchableOpacity
-            style={[styles.transitToggle, showTransitLayer && styles.transitToggleActive]}
-            onPress={() => setShowTransitLayer(prev => !prev)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="git-branch" size={16} color={showTransitLayer ? '#FFFFFF' : COLORS.navy} />
-            <Text style={[styles.transitToggleText, showTransitLayer && { color: '#FFFFFF' }]}>
-              Transit
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.routeTypeSelectorRow}>
+        <View style={styles.transitControlsContainer}>
+          <View style={styles.transitControlsRow}>
             <TouchableOpacity
-              style={[
-                styles.routeTypeSelectorButton,
-                selectedRouteType === 'jeepney' && styles.routeTypeSelectorButtonActive,
-              ]}
+              style={[styles.transitToggle, showTransitLayer && styles.transitToggleActive]}
+              onPress={() => setShowTransitLayer(prev => !prev)}
               activeOpacity={0.85}
-              onPress={() => handleRouteTypeChange('jeepney')}
             >
-              <Text
-                style={[
-                  styles.routeTypeSelectorText,
-                  selectedRouteType === 'jeepney' && styles.routeTypeSelectorTextActive,
-                ]}
-              >
-                Jeepney
+              <Ionicons name="git-branch" size={16} color={showTransitLayer ? '#FFFFFF' : COLORS.navy} />
+              <Text style={[styles.transitToggleText, showTransitLayer && { color: '#FFFFFF' }]}>
+                Transit
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.routeTypeSelectorButton,
-                selectedRouteType === 'combo' && styles.routeTypeSelectorButtonActive,
-              ]}
-              activeOpacity={0.85}
-              onPress={() => handleRouteTypeChange('combo')}
-            >
-              <Text
-                style={[
-                  styles.routeTypeSelectorText,
-                  selectedRouteType === 'combo' && styles.routeTypeSelectorTextActive,
-                ]}
+            {/* Simulation Play Button (top row, only when idle) */}
+            {simCoordinates.length >= 2 && sim.state === 'idle' && (
+              <TouchableOpacity
+                style={styles.simPlayToggle}
+                onPress={() => {
+                  setSimAutoFollow(true);
+                  sim.play();
+                }}
+                activeOpacity={0.85}
               >
-                Combo
-              </Text>
-            </TouchableOpacity>
+                <Ionicons
+                  name="play"
+                  size={20}
+                  color={COLORS.navy}
+                  style={{ marginLeft: 2 }}
+                />
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity
-              style={[
-                styles.routeTypeSelectorButton,
-                selectedRouteType === 'bus' && styles.routeTypeSelectorButtonActive,
-              ]}
-              activeOpacity={0.85}
-              onPress={() => handleRouteTypeChange('bus')}
-            >
-              <Text
-                style={[
-                  styles.routeTypeSelectorText,
-                  selectedRouteType === 'bus' && styles.routeTypeSelectorTextActive,
-                ]}
+            {showTransitLayer && (
+              <TouchableOpacity
+                style={styles.nearestStopBtn}
+                onPress={handleFindNearestStop}
+                activeOpacity={0.85}
               >
-                Bus
-              </Text>
-            </TouchableOpacity>
+                <Ionicons name="navigate" size={14} color={COLORS.navy} />
+                <Text style={styles.nearestStopBtnText}>Nearest Stop</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Live summary card — right side of the controls row */}
+            {routeSummary && topRightSummaryText && (
+              <>
+                <View style={{ flex: 1 }} />
+                <View style={[styles.topRightSummaryCard, { flexShrink: 1 }]}>
+                  <Text style={styles.topRightSummaryTitle} numberOfLines={1}>
+                    {sim.state !== 'idle' ? `${selectedOptionLabel} (Live)` : selectedOptionLabel}
+                  </Text>
+                  <Text style={styles.topRightSummaryValue} numberOfLines={2}>
+                    {topRightSummaryText}
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
 
-          {/* Simulation Play Button (top row, only when idle) */}
-          {simCoordinates.length >= 2 && sim.state === 'idle' && (
-            <TouchableOpacity
-              style={styles.simPlayToggle}
-              onPress={() => {
-                setSimAutoFollow(true);
-                sim.play();
-              }}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="play"
-                size={20}
-                color={COLORS.navy}
-                style={{ marginLeft: 2 }}
-              />
-            </TouchableOpacity>
-          )}
-
           {showTransitLayer && (
-            <TouchableOpacity
-              style={styles.nearestStopBtn}
-              onPress={handleFindNearestStop}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="navigate" size={14} color={COLORS.navy} />
-              <Text style={styles.nearestStopBtnText}>Nearest Stop</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Live summary card — right side of the controls row */}
-          {routeSummary && topRightSummaryText && (
-            <>
-              <View style={{ flex: 1 }} />
-              <View style={styles.topRightSummaryCard}>
-                <Text style={styles.topRightSummaryTitle} numberOfLines={1}>
-                  {sim.state !== 'idle' ? `${selectedOptionLabel} (Live)` : selectedOptionLabel}
+            <View style={styles.routeTypeSelectorRow}>
+              <TouchableOpacity
+                style={[
+                  styles.routeTypeSelectorButton,
+                  selectedRouteType === 'jeepney' && styles.routeTypeSelectorButtonActive,
+                ]}
+                activeOpacity={0.85}
+                onPress={() => handleRouteTypeChange('jeepney')}
+              >
+                <Text
+                  style={[
+                    styles.routeTypeSelectorText,
+                    selectedRouteType === 'jeepney' && styles.routeTypeSelectorTextActive,
+                  ]}
+                >
+                  Jeepney
                 </Text>
-                <Text style={styles.topRightSummaryValue}>
-                  {topRightSummaryText}
-                </Text>
-              </View>
-            </>
-          )}
+              </TouchableOpacity>
 
+              <TouchableOpacity
+                style={[
+                  styles.routeTypeSelectorButton,
+                  selectedRouteType === 'combo' && styles.routeTypeSelectorButtonActive,
+                ]}
+                activeOpacity={0.85}
+                onPress={() => handleRouteTypeChange('combo')}
+              >
+                <Text
+                  style={[
+                    styles.routeTypeSelectorText,
+                    selectedRouteType === 'combo' && styles.routeTypeSelectorTextActive,
+                  ]}
+                >
+                  Combo
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.routeTypeSelectorButton,
+                  selectedRouteType === 'bus' && styles.routeTypeSelectorButtonActive,
+                ]}
+                activeOpacity={0.85}
+                onPress={() => handleRouteTypeChange('bus')}
+              >
+                <Text
+                  style={[
+                    styles.routeTypeSelectorText,
+                    selectedRouteType === 'bus' && styles.routeTypeSelectorTextActive,
+                  ]}
+                >
+                  Bus
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {nearestStop && showTransitLayer && (
@@ -2187,7 +2190,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
-    maxWidth: 200,
+    flexShrink: 1,
+    maxWidth: 160,
   },
   topRightSummaryTitle: {
     fontFamily: 'Inter',
@@ -2564,11 +2568,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
   },
+  transitControlsContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    marginTop: 8,
+    marginHorizontal: SPACING.screenX,
+    gap: 8,
+  },
   transitControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    marginHorizontal: SPACING.screenX,
+    alignSelf: 'stretch',
     gap: 8,
   },
   transitToggle: {
@@ -2600,6 +2610,7 @@ const styles = StyleSheet.create({
   routeTypeSelectorRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     backgroundColor: 'rgba(10,22,40,0.04)',
     borderRadius: RADIUS.pill,
     padding: 3,
