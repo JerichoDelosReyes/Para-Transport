@@ -1807,17 +1807,6 @@ export default function HomeScreen() {
               </TouchableOpacity>
             )}
 
-            {showTransitLayer && (
-              <TouchableOpacity
-                style={styles.nearestStopBtn}
-                onPress={handleFindNearestStop}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="navigate" size={14} color={COLORS.navy} />
-                <Text style={styles.nearestStopBtnText}>Nearest Stop</Text>
-              </TouchableOpacity>
-            )}
-
             {/* Live summary card — right side of the controls row */}
             {routeSummary && topRightSummaryText && (
               <>
@@ -1835,9 +1824,10 @@ export default function HomeScreen() {
           </View>
 
           {showTransitLayer && (
-            <View style={styles.routeTypeSelectorRow}>
-              <TouchableOpacity
-                style={[
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={styles.routeTypeSelectorRow}>
+                <TouchableOpacity
+                  style={[
                   styles.routeTypeSelectorButton,
                   selectedRouteType === 'jeepney' && styles.routeTypeSelectorButtonActive,
                 ]}
@@ -1890,6 +1880,16 @@ export default function HomeScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+              style={styles.nearestStopBtn}
+              onPress={handleFindNearestStop}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="navigate" size={14} color={COLORS.navy} />
+              <Text style={styles.nearestStopBtnText}>Nearest Stop</Text>
+            </TouchableOpacity>
+          </View>
           )}
         </View>
 
