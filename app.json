@@ -28,7 +28,9 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
       ],
       "package": "com.para.app"
     },
@@ -37,7 +39,14 @@
     },
     "plugins": [
       "expo-web-browser",
-      "@maplibre/maplibre-react-native"
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/logo/appicon.png",
+          "color": "#E6F4FE"
+        }
+      ]
     ],
     "extra": {
       "eas": {

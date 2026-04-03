@@ -26,6 +26,7 @@ import {
   mapLoginError,
   mapResetPasswordError,
   sendPasswordResetEmail,
+  logUserAction
 } from '../services/authService';
 import { useStore } from '../store/useStore';
 import OtpModal from '../components/OtpModal';
@@ -85,21 +86,41 @@ export default function LoginScreen() {
       try {
         const { data: profile } = await supabase
           .from('users')
-          .select('points, streak_count, distance, trips, spent, badges, saved_routes, saved_places')
+          .select('username, display_name, full_name, points, streak_count, total_distance, total_trips, total_fare, badges, saved_routes, saved_places')
           .eq('email', email.trim().toLowerCase())
           .single();
         if (profile) userStats = profile;
       } catch (err) {}
 
+      const finalUsername = data?.user?.user_metadata?.username || userStats.username || '';
+      const finalDisplayName = data?.user?.user_metadata?.display_name || userStats.display_name || finalUsername;
+      const finalFullName = data?.user?.user_metadata?.full_name || userStats.full_name || 'Commuter';
+
+      // Self-healing: If the local DB users table didn't have the username or display_name, update it so leaderboard works!
+      if (data?.user?.id && (!userStats.username || !userStats.display_name)) {
+        try {
+          await supabase.from('users').update({
+            username: finalUsername,
+            display_name: finalDisplayName,
+            full_name: finalFullName
+          }).eq('id', data.user.id);
+        } catch (e) {
+          console.warn('Failed self healing user row', e);
+        }
+      }
+
       // Construct a unified user to save in store
+      if (data?.user?.id) await logUserAction(data.user.id, 'Logged in');
       beginAuthSession({
-        name: data?.user?.user_metadata?.display_name || 'Commuter',
+        id: data?.user?.id,
+        username: finalUsername,
+        full_name: finalFullName,
         email: data?.user?.email || email,
         points: userStats.points || 0,
         streak_count: userStats.streak_count || 0,
-        distance: userStats.distance || 0,
-        trips: userStats.trips || 0,
-        spent: userStats.spent || 0,
+        total_distance: userStats.total_distance || 0,
+        total_trips: userStats.total_trips || 0,
+        spent: userStats.total_fare || 0,
         saved_routes: userStats.saved_routes || [],
         saved_places: userStats.saved_places || [],
         badges: userStats.badges || []
@@ -159,20 +180,38 @@ export default function LoginScreen() {
       try {
         const { data: profile } = await supabase
           .from('users')
-          .select('points, streak_count, distance, trips, spent, badges, saved_routes, saved_places')
+          .select('username, display_name, full_name, points, streak_count, total_distance, total_trips, total_fare, badges, saved_routes, saved_places')
           .eq('email', email.trim().toLowerCase())
           .single();
         if (profile) userStats = profile;
       } catch (err) {}
       
+      const finalUsername = data?.user?.user_metadata?.username || userStats.username || '';
+      const finalDisplayName = data?.user?.user_metadata?.display_name || userStats.display_name || finalUsername;
+      const finalFullName = data?.user?.user_metadata?.full_name || userStats.full_name || 'Commuter';
+
+      if (data?.user?.id && (!userStats.username || !userStats.display_name)) {
+        try {
+          await supabase.from('users').update({
+            username: finalUsername,
+            display_name: finalDisplayName,
+            full_name: finalFullName
+          }).eq('id', data.user.id);
+        } catch (e) {
+          console.warn('Failed self healing user row', e);
+        }
+      }
+      
       beginAuthSession({
-        name: data?.user?.user_metadata?.display_name || 'Commuter',
+        id: data?.user?.id,
+        username: finalUsername,
+        full_name: finalFullName,
         email: data?.user?.email || email,
         points: userStats.points || 0,
         streak_count: userStats.streak_count || 0,
-        distance: userStats.distance || 0,
-        trips: userStats.trips || 0,
-        spent: userStats.spent || 0,
+        total_distance: userStats.total_distance || 0,
+        total_trips: userStats.total_trips || 0,
+        spent: userStats.total_fare || 0,
         saved_routes: userStats.saved_routes || [],
         saved_places: userStats.saved_places || [],
         badges: userStats.badges || []

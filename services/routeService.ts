@@ -2,24 +2,45 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabaseClient';
 import type { JeepneyRoute, RouteCoord, StopPoint } from '../types/routes';
 
-const CACHE_KEY = '@para_routes_cache';
+const CACHE_KEY = '@para_routes_cache_v5_compact_geometry';
 const CACHE_TTL_MS = 1000 * 60 * 60; // 1 hour
-
-type RouteSource = 'supabase' | 'cache' | 'bundled';
+const MAX_ROUTE_POINTS_BY_TYPE: Record<string, number> = {
+  jeepney: 900,
+  bus: 1200,
+  tricycle: 500,
+  uv: 700,
+};
 
 interface CachedData {
   routes: JeepneyRoute[];
   cachedAt: number;
 }
 
+function downsamplePath(pathData: number[][], maxPoints: number): number[][] {
+  if (!Array.isArray(pathData) || pathData.length <= maxPoints) return pathData;
+
+  const step = (pathData.length - 1) / (maxPoints - 1);
+  const sampled: number[][] = [];
+
+  for (let i = 0; i < maxPoints - 1; i++) {
+    sampled.push(pathData[Math.round(i * step)]);
+  }
+
+  sampled.push(pathData[pathData.length - 1]);
+  return sampled;
+}
+
 /** Transform a Supabase route row + its stops into the app's JeepneyRoute shape. */
 function toJeepneyRoute(
   row: any,
   stops: any[],
+  vehicleType: 'jeepney' | 'tricycle' | 'bus' | 'uv' = 'jeepney'
 ): JeepneyRoute {
   const pathData = Array.isArray(row.path_data) ? row.path_data : [];
+  const maxPoints = MAX_ROUTE_POINTS_BY_TYPE[vehicleType] || 800;
+  const compactPathData = downsamplePath(pathData, maxPoints);
 
-  const coordinates: RouteCoord[] = pathData.map((coord: number[]) => ({
+  const coordinates: RouteCoord[] = compactPathData.map((coord: number[]) => ({
     latitude: coord[1],
     longitude: coord[0],
   }));
@@ -33,87 +54,78 @@ function toJeepneyRoute(
 
   return {
     properties: {
-      code: row.route_code ?? '',
-      name: row.name ?? '',
+      code: row.route_code ?? row.source_relation_id ?? '',
+      name: row.label ?? row.name ?? '',
       description: row.description ?? '',
-      type: row.vehicle_type ?? 'jeepney',
+      type: vehicleType,
       fare: Number(row.fare_base) || 0,
       status: row.status ?? 'active',
       operator: row.operator ?? '',
+      fromLabel: row.from_label ?? undefined,
+      toLabel: row.to_label ?? undefined,
+      network: row.network ?? undefined,
     },
     coordinates,
     stops: mappedStops,
   };
 }
 
-/** Parse bundled JSON the same way the old hooks did. */
-function parseBundledRoutes(data: any): JeepneyRoute[] {
-  return (data.routes || [])
-    .filter((r: any) => r.path?.length >= 2)
-    .map((r: any) => {
-      const coordinates: RouteCoord[] = r.path.map(([lng, lat]: [number, number]) => ({
-        latitude: lat,
-        longitude: lng,
-      }));
-
-      const stops: StopPoint[] = (r.stops || []).map((s: any, idx: number) => ({
-        coordinate: { latitude: s.lat, longitude: s.lng },
-        type: idx === 0 || idx === (r.stops.length - 1) ? 'terminal' as const : 'stop' as const,
-        label: s.name,
-      }));
-
-      return {
-        properties: {
-          code: r.code,
-          name: r.name,
-          description: r.description,
-          type: r.type,
-          fare: r.fare,
-          status: r.status,
-          operator: r.operator || '',
-        },
-        coordinates,
-        stops,
-      };
-    });
-}
+type RouteSource = 'supabase' | 'cache';
 
 /** Fetch all active routes + their stops from Supabase. */
 export async function fetchRoutesFromSupabase(): Promise<JeepneyRoute[]> {
-  // 1. Fetch routes
-  const { data: routeRows, error: routeErr } = await supabase
-    .from('routes')
-    .select('*')
-    .eq('is_active', true)
-    .order('name');
+  const routeTypes: Array<{ table: string, stopTable: string, type: 'jeepney' | 'tricycle' | 'bus' | 'uv' }> = [
+    { table: 'jeepney_routes', stopTable: 'jeepney_route_stops', type: 'jeepney' },
+    { table: 'tricycle_routes', stopTable: 'tricycle_route_stops', type: 'tricycle' },
+    { table: 'bus_routes', stopTable: 'bus_route_stops', type: 'bus' },
+    { table: 'uv_express_routes', stopTable: 'uv_express_route_stops', type: 'uv' },
+  ];
 
-  if (routeErr) throw routeErr;
-  if (!routeRows || routeRows.length === 0) return [];
+  let allMappedRoutes: JeepneyRoute[] = [];
 
-  // 2. Fetch all stops for these routes in one query
-  const routeIds = routeRows.map((r: any) => r.id);
-  const { data: stopRows, error: stopErr } = await supabase
-    .from('route_stops')
-    .select('*')
-    .in('route_id', routeIds)
-    .order('stop_order');
+  for (const { table, stopTable, type } of routeTypes) {
+    try {
+      // 1. Fetch routes
+      const { data: routeRows, error: routeErr } = await supabase
+        .from(table)
+        .select('id, source_relation_id, route_code, name, label, from_label, to_label, description, operator, network, fare_base, status, path_data, is_active')
+        .eq('is_active', true)
+        .order('label');
 
-  if (stopErr) throw stopErr;
+      if (routeErr || !routeRows || routeRows.length === 0) continue;
 
-  // 3. Group stops by route_id
-  const stopsByRoute: Record<string, any[]> = {};
-  for (const stop of stopRows || []) {
-    if (!stopsByRoute[stop.route_id]) stopsByRoute[stop.route_id] = [];
-    stopsByRoute[stop.route_id].push(stop);
+      // 2. Fetch all stops for these routes in one query
+      const routeIds = routeRows.map((r: any) => r.id);
+      const { data: stopRows, error: stopErr } = await supabase
+        .from(stopTable)
+        .select('route_id, stop_name, latitude, longitude, stop_order')
+        .in('route_id', routeIds)
+        .order('stop_order');
+
+      if (stopErr) continue;
+
+      // 3. Group stops by route_id
+      const stopsByRoute: Record<string, any[]> = {};
+      for (const stop of stopRows || []) {
+        if (!stopsByRoute[stop.route_id]) stopsByRoute[stop.route_id] = [];
+        stopsByRoute[stop.route_id].push(stop);
+      }
+
+      // 4. Assemble JeepneyRoute objects
+      const mapped = routeRows
+        .filter((r: any) => {
+          const path = Array.isArray(r.path_data) ? r.path_data : [];
+          return path.length >= 2;
+        })
+        .map((r: any) => toJeepneyRoute(r, stopsByRoute[r.id] || [], type));
+        
+      allMappedRoutes = allMappedRoutes.concat(mapped);
+    } catch (e) {
+      console.warn(`[routeService] Failed to fetch ${type} routes from Supabase:`, e);
+    }
   }
 
-  // 4. Assemble JeepneyRoute objects
-  return routeRows
-    .filter((r: any) => {
-      const path = Array.isArray(r.path_data) ? r.path_data : [];
-      return path.length >= 2;
-    })
-    .map((r: any) => toJeepneyRoute(r, stopsByRoute[r.id] || []));
+  return allMappedRoutes;
 }
 
 /** Read cached routes from AsyncStorage. Returns null if missing/expired. */
@@ -140,10 +152,9 @@ export async function cacheRoutes(routes: JeepneyRoute[]): Promise<void> {
 }
 
 /**
- * Load routes with a 3-tier fallback strategy:
+ * Load routes with a 2-tier fallback strategy:
  *   1. Supabase (live data)
  *   2. AsyncStorage cache (offline / Supabase down)
- *   3. Bundled routes.json (first launch with no network)
  */
 export async function loadRoutes(): Promise<{ routes: JeepneyRoute[]; source: RouteSource }> {
   // 1. Try Supabase
@@ -169,14 +180,6 @@ export async function loadRoutes(): Promise<{ routes: JeepneyRoute[]; source: Ro
     // fall through
   }
 
-  // 3. Fallback to bundled JSON
-  try {
-    const bundled = require('../data/routes.json');
-    const routes = parseBundledRoutes(bundled);
-    console.log(`[routeService] Loaded ${routes.length} routes from bundled JSON`);
-    return { routes, source: 'bundled' };
-  } catch (err) {
-    console.warn('[routeService] Bundled JSON fallback failed:', err);
-    return { routes: [], source: 'bundled' };
-  }
+  console.warn('[routeService] No routes available from Supabase or cache');
+  return { routes: [], source: 'cache' };
 }

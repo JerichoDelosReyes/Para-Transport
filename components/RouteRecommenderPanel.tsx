@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated, PanResponder } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Animated, PanResponder } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS, RADIUS, TYPOGRAPHY } from "../constants/theme";
 import type { MatchedRoute, RankMode } from "../services/routeSearch";
@@ -20,6 +20,7 @@ type Props = {
   selectedRoute: string | null;
   setSelectedRoute: (id: string | null) => void;
   destinationName?: string;
+  routeTypeLabel?: string;
   onClose: () => void;
 };
 
@@ -38,7 +39,8 @@ export default function RouteRecommenderPanel({
   selectedRoute,
   setSelectedRoute,
   onClose,
-  destinationName
+  destinationName,
+  routeTypeLabel,
 }: Props) {
   // Start off-screen at 0 (bound safely behind bottom edge)
   const panY = useRef(new Animated.Value(0)).current; 
@@ -118,6 +120,77 @@ export default function RouteRecommenderPanel({
     [isExpanded, panY]
   );
 
+  const renderRouteCard = useMemo(
+    () => ({ item, index }: { item: MatchedRoute; index: number }) => {
+      const id = item.legs.map((l: any) => l.route.properties.code).join("+");
+      const badgeLabel =
+        index === 0 && rankedRoutes.length > 1
+          ? RANK_TABS.find((t) => t.key === rankTab)?.label
+          : undefined;
+
+      return (
+        <RouteResultCard
+          matched={item}
+          isSelected={selectedRoute === id}
+          badgeLabel={badgeLabel}
+          onPress={(pressedId: string) => {
+            setSelectedRoute(selectedRoute === pressedId ? null : pressedId);
+          }}
+        />
+      );
+    },
+    [rankTab, rankedRoutes.length, selectedRoute, setSelectedRoute]
+  );
+
+  const keyExtractor = useMemo(
+    () => (item: MatchedRoute) => item.legs.map((l: any) => l.route.properties.code).join("+"),
+    []
+  );
+
+  const shownCount = rankedRoutes.length;
+  const totalCount = matchedRoutes.length;
+  const routeSubtitle =
+    totalCount > shownCount
+      ? `Top ${shownCount} of ${totalCount} routes${destinationName ? ` to ${destinationName}` : ''}`
+      : `${shownCount} route${shownCount !== 1 ? 's' : ''}${destinationName ? ` to ${destinationName}` : ''}`;
+
+  const listHeader = useMemo(
+    () => (
+      <>
+        {matchedRoutes.length > 1 && (
+          <View style={styles.rankTabsRow}>
+            {RANK_TABS.map((tab) => (
+              <TouchableOpacity
+                key={tab.key}
+                style={[styles.rankTab, rankTab === tab.key && styles.rankTabActive]}
+                activeOpacity={0.8}
+                onPress={() => setRankTab(tab.key as RankMode)}
+              >
+                <Text style={[styles.rankTabText, rankTab === tab.key && styles.rankTabTextActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </>
+    ),
+    [destinationName, matchedRoutes.length, rankTab, routeSubtitle, setRankTab, totalCount]
+  );
+
+  const emptyList = useMemo(
+    () => (
+      <View style={styles.emptyResultCard}>
+        <Ionicons name="bus-outline" size={36} color={COLORS.textMuted} />
+        <Text style={styles.emptyResultTitle}>No {routeTypeLabel || 'transit'} routes found</Text>
+        <Text style={styles.emptyResultText}>
+          No {routeTypeLabel ? routeTypeLabel.toLowerCase() : 'transit'} routes pass near both your location and this destination.
+        </Text>
+      </View>
+    ),
+    [routeTypeLabel]
+  );
+
   return (
     <Animated.View 
       style={[
@@ -131,68 +204,26 @@ export default function RouteRecommenderPanel({
           <View style={styles.dragHandle} />
         </TouchableOpacity>
         <View style={styles.sheetHeaderRow}>
-          <Text style={styles.sheetHeaderTitle}>AVAILABLE ROUTES</Text>
+          <Text style={styles.sheetHeaderTitle}>ROUTES - {(routeTypeLabel || 'Transit').toUpperCase()}</Text>
         </View>
       </View>
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
-        contentContainerStyle={styles.sheetContent}
+      <FlatList
+        data={rankedRoutes}
+        keyExtractor={keyExtractor}
+        renderItem={renderRouteCard}
+        showsVerticalScrollIndicator={false}
         bounces={false}
-      >
-        <View style={styles.cardList}>
-          {destinationName ? (
-            <Text style={styles.routeResultSubtitle}>
-              {matchedRoutes.length} route{matchedRoutes.length !== 1 ? "s" : ""} to {destinationName}
-            </Text>
-          ) : null}
-
-          {matchedRoutes.length > 1 && (
-            <View style={styles.rankTabsRow}>
-              {RANK_TABS.map((tab) => (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={[styles.rankTab, rankTab === tab.key && styles.rankTabActive]}
-                  activeOpacity={0.8}
-                  onPress={() => setRankTab(tab.key as RankMode)}
-                >
-                  <Text style={[styles.rankTabText, rankTab === tab.key && styles.rankTabTextActive]}>
-                    {tab.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {matchedRoutes.length > 0 ? (
-            rankedRoutes.map((matched, index) => {
-              const id = matched.legs.map((l: any) => l.route.properties.code).join("+");
-              const badgeLabel = index === 0 && rankedRoutes.length > 1
-                ? RANK_TABS.find(t => t.key === rankTab)?.label
-                : undefined;
-              return (
-                <RouteResultCard
-                  key={id}
-                  matched={matched}
-                  isSelected={selectedRoute === id}
-                  badgeLabel={badgeLabel}
-                  onPress={(pressedId: string) => {
-                    setSelectedRoute(selectedRoute === pressedId ? null : pressedId);
-                  }}
-                />
-              );
-            })
-          ) : (
-            <View style={styles.emptyResultCard}>
-              <Ionicons name="bus-outline" size={36} color={COLORS.textMuted} />
-              <Text style={styles.emptyResultTitle}>No transit routes found</Text>
-              <Text style={styles.emptyResultText}>
-                No jeepney routes pass near both your location and this destination.
-              </Text>
-            </View>
-          )}
-        </View>
-      </ScrollView>
+        contentContainerStyle={styles.sheetContent}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={emptyList}
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+        ListFooterComponent={() => <View style={{ height: 120 }} />}
+        initialNumToRender={6}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
+      />
     </Animated.View>
   );
 }
@@ -224,7 +255,7 @@ const styles = StyleSheet.create({
   },
   sheetHeaderRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "center",
     alignItems: "center",
   },
   dragHandleWrap: {
@@ -234,10 +265,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   dragHandle: {
-    width: 40,
+    width: 44,
     height: 5,
-    borderRadius: 3,
-    backgroundColor: "rgba(10,22,40,0.2)",
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
   },
   sheetHeaderTitle: {
     fontFamily: "Cubao",
@@ -247,17 +278,14 @@ const styles = StyleSheet.create({
   },
   sheetContent: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
     paddingTop: 10,
+    paddingBottom: 250,
   },
   routeResultSubtitle: {
     fontFamily: "Inter-Medium",
     fontSize: TYPOGRAPHY.body,
     color: COLORS.textMuted,
     marginBottom: 16,
-  },
-  cardList: {
-    gap: 12,
   },
   rankTabsRow: {
     flexDirection: "row",

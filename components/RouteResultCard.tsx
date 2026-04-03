@@ -12,9 +12,11 @@ type Props = {
 };
 
 export default function RouteResultCard({ matched, isSelected, onPress, badgeLabel }: Props) {
-  const { legs, distanceKm, estimatedFare, estimatedMinutes } = matched;
+  const { legs, distanceKm, estimatedMinutes } = matched;
   const isTransfer = legs.length > 1;
   const id = legs.map(l => l.route.properties.code).join('+');
+  const formatPeso = (value: number): string => String(Math.max(0, Math.round(value)));
+  const totalTransitFare = legs.reduce((sum, leg) => sum + Math.max(0, Math.round(leg.estimatedFare)), 0);
 
   return (
     <TouchableOpacity
@@ -37,7 +39,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
                 <Ionicons name="walk-outline" size={14} color={COLORS.textMuted} style={{ marginHorizontal: 2 }} />
               )}
               <View style={[styles.codeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
-                <Text style={styles.codeText}>{leg.route.properties.code}</Text>
+                <Text style={styles.codeText}>{leg.route.properties.name || leg.route.properties.code}</Text>
               </View>
             </React.Fragment>
           ))}
@@ -63,10 +65,21 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
 
       {/* Via stops */}
       {legs.length === 1 && (() => {
-        const viaStops = legs[0].route.stops.map(s => s.label).join(' → ');
-        return viaStops ? (
-          <Text style={styles.viaText} numberOfLines={1}>Via {viaStops}</Text>
-        ) : null;
+        const { fromLabel, toLabel } = legs[0].route.properties;
+        if (fromLabel && toLabel) {
+          return (
+            <Text style={styles.viaText} numberOfLines={1}>
+              {fromLabel} → {toLabel}
+            </Text>
+          );
+        } else if (fromLabel || toLabel) {
+          return (
+            <Text style={styles.viaText} numberOfLines={1}>
+              {fromLabel || toLabel}
+            </Text>
+          );
+        }
+        return null;
       })()}
 
       {/* Per-leg fare breakdown for transfers */}
@@ -74,7 +87,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
         <View style={styles.fareBreakdown}>
           {legs.map((leg, i) => (
             <Text key={i} style={styles.fareBreakdownText}>
-              {leg.route.properties.code}: ₱{leg.estimatedFare.toFixed(2)} ({leg.distanceKm.toFixed(1)} km)
+              {leg.route.properties.code}: ₱{formatPeso(leg.estimatedFare)} ({leg.distanceKm.toFixed(1)} km)
             </Text>
           ))}
         </View>
@@ -88,7 +101,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
         </View>
         <View style={styles.fareWrap}>
           {isTransfer && <Text style={styles.fareLabelText}>Total</Text>}
-          <Text style={styles.fareText}>₱{estimatedFare.toFixed(2)}</Text>
+          <Text style={styles.fareText}>₱{formatPeso(totalTransitFare)}</Text>
         </View>
       </View>
     </TouchableOpacity>

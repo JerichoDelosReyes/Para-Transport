@@ -10,6 +10,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { AchievementPopup } from '../components/AchievementPopup';
 import { ensurePmtilesProtocol } from '../services/pmtilesProtocol';
+import { GlobalBroadcast } from '../components/GlobalBroadcast';
+import { supabase } from '../config/supabaseClient';
+import { useStore } from '../store/useStore';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -22,6 +25,34 @@ function CustomSplash({ onFinish }: { onFinish: () => void }) {
   
   // The whole screen fading out
   const screenOpacityAnim = useRef(new Animated.Value(1)).current;
+
+  const setBadgesData = useStore(state => state.setBadgesData);
+  const setFareMatrices = useStore(state => state.setFareMatrices);
+
+  useEffect(() => {
+    const fetchAppConfig = async () => {
+      const { data: badgesData } = await supabase.from('badges').select('*');
+      if (badgesData && badgesData.length) {
+        setBadgesData(badgesData);
+      } else {
+        const { BADGES } = require('../constants/badges');
+        setBadgesData(BADGES.map((b: any) => ({ id: b.id, name: b.name, description: b.description, condition_value: b.goal, condition_type: b.type, icon_url: b.id })));
+      }
+
+      const { data: faresData } = await supabase.from('fare_matrices').select('*');
+      if (faresData && faresData.length) {
+        setFareMatrices(faresData);
+      } else {
+        setFareMatrices([
+          { vehicle_type: 'jeepney', base_fare: 13.0, base_distance: 4.0, per_km_rate: 1.8 },
+          { vehicle_type: 'bus', base_fare: 15.0, base_distance: 5.0, per_km_rate: 2.65 },
+          { vehicle_type: 'tricycle', base_fare: 25.0, base_distance: 1.0, per_km_rate: 5.0 },
+          { vehicle_type: 'uv_express', base_fare: 25.0, base_distance: 2.0, per_km_rate: 2.0 },
+        ]);
+      }
+    };
+    fetchAppConfig();
+  }, []);
 
   useEffect(() => {
     Animated.sequence([
@@ -106,9 +137,32 @@ export default function RootLayout() {
   });
 
   const [showAnimatedSplash, setShowAnimatedSplash] = useState(true);
+  const setBadgesData = useStore(state => state.setBadgesData);
+  const setFareMatrices = useStore(state => state.setFareMatrices);
 
   useEffect(() => {
-    ensurePmtilesProtocol();
+    const fetchAppConfig = async () => {
+      const { data: badgesData } = await supabase.from('badges').select('*');
+      if (badgesData && badgesData.length) {
+        setBadgesData(badgesData);
+      } else {
+        const { BADGES } = require('../constants/badges');
+        setBadgesData(BADGES.map((b: any) => ({ id: b.id, name: b.name, description: b.description, condition_value: b.goal, condition_type: b.type, icon_url: b.id })));
+      }
+
+      const { data: faresData } = await supabase.from('fare_matrices').select('*');
+      if (faresData && faresData.length) {
+        setFareMatrices(faresData);
+      } else {
+        setFareMatrices([
+          { vehicle_type: 'jeepney', base_fare: 13.0, base_distance: 4.0, per_km_rate: 1.8 },
+          { vehicle_type: 'bus', base_fare: 15.0, base_distance: 5.0, per_km_rate: 2.65 },
+          { vehicle_type: 'tricycle', base_fare: 25.0, base_distance: 1.0, per_km_rate: 5.0 },
+          { vehicle_type: 'uv_express', base_fare: 25.0, base_distance: 2.0, per_km_rate: 2.0 },
+        ]);
+      }
+    };
+    fetchAppConfig();
   }, []);
 
   useEffect(() => {
@@ -140,6 +194,9 @@ export default function RootLayout() {
           {showAnimatedSplash && (
             <CustomSplash onFinish={() => setShowAnimatedSplash(false)} />
           )}
+
+          {/* Global Broadcast Overlay */}
+          <GlobalBroadcast />
 
           {/* Global Achievement Popup Overlay */}
           <AchievementPopup />

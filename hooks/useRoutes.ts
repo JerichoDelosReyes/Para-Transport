@@ -6,7 +6,7 @@ export function useRoutes() {
   const [routes, setRoutes] = useState<JeepneyRoute[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<'supabase' | 'cache' | 'bundled' | null>(null);
+  const [source, setSource] = useState<'supabase' | 'cache' | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);

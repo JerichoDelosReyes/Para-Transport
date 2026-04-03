@@ -18,9 +18,7 @@
 
 ## ✨ Overview
 
-Para Mobile addresses the challenge of navigating informal public transportation networks where traditional mapping services lack coverage. By leveraging manually digitized route data (GeoJSON) and performing local spatial analysis, Para provides secure, offline-resilient route discovery without relying on costly external routing APIs. 
-
-Our route geometry is curated through manual plotting workflows (including map.ie/Map.io exports) and GPX parsing/import pipelines, giving better local coverage for routes that are often missing from mainstream routing stacks.
+Para Mobile addresses the challenge of navigating informal public transportation networks where traditional mapping services lack coverage. By using Supabase-managed transit data and local spatial analysis, Para provides secure, offline-resilient route discovery without relying on costly external routing APIs.
 
 Bringing clarity and confidence to your daily commute around the **Philippines**.
 
@@ -42,7 +40,7 @@ Bringing clarity and confidence to your daily commute around the **Philippines**
 ## 🌟 What Makes Para Unique
 
 - **Hyperlocal-first routing:** Para is tuned for local commuting realities, where route visibility is often incomplete in global apps.
-- **Community-curated geometry:** Routes are manually plotted, validated, and improved over time from field data and GPX traces.
+- **Community-curated catalog:** Routes are maintained in Supabase and continuously improved over time from field data and operations updates.
 - **Transport context over generic navigation:** The app explicitly models jeepney, tricycle, bus, UV Express, and other transportation tradeoffs (fare, transfers, and practicality).
 - **Built for everyday commuters:** Features such as fare-aware suggestions, saved places, recent searches, and commuter achievements are designed for daily repeat use.
 
@@ -50,10 +48,9 @@ Bringing clarity and confidence to your daily commute around the **Philippines**
 
 ## 🗂️ Data Availability Note
 
-- Route datasets, GPX files, and local places data are treated as private/local working data and are gitignored for this repository.
-- Use placeholder templates in `data/placeholders/` when sharing the project publicly.
-- Full plotting/import instructions are documented in [data/RouteGuide.md](data/RouteGuide.md) (Maps.ie plotting -> GPX export -> JSON parse workflow).
-- GPX-specific format and parsing instructions are in [data/gpx/README.md](data/gpx/GPXHelper.md).
+- Transit routes are sourced from Supabase (`routes` and `route_stops` tables).
+- The mobile app keeps a short-lived local cache for offline resilience, but bundled local route JSON/GPX datasets are not used.
+- To add or update routes, apply database migrations/seeding workflows in Supabase instead of committing local route files.
 
 <br/>
 
