@@ -18,6 +18,7 @@ const CHATBOT_STATES = {
   ERROR: require("../assets/AIChatbot/ERROR.png"),
 };
 const JEEPIE_AVATAR = require("../assets/AIChatbot/Jeepie.png");
+const MIN_TYPING_DURATION_MS = 900;
 
 type ChatMessage = {
   id: string;
@@ -45,6 +46,7 @@ export default function AIChatbotScreen() {
   const [isSending, setIsSending] = useState(false);
   const [isTagalogGreeting, setIsTagalogGreeting] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [typingFrame, setTypingFrame] = useState(0);
   const floatAnim = useRef(new Animated.Value(0)).current;
   const greetingOpacity = useRef(new Animated.Value(1)).current;
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
@@ -135,6 +137,19 @@ export default function AIChatbotScreen() {
   }, []);
 
   useEffect(() => {
+    if (!isSending) {
+      setTypingFrame(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setTypingFrame((prev) => (prev + 1) % 3);
+    }, 260);
+
+    return () => clearInterval(interval);
+  }, [isSending]);
+
+  useEffect(() => {
     let mounted = true;
 
     const loadLocation = async () => {
@@ -184,6 +199,15 @@ export default function AIChatbotScreen() {
     setInputText("");
     setCurrentState("PROCESSING");
     setIsSending(true);
+    const startedAt = Date.now();
+
+    const waitForTyping = async () => {
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, MIN_TYPING_DURATION_MS - elapsed);
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+    };
 
     try {
       const response = await getChatbotReply({
@@ -194,6 +218,8 @@ export default function AIChatbotScreen() {
         currentLocation,
         currentLocationLabel,
       });
+
+      await waitForTyping();
 
       setConversationState(response.state);
 
@@ -223,6 +249,7 @@ export default function AIChatbotScreen() {
         })();
       }
     } catch {
+      await waitForTyping();
       setCurrentState("ERROR");
       setMessages((prev) => [
         ...prev,
@@ -373,8 +400,19 @@ export default function AIChatbotScreen() {
                     <View style={styles.aiMessageAvatarWrap}>
                       <Image source={JEEPIE_AVATAR} style={styles.aiMessageAvatarImage} />
                     </View>
-                    <View style={[styles.messageBubble, styles.aiBubble, { paddingVertical: 14 }]}>
-                      <ActivityIndicator size="small" color={COLORS.navy} />
+                    <View style={[styles.messageBubble, styles.aiBubble, styles.typingBubble]}>
+                      <View style={styles.typingDotsRow}>
+                        {[0, 1, 2].map((dotIndex) => (
+                          <View
+                            key={dotIndex}
+                            style={[
+                              styles.typingDot,
+                              typingFrame === dotIndex ? styles.typingDotActive : null,
+                            ]}
+                          />
+                        ))}
+                      </View>
+                      <Text style={styles.typingText}>Jeepie is typing</Text>
                     </View>
                   </View>
                 ) : null
@@ -512,6 +550,32 @@ const styles = StyleSheet.create({
   messageText: { fontSize: 16, lineHeight: 22 },
   userMessageText: { color: "#FFFFFF" },
   aiMessageText: { color: COLORS.navy },
+  typingBubble: {
+    paddingVertical: 10,
+  },
+  typingDotsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    columnGap: 6,
+    marginBottom: 5,
+  },
+  typingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: COLORS.navy,
+    opacity: 0.28,
+  },
+  typingDotActive: {
+    opacity: 0.9,
+    transform: [{ scale: 1.15 }],
+  },
+  typingText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: "600",
+  },
   inputContainer: { paddingHorizontal: 24, paddingBottom: 20 },
   inputContainerChat: {
     paddingHorizontal: 12,
