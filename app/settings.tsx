@@ -66,7 +66,7 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const currentThemeLabel = themeMode === 'system' ? 'System' : themeMode === 'light' ? 'Light' : 'Dark';
+  const currentThemeLabel = themeMode === 'light' ? 'Light' : 'Dark';
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
@@ -241,17 +241,6 @@ export default function SettingsScreen() {
                 <Text style={[styles.modalOptionText, { color: theme.text }]}>Light</Text>
               </View>
               {themeMode === 'light' && <Ionicons name="checkmark" size={20} color={theme.accent} />}
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.modalOption}
-              onPress={() => { setThemeMode('system'); setIsAppearanceModalVisible(false); }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="phone-portrait" size={20} color={theme.text} style={{ marginRight: 12 }} />
-                <Text style={[styles.modalOptionText, { color: theme.text }]}>Use Device Settings</Text>
-              </View>
-              {themeMode === 'system' && <Ionicons name="checkmark" size={20} color={theme.accent} />}
             </TouchableOpacity>
 
           </Pressable>
