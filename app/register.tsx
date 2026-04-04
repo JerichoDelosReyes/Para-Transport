@@ -52,6 +52,7 @@ const HEADER_DOODLES: HeaderDoodle[] = [
 
 export default function RegisterScreen() {
   const { theme, isDark } = useTheme();
+  const styles = createStyles(theme, isDark);
   const router = useRouter();
   const beginAuthSession = useStore((state) => state.beginAuthSession);
 
@@ -312,7 +313,7 @@ export default function RegisterScreen() {
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color="#0A1628" />
                 ) : (
                   <Text style={styles.primaryButtonText}>Create Account</Text>
                 )}
@@ -342,13 +343,13 @@ export default function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
   },
   headerZone: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
     minHeight: 290,
     borderBottomLeftRadius: 34,
     borderBottomRightRadius: 34,
@@ -379,19 +380,19 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 6,
     fontFamily: 'Cubao',
-    color: COLORS.navy,
+    color: theme.text,
     fontSize: 34,
   },
   headerCopy: {
     marginTop: 3,
     fontFamily: 'Inter',
     fontSize: 15,
-    color: COLORS.navy,
+    color: theme.text,
     opacity: 0.86,
   },
   formArea: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.background,
   },
   scrollContent: {
     paddingBottom: 24,
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: 'Inter',
     fontSize: 15,
-    color: COLORS.textLabel,
+    color: theme.textSecondary,
     marginBottom: 8,
   },
   labelTop: {
@@ -420,19 +421,19 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: RADIUS.input,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
-    backgroundColor: COLORS.card,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#EFEFEF',
+    backgroundColor: theme.cardBackground,
     paddingHorizontal: 14,
     fontFamily: 'Inter',
     fontSize: 17,
-    color: COLORS.textStrong,
+    color: theme.text,
   },
   passwordWrap: {
     height: 52,
     borderRadius: RADIUS.input,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
-    backgroundColor: COLORS.card,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#EFEFEF',
+    backgroundColor: theme.cardBackground,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -441,13 +442,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: 'Inter',
     fontSize: 17,
-    color: COLORS.textStrong,
+    color: theme.text,
   },
   primaryButton: {
     marginTop: 24,
     height: 56,
     borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -464,7 +465,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.navy,
+    color: '#0A1628',
   },
   linkWrap: {
     marginTop: 16,
@@ -472,7 +473,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontFamily: 'Inter',
-    color: COLORS.navy,
+    color: theme.text,
     fontSize: 15,
     textDecorationLine: 'underline',
   },

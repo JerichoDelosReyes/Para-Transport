@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import { useTheme } from '../src/theme/ThemeContext';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 
@@ -35,6 +36,8 @@ const DOODLES: Doodle[] = [
 ];
 
 export default function WelcomeScreen() {
+  const { theme, isDark } = useTheme();
+  const styles = createStyles(theme, isDark);
   const router = useRouter();
   const beginGuestSession = useStore((state) => state.beginGuestSession);
   const hasHydrated = useStore((state) => state.hasHydrated);
@@ -94,7 +97,7 @@ export default function WelcomeScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? "light" : "dark"} />
 
       <View style={styles.canvas}>
         {DOODLES.map((doodle) => (
@@ -218,21 +221,21 @@ export default function WelcomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.background,
   },
   canvas: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.background,
   },
   doodle: {
     position: 'absolute',
   },
   doodleText: {
     fontFamily: 'Cubao',
-    color: COLORS.navy,
+    color: theme.text,
   },
   topSection: {
     alignItems: 'center',
@@ -243,7 +246,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Cubao',
     fontSize: 34,
     lineHeight: 34,
-    color: COLORS.navy,
+    color: theme.text,
     textAlign: 'center',
   },
   subtitleRow: {
@@ -255,7 +258,7 @@ const styles = StyleSheet.create({
   subtitleBase: {
     fontFamily: 'Inter-Italic',
     fontSize: 15,
-    color: COLORS.textMuted,
+    color: theme.textSecondary,
   },
   subtitleEvery: {
     fontFamily: 'Inter-Italic',
@@ -283,7 +286,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(245,197,24,0.18)',
   },
   bottomSheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.surface,
     marginHorizontal: 0,
     marginTop: -60,
     paddingHorizontal: SPACING.screenX,
@@ -297,7 +300,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 34,
     fontWeight: '700',
-    color: COLORS.navy,
+    color: theme.text,
   },
   sheetSubtitle: {
     marginTop: 12,
@@ -306,12 +309,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 14,
     lineHeight: 20,
-    color: COLORS.textMuted,
+    color: theme.textSecondary,
   },
   primaryButton: {
     height: 56,
     borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -323,7 +326,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   primaryButtonText: {
-    fontFamily: 'Inter',
+fontFamily: 'Inter',
     fontSize: 18,
     fontWeight: '700',
     color: COLORS.navy,
@@ -340,7 +343,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalSheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: SPACING.screenX,
@@ -357,7 +360,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 5,
     borderRadius: 999,
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
     marginBottom: 10,
   },
   modalTitle: {
@@ -365,27 +368,27 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 28,
     fontWeight: '700',
-    color: COLORS.navy,
+    color: theme.text,
     textAlign: 'center',
   },
   modalSubtitle: {
     marginTop: 8,
     fontFamily: 'Inter',
     fontSize: 15,
-    color: COLORS.textMuted,
+    color: theme.textSecondary,
     textAlign: 'center',
     marginBottom: 16,
   },
   modalPrimaryAction: {
     height: 54,
     borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
   },
   modalPrimaryText: {
-    fontFamily: 'Inter',
+fontFamily: 'Inter',
     fontSize: 17,
     fontWeight: '700',
     color: COLORS.navy,
@@ -395,8 +398,8 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: RADIUS.pill,
     borderWidth: 1.5,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#EFEFEF',
+    backgroundColor: theme.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -404,7 +407,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 17,
     fontWeight: '600',
-    color: COLORS.navy,
+    color: theme.text,
   },
   modalFooterText: {
     marginTop: 14,
@@ -412,7 +415,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 12,
     lineHeight: 18,
-    color: COLORS.textMuted,
+    color: theme.textSecondary,
   },
   guestLinkWrap: {
     marginTop: 12,
@@ -421,7 +424,7 @@ const styles = StyleSheet.create({
   guestLink: {
     fontFamily: 'Inter',
     fontSize: 14,
-    color: COLORS.textMuted,
+    color: theme.textSecondary,
     textDecorationLine: 'underline',
   },
 });

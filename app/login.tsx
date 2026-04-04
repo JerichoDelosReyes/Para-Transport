@@ -52,6 +52,7 @@ const HEADER_DOODLES: HeaderDoodle[] = [
 
 export default function LoginScreen() {
   const { theme, isDark } = useTheme();
+  const styles = createStyles(theme, isDark);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const beginAuthSession = useStore((state) => state.beginAuthSession);
@@ -316,7 +317,7 @@ export default function LoginScreen() {
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#0A1628" />
               ) : (
                 <Text style={styles.primaryButtonText}>LOG IN</Text>
               )}
@@ -392,13 +393,13 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
   },
   headerZone: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
     minHeight: 290,
     borderBottomLeftRadius: 34,
     borderBottomRightRadius: 34,
@@ -429,19 +430,19 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 6,
     fontFamily: 'Cubao',
-    color: COLORS.navy,
+    color: theme.text,
     fontSize: 34,
   },
   headerCopy: {
     marginTop: 3,
     fontFamily: 'Inter',
     fontSize: 15,
-    color: COLORS.navy,
+    color: theme.text,
     opacity: 0.86,
   },
   formArea: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.background,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenX,
@@ -451,7 +452,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: 'Inter',
     fontSize: 15,
-    color: COLORS.textLabel,
+    color: theme.textSecondary,
     marginBottom: 8,
   },
   labelTop: {
@@ -471,7 +472,7 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     fontFamily: 'Inter',
     fontSize: 13,
-    color: COLORS.navy,
+    color: theme.text,
     textDecorationLine: 'underline',
     opacity: 0.9,
   },
@@ -482,22 +483,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenX,
   },
   modalCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: theme.cardBackground,
     borderRadius: RADIUS.card,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
+    borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)',
   },
   modalTitle: {
     fontFamily: 'Cubao',
     fontSize: 24,
-    color: COLORS.navy,
+    color: theme.text,
   },
   modalBody: {
     marginTop: 6,
     fontFamily: 'Inter',
     fontSize: 14,
-    color: COLORS.textStrong,
+    color: theme.text,
     opacity: 0.8,
   },
   modalInput: {
@@ -505,12 +506,12 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: RADIUS.input,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#EFEFEF',
+    backgroundColor: theme.surface,
     paddingHorizontal: 14,
     fontFamily: 'Inter',
     fontSize: 16,
-    color: COLORS.navy,
+    color: theme.text,
   },
   modalErrorText: {
     marginTop: 8,
@@ -531,12 +532,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.12)',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.12)',
   },
   modalSecondaryText: {
     fontFamily: 'Inter',
     fontSize: 14,
-    color: COLORS.navy,
+    color: theme.text,
     fontWeight: '600',
   },
   modalPrimaryButton: {
@@ -545,31 +546,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
   },
   modalPrimaryText: {
     fontFamily: 'Inter',
     fontSize: 14,
-    color: COLORS.navy,
+    color: theme.text,
     fontWeight: '700',
   },
   input: {
     height: 52,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#EFEFEF',
+    backgroundColor: theme.surface,
     paddingHorizontal: 14,
     fontFamily: 'Inter',
     fontSize: 17,
-    color: COLORS.navy,
+    color: theme.text,
   },
   passwordWrap: {
     height: 52,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#EFEFEF',
+    backgroundColor: theme.surface,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -578,13 +579,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: 'Inter',
     fontSize: 17,
-    color: COLORS.navy,
+    color: theme.text,
   },
   primaryButton: {
     marginTop: 24,
     height: 56,
     borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -601,7 +602,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.navy,
+    color: '#0A1628',
   },
   linkWrap: {
     marginTop: 14,
@@ -611,7 +612,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 15,
     fontWeight: '500',
-    color: COLORS.navy,
+    color: theme.text,
     textDecorationLine: 'underline',
   },
   footerText: {
@@ -619,6 +620,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: 'Inter',
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: theme.textSecondary,
   },
 });
