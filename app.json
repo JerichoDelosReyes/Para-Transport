@@ -40,6 +40,7 @@
     "plugins": [
       "expo-web-browser",
       "@maplibre/maplibre-react-native",
+
       [
         "expo-notifications",
         {
