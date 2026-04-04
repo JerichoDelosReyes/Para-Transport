@@ -133,9 +133,9 @@ export default function PointsHistoryScreen() {
                       <Ionicons name="calendar-outline" size={14} color={theme.textSecondary} />
                       <Text style={[styles.dateText, { color: theme.textSecondary }]}>{formattedDate} • {formattedTime}</Text>
                     </View>
-                    <View style={[styles.pointsBadge, { backgroundColor: isDark ? theme.surfaceSecondary : '#F3F4F6' }, isMultiplier && styles.pointsBadgeGold]}>
-                      <Text style={[styles.pointsAmount, { color: theme.text }, isMultiplier && styles.pointsAmountGold]}>+{item.points || 0}</Text>
-                      <Text style={[styles.pointsLabelInfo, { color: theme.textSecondary }, isMultiplier && styles.pointsAmountGold]}>PTS</Text>
+                    <View style={[styles.pointsBadge, { backgroundColor: isDark ? theme.surfaceSecondary : '#F3F4F6' }, isMultiplier && [styles.pointsBadgeGold, { backgroundColor: isDark ? 'rgba(220,160,32,0.4)' : '#FEF08A', borderColor: isDark ? '#E8A020' : '#FDE68A' }]]}>
+                      <Text style={[styles.pointsAmount, { color: theme.text }, isMultiplier && [styles.pointsAmountGold, { color: isDark ? '#FFFFFF' : '#92400E' }]]}>+{item.points || 0}</Text>
+                      <Text style={[styles.pointsLabelInfo, { color: theme.textSecondary }, isMultiplier && [styles.pointsAmountGold, { color: isDark ? '#FCD34D' : '#92400E' }]]}>PTS</Text>
                     </View>
                   </View>
                   
@@ -157,9 +157,9 @@ export default function PointsHistoryScreen() {
                       <Text style={[styles.metricText, { color: theme.textSecondary }]}>{item.time || Math.round((item.distance || 0) * 3) || 5} min</Text>
                     </View>
                     {isMultiplier && (
-                       <View style={styles.metricItemGold}>
-                         <Ionicons name="flash" size={16} color="#B45309" />
-                         <Text style={styles.metricTextGold}>x{item.multiplier} Rush Hour</Text>
+                       <View style={[styles.metricItemGold, { backgroundColor: isDark ? 'rgba(232, 160, 32, 0.15)' : '#FEF3C7' }]}>
+                         <Ionicons name="flash" size={16} color={isDark ? '#E8A020' : '#B45309'} />
+                         <Text style={[styles.metricTextGold, { color: isDark ? '#FDE68A' : '#B45309' }]}>x{item.multiplier} Rush Hour</Text>
                        </View>
                     )}
                   </View>
@@ -176,7 +176,6 @@ export default function PointsHistoryScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   topSection: {
     backgroundColor: COLORS.primary,
@@ -210,7 +209,6 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   content: {
     paddingHorizontal: SPACING.screenX,
