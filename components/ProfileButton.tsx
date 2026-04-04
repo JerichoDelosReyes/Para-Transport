@@ -21,14 +21,14 @@ export function ProfileButton() {
 
   return (
     <TouchableOpacity 
-      style={[styles.avatarButton, { backgroundColor: isDark ? '#0A1628' : '#E8A020' }]} 
+      style={[styles.avatarButton, { backgroundColor: '#E8A020' }, isDark && { borderWidth: 2, borderColor: '#0A1628' }]} 
       onPress={() => router.navigate('/profile')}
       activeOpacity={0.8}
     >
       {photoUrl ? (
         <Image source={{ uri: photoUrl }} style={styles.avatarImage} />
       ) : (
-        <Text style={[styles.avatarInitials, { color: isDark ? '#E8A020' : COLORS.navy }]}>
+        <Text style={[styles.avatarInitials, { color: COLORS.navy }]}>
           {getInitials(user?.username || user?.full_name || '')}
         </Text>
       )}
