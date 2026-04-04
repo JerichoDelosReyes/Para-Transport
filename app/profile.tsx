@@ -143,9 +143,8 @@ export default function ProfileScreen() {
 
               <TouchableOpacity 
                 style={[styles.quickStat, isGuestAccount && { opacity: 0.5 }]}
-                onPress={() => isGuestAccount && Alert.alert('Guest Mode', 'Points feature is not available for guest mode.')}
-                activeOpacity={isGuestAccount ? 0.8 : 1}
-                disabled={!isGuestAccount}
+                  onPress={() => isGuestAccount ? Alert.alert('Guest Mode', 'Points feature is not available for guest mode.') : router.navigate('/points-history')}
+                  activeOpacity={0.7}
               >
                 <Text style={styles.quickStatValue}>{user?.points || 0}</Text>
                 <Text style={styles.quickStatLabel}>Points</Text>

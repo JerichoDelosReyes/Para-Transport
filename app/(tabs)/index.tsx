@@ -1892,7 +1892,7 @@ export default function HomeScreen() {
             const basePoints = Math.max(1, Math.round(distKm * 2));
             const totalPoints = Math.round(basePoints * multiplier);
             
-            addTripStats({ distance: distKm, fare: fareAmt, points: totalPoints });
+            addTripStats({ distance: distKm, fare: fareAmt, points: totalPoints, time: actualMinutes, multiplier: multiplier, origin: originQuery || 'Current Location', destination: destinationQuery || 'Destination' });
             
             router.navigate({
               pathname: '/journey-summary',

@@ -20,6 +20,7 @@ interface User {
   saved_routes?: any[];
   saved_places?: any[];
   commute_history?: any[];
+  points_history?: any[];
   badges?: string[]; // Kept locally for now
   fare_discount_type?: FareDiscountType;
   last_ride_at?: string | null;
@@ -84,7 +85,7 @@ interface StoreState {
   setHasHydrated: (value: boolean) => void;
   dismissInsight: () => void;
   addPoints: (points: number) => void;
-  addTripStats: (stats: { distance: number; fare: number; points: number }) => void;
+  addTripStats: (stats: { distance: number; fare: number; points: number; time?: number; multiplier?: number; origin?: string; destination?: string }) => void;
   resetStreak: () => void;
   setSelectedTransitRoute: (route: any | null) => void;
   setPendingRouteSearch: (search: { origin: any; destination: any } | null) => void;
@@ -175,7 +176,7 @@ export const useStore = create<StoreState>()(
       setHasHydrated: (value) => set({ hasHydrated: value }),
       dismissInsight: () => set({ insightDismissed: true }),
       addPoints: (points) => set((state) => ({ user: { ...state.user, points: state.user.points + points } })),
-      addTripStats: ({ distance, fare, points }) => set((state) => {
+      addTripStats: ({ distance, fare, points, time, multiplier, origin, destination }) => set((state) => {
         const now = new Date();
         const todayStr = now.toISOString().split('T')[0];
         let newStreak = state.user.streak_count || 0;
@@ -200,15 +201,30 @@ export const useStore = create<StoreState>()(
           newStreak = 1;
         }
 
-        const newUser: User = {
-          ...state.user,
-          points: (state.user.points || 0) + points,
-          streak_count: newStreak,
-          last_ride_at: now.toISOString(),
-          total_distance: (state.user.total_distance || 0) + distance,
-          spent: (state.user.spent || 0) + fare,
-          total_trips: (state.user.total_trips || 0) + 1,
-        };
+        const historyItem = {
+            id: Date.now().toString(),
+            timestamp: Date.now(),
+            distance,
+            fare,
+            points,
+            time,
+            multiplier,
+            origin,
+            destination
+          };
+          const currentPointsHistory = state.user.points_history || [];
+          const newPointsHistory = [historyItem, ...currentPointsHistory].slice(0, 200);
+
+          const newUser: User = {
+            ...state.user,
+            points: (state.user.points || 0) + points,
+            streak_count: newStreak,
+            last_ride_at: now.toISOString(),
+            total_distance: (state.user.total_distance || 0) + distance,
+            spent: (state.user.spent || 0) + fare,
+            total_trips: (state.user.total_trips || 0) + 1,
+            points_history: newPointsHistory
+          };
 
         const newBadges = [...(newUser.badges || [])];
         let nextBadgeToShow = state.unlockedBadgeToShow;
