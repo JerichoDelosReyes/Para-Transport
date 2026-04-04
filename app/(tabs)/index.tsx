@@ -1912,8 +1912,8 @@ export default function HomeScreen() {
     pitch?: number;
     heading?: number;
   }) => {
-    if (payload.centerCoordinate && payload.zoom !== undefined) {
-      const zoom = payload.zoom;
+    if (payload.centerCoordinate) {
+      const zoom = payload.zoom ?? latDeltaToZoom(mapRegion.latitudeDelta);
       const nextRegion: MapRegion = {
         latitude: payload.centerCoordinate[1],
         longitude: payload.centerCoordinate[0],
@@ -1922,7 +1922,7 @@ export default function HomeScreen() {
       };
       setMapRegion(nextRegion);
     }
-  }, [setMapRegion]);
+  }, [mapRegion.latitudeDelta, setMapRegion]);
 
   const handleRouteTypeChange = useCallback((nextType: TransitRouteType) => {
     if (nextType === selectedRouteType) return;
@@ -2137,7 +2137,7 @@ export default function HomeScreen() {
           };
 
           handleRegionChangeComplete(nextRegion);
-          handleCameraChange(payload);
+          handleCameraChange({ ...payload, zoom });
         }}
         onMapLongPress={handleMapLongPress}
         onMapTouchStart={() => {
