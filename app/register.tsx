@@ -29,6 +29,7 @@ import {
   mapRegisterError,
   logUserAction
 } from '../services/authService';
+import { useTheme } from '../src/theme/ThemeContext';
 import { useStore } from '../store/useStore';
 
 type HeaderDoodle = {
@@ -50,6 +51,7 @@ const HEADER_DOODLES: HeaderDoodle[] = [
 ];
 
 export default function RegisterScreen() {
+  const { theme, isDark } = useTheme();
   const router = useRouter();
   const beginAuthSession = useStore((state) => state.beginAuthSession);
 
@@ -200,11 +202,11 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.primary} />
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#E8A020" />
 
-      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.headerZone}>
+      <KeyboardAvoidingView style={[styles.screen, { backgroundColor: theme.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={[styles.headerZone, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
           {HEADER_DOODLES.map((doodle) => (
             <View
               key={doodle.id}
@@ -222,82 +224,82 @@ export default function RegisterScreen() {
           ))}
 
           <SafeAreaView edges={['top']} style={styles.headerSafeContent}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
-              <Ionicons name="chevron-back" size={20} color={COLORS.navy} />
+            <TouchableOpacity style={[styles.backButton, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]} onPress={() => router.back()} activeOpacity={0.8}>
+              <Ionicons name="chevron-back" size={20} color="#0A1628" />
             </TouchableOpacity>
 
             <View style={styles.headerCenter}>
               <MinimalistJeep width={104} height={64} />
-              <Text style={styles.title}>REGISTER</Text>
-              <Text style={styles.headerCopy}>Sama ka sa Para community.</Text>
+              <Text style={[styles.title, { color: '#0A1628' }]}>REGISTER</Text>
+              <Text style={[styles.headerCopy, { color: '#0A1628' }]}>Sama ka sa Para community.</Text>
             </View>
           </SafeAreaView>
         </View>
 
-        <View style={styles.formArea}>
+        <View style={[styles.formArea, { backgroundColor: theme.background }]}>
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.formWrap}>
-              <Text style={styles.label}>Name</Text>
+              <Text style={[styles.label, { color: theme.textSecondary }]}>Name</Text>
               <TextInput 
                 value={name}
                 onChangeText={setName}
-                style={styles.input} 
+                style={[styles.input, { backgroundColor: theme.inputBackground, color: theme.text }]} 
                 placeholder="Juan Dela Cruz" 
-                placeholderTextColor={COLORS.textMuted} 
+                placeholderTextColor={theme.textSecondary} 
               />
 
-              <Text style={[styles.label, styles.labelTop]}>Username</Text>
+              <Text style={[styles.label, styles.labelTop, { color: theme.textSecondary }]}>Username</Text>
               <TextInput 
                 value={username}
                 onChangeText={(text) => setUsername(text.replace(/\s/g, ''))}
-                style={styles.input} 
+                style={[styles.input, { backgroundColor: theme.inputBackground, color: theme.text }]} 
                 placeholder="juancruz123" 
-                placeholderTextColor={COLORS.textMuted}
+                placeholderTextColor={theme.textSecondary}
                 autoCapitalize="none"
               />
 
-              <Text style={[styles.label, styles.labelTop]}>Email</Text>
+              <Text style={[styles.label, styles.labelTop, { color: theme.textSecondary }]}>Email</Text>
               <TextInput
                 value={email}
                 onChangeText={setEmail}
-                style={styles.input}
+                style={[styles.input, { backgroundColor: theme.inputBackground, color: theme.text }]}
                 placeholder="juan@para.ph"
-                placeholderTextColor={COLORS.textMuted}
+                placeholderTextColor={theme.textSecondary}
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
 
-              <Text style={[styles.label, styles.labelTop]}>Password</Text>
-              <View style={styles.passwordWrap}>
+              <Text style={[styles.label, styles.labelTop, { color: theme.textSecondary }]}>Password</Text>
+              <View style={[styles.passwordWrap, { backgroundColor: theme.inputBackground }]}>
                 <TextInput 
                   value={password}
                   onChangeText={setPassword}
-                  style={styles.passwordInput} 
+                  style={[styles.passwordInput, { color: theme.text }]} 
                   placeholder="**********" 
-                  placeholderTextColor={COLORS.textMuted} 
+                  placeholderTextColor={theme.textSecondary} 
                   secureTextEntry={!showPassword} 
                 />
                 <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)}>
-                  <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={COLORS.navy} />
+                  <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={theme.textSecondary} />
                 </TouchableOpacity>
               </View>
 
-              <Text style={[styles.label, styles.labelTop]}>Confirm Password</Text>
-              <View style={styles.passwordWrap}>
+              <Text style={[styles.label, styles.labelTop, { color: theme.textSecondary }]}>Confirm Password</Text>
+              <View style={[styles.passwordWrap, { backgroundColor: theme.inputBackground }]}>
                 <TextInput 
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
-                  style={styles.passwordInput} 
+                  style={[styles.passwordInput, { color: theme.text }]} 
                   placeholder="**********" 
-                  placeholderTextColor={COLORS.textMuted} 
+                  placeholderTextColor={theme.textSecondary} 
                   secureTextEntry={!showConfirm} 
                 />
                 <TouchableOpacity onPress={() => setShowConfirm((prev) => !prev)}>
-                  <Ionicons name={showConfirm ? 'eye-off' : 'eye'} size={20} color={COLORS.navy} />
+                  <Ionicons name={showConfirm ? 'eye-off' : 'eye'} size={20} color={theme.textSecondary} />
                 </TouchableOpacity>
               </View>
 

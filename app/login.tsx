@@ -28,6 +28,7 @@ import {
   sendPasswordResetEmail,
   logUserAction
 } from '../services/authService';
+import { useTheme } from '../src/theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import OtpModal from '../components/OtpModal';
 
@@ -50,6 +51,7 @@ const HEADER_DOODLES: HeaderDoodle[] = [
 ];
 
 export default function LoginScreen() {
+  const { theme, isDark } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const beginAuthSession = useStore((state) => state.beginAuthSession);
@@ -227,14 +229,14 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.screen}>
-      <StatusBar style="dark" translucent backgroundColor="transparent" />
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <StatusBar style="dark" translucent backgroundColor="#E8A020" />
 
       <KeyboardAvoidingView
-        style={styles.screen}
+        style={[styles.screen, { backgroundColor: theme.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.headerZone}>
+        <View style={[styles.headerZone, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
           {HEADER_DOODLES.map((doodle) => (
             <View
               key={doodle.id}
@@ -252,47 +254,47 @@ export default function LoginScreen() {
           ))}
 
           <View style={[styles.headerSafeContent, { paddingTop: insets.top }]}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
-              <Ionicons name="chevron-back" size={20} color={COLORS.navy} />
+            <TouchableOpacity style={[styles.backButton, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]} onPress={() => router.back()} activeOpacity={0.8}>
+              <Ionicons name="chevron-back" size={20} color="#0A1628" />
             </TouchableOpacity>
 
             <View style={styles.headerCenter}>
               <MinimalistJeep width={104} height={64} />
-              <Text style={styles.title}>LOG IN</Text>
-              <Text style={styles.headerCopy}>Tuloy na, tara na sa byahe.</Text>
+              <Text style={[styles.title, { color: '#0A1628' }]}>LOG IN</Text>
+              <Text style={[styles.headerCopy, { color: '#0A1628' }]}>Tuloy na, tara na sa byahe.</Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.formArea}>
+        <View style={[styles.formArea, { backgroundColor: theme.background }]}>
           <ScrollView
             contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.label}>Email</Text>
+            <Text style={[styles.label, { color: theme.textSecondary }]}>Email</Text>
             <TextInput
               value={email}
               onChangeText={setEmail}
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.inputBackground, color: theme.text }]}
               placeholder="someone@gmail.com"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={theme.textSecondary}
               autoCapitalize="none"
               keyboardType="email-address"
             />
 
-            <Text style={[styles.label, styles.labelTop]}>Password</Text>
-            <View style={styles.passwordWrap}>
+            <Text style={[styles.label, styles.labelTop, { color: theme.textSecondary }]}>Password</Text>
+            <View style={[styles.passwordWrap, { backgroundColor: theme.inputBackground }]}>
               <TextInput
                 value={password}
                 onChangeText={setPassword}
-                style={styles.passwordInput}
+                style={[styles.passwordInput, { color: theme.text }]}
                 placeholder="**********"
-                placeholderTextColor={COLORS.textMuted}
+                placeholderTextColor={theme.textSecondary}
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)}>
-                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={COLORS.navy} />
+                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -324,7 +326,7 @@ export default function LoginScreen() {
               <Text style={styles.linkText}>Create account</Text>
             </TouchableOpacity>
 
-            <Text style={styles.footerText}>Privacy Policy. Terms of Service</Text>
+            <Text style={[styles.footerText, { color: theme.textSecondary }]}>Privacy Policy. Terms of Service</Text>
           </ScrollView>
         </View>
 
@@ -348,16 +350,16 @@ export default function LoginScreen() {
           onRequestClose={() => setIsForgotModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Forgot Password</Text>
-              <Text style={styles.modalBody}>Enter your email and we will send a reset link.</Text>
+            <View style={[styles.modalCard, { backgroundColor: theme.cardBackground }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Forgot Password</Text>
+              <Text style={[styles.modalBody, { color: theme.textSecondary }]}>Enter your email and we will send a reset link.</Text>
 
               <TextInput
                 value={resetEmailInput}
                 onChangeText={setResetEmailInput}
-                style={styles.modalInput}
+                style={[styles.modalInput, { backgroundColor: theme.inputBackground, color: theme.text }]}
                 placeholder="someone@gmail.com"
-                placeholderTextColor={COLORS.textMuted}
+                placeholderTextColor={theme.textSecondary}
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
@@ -366,12 +368,12 @@ export default function LoginScreen() {
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
-                  style={styles.modalSecondaryButton}
+                  style={[styles.modalSecondaryButton, { backgroundColor: theme.surface }]}
                   onPress={() => setIsForgotModalVisible(false)}
                   activeOpacity={0.8}
                   disabled={isForgotSubmitting}
                 >
-                  <Text style={styles.modalSecondaryText}>Cancel</Text>
+                  <Text style={[styles.modalSecondaryText, { color: theme.text }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalPrimaryButton, isForgotSubmitting && styles.disabledButton]}

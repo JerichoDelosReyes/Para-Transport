@@ -380,7 +380,8 @@ const styles = StyleSheet.create({
     width: 86,
     height: 86,
     borderRadius: 43,
-    backgroundColor: '#d5a944',
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
@@ -399,8 +400,8 @@ const styles = StyleSheet.create({
     fontSize: 36,
   },
   badgeImage: {
-    width: 60,
-    height: 60,
+    width: '100%',
+    height: '100%',
   },
   textWrapper: {
     flex: 1,

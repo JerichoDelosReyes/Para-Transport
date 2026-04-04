@@ -4,11 +4,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useStore } from '../store/useStore';
+import { useTheme } from '../src/theme/ThemeContext';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { supabase } from '../config/supabaseClient';
 import { loginWithEmailPassword } from '../services/authService';
 
 export default function EditProfileScreen() {
+  const { theme, isDark } = useTheme();
   const router = useRouter();
   const user = useStore((state) => state.user);
   const setUser = useStore((state) => state.setUser);
@@ -119,20 +121,20 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.topSection, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <View style={[styles.topSection, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
         <View style={styles.header}>
           <TouchableOpacity 
             style={styles.backButton}
             onPress={() => router.back()}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <View style={styles.backButtonCircle}>
-              <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
+            <View style={[styles.backButtonCircle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+              <Ionicons name="chevron-back" size={24} color="#0A1628" />
             </View>
           </TouchableOpacity>
           
-          <Text style={styles.headerTitle}>EDIT</Text>
+          <Text style={[styles.headerTitle, { color: '#0A1628' }]}>EDIT</Text>
           
           <TouchableOpacity 
             style={styles.saveButton}
@@ -140,42 +142,42 @@ export default function EditProfileScreen() {
             disabled={isSaving}
           >
             {isSaving ? (
-               <View style={styles.saveButtonCircle}>
-                 <ActivityIndicator size="small" color={COLORS.navy} />
+               <View style={[styles.saveButtonCircle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+                 <ActivityIndicator size="small" color="#0A1628" />
                </View>
             ) : (
-               <View style={styles.saveButtonCircle}>
-                 <Ionicons name="checkmark" size={24} color={COLORS.navy} />
+               <View style={[styles.saveButtonCircle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+                 <Ionicons name="checkmark" size={24} color="#0A1628" />
                </View>
             )}
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { backgroundColor: theme.background }]}>
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Full Name</Text>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>Full Name</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.inputBackground, color: theme.text }]}
             value={name}
             onChangeText={setName}
             placeholder="Enter your full name"
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={theme.textSecondary}
             editable={!isGuestAccount}
           />
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>Email</Text>
           <TextInput
-            style={[styles.input, styles.inputDisabled]}
+            style={[styles.input, styles.inputDisabled, { color: theme.textSecondary }]}
             value={user?.email || ''}
             editable={false}
           />
         </View>
         
         {isGuestAccount && (
-          <Text style={styles.guestNotice}>
+          <Text style={[styles.guestNotice, { color: theme.textSecondary }]}>
             Profile cannot be modified for guest accounts.
           </Text>
         )}
@@ -183,21 +185,21 @@ export default function EditProfileScreen() {
         {!isGuestAccount && (
           <>
             <TouchableOpacity 
-              style={styles.changePasswordButton}
+              style={[styles.changePasswordButton, { backgroundColor: theme.cardBackground }]}
               onPress={handleResetPassword}
             >
-              <Ionicons name="lock-closed-outline" size={20} color={COLORS.navy} />
-              <Text style={styles.changePasswordText}>Change Password</Text>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} style={styles.chevronIcon} />
+              <Ionicons name="lock-closed-outline" size={20} color={theme.text} />
+              <Text style={[styles.changePasswordText, { color: theme.text }]}>Change Password</Text>
+              <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} style={styles.chevronIcon} />
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={[styles.changePasswordButton, { marginTop: 12, backgroundColor: '#FFE5E5' }]}
+              style={[styles.changePasswordButton, { marginTop: 12, backgroundColor: 'transparent' }]}
               onPress={() => setIsResetModalVisible(true)}
             >
               <Ionicons name="warning-outline" size={20} color="#D32F2F" />
               <Text style={[styles.changePasswordText, { color: '#D32F2F' }]}>Reset Progress</Text>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} style={styles.chevronIcon} />
+              <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} style={styles.chevronIcon} />
             </TouchableOpacity>
           </>
         )}
@@ -211,35 +213,35 @@ export default function EditProfileScreen() {
         onRequestClose={() => setIsResetModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Reset Progress</Text>
-            <Text style={styles.modalDescription}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.cardBackground }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Reset Progress</Text>
+            <Text style={[styles.modalDescription, { color: theme.textSecondary }]}>
               This will permanently delete your scores, achievements, saved places, and history. Please enter your password to confirm.
             </Text>
             
             <TextInput
-              style={styles.modalInput}
+              style={[styles.modalInput, { backgroundColor: theme.inputBackground, color: theme.text }]}
               value={resetPasswordInput}
               onChangeText={setResetPasswordInput}
               placeholder="Enter password"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={theme.textSecondary}
               secureTextEntry
             />
 
             <View style={styles.modalActions}>
               <TouchableOpacity 
-                style={styles.modalCancelButton}
+                style={[styles.modalCancelButton, { backgroundColor: theme.surface }]}
                 onPress={() => {
                   setIsResetModalVisible(false);
                   setResetPasswordInput('');
                 }}
                 disabled={isResetting}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={[styles.modalCancelText, { color: theme.text }]}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={styles.modalConfirmButton}
+                style={[styles.modalConfirmButton, { backgroundColor: '#D32F2F' }]}
                 onPress={handleConfirmResetProgress}
                 disabled={isResetting}
               >
