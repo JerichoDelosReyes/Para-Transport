@@ -339,77 +339,6 @@ export default function SearchScreen({
           </TouchableOpacity>
         </View>
 
-        <View style={styles.routeTypeRow}>
-          <TouchableOpacity
-            style={[
-              styles.routeTypeChip,
-              selectedRouteType === 'jeepney' && styles.routeTypeChipActive,
-            ]}
-            activeOpacity={0.85}
-            onPress={() => onSelectRouteType('jeepney')}
-          >
-            <Ionicons
-              name="bus-outline"
-              size={14}
-              color={selectedRouteType === 'jeepney' ? '#FFFFFF' : COLORS.navy}
-            />
-            <Text
-              style={[
-                styles.routeTypeChipText,
-                selectedRouteType === 'jeepney' && styles.routeTypeChipTextActive,
-              ]}
-            >
-              Jeepney
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.routeTypeChip,
-              selectedRouteType === 'combo' && styles.routeTypeChipActive,
-            ]}
-            activeOpacity={0.85}
-            onPress={() => onSelectRouteType('combo')}
-          >
-            <Ionicons
-              name="shuffle-outline"
-              size={14}
-              color={selectedRouteType === 'combo' ? '#FFFFFF' : COLORS.navy}
-            />
-            <Text
-              style={[
-                styles.routeTypeChipText,
-                selectedRouteType === 'combo' && styles.routeTypeChipTextActive,
-              ]}
-            >
-              Jeep + Bus
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.routeTypeChip,
-              selectedRouteType === 'bus' && styles.routeTypeChipActive,
-            ]}
-            activeOpacity={0.85}
-            onPress={() => onSelectRouteType('bus')}
-          >
-            <Ionicons
-              name="bus"
-              size={14}
-              color={selectedRouteType === 'bus' ? '#FFFFFF' : COLORS.navy}
-            />
-            <Text
-              style={[
-                styles.routeTypeChipText,
-                selectedRouteType === 'bus' && styles.routeTypeChipTextActive,
-              ]}
-            >
-              Bus
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Search Fields */}
         <View style={styles.fieldsContainer}>
           <View style={{ flex: 1 }}>
@@ -648,38 +577,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Cubao',
     fontSize: 22,
     color: COLORS.navy,
-  },
-  routeTypeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: SPACING.screenX,
-    marginBottom: 10,
-  },
-  routeTypeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(10,22,40,0.08)',
-  },
-  routeTypeChipActive: {
-    backgroundColor: '#0A1628',
-    borderColor: '#0A1628',
-  },
-  routeTypeChipText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.navy,
-  },
-  routeTypeChipTextActive: {
-    color: '#FFFFFF',
   },
   fieldsContainer: {
     flexDirection: 'row',

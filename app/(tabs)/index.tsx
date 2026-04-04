@@ -560,7 +560,6 @@ export default function HomeScreen() {
     return transitRoutes.flatMap((route: any) => route.stops || []);
   }, [transitRoutes]);
   const [showTransitLayer, setShowTransitLayer] = useState(false);
-  const [nearestStop, setNearestStop] = useState<any>(null);
   const user = useStore((state) => state.user);
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
   const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
@@ -1175,41 +1174,6 @@ export default function HomeScreen() {
     }
   }, [pendingRouteSearch, handleSearchSelectRoute]);
 
-  const handleFindNearestStop = useCallback(() => {
-    if (!currentLocation) {
-      Alert.alert('GPS Not Ready', 'Waiting for your current location.');
-      return;
-    }
-    if (transitStops.length === 0) {
-      Alert.alert('No Stops', 'No transit stops loaded yet.');
-      return;
-    }
-
-    let closest: any = null;
-    let closestDist = Infinity;
-    for (const stop of transitStops as any[]) {
-      const dlat = stop.coordinate.latitude - currentLocation.latitude;
-      const dlng = stop.coordinate.longitude - currentLocation.longitude;
-      const dist = dlat * dlat + dlng * dlng;
-      if (dist < closestDist) {
-        closestDist = dist;
-        closest = stop;
-      }
-    }
-
-    if (closest) {
-      setNearestStop(closest);
-      const nearestRegion: MapRegion = {
-        latitude: closest.coordinate.latitude,
-        longitude: closest.coordinate.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      };
-      //mapRegionRef.current = nearestRegion;
-      animateToRegion(nearestRegion, 600);
-    }
-  }, [currentLocation, transitStops]);
-
   const resolveWalkPathOnRoad = useCallback(async (
     from: MapCoordinate,
     to: MapCoordinate,
@@ -1737,7 +1701,6 @@ export default function HomeScreen() {
           children: (
             <View style={[
               styles.transitStopMarker,
-              nearestStop?.id === stop.id && styles.nearestStopMarker,
             ]}>
               <Ionicons name="ellipse" size={6} color="#FFFFFF" />
             </View>
@@ -1752,7 +1715,7 @@ export default function HomeScreen() {
     }
 
     return markers;
-  }, [activeUserPosition, destinationLocation, visibleTransitMarkers, destinationQuery, visibleTransitStops, nearestStop?.id]);
+  }, [activeUserPosition, destinationLocation, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
 
   // Log marker/line updates for diagnostics
   useEffect(() => {
@@ -2263,87 +2226,10 @@ export default function HomeScreen() {
             )}
           </View>
 
-          {showTransitLayer && (
-            <View style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
-              <TouchableOpacity
-                style={styles.nearestStopBtn}
-                onPress={handleFindNearestStop}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="navigate" size={14} color={COLORS.navy} />
-                <Text style={styles.nearestStopBtnText}>Nearest Stop</Text>
-              </TouchableOpacity>
 
-              <View style={styles.routeTypeSelectorRow}>
-                <TouchableOpacity
-                  style={[
-                  styles.routeTypeSelectorButton,
-                  selectedRouteType === 'jeepney' && styles.routeTypeSelectorButtonActive,
-                ]}
-                activeOpacity={0.85}
-                onPress={() => handleRouteTypeChange('jeepney')}
-              >
-                <Text
-                  style={[
-                    styles.routeTypeSelectorText,
-                    selectedRouteType === 'jeepney' && styles.routeTypeSelectorTextActive,
-                  ]}
-                >
-                  Jeepney
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.routeTypeSelectorButton,
-                  selectedRouteType === 'combo' && styles.routeTypeSelectorButtonActive,
-                ]}
-                activeOpacity={0.85}
-                onPress={() => handleRouteTypeChange('combo')}
-              >
-                <Text
-                  style={[
-                    styles.routeTypeSelectorText,
-                    selectedRouteType === 'combo' && styles.routeTypeSelectorTextActive,
-                  ]}
-                >
-                  Combo
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.routeTypeSelectorButton,
-                  selectedRouteType === 'bus' && styles.routeTypeSelectorButtonActive,
-                ]}
-                activeOpacity={0.85}
-                onPress={() => handleRouteTypeChange('bus')}
-              >
-                <Text
-                  style={[
-                    styles.routeTypeSelectorText,
-                    selectedRouteType === 'bus' && styles.routeTypeSelectorTextActive,
-                  ]}
-                >
-                  Bus
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          )}
         </View>
 
-        {nearestStop && showTransitLayer && (
-          <View style={styles.nearestStopCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="location" size={16} color={COLORS.primary} />
-              <Text style={styles.nearestStopName}>{nearestStop.name}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setNearestStop(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          </View>
-        )}
+
 
         {selectedTransitRoute &&
         (!normalizeTransitRouteType((selectedTransitRoute as any).type) ||
@@ -3158,31 +3044,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.navy,
   },
-  routeTypeSelectorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(10,22,40,0.04)',
-    borderRadius: RADIUS.pill,
-    padding: 3,
-  },
-  routeTypeSelectorButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: RADIUS.pill,
-  },
-  routeTypeSelectorButtonActive: {
-    backgroundColor: '#0A1628',
-  },
-  routeTypeSelectorText: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.navy,
-  },
-  routeTypeSelectorTextActive: {
-    color: '#FFFFFF',
-  },
   transitErrorCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3267,59 +3128,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 5,
-  },
-  nearestStopMarker: {
-    backgroundColor: COLORS.primary,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 3,
-  },
-  nearestStopBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(10,22,40,0.08)',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  nearestStopBtnText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.navy,
-  },
-  nearestStopCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    marginHorizontal: SPACING.screenX,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(232,160,32,0.3)',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  nearestStopName: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.navy,
   },
   recommenderToggle: {
     position: 'absolute',
