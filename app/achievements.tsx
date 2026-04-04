@@ -173,7 +173,7 @@ export default function AchievementsScreen() {
 
               return (
                 <View key={badge.id || idx} style={[styles.card, isLocked && { opacity: 0.7 }]}>
-                  <View style={[styles.iconWrapper, { backgroundColor: badge.id === 'route_rookie' ? '#DDAA44' : '#ECE2CC' }, isEarned && styles.iconWrapperEarned]}>
+                  <View style={[styles.iconWrapper, isEarned && styles.iconWrapperEarned]}>
                     {badge.icon_url || BADGE_IMAGES[badge.id] ? (
                       <Image 
                         source={(badge.icon_url && badge.icon_url.startsWith('http')) ? { uri: badge.icon_url } : BADGE_IMAGES[badge.id]} 
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     width: 86,
     height: 86,
     borderRadius: 43,
-    backgroundColor: '#ECE2CC',
+    backgroundColor: '#d5a944',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
