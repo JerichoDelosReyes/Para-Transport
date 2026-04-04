@@ -238,7 +238,7 @@ export default function ProfileScreen() {
                       <Text style={[styles.badgeEmoji, !isEarned && { opacity: 0.3 }]}>{badge.icon}</Text>
                     )}
                   </View>
-                  <Text style={[styles.badgeName, { color: theme.text }, !isEarned && { color: theme.textSecondary }]}>{badge.name}</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.badgeName, { color: theme.text }, !isEarned && { color: theme.textSecondary }]}>{badge.name}</Text>
                   {!isEarned && (
                     <View style={[styles.lockOverlay, { backgroundColor: theme.inputBackground }]}>
                       <Ionicons name="lock-closed" size={14} color={theme.textSecondary} />

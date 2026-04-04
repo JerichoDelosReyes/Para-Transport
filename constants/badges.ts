@@ -17,7 +17,7 @@ export const BADGES: Badge[] = [
   { id: "bus_rider", name: "Bus Rider", description: "Use bus routes 15 times.", icon: "🚌", goal: 15 },
   { id: "uv_express_commuter", name: "UV Express Commuter", description: "Use UV Express routes 10 times.", icon: "🚐", goal: 10 },
   { id: "tricycle_veteran", name: "Tricycle Veteran", description: "Use tricycle rides 20 times.", icon: "🛺", goal: 20 },
-  { id: "multi_modal_commuter", name: "Multi-Modal Commuter", description: "Use at least 3 transport types in one trip.", icon: "🔄", goal: 3 },
+  { id: "multi_modal_commuter", name: "Multi-Modal", description: "Use at least 3 transport types in one trip.", icon: "🔄", goal: 3 },
   { id: "budget_saver", name: "Budget Saver", description: "Complete 10 trips under a set budget.", icon: "💵", goal: 10 },
   { id: "fare_planner", name: "Fare Planner", description: "Use the fare calculator 10 times.", icon: "🧮", goal: 10 },
   { id: "cost_optimizer", name: "Cost Optimizer", description: "Choose the cheapest route 5 times.", icon: "📉", goal: 5 },
