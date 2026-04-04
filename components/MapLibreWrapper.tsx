@@ -1,6 +1,6 @@
 import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import MapLibreGL from '@maplibre/maplibre-react-native';
+import { Map, Camera, GeoJSONSource, Layer, Marker, Callout } from '@maplibre/maplibre-react-native';
 import { MAP_CONFIG } from '../constants/map';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/theme';
 import { mapDiagnostics } from '../services/mapDiagnosticsService';
@@ -255,7 +255,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
     };
 
     return (
-      <MapLibreGL.MapView
+      <Map
         style={{ flex: 1 }}
         mapStyle={styleURL}
         compassEnabled={false}
@@ -286,7 +286,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
           });
         }}
       >
-        <MapLibreGL.Camera
+        <Camera
           ref={cameraRef}
           centerCoordinate={externalCameraCenter ?? initialCenterCoordinate}
           zoomLevel={externalCameraZoom ?? initialZoomLevel}
@@ -297,9 +297,10 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
         />
 
         {lines.length > 0 ? (
-          <MapLibreGL.ShapeSource id="route-lines" shape={lineSource as any}>
-            <MapLibreGL.LineLayer
+          <GeoJSONSource id="route-lines" data={lineSource as any}>
+            <Layer
               id="route-lines-layer"
+              type="line"
               style={{
                 lineColor: ['coalesce', ['get', 'color'], '#E8A020'],
                 lineWidth: ['coalesce', ['get', 'width'], 4],
@@ -307,7 +308,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
                 lineJoin: 'round',
               }}
             />
-          </MapLibreGL.ShapeSource>
+          </GeoJSONSource>
         ) : null}
 
         {markers.map((marker) => {
@@ -315,11 +316,11 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
           const hasMetadata = !!marker.metadata;
 
           return (
-            <MapLibreGL.PointAnnotation
+            <Marker
               key={marker.id}
               id={marker.id}
               coordinate={marker.coordinate}
-              onSelected={() => setSelectedMarkerId(marker.id)}
+              onPress={() => setSelectedMarkerId(marker.id)}
             >
               <>
                 <TouchableOpacity
@@ -329,22 +330,22 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
                   {marker.children || <View style={{ width: 10, height: 10 }} />}
                 </TouchableOpacity>
                 {isSelected && hasMetadata ? (
-                  <MapLibreGL.Callout title={marker.metadata?.label || ''}>
+                  <Callout title={marker.metadata?.label || ''}>
                     <MapCallout
                       metadata={marker.metadata}
                       onClose={() => setSelectedMarkerId(null)}
                     />
-                  </MapLibreGL.Callout>
+                  </Callout>
                 ) : (
                   <View />
                 )}
               </>
-            </MapLibreGL.PointAnnotation>
+            </Marker>
           );
         })}
 
         {children}
-      </MapLibreGL.MapView>
+      </Map>
     );
   },
 );
