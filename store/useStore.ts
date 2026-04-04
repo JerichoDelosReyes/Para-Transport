@@ -469,26 +469,30 @@ export const useStore = create<StoreState>()(
           try {
             const { data, error } = await supabase
               .from('users')
-              .select('points, streak_count, total_distance, total_trips, total_fare, badges, last_ride_at')
+              .select('points, streak_count, total_distance, total_trips, total_fare, badges, last_ride_at, saved_routes, saved_places, commute_history, points_history')
               .eq('id', state.user.id)
               .single();
               
             if (data && !error) {
-              set((s) => ({
-                user: {
-                  ...s.user,
-                  points: data.points ?? s.user.points ?? 0,
-                  streak_count: data.streak_count ?? s.user.streak_count ?? 0,
-                  last_ride_at: data.last_ride_at ?? s.user.last_ride_at ?? null,
-                  total_distance: data.total_distance ?? s.user.total_distance ?? 0,
-                  total_trips: data.total_trips ?? s.user.total_trips ?? 0,
-                  spent: data.total_fare ?? s.user.spent ?? 0,
-                  badges: data.badges ?? s.user.badges ?? [],
-                  commute_history: s.user.commute_history || [],
-                  saved_routes: s.user.saved_routes || [],
-                  saved_places: s.user.saved_places || [],
-                }
-              }));
+              set((s) => {
+                if (!s.user) return s;
+                return {
+                  user: {
+                    ...s.user,
+                    points: data.points ?? s.user.points ?? 0,
+                    streak_count: data.streak_count ?? s.user.streak_count ?? 0,
+                    last_ride_at: data.last_ride_at ?? s.user.last_ride_at ?? null,
+                    total_distance: data.total_distance ?? s.user.total_distance ?? 0,
+                    total_trips: data.total_trips ?? s.user.total_trips ?? 0,
+                    spent: data.total_fare ?? s.user.spent ?? 0,
+                    badges: data.badges ?? s.user.badges ?? [],
+                    commute_history: data.commute_history ?? s.user.commute_history ?? [],
+                    saved_routes: data.saved_routes ?? s.user.saved_routes ?? [],
+                    saved_places: data.saved_places ?? s.user.saved_places ?? [],
+                    points_history: data.points_history ?? s.user.points_history ?? [],
+                  }
+                };
+              });
             }
           } catch (e) {
             console.error('Failed to sync with Supabase', e);

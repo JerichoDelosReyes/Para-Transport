@@ -1,6 +1,6 @@
 import { useTheme } from "../../src/theme/ThemeContext";
 import { Tabs } from 'expo-router';
-import { StyleSheet, View, Text, Animated, Dimensions, Platform, TouchableWithoutFeedback, Easing } from 'react-native';
+import { StyleSheet, View, Text, Animated, Dimensions, Platform, TouchableWithoutFeedback, Easing, AppState, AppStateStatus } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/theme';
 import { useEffect, useRef, useState } from 'react';
@@ -196,6 +196,16 @@ export default function TabLayout() {
     if (sessionMode === 'auth') {
       syncWithSupabase();
     }
+
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && sessionMode === 'auth') {
+        syncWithSupabase();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [sessionMode]);
 
   return (

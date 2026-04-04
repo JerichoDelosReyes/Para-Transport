@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "scheme": "para",
     "icon": "./assets/logo/appicon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/logo/splashscreen.png",
       "resizeMode": "contain",

@@ -284,7 +284,9 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
       <Map
         style={{ flex: 1 }}
         mapStyle={styleURL}
-        compass={false}
+        compass={true}
+        compassPosition={{ bottom: 320, right: 16 }}
+        compassHiddenFacingNorth={false}
         touchRotate={rotateEnabled}
         touchPitch={pitchEnabled}
         touchZoom={true}
