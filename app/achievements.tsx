@@ -161,9 +161,19 @@ export default function AchievementsScreen() {
             </>
           )}
 
-          <View style={[styles.sectionHeader, user?.email !== 'guest@para.ph' ? { marginTop: 32 } : {}]}>
-            <Ionicons name="medal" size={24} color="#E8A020" />
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>BADGES</Text>
+          <View style={[
+            { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }, 
+            user?.email !== 'guest@para.ph' ? { marginTop: 32 } : {}
+          ]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="medal" size={24} color="#E8A020" />
+              <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>BADGES</Text>
+            </View>
+            <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
+              <Text style={{ fontFamily: 'Inter', fontSize: 13, color: theme.textSecondary, fontWeight: '500' }}>
+                {user?.badges?.length || 0} Unlocked  •  {Math.max(0, badgesData.length - (user?.badges?.length || 0))} Locked
+              </Text>
+            </View>
           </View>
 
           <View style={styles.grid}>
