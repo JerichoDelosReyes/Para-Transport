@@ -292,7 +292,8 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
         onDidFinishLoadingMap={handleMapReady}
         onPress={onMapTouchStart}
         onLongPress={(event: any) => {
-          const coords = event?.geometry?.coordinates;
+          // MapLibre v11 gives coordinates in `event.nativeEvent.lngLat`
+          const coords = event?.nativeEvent?.lngLat || event?.geometry?.coordinates || event?.lngLat;
           if (!Array.isArray(coords) || coords.length < 2 || !onMapLongPress) return;
           onMapLongPress([coords[0], coords[1]]);
         }}
@@ -300,15 +301,15 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
           // Skip firing callback if this was an external programmatic update
           if (isExternalUpdateRef.current) return;
           
-          const properties = event?.properties;
-          const center = event?.geometry?.coordinates;
-          if (!properties || !onCameraChanged) return;
+          const viewState = event?.nativeEvent || event;
+          const center = viewState?.center;
+          if (!viewState || !onCameraChanged) return;
 
           onCameraChanged({
             centerCoordinate: Array.isArray(center) ? [center[0], center[1]] : undefined,
-            zoom: properties.zoomLevel,
-            pitch: properties.pitch,
-            heading: properties.heading,
+            zoom: viewState.zoom,
+            pitch: viewState.pitch,
+            heading: viewState.bearing !== undefined ? viewState.bearing : viewState.heading,
           });
         }}
       >
