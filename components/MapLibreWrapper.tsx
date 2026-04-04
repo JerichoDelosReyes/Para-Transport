@@ -195,12 +195,17 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
       if (externalCameraCenter || externalCameraZoom !== undefined || externalCameraPitch !== undefined || externalCameraHeading !== undefined) {
         isExternalUpdateRef.current = true;
         
-        cameraRef.current.setCamera({
-          centerCoordinate: externalCameraCenter,
-          zoomLevel: externalCameraZoom,
-          pitch: externalCameraPitch,
-          heading: externalCameraHeading,
-        });
+        const opts: any = {};
+        if (externalCameraCenter) opts.center = externalCameraCenter;
+        if (externalCameraZoom !== undefined) opts.zoom = externalCameraZoom;
+        if (externalCameraPitch !== undefined) opts.pitch = externalCameraPitch;
+        if (externalCameraHeading !== undefined) opts.bearing = externalCameraHeading;
+
+        if (opts.center) {
+          cameraRef.current.easeTo(opts);
+        } else if (opts.zoom !== undefined) {
+          cameraRef.current.zoomTo(opts.zoom, opts);
+        }
         
         // Disable flag after camera update so next user interaction is captured
         setTimeout(() => {
@@ -211,20 +216,41 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
 
     useImperativeHandle(ref, () => ({
       flyTo: (coordinate, duration = 600) => {
-        cameraRef.current?.flyTo(coordinate, duration);
+        cameraRef.current?.flyTo({ center: coordinate, duration });
       },
       fitBounds: (northEast, southWest, padding = 48, duration = 600) => {
-        cameraRef.current?.fitBounds(northEast, southWest, padding, duration);
+        let viewPadding;
+        if (typeof padding === 'number') {
+          viewPadding = { top: padding, right: padding, bottom: padding, left: padding };
+        } else if (Array.isArray(padding) && padding.length >= 2) {
+          viewPadding = { 
+            top: padding[0], bottom: padding[0], 
+            left: padding[1] || padding[0], right: padding[1] || padding[0] 
+          };
+        }
+        
+        cameraRef.current?.fitBounds(
+          [southWest[0], southWest[1], northEast[0], northEast[1]],
+          { padding: viewPadding, duration }
+        );
       },
       setCamera: (options) => {
-        cameraRef.current?.setCamera({
-          centerCoordinate: options.centerCoordinate,
-          zoomLevel: options.zoomLevel,
-          pitch: options.pitch,
-          heading: options.heading,
-          animationDuration: options.animationDuration,
-          animationMode: options.animationMode,
-        });
+        const opts: any = {};
+        if (options.centerCoordinate) opts.center = options.centerCoordinate;
+        if (options.zoomLevel !== undefined) opts.zoom = options.zoomLevel;
+        if (options.pitch !== undefined) opts.pitch = options.pitch;
+        if (options.heading !== undefined) opts.bearing = options.heading;
+        if (options.animationDuration !== undefined) opts.duration = options.animationDuration;
+
+        if (options.animationMode === 'flyTo' && opts.center) {
+          cameraRef.current?.flyTo(opts);
+        } else if (options.animationMode !== 'flyTo' && options.animationMode !== 'linearTo' && opts.center) {
+          cameraRef.current?.easeTo(opts);
+        } else if (opts.center) {
+          cameraRef.current?.jumpTo(opts);
+        } else if (opts.zoom !== undefined) {
+          cameraRef.current?.zoomTo(opts.zoom, opts);
+        }
       },
     }));
 
@@ -258,11 +284,11 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
       <Map
         style={{ flex: 1 }}
         mapStyle={styleURL}
-        compassEnabled={false}
-        rotateEnabled={rotateEnabled}
-        pitchEnabled={pitchEnabled}
-        zoomEnabled
-        scrollEnabled
+        compass={false}
+        touchRotate={rotateEnabled}
+        touchPitch={pitchEnabled}
+        touchZoom={true}
+        dragPan={true}
         onDidFinishLoadingMap={handleMapReady}
         onPress={onMapTouchStart}
         onLongPress={(event: any) => {
@@ -288,12 +314,11 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
       >
         <Camera
           ref={cameraRef}
-          centerCoordinate={externalCameraCenter ?? initialCenterCoordinate}
-          zoomLevel={externalCameraZoom ?? initialZoomLevel}
-          minZoomLevel={minZoomLevel}
-          maxZoomLevel={maxZoomLevel}
-          pitch={externalCameraPitch ?? MAP_CONFIG.THREE_D_CAMERA.defaultPitch}
-          heading={externalCameraHeading ?? 0}
+          center={initialCenterCoordinate}
+          zoom={initialZoomLevel}
+          minZoom={minZoomLevel}
+          maxZoom={maxZoomLevel}
+          pitch={MAP_CONFIG.THREE_D_CAMERA.defaultPitch}
         />
 
         {lines.length > 0 ? (
@@ -319,7 +344,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
             <Marker
               key={marker.id}
               id={marker.id}
-              coordinate={marker.coordinate}
+              lngLat={marker.coordinate}
               onPress={() => setSelectedMarkerId(marker.id)}
             >
               <>
