@@ -214,7 +214,10 @@ export default function ProfileScreen() {
           </View>
 
           <View style={[styles.badgesWrapper, isGuestAccount && { opacity: 0.5 }]}>
-            {BADGES.slice(0, 3).map((badge) => {
+            {['route_rookie', 'multi_modal_commuter', 'route_comparator']
+              .map(id => BADGES.find(b => b.id === id))
+              .filter((b): b is import('../constants/badges').Badge => !!b)
+              .map((badge) => {
               const isEarned = user?.badges?.includes(badge.id) || false;
               return (
                 <TouchableOpacity 
