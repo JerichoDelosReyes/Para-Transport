@@ -11,6 +11,7 @@ import { useRoutes } from "../hooks/useRoutes";
 import { getChatbotReply, type ChatbotConversationState } from "../services/chatbotService";
 import { useStore } from "../store/useStore";
 import { supabase } from '../config/supabaseClient';
+import { useTheme } from '../src/theme/ThemeContext';
 
 const CHATBOT_STATES = {
   IDLE: require("../assets/AIChatbot/IDLE.png"),
@@ -30,6 +31,7 @@ type ChatMessage = {
 const BOT_NAME = "Jeepie";
 
 export default function AIChatbotScreen() {
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [currentState, setCurrentState] = useState<keyof typeof CHATBOT_STATES>("IDLE");
   const [inputText, setInputText] = useState("");
@@ -355,7 +357,7 @@ export default function AIChatbotScreen() {
 
   return (
     <LinearGradient
-      colors={[COLORS.background, "#FDE8A8", "#D7F3DE"]}
+      colors={isDark ? [theme.background, theme.surfaceSecondary, theme.background] : [COLORS.background, "#FDE8A8", "#D7F3DE"]}
       style={styles.container}
     >
       <SafeAreaView
@@ -363,29 +365,29 @@ export default function AIChatbotScreen() {
         edges={hasConversation ? ["left", "right", "bottom"] : ["top", "left", "right", "bottom"]}
       >
         {hasConversation ? (
-          <View style={[styles.chatHeader, { paddingTop: insets.top + 10 }]}> 
-            <TouchableOpacity onPress={() => router.back()} style={styles.chatHeaderBackButton}>
-              <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
+          <View style={[styles.chatHeader, { paddingTop: insets.top + 10 }, isDark && { backgroundColor: theme.surfaceSecondary, borderBottomColor: theme.cardBorder }]}> 
+            <TouchableOpacity onPress={() => router.back()} style={[styles.chatHeaderBackButton, isDark && { backgroundColor: theme.inputBackground }]}>
+              <Ionicons name="chevron-back" size={24} color={isDark ? theme.text : COLORS.navy} />
             </TouchableOpacity>
-            <View style={styles.chatHeaderAvatarWrap}>
+            <View style={[styles.chatHeaderAvatarWrap, isDark && { borderColor: theme.cardBorder }]}>
               <Image source={JEEPIE_AVATAR} style={styles.chatHeaderAvatarImage} />
             </View>
             <View style={styles.chatHeaderInfo}>
-              <Text style={styles.chatHeaderName}>{BOT_NAME}</Text>
+              <Text style={[styles.chatHeaderName, isDark && { color: theme.text }]}>{BOT_NAME}</Text>
               <View style={styles.chatStatusRow}>
                 <View style={styles.onlineDot} />
-                <Text style={styles.chatHeaderStatus}>Online</Text>
+                <Text style={[styles.chatHeaderStatus, isDark && { color: theme.textSecondary }]}>Online</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={handleClearChat} style={styles.chatHeaderClearButton}>
-              <Ionicons name="trash-outline" size={18} color={COLORS.navy} />
-              <Text style={styles.chatHeaderClearText}>Clear</Text>
+            <TouchableOpacity onPress={handleClearChat} style={[styles.chatHeaderClearButton, isDark && { backgroundColor: theme.inputBackground, borderColor: "transparent" }]}>
+              <Ionicons name="trash-outline" size={18} color={isDark ? theme.text : COLORS.navy} />
+              <Text style={[styles.chatHeaderClearText, isDark && { color: theme.text }]}>Clear</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-              <Ionicons name="chevron-back" size={28} color={COLORS.navy} />
+            <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, isDark && { backgroundColor: theme.surfaceSecondary, shadowColor: "transparent" }]}>
+              <Ionicons name="chevron-back" size={28} color={isDark ? theme.text : COLORS.navy} />
             </TouchableOpacity>
           </View>
         )}
@@ -393,13 +395,13 @@ export default function AIChatbotScreen() {
         {messages.length === 0 ? (
           <>
             <Animated.View style={[styles.greetingContainer, { opacity: greetingOpacity }]}>
-              <Text style={styles.greetingTitle}>
+              <Text style={[styles.greetingTitle, isDark && { color: theme.textSecondary }]}>
                 {isTagalogGreeting
                   ? `Kumusta, ${preferredName || "Komyuter"}!`
                   : `Hello, ${preferredName || "Commuter"}!`}
               </Text>
               <Text
-                style={styles.greetingSubtitle}
+                style={[styles.greetingSubtitle, isDark && { color: theme.text }]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.78}
@@ -413,7 +415,8 @@ export default function AIChatbotScreen() {
                 style={[
                   styles.aiGlowWrap,
                   isKeyboardVisible ? styles.aiGlowWrapKeyboard : null,
-                  { transform: [{ translateY: isKeyboardVisible ? 0 : floatAnim }] },
+                  isDark && { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder, shadowOpacity: 0 },
+                    { transform: [{ translateY: isKeyboardVisible ? 0 : floatAnim }] },
                 ]}
               >
                 <View style={[styles.aiImagePortal, isKeyboardVisible ? styles.aiImagePortalKeyboard : null]}>
@@ -423,7 +426,7 @@ export default function AIChatbotScreen() {
                   />
                 </View>
               </Animated.View>
-              {!isKeyboardVisible && <View style={styles.aiShadow} />}
+              {!isKeyboardVisible && <View style={[styles.aiShadow, isDark && { backgroundColor: "rgba(0,0,0,0.5)" }]} />}
             </View>
           </>
         ) : (
@@ -439,8 +442,8 @@ export default function AIChatbotScreen() {
                 if (item.isUser) {
                   return (
                     <View style={styles.userMessageRow}>
-                      <View style={[styles.messageBubble, styles.userBubble]}>
-                        <Text style={[styles.messageText, styles.userMessageText]}>
+                      <View style={[styles.messageBubble, styles.userBubble, isDark && { backgroundColor: theme.accent }]}><Text style={[styles.messageText, styles.userMessageText, isDark && { color: "#0A1628" }]}>
+                        
                           {item.text}
                         </Text>
                       </View>
@@ -453,8 +456,8 @@ export default function AIChatbotScreen() {
                     <View style={styles.aiMessageAvatarWrap}>
                       <Image source={JEEPIE_AVATAR} style={styles.aiMessageAvatarImage} />
                     </View>
-                    <View style={[styles.messageBubble, styles.aiBubble]}>
-                      <Text style={[styles.messageText, styles.aiMessageText]}>
+                    <View style={[styles.messageBubble, styles.aiBubble, isDark && { backgroundColor: theme.surfaceSecondary, borderColor: theme.cardBorder }]}><Text style={[styles.messageText, styles.aiMessageText, isDark && { color: theme.text }]}>
+                      
                         {item.text}
                       </Text>
                     </View>
@@ -467,7 +470,7 @@ export default function AIChatbotScreen() {
                     <View style={styles.aiMessageAvatarWrap}>
                       <Image source={JEEPIE_AVATAR} style={styles.aiMessageAvatarImage} />
                     </View>
-                    <View style={[styles.messageBubble, styles.aiBubble, styles.typingBubble]}>
+                    <View style={[styles.messageBubble, styles.aiBubble, styles.typingBubble, isDark && { backgroundColor: theme.surfaceSecondary, borderColor: theme.cardBorder }]}>
                       <View style={styles.typingDotsRow}>
                         {[0, 1, 2].map((dotIndex) => {
                           const start = dotIndex * 0.22;
@@ -480,12 +483,12 @@ export default function AIChatbotScreen() {
                           return (
                             <Animated.View
                               key={dotIndex}
-                              style={[styles.typingDot, { opacity: dotOpacity }]}
+                                style={[styles.typingDot, { opacity: dotOpacity }, isDark && { backgroundColor: theme.textSecondary }]}
                             />
                           );
                         })}
                       </View>
-                      <Text style={styles.typingText}>Jeepie is typing</Text>
+                      <Text style={[styles.typingText, isDark && { color: theme.textSecondary }]}>Jeepie is typing</Text>
                     </View>
                   </View>
                 ) : null
@@ -499,17 +502,17 @@ export default function AIChatbotScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={[styles.inputContainer, hasConversation ? styles.inputContainerChat : null]}
         >
-          <View style={[styles.inputWrapper, hasConversation ? styles.inputWrapperChat : null]}>
-            <TextInput 
-              style={styles.textInput}
+          <View style={[styles.inputWrapper, hasConversation ? styles.inputWrapperChat : null, isDark && { backgroundColor: theme.surfaceSecondary, borderColor: theme.cardBorder }]}>
+              <TextInput style={[styles.textInput, isDark && { color: theme.text }]} 
+              
               placeholder={isRecording ? "Listening..." : "Ask Jeepie"}
-              placeholderTextColor={isRecording ? COLORS.primary : COLORS.textMuted}
+              placeholderTextColor={isRecording ? (isDark ? theme.accent : COLORS.primary) : (isDark ? theme.textSecondary : COLORS.textMuted)}
               value={inputText}
               onChangeText={setInputText}
               onSubmitEditing={handleSend}
             />
 
-            <TouchableOpacity style={[styles.micButton, isSending ? { opacity: 0.6 } : null]} onPress={handleSendOrMic} disabled={isSending}>
+            <TouchableOpacity style={[styles.micButton, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }, isSending ? { opacity: 0.6 } : null]} onPress={handleSendOrMic} disabled={isSending}>
               {isSending ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
@@ -597,7 +600,7 @@ const styles = StyleSheet.create({
   aiContainerKeyboard: { flex: 0, marginTop: 18, marginBottom: 14 },
   aiGlowWrap: { width: 250, height: 250, borderRadius: 125, backgroundColor: "rgba(255,255,255,0.5)", alignItems: "center", justifyContent: "center", shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 30, elevation: 20, borderWidth: 2, borderColor: "rgba(255,255,255,0.8)" },
   aiGlowWrapKeyboard: { width: 180, height: 180, borderRadius: 90, shadowOpacity: 0.3, shadowRadius: 16 },
-  aiImagePortal: { width: 220, height: 220, borderRadius: 110, overflow: "hidden", backgroundColor: "#CBA962", alignItems: "center", justifyContent: "center" },
+  aiImagePortal: { width: 220, height: 220, borderRadius: 110, overflow: "hidden", backgroundColor: "#CDAA54", alignItems: "center", justifyContent: "center" },
   aiImagePortalKeyboard: { width: 160, height: 160, borderRadius: 80 },
   chatbotImage: { width: "100%", height: "100%", resizeMode: "contain" },
   aiShadow: { width: 120, height: 12, borderRadius: 6, backgroundColor: "rgba(10, 22, 40, 0.1)", marginTop: 30, transform: [{ scaleX: 2 }] },
@@ -611,7 +614,7 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     overflow: "hidden",
-    backgroundColor: "#E0B258",
+    backgroundColor: "#CDAA54",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.75)",
     marginBottom: 2,
@@ -660,5 +663,5 @@ const styles = StyleSheet.create({
     borderColor: "rgba(10,22,40,0.12)",
   },
   textInput: { flex: 1, height: 40, fontSize: 16, color: COLORS.navy },
-  micButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center", shadowColor: "transparent", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 }
+  micButton: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", shadowColor: "transparent", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 }
 });

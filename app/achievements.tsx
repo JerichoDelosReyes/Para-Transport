@@ -109,10 +109,28 @@ export default function AchievementsScreen() {
                       // Determine the name to show 
                       const displayName = lbUser.username ? `${lbUser.username}` : (lbUser.full_name || 'Anonymous User');
                       
+                      let containerBg = isDark ? theme.surfaceSecondary : '#F3F4F6';
+                      let textColor = isDark ? '#FFFFFF' : '#4B5563';
+                      let ptsColor = theme.text;
+                      
+                      if (index === 0) {
+                        containerBg = isDark ? 'rgba(232,160,32,0.4)' : '#FEF08A';
+                        textColor = isDark ? '#FFFFFF' : '#854D0E';
+                        ptsColor = isDark ? '#E8A020' : '#D97706';
+                      } else if (index === 1) {
+                        containerBg = isDark ? 'rgba(156,163,175,0.4)' : '#E5E7EB';
+                        textColor = isDark ? '#FFFFFF' : '#374151';
+                        ptsColor = isDark ? '#D1D5DB' : '#4B5563';
+                      } else if (index === 2) {
+                        containerBg = isDark ? 'rgba(180,83,9,0.4)' : '#FFEDD5';
+                        textColor = isDark ? '#FFFFFF' : '#9A3412';
+                        ptsColor = isDark ? '#F59E0B' : '#B45309';
+                      }
+                      
                       return (
                         <View key={lbUser.id || index} style={[styles.leaderboardCard, isMe && [styles.leaderboardCardMe, { backgroundColor: isDark ? 'rgba(232, 160, 32, 0.15)' : '#FFFBEB' }]]}>
-                          <View style={[styles.rankContainer, styles.rankContainerTop, { backgroundColor: isDark ? 'rgba(220,160,32,0.4)' : '#FEF08A' }]}>
-                            <Text style={[styles.rankText, styles.rankTextTop, { color: isDark ? '#FFFFFF' : '#854D0E' }]}>#{index + 1}</Text>
+                          <View style={[styles.rankContainer, { backgroundColor: containerBg }]}>
+                            <Text style={[styles.rankText, { color: textColor }]}>#{index + 1}</Text>
                           </View>
                           <View style={styles.lbInfo}>
                             <Text style={[styles.lbName, isMe && styles.lbNameMe, { color: isDark ? '#FFFFFF' : '#1F2937' }]} numberOfLines={1}>
@@ -120,7 +138,7 @@ export default function AchievementsScreen() {
                             </Text>
                           </View>
                           <View style={styles.pointsContainer}>
-                            <Text style={[styles.pointsText, styles.pointsTextTop, { color: isDark ? '#E8A020' : '#D97706' }]}>{lbUser.points || 0}</Text>
+                            <Text style={[styles.pointsText, { color: ptsColor }]}>{lbUser.points || 0}</Text>
                             <Text style={[styles.pointsLabel, { color: theme.textSecondary }]}>PTS</Text>
                           </View>
                         </View>

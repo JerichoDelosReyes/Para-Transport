@@ -158,7 +158,7 @@ export default function EditProfileScreen() {
         <View style={styles.inputGroup}>
           <Text style={[styles.label, { color: theme.textSecondary }]}>Full Name</Text>
           <TextInput
-            style={[styles.input, { backgroundColor: theme.inputBackground, color: theme.text }]}
+            style={[styles.input, { backgroundColor: isDark ? theme.inputBackground : '#FFFFFF', color: theme.text }]}
             value={name}
             onChangeText={setName}
             placeholder="Enter your full name"
@@ -170,7 +170,7 @@ export default function EditProfileScreen() {
         <View style={styles.inputGroup}>
           <Text style={[styles.label, { color: theme.textSecondary }]}>Email</Text>
           <TextInput
-            style={[styles.input, styles.inputDisabled, { color: theme.textSecondary }]}
+            style={[styles.input, styles.inputDisabled, { backgroundColor: isDark ? theme.inputBackground : '#FFFFFF', color: theme.textSecondary }]}
             value={user?.email || ''}
             editable={false}
           />
@@ -194,12 +194,12 @@ export default function EditProfileScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={[styles.changePasswordButton, { marginTop: 12, backgroundColor: 'transparent' }]}
+              style={[styles.changePasswordButton, { marginTop: 12, backgroundColor: isDark ? 'rgba(211, 47, 47, 0.15)' : '#FFEBEE' }]}
               onPress={() => setIsResetModalVisible(true)}
             >
               <Ionicons name="warning-outline" size={20} color="#D32F2F" />
               <Text style={[styles.changePasswordText, { color: '#D32F2F' }]}>Reset Progress</Text>
-              <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} style={styles.chevronIcon} />
+              <Ionicons name="chevron-forward" size={20} color="#D32F2F" style={styles.chevronIcon} />
             </TouchableOpacity>
           </>
         )}

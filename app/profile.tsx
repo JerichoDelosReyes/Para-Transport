@@ -54,13 +54,13 @@ export default function ProfileScreen() {
   const getRankStyle = (rank: number) => {
     switch (rank) {
       case 1:
-        return { backgroundColor: '#FEF08A', color: '#854D0E', emoji: '🥇' }; // Gold
+        return { backgroundColor: isDark ? 'rgba(220,160,32,0.4)' : '#FEF08A', color: isDark ? '#FFFFFF' : '#854D0E', emoji: '🥇' }; // Gold
       case 2:
-        return { backgroundColor: '#E5E7EB', color: '#374151', emoji: '🥈' }; // Silver
+        return { backgroundColor: isDark ? 'rgba(156,163,175,0.4)' : '#E5E7EB', color: isDark ? '#FFFFFF' : '#374151', emoji: '🥈' }; // Silver
       case 3:
-        return { backgroundColor: '#FED7AA', color: '#92400E', emoji: '🥉' }; // Bronze
+        return { backgroundColor: isDark ? 'rgba(180,83,9,0.4)' : '#FED7AA', color: isDark ? '#FFFFFF' : '#92400E', emoji: '🥉' }; // Bronze
       default:
-        return { backgroundColor: 'rgba(0,0,0,0.04)', color: COLORS.navy, emoji: '🏆' }; // Default
+        return { backgroundColor: isDark ? theme.surfaceSecondary : 'rgba(0,0,0,0.04)', color: isDark ? '#FFFFFF' : COLORS.navy, emoji: '🏆' }; // Default
     }
   };
 

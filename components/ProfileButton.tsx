@@ -2,6 +2,7 @@ import { TouchableOpacity, Text, StyleSheet, View, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useStore } from '../store/useStore';
 import { COLORS } from '../constants/theme';
+import { useTheme } from '../src/theme/ThemeContext';
 
 function getInitials(name: string) {
   if (!name) return 'PR';
@@ -13,20 +14,21 @@ function getInitials(name: string) {
 export function ProfileButton() {
   const router = useRouter();
   const user = useStore((state) => state.user);
+  const { isDark } = useTheme();
 
   // @ts-ignore - Check if photoUrl exists on user in the future
   const photoUrl = user?.photoUrl || user?.photo;
 
   return (
     <TouchableOpacity 
-      style={styles.avatarButton} 
+      style={[styles.avatarButton, { backgroundColor: isDark ? '#0A1628' : '#E8A020' }]} 
       onPress={() => router.navigate('/profile')}
       activeOpacity={0.8}
     >
       {photoUrl ? (
         <Image source={{ uri: photoUrl }} style={styles.avatarImage} />
       ) : (
-        <Text style={styles.avatarInitials}>
+        <Text style={[styles.avatarInitials, { color: isDark ? '#E8A020' : COLORS.navy }]}>
           {getInitials(user?.username || user?.full_name || '')}
         </Text>
       )}

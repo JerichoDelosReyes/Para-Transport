@@ -380,16 +380,16 @@ export default function SearchScreen({
 
   return (
     <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>
-      <View style={[styles.container, { paddingTop: Math.max(insets.top, 14) }]}>
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 14), backgroundColor: theme.background }]}>
         <View style={styles.safe}>
           {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={24} color={theme.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { flex: 1 }]}>Your Route</Text>
+          <Text style={[styles.headerTitle, { flex: 1, color: theme.text }]}>Your Route</Text>
           <TouchableOpacity onPress={handleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name={isRouteSaved() ? "bookmark" : "bookmark-outline"} size={24} color={isRouteSaved() ? COLORS.primary : COLORS.navy} />
+            <Ionicons name={isRouteSaved() ? "bookmark" : "bookmark-outline"} size={24} color={isRouteSaved() ? COLORS.primary : theme.text} />
           </TouchableOpacity>
         </View>
 
@@ -406,9 +406,9 @@ export default function SearchScreen({
             <View style={[styles.fieldDot, { backgroundColor: '#4A90D9' }]} />
             <TextInput
               ref={originRef}
-              style={styles.fieldInput}
+              style={[styles.fieldInput, { color: theme.text }]}
               placeholder="Where are you now?"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={theme.textSecondary}
               value={usingCurrentLocation && !originText ? (currentLocationLabel || 'Current Location') : originText}
               onChangeText={(t) => {
                 setOriginText(t);
@@ -469,9 +469,9 @@ export default function SearchScreen({
             <View style={[styles.fieldDot, { backgroundColor: '#E8A020' }]} />
             <TextInput
               ref={destRef}
-              style={styles.fieldInput}
+              style={[styles.fieldInput, { color: theme.text }]}
               placeholder="Where are you going?"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={theme.textSecondary}
               value={destinationText}
               onChangeText={setDestinationText}
               onFocus={() => setActiveField('destination')}
@@ -540,7 +540,7 @@ export default function SearchScreen({
             {isFetching && suggestions.length === 0 ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator size="small" color="#E8A020" />
-                <Text style={styles.loadingText}>Searching places...</Text>
+                <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Searching places...</Text>
               </View>
             ) : (
               <FlatList
@@ -558,10 +558,10 @@ export default function SearchScreen({
                       <Ionicons name="location" size={18} color="#4A90D9" />
                     </View>
                     <View style={styles.resultTextWrap}>
-                      <Text style={styles.resultTitle} numberOfLines={1}>
+                      <Text style={[styles.resultTitle, { color: theme.text }]} numberOfLines={1}>
                         {item.title}
                       </Text>
-                      <Text style={styles.resultSubtitle} numberOfLines={2}>
+                      <Text style={[styles.resultSubtitle, { color: theme.textSecondary }]} numberOfLines={2}>
                         {item.subtitle}
                       </Text>
                     </View>
@@ -569,7 +569,7 @@ export default function SearchScreen({
                 )}
                 ListEmptyComponent={
                   !isFetching ? (
-                    <Text style={styles.emptyText}>No places found. Try a different search.</Text>
+                    <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No places found. Try a different search.</Text>
                   ) : null
                 }
               />
@@ -581,7 +581,7 @@ export default function SearchScreen({
               <>
                 <View style={styles.sectionHeader}>
                   <Ionicons name="time-outline" size={16} color={theme.text} />
-                  <Text style={styles.sectionTitle}>Recent</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent</Text>
                 </View>
                 <FlatList
                   data={recents}
@@ -598,10 +598,10 @@ export default function SearchScreen({
                         <Ionicons name="location" size={18} color="#4A90D9" />
                       </View>
                       <View style={styles.resultTextWrap}>
-                        <Text style={styles.resultTitle} numberOfLines={1}>
+                        <Text style={[styles.resultTitle, { color: theme.text }]} numberOfLines={1}>
                           {item.title}
                         </Text>
-                        <Text style={styles.resultSubtitle} numberOfLines={2}>
+                        <Text style={[styles.resultSubtitle, { color: theme.textSecondary }]} numberOfLines={2}>
                           {item.subtitle}
                         </Text>
                       </View>
@@ -621,7 +621,6 @@ export default function SearchScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   safe: {
     flex: 1,

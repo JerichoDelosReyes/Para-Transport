@@ -260,6 +260,7 @@ export const useStore = create<StoreState>()(
               total_distance: newUser.total_distance,
               total_trips: newUser.total_trips,
               total_fare: newUser.spent,
+              points_history: newUser.points_history,
             })
             .eq('id', state.user.id)
             .then(({ error }) => {
@@ -280,11 +281,11 @@ export const useStore = create<StoreState>()(
           const currentSaved = state.user.saved_routes || [];
           if (!currentSaved.find((r) => r.id === route.id)) {
             const newSavedRoutes = [...currentSaved, route];
-            if (state.sessionMode === 'auth' && state.user.email) {
+            if (state.sessionMode === 'auth' && state.user.id) {
               supabase
                 .from('users')
                 .update({ saved_routes: newSavedRoutes })
-                .eq('email', state.user.email)
+                .eq('id', state.user.id)
                 .then(({ error }) => {
                   if (error && error.code !== 'PGRST204') console.log('Failed to save route to Supabase:', error);
                 });
@@ -296,11 +297,11 @@ export const useStore = create<StoreState>()(
       removeSavedRoute: (routeId: string | number) =>
         set((state) => {
           const newSavedRoutes = (state.user.saved_routes || []).filter((r) => r.id !== routeId);
-          if (state.sessionMode === 'auth' && state.user.email) {
+          if (state.sessionMode === 'auth' && state.user.id) {
             supabase
               .from('users')
               .update({ saved_routes: newSavedRoutes })
-              .eq('email', state.user.email)
+              .eq('id', state.user.id)
               .then(({ error }) => {
                 if (error && error.code !== 'PGRST204') console.log('Failed to save route to Supabase:', error);
               });
@@ -317,11 +318,11 @@ export const useStore = create<StoreState>()(
           const currentSaved = state.user.saved_places || [];
           if (!currentSaved.find((p) => p.id === place.id)) {
             const newSavedPlaces = [...currentSaved, place];
-            if (state.sessionMode === 'auth' && state.user.email) {
+            if (state.sessionMode === 'auth' && state.user.id) {
               supabase
                 .from('users')
                 .update({ saved_places: newSavedPlaces })
-                .eq('email', state.user.email)
+                .eq('id', state.user.id)
                 .then(({ error }) => {
                   if (error && error.code !== 'PGRST204') console.log('Failed to save place to Supabase:', error);
                 });
@@ -333,11 +334,11 @@ export const useStore = create<StoreState>()(
       removeSavedPlace: (placeId: string) =>
         set((state) => {
           const newSavedPlaces = (state.user.saved_places || []).filter((p) => p.id !== placeId);
-          if (state.sessionMode === 'auth' && state.user.email) {
+          if (state.sessionMode === 'auth' && state.user.id) {
             supabase
               .from('users')
               .update({ saved_places: newSavedPlaces })
-              .eq('email', state.user.email)
+              .eq('id', state.user.id)
               .then(({ error }) => {
                 if (error && error.code !== 'PGRST204') console.log('Failed to remove saved route in Supabase:', error);
               });
@@ -354,11 +355,11 @@ export const useStore = create<StoreState>()(
           const currentHistory = state.user.commute_history || [];
           const newHistory = [item, ...currentHistory.filter((h: any) => h.id !== item.id)].slice(0, 200);
           
-          if (state.sessionMode === 'auth' && state.user.email) {
+          if (state.sessionMode === 'auth' && state.user.id) {
             supabase
               .from('users')
               .update({ commute_history: newHistory })
-              .eq('email', state.user.email)
+              .eq('id', state.user.id)
               .then(({ error }) => {
                 if (error && error.code !== 'PGRST204') console.error('Error saving history to Supabase:', error);
               });
@@ -373,11 +374,11 @@ export const useStore = create<StoreState>()(
           const updatedHistory = [...currentHistory];
           updatedHistory[0] = { ...updatedHistory[0], fare: fare };
           
-          if (state.sessionMode === 'auth' && state.user.email) {
+          if (state.sessionMode === 'auth' && state.user.id) {
             supabase
               .from('users')
               .update({ commute_history: updatedHistory })
-              .eq('email', state.user.email)
+              .eq('id', state.user.id)
               .then(({ error }) => {
                 if (error && error.code !== 'PGRST204') console.error('Error updating history fare to Supabase:', error);
               });
@@ -387,11 +388,11 @@ export const useStore = create<StoreState>()(
         }),
       clearHistory: () =>
         set((state) => {
-          if (state.sessionMode === 'auth' && state.user.email) {
+          if (state.sessionMode === 'auth' && state.user.id) {
             supabase
               .from('users')
               .update({ commute_history: [] })
-              .eq('email', state.user.email)
+              .eq('id', state.user.id)
               .then(({ error }) => {
                 if (error && error.code !== 'PGRST204') console.error('Error clearing history in Supabase:', error);
               });
@@ -409,11 +410,11 @@ export const useStore = create<StoreState>()(
           const newBadges = [...currentBadges, badgeId];
           
           // update supabase if authenticated
-          if (state.sessionMode === 'auth' && state.user.email) {
+          if (state.sessionMode === 'auth' && state.user.id) {
             supabase
               .from('users')
               .update({ badges: newBadges })
-              .eq('email', state.user.email)
+              .eq('id', state.user.id)
               .then(({ error }) => {
                 if (error && error.code !== 'PGRST204') console.log('Failed to array-sync badge to Supabase:', error.message);
               });
@@ -437,9 +438,10 @@ export const useStore = create<StoreState>()(
           saved_routes: [],
           saved_places: [],
           commute_history: [],
+          points_history: [],
         };
         
-        if (state.sessionMode === 'auth' && state.user.email) {
+        if (state.sessionMode === 'auth' && state.user.id) {
           supabase
             .from('users')
             .update({
@@ -450,8 +452,10 @@ export const useStore = create<StoreState>()(
               total_trips: 0,
               badges: [],
               last_ride_at: null,
+              points_history: [],
+              commute_history: [],
             })
-            .eq('email', state.user.email)
+            .eq('id', state.user.id)
             .then(({ error }) => {
               if (error) console.log('Failed to reset progress in Supabase:', error.message);
             });
@@ -461,12 +465,12 @@ export const useStore = create<StoreState>()(
       }),
       syncWithSupabase: async () => {
         const state = useStore.getState();
-        if (state.sessionMode === 'auth' && state.user?.email) {
+        if (state.sessionMode === 'auth' && state.user?.id) {
           try {
             const { data, error } = await supabase
               .from('users')
               .select('points, streak_count, total_distance, total_trips, total_fare, badges, last_ride_at')
-              .eq('email', state.user.email)
+              .eq('id', state.user.id)
               .single();
               
             if (data && !error) {

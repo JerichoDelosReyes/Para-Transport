@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
+import { useTheme } from '../../src/theme/ThemeContext';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import type { JeepneyRoute } from '../../types/routes';
@@ -434,6 +435,7 @@ const candidateHasMode = (candidate: RecommenderCandidate, mode: string): boolea
 };
 
 export default function HomeScreen() {
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
@@ -2011,7 +2013,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </BlurView>
 
-        <View style={[styles.chatbotWrap]}>
+        <View style={[styles.chatbotWrap, { backgroundColor: '#CBA962', borderColor: isDark ? theme.cardBorder : '#FFFFFF' }]}>
           <TouchableOpacity 
             style={styles.locateButton} 
             onPress={() => router.push('/ai-chatbot')} 
@@ -2091,7 +2093,7 @@ export default function HomeScreen() {
         {/* Floating Top Header */}
         <View style={[styles.header, isSearchActive && { zIndex: 10 }]}>
           <TouchableOpacity
-              style={styles.searchPillWrapper}
+              style={[styles.searchPillWrapper, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}
               activeOpacity={0.8}
               onPress={() => setIsSearchActive(true)}
             >
@@ -2100,14 +2102,14 @@ export default function HomeScreen() {
                 style={{ width: 48, height: 20 }} 
                 resizeMode="contain"
               />
-              <Text style={[styles.searchInputText, {color: COLORS.textMuted, flex: 1, marginLeft: 6}]} numberOfLines={1}>
+              <Text style={[styles.searchInputText, {color: theme.textSecondary, flex: 1, marginLeft: 6}]} numberOfLines={1}>
                 {destinationQuery ? `${originQuery || currentLocationLabel} → ${destinationQuery}` : `Saan tayo, ${user?.username || 'Komyuter'}?`}
               </Text>
               <TouchableOpacity 
                 onPress={() => setIsSearchActive(true)} 
                 style={{ paddingHorizontal: 8 }}
               >
-                <Ionicons name="mic" size={20} color={COLORS.textMuted} />
+                <Ionicons name="mic" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
               <ProfileButton />
             </TouchableOpacity>
@@ -2116,11 +2118,11 @@ export default function HomeScreen() {
         {/* Guidance Overlay */}
         {isGuidanceActive && guidanceSteps.length > 0 && (
           <Animated.View style={[styles.guidanceCardContainer, { transform: [{ translateY: guidancePanY }] }]}>
-            <View style={[styles.guidanceCard, { paddingTop: Math.max(insets.top, 24) + 16, position: 'relative' }]}>
+            <View style={[styles.guidanceCard, { paddingTop: Math.max(insets.top, 24) + 16, position: 'relative', backgroundColor: theme.cardBackground, borderColor: isDark ? theme.cardBorder : 'rgba(255,255,255,0.8)' }]}>
               <TouchableOpacity style={[styles.guidanceCloseBtn, { top: Math.max(insets.top, 24) + 8, right: 16 }]} onPress={stopGuidance}>
-                <Ionicons name="close" size={20} color={COLORS.textMuted} />
+                <Ionicons name="close" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
-              <View style={styles.guidanceIconBox}>
+              <View style={[styles.guidanceIconBox, { backgroundColor: isDark ? 'rgba(232,160,32,0.15)' : 'rgba(245,197,24,0.15)' }]}>
                 <Ionicons 
                   name={
                     guidanceSteps[currentStepIndex].type === 'walk' ? 'walk' :
@@ -2129,14 +2131,14 @@ export default function HomeScreen() {
                     guidanceSteps[currentStepIndex].type === 'transfer' ? 'swap-horizontal' :
                     guidanceSteps[currentStepIndex].type === 'alight' ? 'arrow-down' : 'checkmark-circle'
                   } 
-                  size={24} color={COLORS.primary} 
+                  size={24} color={isDark ? '#E8A020' : COLORS.primary} 
                 />
               </View>
               <View style={styles.guidanceTextWrap}>
                 <Animated.View style={{ opacity: guidanceStepFadeAnim }}>
-                  <Text style={styles.guidanceInstruction}>{guidanceSteps[currentStepIndex]?.instruction}</Text>
+                  <Text style={[styles.guidanceInstruction, { color: theme.text }]}>{guidanceSteps[currentStepIndex]?.instruction}</Text>
                   {currentStepIndex + 1 < guidanceSteps.length && (
-                    <Text style={styles.guidanceNextInstruction}>
+                    <Text style={[styles.guidanceNextInstruction, { color: theme.textSecondary }]}>
                       <Text style={{fontWeight:'700'}}>Then: </Text>
                       {guidanceSteps[currentStepIndex + 1]?.instruction}
                     </Text>
@@ -2144,8 +2146,8 @@ export default function HomeScreen() {
                 </Animated.View>
               </View>
               <View style={styles.guidanceEtaWrap}>
-                <Text style={styles.guidanceEta}>{Math.ceil((guidanceSteps[currentStepIndex]?.durationSeconds || 0) / 60)}</Text>
-                <Text style={styles.guidanceEtaMin}>min</Text>
+                <Text style={[styles.guidanceEta, { color: theme.text }]}>{Math.ceil((guidanceSteps[currentStepIndex]?.durationSeconds || 0) / 60)}</Text>
+                <Text style={[styles.guidanceEtaMin, { color: theme.textSecondary }]}>min</Text>
               </View>
             </View>
             <View style={styles.guidanceProgressBar}>
@@ -2202,11 +2204,11 @@ export default function HomeScreen() {
             {routeSummary && topRightSummaryText && (
               <>
                 <View style={{ flex: 1 }} />
-                <View style={[styles.topRightSummaryCard, { flexShrink: 1 }]}>
-                  <Text style={styles.topRightSummaryTitle} numberOfLines={1}>
+                <View style={[styles.topRightSummaryCard, { flexShrink: 1, backgroundColor: isDark ? theme.surfaceSecondary : '#FFF' }]}>
+                  <Text style={[styles.topRightSummaryTitle, { color: theme.textSecondary }]} numberOfLines={1}>
                     {sim.state !== 'idle' ? `${selectedOptionLabel} (Live)` : selectedOptionLabel}
                   </Text>
-                  <Text style={styles.topRightSummaryValue} numberOfLines={2}>
+                  <Text style={[styles.topRightSummaryValue, { color: theme.text }]} numberOfLines={2}>
                     {topRightSummaryText}
                   </Text>
                 </View>
@@ -2225,20 +2227,20 @@ export default function HomeScreen() {
             selectedRouteType,
             normalizeTransitRouteType((selectedTransitRoute as any).type),
           )) ? (
-          <View style={styles.transitRouteCard}>
+          <View style={[styles.transitRouteCard, { backgroundColor: theme.cardBackground, shadowColor: isDark ? '#000' : '#000' }]}>
             <View style={styles.transitRouteHeader}>
               <View style={[styles.transitTypeBadge, { backgroundColor: selectedTransitRoute.color || '#1E88E5' }]}>
                 <Text style={styles.transitTypeBadgeText}>{selectedTransitRoute.label || 'Transit'}</Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedTransitRoute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={22} color={COLORS.textMuted} />
+                <Ionicons name="close-circle" size={22} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.transitRouteTitle} numberOfLines={1}>
+            <Text style={[styles.transitRouteTitle, { color: theme.text }]} numberOfLines={1}>
               {selectedTransitRoute.ref ? `[${selectedTransitRoute.ref}] ` : ''}{selectedTransitRoute.name}
             </Text>
             {(selectedTransitRoute.from || selectedTransitRoute.to) ? (
-              <Text style={styles.transitRouteMeta} numberOfLines={1}>
+              <Text style={[styles.transitRouteMeta, { color: theme.textSecondary }]} numberOfLines={1}>
                 {selectedTransitRoute.from}{selectedTransitRoute.from && selectedTransitRoute.to ? ' -> ' : ''}{selectedTransitRoute.to}
               </Text>
             ) : null}
@@ -2247,12 +2249,12 @@ export default function HomeScreen() {
 
         {/* Simulation Panel */}
         {sim.state !== 'idle' && (
-          <View style={[styles.simPanelWrapper]}>
+          <View style={[styles.simPanelWrapper, { backgroundColor: theme.cardBackground }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               
               {/* Play/Pause/Replay Button */}
               <TouchableOpacity 
-                style={[styles.simPlayPauseBtn, { width: 44, height: 44, borderRadius: 22, flexShrink: 0 }]} 
+                style={[styles.simPlayPauseBtn, { width: 44, height: 44, borderRadius: 22, flexShrink: 0, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]} 
                 onPress={() => {
                   if (sim.state === 'finished') {
                     sim.reset(); sim.play();
@@ -2261,12 +2263,12 @@ export default function HomeScreen() {
                   }
                 }}
               >
-                <Ionicons name={sim.state === 'playing' ? 'pause' : sim.state === 'finished' ? 'refresh' : 'play'} size={22} color="#FFFFFF" style={sim.state === 'playing' || sim.state === 'finished' ? {} : { marginLeft: 3 }} />
+                <Ionicons name={sim.state === 'playing' ? 'pause' : sim.state === 'finished' ? 'refresh' : 'play'} size={22} color={isDark ? COLORS.navy : "#FFFFFF"} style={sim.state === 'playing' || sim.state === 'finished' ? {} : { marginLeft: 3 }} />
               </TouchableOpacity>
 
               {/* Title & Controls */}
               <View style={{ flex: 1, justifyContent: 'center' }}>
-                <Text style={[styles.simPanelStatusText, { fontSize: 13 }]} numberOfLines={1}>
+                <Text style={[styles.simPanelStatusText, { fontSize: 13, color: theme.text }]} numberOfLines={1}>
                   {destinationQuery ? `${originQuery || currentLocationLabel} → ${destinationQuery}` : sim.currentSegInfo?.label || 'Walking...'}
                 </Text>
                 
@@ -2281,17 +2283,17 @@ export default function HomeScreen() {
                     </Text>
                   </TouchableOpacity>
                   
-                  <Text style={{ fontSize: 11, color: '#71717A', marginLeft: 8, marginRight: 4, fontWeight: '500' }} numberOfLines={1}>
+                  <Text style={{ fontSize: 11, color: theme.textSecondary, marginLeft: 8, marginRight: 4, fontWeight: '500' }} numberOfLines={1}>
                     {sim.state === 'finished' ? 'Arrived' : `${Math.max(0, sim.remainingDistanceKm).toFixed(1)} km left`}
                   </Text>
                   {sim.currentSegInfo?.vehicleType === 'jeepney' ? (
-                    <Ionicons name="bus-outline" size={14} color="#71717A" />
+                    <Ionicons name="bus-outline" size={14} color={theme.textSecondary} />
                   ) : sim.currentSegInfo?.vehicleType === 'bus' ? (
-                    <Ionicons name="bus" size={14} color="#71717A" />
+                    <Ionicons name="bus" size={14} color={theme.textSecondary} />
                   ) : sim.currentSegInfo?.vehicleType === 'tricycle' ? (
-                    <Ionicons name="bicycle" size={14} color="#71717A" />
+                    <Ionicons name="bicycle" size={14} color={theme.textSecondary} />
                   ) : (
-                    <Ionicons name="walk" size={14} color="#71717A" />
+                    <Ionicons name="walk" size={14} color={theme.textSecondary} />
                   )}
                 </View>
               </View>
@@ -2303,8 +2305,8 @@ export default function HomeScreen() {
             </View>
 
             {/* Bottom Progress Bar */}
-            <View style={[styles.simProgressBarTrack, { height: 3, marginTop: 12, marginBottom: 0, backgroundColor: '#F3F4F6' }]}>
-              <View style={[styles.simProgressBarFill, { width: `${sim.progress * 100}%`, backgroundColor: COLORS.primary }]} />
+            <View style={[styles.simProgressBarTrack, { height: 3, marginTop: 12, marginBottom: 0, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' }]}>
+              <View style={[styles.simProgressBarFill, { width: `${sim.progress * 100}%`, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]} />
             </View>
           </View>
         )}
