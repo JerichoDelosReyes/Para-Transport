@@ -27,7 +27,7 @@ import * as Haptics from 'expo-haptics';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
-import { findRoutesForDestination, rankRoutes, MatchedRoute, RankMode } from '../../services/routeSearch';
+import { findRoutesForDestination, MatchedRoute } from '../../services/routeSearch';
 import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
 import { loadRoutes } from '../../services/routeService';
@@ -40,7 +40,6 @@ const ROUTING_NEAREST_BASE_URL = 'https://router.project-osrm.org/nearest/v1';
 const WALK_ROUTING_PROFILE = 'walking';
 const MAX_WALK_PATH_POINTS = 140;
 const WALK_PATH_CACHE_LIMIT = 400;
-const MAX_RANKED_ROUTE_OPTIONS = 5;
 
 type MapCoordinate = {
   latitude: number;
@@ -210,6 +209,68 @@ const routeTypeLabel = (routeType: TransitRouteType): string => {
   if (routeType === 'jeepney') return 'Jeepney';
   return 'Jeep + Bus';
 };
+
+const compareLeastTransfer = (a: MatchedRoute, b: MatchedRoute): number => {
+  return (
+    a.transferCount - b.transferCount ||
+    a.estimatedMinutes - b.estimatedMinutes ||
+    a.estimatedFare - b.estimatedFare
+  );
+};
+
+const compareFastest = (a: MatchedRoute, b: MatchedRoute): number => {
+  return (
+    a.estimatedMinutes - b.estimatedMinutes ||
+    a.transferCount - b.transferCount ||
+    a.estimatedFare - b.estimatedFare
+  );
+};
+
+const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number => {
+  return (
+    a.estimatedFare - b.estimatedFare ||
+    a.transferCount - b.transferCount ||
+    a.estimatedMinutes - b.estimatedMinutes
+  );
+};
+
+const rankTopRoutes = (routes: MatchedRoute[], limit = 5): MatchedRoute[] => {
+  if (routes.length <= limit) return [...routes].sort(compareLeastTransfer);
+
+  const indexed = routes.map((route, index) => ({ route, index }));
+  const scores = new Map<number, number>();
+
+  const applyRank = (comparator: (a: MatchedRoute, b: MatchedRoute) => number) => {
+    const ordered = [...indexed].sort((a, b) => comparator(a.route, b.route) || a.index - b.index);
+    ordered.forEach((item, rankIndex) => {
+      scores.set(item.index, (scores.get(item.index) || 0) + rankIndex);
+    });
+  };
+
+  applyRank(compareLeastTransfer);
+  applyRank(compareFastest);
+  applyRank(compareCheapest);
+
+  return [...indexed]
+    .sort((a, b) => {
+      const scoreDiff = (scores.get(a.index) || 0) - (scores.get(b.index) || 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      return (
+        compareLeastTransfer(a.route, b.route) ||
+        compareFastest(a.route, b.route) ||
+        compareCheapest(a.route, b.route) ||
+        a.index - b.index
+      );
+    })
+    .slice(0, limit)
+    .map((item) => item.route);
+};
+
+const MAP_ROUTE_TYPE_OPTIONS: Array<{ key: TransitRouteType; label: string }> = [
+  { key: 'jeepney', label: 'Jeep' },
+  { key: 'bus', label: 'Bus' },
+  { key: 'combo', label: 'Both' },
+];
 
 const roundCoordForKey = (value: number): string => value.toFixed(5);
 
@@ -444,6 +505,7 @@ export default function HomeScreen() {
   const [destinationQuery, setDestinationQuery] = useState('');
   const [originQuery, setOriginQuery] = useState('');
   const [selectedRouteType, setSelectedRouteType] = useState<TransitRouteType>('jeepney');
+  const [showTransitPriority, setShowTransitPriority] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
   const [currentLocationLabel, setCurrentLocationLabel] = useState<string>('Current Location');
@@ -451,8 +513,6 @@ export default function HomeScreen() {
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
   const [matchedRoutes, setMatchedRoutes] = useState<MatchedRoute[]>([]);
-  const [rankTab, setRankTab] = useState<RankMode>('easiest');
-  const [rankedRoutes, setRankedRoutes] = useState<MatchedRoute[]>([]);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<MatchedRoute | null>(null);
   const [transitLegs, setTransitLegs] = useState<TransitLeg[]>([]);
@@ -472,10 +532,6 @@ export default function HomeScreen() {
     () => routeTypeLabel(selectedRouteType),
     [selectedRouteType],
   );
-
-  useEffect(() => {
-    setRankedRoutes(rankRoutes(matchedRoutes, rankTab).slice(0, MAX_RANKED_ROUTE_OPTIONS));
-  }, [matchedRoutes, rankTab]);
 
   const lastZoomedRouteIdRef = useRef<string | null>(null);
 
@@ -602,9 +658,13 @@ export default function HomeScreen() {
   }, []);
 
   const selectedOptionLabel = useMemo(() => {
-    if (!selectedRouteId) return 'Current Route';
-    return selectedRoute?.legs.map((l: any) => l.route.properties.code).join('+') || 'Current Route';
-  }, [selectedRouteId, selectedRoute]);
+    if (!selectedRoute || selectedRoute.legs.length === 0) return 'Current Route';
+
+    const firstRouteName = selectedRoute.legs[0]?.route?.properties?.name || 'Current Route';
+    if (selectedRoute.legs.length === 1) return firstRouteName;
+
+    return `${firstRouteName} +${selectedRoute.legs.length - 1} transfer`;
+  }, [selectedRoute]);
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -995,7 +1055,7 @@ export default function HomeScreen() {
       setShowRecommender(true);
 
       if (results.length > 0) {
-        const firstRanked = rankRoutes(results, 'easiest')[0];
+        const firstRanked = rankTopRoutes(results, 5)[0];
         if (firstRanked) {
           const firstId = firstRanked.legs.map((l: any) => l.route.properties.code).join('+');
           
@@ -2216,6 +2276,58 @@ export default function HomeScreen() {
             )}
           </View>
 
+          <View style={styles.routeTypeFilterGroup}>
+            <TouchableOpacity 
+              activeOpacity={0.8}
+              onPress={() => setShowTransitPriority(prev => !prev)}
+              style={styles.transitPriorityHeader}
+            >
+              <Text style={[styles.routeTypeFilterLabel, { color: theme.textSecondary }]}>Transit Priority</Text>
+              <Ionicons 
+                name={showTransitPriority ? "chevron-up" : "chevron-down"} 
+                size={14} 
+                color={theme.textSecondary} 
+                style={{ marginLeft: 4 }}
+              />
+            </TouchableOpacity>
+            
+            {showTransitPriority && (
+              <View
+                style={[
+                  styles.routeTypeFilterRow,
+                  {
+                    backgroundColor: theme.cardBackground,
+                    borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(10,22,40,0.08)',
+                  },
+                ]}
+              >
+                {MAP_ROUTE_TYPE_OPTIONS.map((option) => {
+                  const isActive = selectedRouteType === option.key;
+                  return (
+                    <TouchableOpacity
+                      key={option.key}
+                      style={[
+                        styles.routeTypeFilterPill,
+                        isActive && styles.routeTypeFilterPillActive,
+                      ]}
+                      activeOpacity={0.85}
+                      onPress={() => handleRouteTypeChange(option.key)}
+                    >
+                      <Text
+                        style={[
+                          styles.routeTypeFilterText,
+                          { color: isActive ? COLORS.navy : theme.textSecondary },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
 
         </View>
 
@@ -2316,9 +2428,6 @@ export default function HomeScreen() {
       <RouteRecommenderPanel
         visible={showRecommender}
         matchedRoutes={matchedRoutes}
-        rankedRoutes={rankedRoutes}
-        rankTab={rankTab}
-        setRankTab={setRankTab}
         selectedRoute={selectedRouteId}
         setSelectedRoute={(id: string | null) => setSelectedRouteId(id)}
         destinationName={destinationQuery}
@@ -2338,8 +2447,6 @@ export default function HomeScreen() {
         currentLocationLabel={currentLocationLabel}
         initialOrigin={pendingRouteSearch ? pendingRouteSearch.origin : originQuery}
         initialDestination={pendingRouteSearch ? pendingRouteSearch.destination : destinationQuery}
-        selectedRouteType={selectedRouteType}
-        onSelectRouteType={handleRouteTypeChange}
         onClearRoute={handleClearRoute}
         onClose={() => {
           setIsSearchActive(false);
@@ -3033,6 +3140,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.navy,
+  },
+  routeTypeFilterGroup: {
+    gap: 6,
+    alignSelf: 'flex-start',
+  },
+  transitPriorityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  routeTypeFilterLabel: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginLeft: 2,
+  },
+  routeTypeFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    padding: 4,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1,
+  },
+  routeTypeFilterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  routeTypeFilterPillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  routeTypeFilterText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
   },
   transitErrorCard: {
     flexDirection: 'row',
