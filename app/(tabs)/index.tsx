@@ -33,6 +33,113 @@ import { loadRoutes } from '../../services/routeService';
 import { MapLibreWrapper, type MapLibreWrapperHandle, type MapLineInput, type MapMarkerInput } from '../../components/MapLibreWrapper';
 import { mapDiagnostics } from '../../services/mapDiagnosticsService';
 
+type PulsingMarkerProps = {
+  pulseColor: string;
+  children: React.ReactNode;
+};
+
+const PulsingMarker = React.memo(({ pulseColor, children }: PulsingMarkerProps) => {
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulseLoop.start();
+    return () => pulseLoop.stop();
+  }, [pulseAnim]);
+
+  const ringOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.4, 0.12],
+  });
+
+  const ringScale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.95, 1.4],
+  });
+
+  return (
+    <View style={styles.pulseWrap}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.pulseRing,
+          {
+            borderColor: pulseColor,
+            opacity: ringOpacity,
+            transform: [{ scale: ringScale }],
+          },
+        ]}
+      />
+      {children}
+    </View>
+  );
+});
+
+PulsingMarker.displayName = 'PulsingMarker';
+
+const BreathingUserCore = React.memo(() => {
+  const breatheAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const breathingLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breatheAnim, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(breatheAnim, {
+          toValue: 0,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    breathingLoop.start();
+    return () => breathingLoop.stop();
+  }, [breatheAnim]);
+
+  const coreScale = breatheAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.94, 1.06],
+  });
+
+  const coreOpacity = breatheAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.9, 1],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.liveUserCore,
+        {
+          opacity: coreOpacity,
+          transform: [{ scale: coreScale }],
+        },
+      ]}
+    >
+    </Animated.View>
+  );
+});
+
+BreathingUserCore.displayName = 'BreathingUserCore';
+
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
 const ROUTING_NEAREST_BASE_URL = 'https://router.project-osrm.org/nearest/v1';
@@ -1661,12 +1768,12 @@ export default function HomeScreen() {
       markers.push({
         id: 'active-user-position',
         coordinate: toLngLat(activeUserPosition),
-        children: (
-          <View style={styles.liveUserMarker}>
-            <View style={styles.liveUserCore}>
-              <Ionicons name="person" size={13} color="#FFFFFF" />
+        children: ( 
+          <PulsingMarker pulseColor="#0EA5E9">
+            <View style={styles.liveUserMarker}>
+              <BreathingUserCore />
             </View>
-          </View>
+        </PulsingMarker>
         ),
         metadata: {
           label: 'Your Location',
@@ -1680,10 +1787,11 @@ export default function HomeScreen() {
         id: 'destination-marker',
         coordinate: toLngLat(destinationLocation),
         children: (
-          <View style={styles.alightMarker}>
-            <Ionicons name="location" size={14} color="#FFFFFF" />
-          </View>
-        ),
+            <View style={styles.alightMarker}>
+              <Ionicons name="location" size={14} color="#FFFFFF" />
+            </View>
+            )
+      ,
         metadata: {
           label: destinationQuery || 'Destination',
           type: 'Drop-off point',
@@ -1697,9 +1805,9 @@ export default function HomeScreen() {
           id: `board-${idx}`,
           coordinate: toLngLat(leg.boardAt),
           children: (
-            <View style={styles.boardMarker}>
-              <Ionicons name="arrow-up-circle" size={14} color="#FFFFFF" />
-            </View>
+              <View style={styles.boardMarker}>
+                <Ionicons name="arrow-up-circle" size={14} color="#ffffff" />
+              </View>
           ),
           metadata: {
             label: leg.transitInfo?.name || `Route ${idx + 1}`,
@@ -1715,9 +1823,9 @@ export default function HomeScreen() {
           id: `drop-${idx}`,
           coordinate: toLngLat(leg.alightAt),
           children: (
-            <View style={styles.alightMarker}>
-              <Ionicons name="arrow-down-circle" size={14} color="#FFFFFF" />
-            </View>
+              <View style={styles.alightMarker}>
+                <Ionicons name="arrow-down-circle" size={14} color="#FFFFFF" />
+              </View>
           ),
           metadata: {
             label: leg.transitInfo?.name || `Route ${idx + 1}`,
@@ -3477,23 +3585,35 @@ const styles = StyleSheet.create({
   simSpeedPillTextActive: {
     color: '#FFFFFF',
   },
-  liveUserMarker: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(14,165,233,0.2)',
+  pulseWrap: {
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pulseRing: {
+    position: 'absolute',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    backgroundColor: 'transparent',
+  },
+  liveUserMarker: {
+    width: 25,
+    height: 25,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fffafa',
+  },
   liveUserCore: {
-    width: 22,
-    height: 22,
+    width: 15,
+    height: 15,
     borderRadius: 11,
     backgroundColor: '#0EA5E9',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 4,
