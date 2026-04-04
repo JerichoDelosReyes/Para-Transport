@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { Animated, View, StyleSheet, Dimensions, Appearance } from 'react-native';
+import { Appearance, Animated, View, StyleSheet, Dimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useColorScheme } from 'nativewind';
 import { lightColors, darkColors, ThemeColors } from './colors';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -17,13 +16,20 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const { width, height } = Dimensions.get('window');
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { colorScheme, setColorScheme } = useColorScheme();
+  const [systemColorScheme, setSystemColorScheme] = useState(Appearance.getColorScheme());
+
+  useEffect(() => {
+    const subscription = Appearance.addChangeListener(({ colorScheme }) => {
+      setSystemColorScheme(colorScheme);
+    });
+    return () => subscription.remove();
+  }, []);
 
   const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
   const [isInitialized, setIsInitialized] = useState(false);
   
-  // NativeWind's useColorScheme hook will sync with the OS globally
-  const currentIsDark = colorScheme === 'dark';
+  // Base configuration
+  const currentIsDark = themeMode === 'system' ? systemColorScheme === 'dark' : themeMode === 'dark';
   
   // Animation state
   const [renderedIsDark, setRenderedIsDark] = useState(currentIsDark);
@@ -63,14 +69,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       try {
         const savedTheme = await AsyncStorage.getItem('para_theme_override');
         const finalMode = (savedTheme === 'light' || savedTheme === 'dark') ? (savedTheme as ThemeMode) : 'system';
-        
         setThemeModeState(finalMode);
-        // Sync NativeWind with the saved theme (this fixes the inconsistency)
-        setColorScheme(finalMode);
         
         // Manually update the starting theme directly without an animation flash
-        const isActuallyDark = finalMode === 'dark' || (finalMode === 'system' && Appearance.getColorScheme() === 'dark');
-        setRenderedIsDark(isActuallyDark);
+        const startupSystemScheme = Appearance.getColorScheme();
+        setRenderedIsDark(finalMode === 'system' ? startupSystemScheme === 'dark' : finalMode === 'dark');
       } catch (e) {
         console.error('Failed to load theme preferences', e);
         setRenderedIsDark(Appearance.getColorScheme() === 'dark');
@@ -85,7 +88,6 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const setThemeMode = async (mode: ThemeMode) => {
     setThemeModeState(mode);
-    setColorScheme(mode);
     try {
       if (mode === 'system') {
         await AsyncStorage.removeItem('para_theme_override');
