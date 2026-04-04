@@ -1,4 +1,5 @@
 import '../global.css';
+import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState, useRef } from 'react';
@@ -175,10 +176,20 @@ export default function RootLayout() {
   }
 
   return (
+    <ThemeProvider>
+      <RootContent showAnimatedSplash={showAnimatedSplash} setShowAnimatedSplash={setShowAnimatedSplash} />
+    </ThemeProvider>
+  );
+}
+
+function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimatedSplash: boolean, setShowAnimatedSplash: (v: boolean) => void }) {
+  const { theme } = useTheme();
+
+  return (
     <SafeAreaProvider>
-      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.background } }}>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
+        <StatusBar style={theme.statusBar as any} />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="login" />
           <Stack.Screen name="register" />

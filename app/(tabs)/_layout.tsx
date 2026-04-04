@@ -1,3 +1,4 @@
+import { useTheme } from "../../src/theme/ThemeContext";
 import { Tabs } from 'expo-router';
 import { StyleSheet, View, Text, Animated, Dimensions, Platform, TouchableWithoutFeedback, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,7 +10,7 @@ import { useStore } from '../../store/useStore';
 
 const { width } = Dimensions.get('window');
 
-function TabBarBackground() {
+function TabBarBackground({ theme }: { theme: any }) {
   const insets = useSafeAreaInsets();
   const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
   const height = 48 + bottomSpace;
@@ -30,7 +31,7 @@ function TabBarBackground() {
   return (
     <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height, backgroundColor: 'transparent', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 4 }}>
       <Svg width={width} height={height}>
-        <Path d={path} fill="#FFFFFF" />
+        <Path d={path} fill={theme.cardBackground} />
       </Svg>
     </View>
   );
@@ -105,6 +106,7 @@ function LiquidGlassHomeButton({ focused, onPress }: { focused: boolean, onPress
 }
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
   const user = useStore((state) => state.user);
@@ -114,7 +116,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   return (
     <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
       {/* Cutout Background */}
-      <TabBarBackground />
+      <TabBarBackground theme={theme} />
       
       <View style={[styles.customTabBarContainer, { height: 48, paddingBottom: 0, marginBottom: bottomSpace }]}>
         {state.routes.map((route: any, index: number) => {
@@ -185,6 +187,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabLayout() {
+  const { theme, isDark } = useTheme();
   const sessionMode = useStore((state) => state.sessionMode);
   const user = useStore((state) => state.user);
   const syncWithSupabase = useStore((state) => state.syncWithSupabase);

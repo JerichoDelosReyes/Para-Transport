@@ -1,3 +1,4 @@
+import { useTheme } from "../src/theme/ThemeContext";
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Modal,
@@ -57,6 +58,7 @@ export default function SearchScreen({
   onSelectRoute,
   onClearRoute,
 }: SearchScreenProps) {
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [activeField, setActiveField] = useState<'origin' | 'destination'>('destination');
   const [originText, setOriginText] = useState('');
@@ -383,7 +385,7 @@ export default function SearchScreen({
           {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.navy} />
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { flex: 1 }]}>Your Route</Text>
           <TouchableOpacity onPress={handleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -397,7 +399,7 @@ export default function SearchScreen({
             {/* Origin */}
             <View
               style={[
-              styles.fieldRow,
+              styles.fieldRow, { backgroundColor: theme.cardBackground },
               activeField === 'origin' && styles.fieldRowActive,
             ]}
           >
@@ -438,14 +440,14 @@ export default function SearchScreen({
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ marginRight: 12 }}
               >
-                <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+                <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={() => handleMicPress('origin')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               {isRecordingOrigin ? (
-                <ActivityIndicator size="small" color={COLORS.primary} />
+                <ActivityIndicator size="small" color={theme.accent} />
               ) : (
-                <Ionicons name="mic" size={20} color={COLORS.textMuted} />
+                <Ionicons name="mic" size={20} color={theme.textSecondary} />
               )}
             </TouchableOpacity>
           </View>
@@ -460,7 +462,7 @@ export default function SearchScreen({
           {/* Destination */}
           <View
             style={[
-              styles.fieldRow,
+              styles.fieldRow, { backgroundColor: theme.cardBackground },
               activeField === 'destination' && styles.fieldRowActive,
             ]}
           >
@@ -489,21 +491,21 @@ export default function SearchScreen({
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ marginRight: 12 }}
               >
-                <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+                <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={() => handleMicPress('destination')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               {isRecordingDestination ? (
-                <ActivityIndicator size="small" color={COLORS.primary} />
+                <ActivityIndicator size="small" color={theme.accent} />
               ) : (
-                <Ionicons name="mic" size={20} color={COLORS.textMuted} />
+                <Ionicons name="mic" size={20} color={theme.textSecondary} />
               )}
             </TouchableOpacity>
           </View>
           </View>
           <TouchableOpacity onPress={handleSwapRoute} style={styles.swapBtnWrapper} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <View style={styles.swapBtn}>
-               <Ionicons name="swap-vertical" size={20} color={COLORS.navy} />
+            <View style={[styles.swapBtn, { backgroundColor: theme.surfaceSecondary }]}>
+               <Ionicons name="swap-vertical" size={20} color={theme.text} />
             </View>
           </TouchableOpacity>
         </View>
@@ -578,7 +580,7 @@ export default function SearchScreen({
             {!isGuestAccount && recents.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="time-outline" size={16} color={COLORS.navy} />
+                  <Ionicons name="time-outline" size={16} color={theme.text} />
                   <Text style={styles.sectionTitle}>Recent</Text>
                 </View>
                 <FlatList
