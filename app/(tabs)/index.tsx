@@ -2611,7 +2611,7 @@ const styles = StyleSheet.create({
   mapControls: {
     position: 'absolute',
     right: 16,
-    bottom: 90,
+    bottom: 86,
     zIndex: 10,
     alignItems: 'flex-end',
   },
@@ -2628,7 +2628,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 14,
     elevation: 6,
-    marginBottom: -16, // Move it further down
+    marginBottom: 0,
   },
   locateGlassWrap: {
     width: 48,
