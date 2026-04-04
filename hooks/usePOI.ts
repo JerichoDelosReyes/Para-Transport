@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { POI_MIN_RENDER_ZOOM } from '../constants/poi';
+import { mapDiagnostics } from '../services/mapDiagnosticsService';
 import { fetchPOIsFromBbox, toPoiFeatureCollection } from '../services/poiService';
 import type { POIBounds, POIFeatureCollection, POIRow } from '../types/poi';
 import { EMPTY_POI_FEATURE_COLLECTION } from '../types/poi';
@@ -32,6 +33,7 @@ export function usePOI() {
       setRows([]);
       setError(null);
       setLoading(false);
+      mapDiagnostics.logOverlayEvent('poi', 0, 'updated');
       return;
     }
 
@@ -44,6 +46,9 @@ export function usePOI() {
         const fetched = await fetchPOIsFromBbox(bounds, limitByZoom(zoom));
         if (requestId !== requestCounterRef.current) return;
         setRows(fetched);
+        if (fetched.length === 0) {
+          mapDiagnostics.logOverlayEvent('poi', 0, 'updated');
+        }
       } catch (err: any) {
         if (requestId !== requestCounterRef.current) return;
         console.warn('[usePOI] POI fetch failed:', err);

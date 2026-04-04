@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabaseClient';
+import LOCAL_PLACES from '../data/local_places';
 import type { POIBounds, POIFeatureCollection, POIRow } from '../types/poi';
 import { EMPTY_POI_FEATURE_COLLECTION } from '../types/poi';
 
@@ -61,6 +62,35 @@ const extractLngLat = (row: any): { latitude: number; longitude: number } | null
   }
 
   return null;
+};
+
+const inBounds = (lat: number, lng: number, bounds: POIBounds): boolean => {
+  return lat >= bounds.minLat && lat <= bounds.maxLat && lng >= bounds.minLng && lng <= bounds.maxLng;
+};
+
+const inferLandmarkType = (title: string): string => {
+  const normalized = title.toLowerCase();
+  if (normalized.includes('hospital')) return 'hospital';
+  if (normalized.includes('terminal')) return 'terminal';
+  if (normalized.includes('mall')) return 'shopping_mall';
+  if (normalized.includes('school') || normalized.includes('university')) return 'school';
+  if (normalized.includes('city hall')) return 'government';
+  if (normalized.includes('market')) return 'convenience_store';
+  return 'other';
+};
+
+const fetchPoisFromLocalFallback = (bounds: POIBounds, limit: number): POIRow[] => {
+  return LOCAL_PLACES
+    .filter((item) => inBounds(item.latitude, item.longitude, bounds))
+    .slice(0, limit)
+    .map((item) => ({
+      id: String(item.id),
+      title: String(item.title),
+      latitude: item.latitude,
+      longitude: item.longitude,
+      landmark_type: inferLandmarkType(item.title),
+      category: 'local_fallback',
+    }));
 };
 
 const normalizePoiRow = (row: any, fallbackId: string): POIRow | null => {
@@ -173,6 +203,10 @@ export async function fetchPOIsFromBbox(bounds: POIBounds, limit: number): Promi
 
   inFlightRequestKey = cacheKey;
   inFlightRequestPromise = fetchPoisFromRpc(bounds, limit)
+    .catch((rpcError) => {
+      console.warn('[poiService] Falling back to local POI dataset', rpcError);
+      return fetchPoisFromLocalFallback(bounds, limit);
+    })
     .then((rows) => {
       bboxCache.set(cacheKey, { cachedAt: Date.now(), rows });
       if (bboxCache.size > MAX_CACHE_BUCKETS) {

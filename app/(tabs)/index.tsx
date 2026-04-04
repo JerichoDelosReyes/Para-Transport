@@ -32,6 +32,9 @@ import { useSimulation } from '../../hooks/useSimulation';
 import { loadRoutes } from '../../services/routeService';
 import { MapLibreWrapper, type MapLibreWrapperHandle, type MapLineInput, type MapMarkerInput } from '../../components/MapLibreWrapper';
 import { mapDiagnostics } from '../../services/mapDiagnosticsService';
+import { usePOI } from '../../hooks/usePOI';
+import PoiOverlay from '../../components/PoiOverlay';
+import { POI_MIN_RENDER_ZOOM } from '../../constants/poi';
 
 type PulsingMarkerProps = {
   pulseColor: string;
@@ -562,6 +565,12 @@ export default function HomeScreen() {
   const [selectedRoute, setSelectedRoute] = useState<MatchedRoute | null>(null);
   const [transitLegs, setTransitLegs] = useState<TransitLeg[]>([]);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
+  const currentZoom = useMemo(() => latDeltaToZoom(mapRegion.latitudeDelta), [mapRegion.latitudeDelta]);
+  const {
+    featureCollection: poiFeatureCollection,
+    requestViewportPOIs,
+    poiCount,
+  } = usePOI();
   // Track programmatic camera updates (zoom buttons, locate user) to pass to MapLibreWrapper
   const [programmaticCamera, setProgrammaticCamera] = useState<{
     center?: [number, number];
@@ -1875,6 +1884,15 @@ export default function HomeScreen() {
     }
   }, [mapLines.length]);
 
+  useEffect(() => {
+    const viewportBounds = regionToBounds(mapRegion, 0.2);
+    requestViewportPOIs(viewportBounds, currentZoom);
+  }, [mapRegion, currentZoom, requestViewportPOIs]);
+
+  useEffect(() => {
+    mapDiagnostics.logOverlayEvent('poi', poiCount, 'updated');
+  }, [poiCount]);
+
   // Auto-follow camera during simulation playback
   useEffect(() => {
     if (sim.state === 'playing' && sim.position && simAutoFollow && mapRef.current) {
@@ -2148,7 +2166,14 @@ export default function HomeScreen() {
         externalCameraZoom={programmaticCamera?.zoom}
         externalCameraPitch={programmaticCamera?.pitch}
         externalCameraHeading={programmaticCamera?.heading}
-      />
+      >
+        <PoiOverlay
+          poiFeatureCollection={poiFeatureCollection}
+          currentZoom={currentZoom}
+          activeUserCoordinate={activeUserPosition ? toLngLat(activeUserPosition) : undefined}
+          minZoomLevel={POI_MIN_RENDER_ZOOM}
+        />
+      </MapLibreWrapper>
 
       {/* Map Controls */}
       <View style={styles.mapControls}>
