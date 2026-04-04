@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
+import { useTheme } from '../src/theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { supabase } from '../config/supabaseClient';
 import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep2.svg';
@@ -33,18 +34,21 @@ const SkeletonCard = () => {
     outputRange: [0.3, 0.7]
   });
 
+  const { theme, isDark } = useTheme();
+  const skeletonBg = isDark ? theme.surfaceSecondary : '#E5E7EB';
+
   return (
-    <View style={styles.historyCard}>
+    <View style={[styles.historyCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
       <View style={styles.historyHeader}>
-        <Animated.View style={[{ width: 140, height: 16, backgroundColor: '#E5E7EB', borderRadius: 4 }, { opacity }]} />
-        <Animated.View style={[{ width: 60, height: 28, backgroundColor: '#E5E7EB', borderRadius: 8 }, { opacity }]} />
+        <Animated.View style={[{ width: 140, height: 16, backgroundColor: skeletonBg, borderRadius: 4 }, { opacity }]} />
+        <Animated.View style={[{ width: 60, height: 28, backgroundColor: skeletonBg, borderRadius: 8 }, { opacity }]} />
       </View>
-      <View style={styles.routeSection}>
-        <Animated.View style={[{ width: '80%', height: 16, backgroundColor: '#E5E7EB', borderRadius: 4, marginBottom: 8 }, { opacity }]} />
-        <Animated.View style={[{ width: '60%', height: 16, backgroundColor: '#E5E7EB', borderRadius: 4 }, { opacity }]} />
+      <View style={[styles.routeSection, { backgroundColor: isDark ? theme.surface : '#F9FAFB' }]}>
+        <Animated.View style={[{ width: '80%', height: 16, backgroundColor: skeletonBg, borderRadius: 4, marginBottom: 8 }, { opacity }]} />
+        <Animated.View style={[{ width: '60%', height: 16, backgroundColor: skeletonBg, borderRadius: 4 }, { opacity }]} />
       </View>
       <View style={styles.metricsRow}>
-        <Animated.View style={[{ width: 70, height: 26, backgroundColor: '#E5E7EB', borderRadius: 6 }, { opacity }]} />
+        <Animated.View style={[{ width: 70, height: 26, backgroundColor: skeletonBg, borderRadius: 6 }, { opacity }]} />
       </View>
     </View>
   );
@@ -54,6 +58,7 @@ export default function PointsHistoryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useStore((state) => state.user);
+  const { theme, isDark } = useTheme();
   
   const [pointsHistory, setPointsHistory] = useState<any[]>(user?.points_history || []);
   const [isLoading, setIsLoading] = useState(true);
@@ -86,13 +91,13 @@ export default function PointsHistoryScreen() {
   }, [user?.id]);
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.topSection, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <View style={[styles.topSection, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.buttonBack} activeOpacity={0.7}>
-            <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
+          <TouchableOpacity onPress={() => router.back()} style={[styles.buttonBack, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#FFFFFF' }]} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={24} color={isDark ? '#FFFFFF' : COLORS.navy} />
           </TouchableOpacity>
-          <Text style={styles.headerTitleText}>POINTS</Text>
+          <Text style={[styles.headerTitleText, { color: isDark ? '#FFFFFF' : '#000000' }]}>POINTS</Text>
           <View style={{ width: 44, height: 44 }} />
         </View>
       </View>
@@ -109,9 +114,9 @@ export default function PointsHistoryScreen() {
               <SkeletonCard />
             </>
           ) : pointsHistory.length === 0 ? (
-             <View style={styles.emptyContainer}>
+             <View style={[styles.emptyContainer, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
                <JeepIllustration width={220} height={150} />
-               <Text style={styles.emptyTitle}>WALA PANG POINTS.</Text>
+               <Text style={[styles.emptyTitle, { color: theme.text }]}>WALA PANG POINTS.</Text>
              </View>
           ) : (
             pointsHistory.map((item: any, index: number) => {
@@ -122,34 +127,34 @@ export default function PointsHistoryScreen() {
               const isMultiplier = item.multiplier && item.multiplier > 1;
 
               return (
-                <View key={item.id || index} style={styles.historyCard}>
+                <View key={item.id || index} style={[styles.historyCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
                   <View style={styles.historyHeader}>
                     <View style={styles.dateBlock}>
-                      <Ionicons name="calendar-outline" size={14} color={COLORS.textLabel} />
-                      <Text style={styles.dateText}>{formattedDate} • {formattedTime}</Text>
+                      <Ionicons name="calendar-outline" size={14} color={theme.textSecondary} />
+                      <Text style={[styles.dateText, { color: theme.textSecondary }]}>{formattedDate} • {formattedTime}</Text>
                     </View>
-                    <View style={[styles.pointsBadge, isMultiplier && styles.pointsBadgeGold]}>
-                      <Text style={[styles.pointsAmount, isMultiplier && styles.pointsAmountGold]}>+{item.points || 0}</Text>
-                      <Text style={[styles.pointsLabelInfo, isMultiplier && styles.pointsAmountGold]}>PTS</Text>
+                    <View style={[styles.pointsBadge, { backgroundColor: isDark ? theme.surfaceSecondary : '#F3F4F6' }, isMultiplier && styles.pointsBadgeGold]}>
+                      <Text style={[styles.pointsAmount, { color: theme.text }, isMultiplier && styles.pointsAmountGold]}>+{item.points || 0}</Text>
+                      <Text style={[styles.pointsLabelInfo, { color: theme.textSecondary }, isMultiplier && styles.pointsAmountGold]}>PTS</Text>
                     </View>
                   </View>
                   
-                  <View style={styles.routeSection}>
+                  <View style={[styles.routeSection, { backgroundColor: isDark ? theme.surfaceSecondary : '#F9FAFB' }]}>
                     <View style={styles.locationRow}>
-                      <Ionicons name="radio-button-on" size={16} color={COLORS.navy} />
-                      <Text style={styles.locationText} numberOfLines={1}>{item.origin || 'Current Location'}</Text>
+                      <Ionicons name="radio-button-on" size={16} color={theme.text} />
+                      <Text style={[styles.locationText, { color: theme.text }]} numberOfLines={1}>{item.origin || 'Current Location'}</Text>
                     </View>
-                    <View style={styles.dottedLine} />
+                    <View style={[styles.dottedLine, { backgroundColor: isDark ? theme.textSecondary : '#D1D5DB' }]} />
                     <View style={styles.locationRow}>
                       <Ionicons name="location" size={16} color={COLORS.primary} />
-                      <Text style={styles.locationText} numberOfLines={1}>{item.destination || 'Destination'}</Text>
+                      <Text style={[styles.locationText, { color: theme.text }]} numberOfLines={1}>{item.destination || 'Destination'}</Text>
                     </View>
                   </View>
 
                   <View style={styles.metricsRow}>
-                    <View style={styles.metricItem}>
-                      <Ionicons name="time-outline" size={16} color={COLORS.textLabel} />
-                      <Text style={styles.metricText}>{item.time || Math.round((item.distance || 0) * 3) || 5} min</Text>
+                    <View style={[styles.metricItem, { backgroundColor: isDark ? theme.surfaceSecondary : '#F3F4F6' }]}>
+                      <Ionicons name="time-outline" size={16} color={theme.textSecondary} />
+                      <Text style={[styles.metricText, { color: theme.textSecondary }]}>{item.time || Math.round((item.distance || 0) * 3) || 5} min</Text>
                     </View>
                     {isMultiplier && (
                        <View style={styles.metricItemGold}>
