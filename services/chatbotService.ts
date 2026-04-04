@@ -199,6 +199,8 @@ type DestinationPoint = {
   name: string;
   coordinate: Coordinate;
   placeId?: string;
+  normalizedName?: string;
+  squashedName?: string;
 };
 
 type StopDestination = DestinationPoint;
@@ -223,6 +225,10 @@ const matchingConfig: Required<DatasetMatchingConfig> = {
   ...(dataset.matchingConfig ?? {}),
 };
 const intentSynonymMap = buildIntentSynonymMap(dataset.intentConfig?.intentSynonyms);
+const precompiledSynonyms = Object.entries(intentSynonymMap).map(([from, to]) => ({
+  regex: new RegExp(`\\b${escapeRegExp(from)}\\b`, 'g'),
+  to,
+}));
 const intentGroups = buildIntentGroups(dataset.intentGroups ?? [], matchingConfig.intentGroupThreshold);
 const intentGroupById = new Map<string, NormalizedIntentGroup>(
   intentGroups.map((group) => [group.id, group]),
@@ -378,12 +384,12 @@ function buildIntentGroups(
 }
 
 function applyIntentSynonyms(normalized: string): string {
-  if (!normalized || Object.keys(intentSynonymMap).length === 0) return normalized;
+  if (!normalized || precompiledSynonyms.length === 0) return normalized;
 
   let output = ` ${normalized} `;
 
-  for (const [from, to] of Object.entries(intentSynonymMap)) {
-    output = output.replace(new RegExp(`\\b${escapeRegExp(from)}\\b`, 'g'), to);
+  for (const { regex, to } of precompiledSynonyms) {
+    output = output.replace(regex, to);
   }
 
   return output.replace(/\s+/g, ' ').trim();
@@ -426,6 +432,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const hintRegexCache = new Map<string, RegExp>();
 function hintMatches(normalized: string, token: string): boolean {
   const normalizedToken = normalizeText(token);
   if (!normalizedToken) return false;
@@ -434,10 +441,19 @@ function hintMatches(normalized: string, token: string): boolean {
     return normalized.includes(normalizedToken);
   }
 
-  return new RegExp(`\\b${escapeRegExp(normalizedToken)}\\b`).test(normalized);
+  let regex = hintRegexCache.get(normalizedToken);
+  if (!regex) {
+    if (hintRegexCache.size > 2000) hintRegexCache.clear();
+    regex = new RegExp(`\\b${escapeRegExp(normalizedToken)}\\b`);
+    hintRegexCache.set(normalizedToken, regex);
+  }
+  return regex.test(normalized);
 }
 
+const normalizeIntentCache = new Map<string, string>();
 function normalizeIntentText(text: string): string {
+  if (normalizeIntentCache.has(text)) return normalizeIntentCache.get(text)!;
+
   let normalized = normalizeText(text);
 
   if (dataset.intentConfig?.collapseRepeatedChars !== false) {
@@ -445,11 +461,19 @@ function normalizeIntentText(text: string): string {
   }
 
   normalized = applyIntentSynonyms(normalized);
-  return normalized.trim();
+  const result = normalized.trim();
+  if (normalizeIntentCache.size > 2000) normalizeIntentCache.clear();
+  normalizeIntentCache.set(text, result);
+  return result;
 }
 
+const tokenizeCache = new Map<string, string[]>();
 function tokenizeWords(normalized: string): string[] {
-  return normalized.split(' ').filter(Boolean);
+  if (tokenizeCache.has(normalized)) return tokenizeCache.get(normalized)!;
+  const result = normalized.split(' ').filter(Boolean);
+  if (tokenizeCache.size > 2000) tokenizeCache.clear();
+  tokenizeCache.set(normalized, result);
+  return result;
 }
 
 function hasAdjacentTransposition(a: string, b: string): boolean {
@@ -532,14 +556,19 @@ function scoreHintMatches(normalized: string, hints: string[]): number {
   return hints.reduce((count, token) => (hintMatches(normalized, token) ? count + 1 : count), 0);
 }
 
+const normalizeCache = new Map<string, string>();
 function normalizeText(text: string): string {
-  return text
+  if (normalizeCache.has(text)) return normalizeCache.get(text)!;
+  const result = text
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  if (normalizeCache.size > 5000) normalizeCache.clear();
+  normalizeCache.set(text, result);
+  return result;
 }
 
 function detectLanguage(message: string): BotLanguage {
@@ -1021,25 +1050,31 @@ function extractDestinationHints(normalized: string): string[] {
 }
 
 function levenshteinDistance(a: string, b: string): number {
-  const rows = a.length + 1;
-  const cols = b.length + 1;
-  const dp: number[][] = Array.from({ length: rows }, () => Array(cols).fill(0));
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
 
-  for (let i = 0; i < rows; i += 1) dp[i][0] = i;
-  for (let j = 0; j < cols; j += 1) dp[0][j] = j;
+  const v0 = new Int32Array(b.length + 1);
+  const v1 = new Int32Array(b.length + 1);
 
-  for (let i = 1; i < rows; i += 1) {
-    for (let j = 1; j < cols; j += 1) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      dp[i][j] = Math.min(
-        dp[i - 1][j] + 1,
-        dp[i][j - 1] + 1,
-        dp[i - 1][j - 1] + cost,
-      );
+  for (let i = 0; i <= b.length; i += 1) {
+    v0[i] = i;
+  }
+
+  for (let i = 0; i < a.length; i += 1) {
+    v1[0] = i + 1;
+
+    for (let j = 0; j < b.length; j += 1) {
+      const cost = a[i] === b[j] ? 0 : 1;
+      v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
+    }
+
+    for (let j = 0; j <= b.length; j += 1) {
+      v0[j] = v1[j];
     }
   }
 
-  return dp[rows - 1][cols - 1];
+  return v1[b.length];
 }
 
 function buildStopDestinations(routes: JeepneyRoute[]): StopDestination[] {
@@ -1053,6 +1088,8 @@ function buildStopDestinations(routes: JeepneyRoute[]): StopDestination[] {
       byLabel.set(normalizedLabel, {
         name: name.trim(),
         coordinate,
+        normalizedName: normalizedLabel,
+        squashedName: squashRepeatedChars(normalizedLabel),
       });
     }
   };
@@ -1100,24 +1137,33 @@ function findStopDestinationByHints(normalized: string, routes: JeepneyRoute[]):
   if (stops.length === 0) return null;
 
   const hints = extractDestinationHints(normalized);
+  const parsedHints = hints.map((hint) => ({
+    text: hint,
+    padded: ` ${hint} `,
+    isOneWord: hint.split(' ').filter(Boolean).length === 1,
+    len: hint.length,
+  }));
+
   let best: StopDestination | null = null;
   let bestScore = 0;
 
   for (const stop of stops) {
-    const stopNormalized = normalizeText(stop.name);
-    const stopSquashed = squashRepeatedChars(stopNormalized);
+    const stopNormalized = stop.normalizedName || normalizeText(stop.name);
+    const stopSquashed = stop.squashedName || squashRepeatedChars(stopNormalized);
+    const oneWordStop = stopSquashed.split(' ').filter(Boolean).length === 1;
+    const stopNormLen = stopNormalized.length;
+    const squashedLen = stopSquashed.length;
 
-    for (const hint of hints) {
+    for (const hintObj of parsedHints) {
+      const { text: hint, padded, isOneWord: oneWordHint, len: hintLen } = hintObj;
       let score = 0;
 
-      if (hintMatches(` ${hint} `, stopNormalized) || stopNormalized.includes(hint) || hint.includes(stopNormalized)) {
-        score = 110 + Math.min(stopNormalized.length, hint.length);
+      if (hintMatches(padded, stopNormalized) || stopNormalized.includes(hint) || hint.includes(stopNormalized)) {
+        score = 110 + Math.min(stopNormLen, hintLen);
       } else {
-        const oneWordHint = hint.split(' ').filter(Boolean).length === 1;
-        const oneWordStop = stopSquashed.split(' ').filter(Boolean).length === 1;
-        if (oneWordHint && oneWordStop && hint.length >= 5 && stopSquashed.length >= 5) {
+        if (oneWordHint && oneWordStop && hintLen >= 5 && squashedLen >= 5) {
           const dist = levenshteinDistance(hint, stopSquashed);
-          const maxLen = Math.max(hint.length, stopSquashed.length);
+          const maxLen = Math.max(hintLen, squashedLen);
           if (dist <= 2 || (maxLen >= 8 && dist <= 3)) {
             score = 80 - dist * 10;
           }

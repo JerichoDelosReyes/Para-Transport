@@ -1783,7 +1783,6 @@ export default function HomeScreen() {
     if (nextType === selectedRouteType) return;
 
     setSelectedRouteType(nextType);
-    setNearestStop(null);
     setSelectedTransitRoute(null);
     setShowRecommender(false);
     setMatchedRoutes([]);
