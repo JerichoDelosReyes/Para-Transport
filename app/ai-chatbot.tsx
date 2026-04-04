@@ -227,6 +227,10 @@ export default function AIChatbotScreen() {
     };
 
     try {
+      // Yield to JS event loop so React Native can render "jeepie is typing"
+      // and allow the user to press back before the heavy route computation begins
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
       const response = await getChatbotReply({
         message: messageText,
         mode: "companion",

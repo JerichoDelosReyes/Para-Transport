@@ -432,8 +432,9 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const hintRegexCache = new Map<string, RegExp>();
+let hintRegexCache: Map<string, RegExp>;
 function hintMatches(normalized: string, token: string): boolean {
+  if (!hintRegexCache) hintRegexCache = new Map<string, RegExp>();
   const normalizedToken = normalizeText(token);
   if (!normalizedToken) return false;
 
@@ -450,8 +451,9 @@ function hintMatches(normalized: string, token: string): boolean {
   return regex.test(normalized);
 }
 
-const normalizeIntentCache = new Map<string, string>();
+let normalizeIntentCache: Map<string, string>;
 function normalizeIntentText(text: string): string {
+  if (!normalizeIntentCache) normalizeIntentCache = new Map<string, string>();
   if (normalizeIntentCache.has(text)) return normalizeIntentCache.get(text)!;
 
   let normalized = normalizeText(text);
@@ -467,8 +469,9 @@ function normalizeIntentText(text: string): string {
   return result;
 }
 
-const tokenizeCache = new Map<string, string[]>();
+let tokenizeCache: Map<string, string[]>;
 function tokenizeWords(normalized: string): string[] {
+  if (!tokenizeCache) tokenizeCache = new Map<string, string[]>();
   if (tokenizeCache.has(normalized)) return tokenizeCache.get(normalized)!;
   const result = normalized.split(' ').filter(Boolean);
   if (tokenizeCache.size > 2000) tokenizeCache.clear();
@@ -556,8 +559,11 @@ function scoreHintMatches(normalized: string, hints: string[]): number {
   return hints.reduce((count, token) => (hintMatches(normalized, token) ? count + 1 : count), 0);
 }
 
-const normalizeCache = new Map<string, string>();
+let normalizeCache: Map<string, string>;
 function normalizeText(text: string): string {
+  if (!normalizeCache) {
+    normalizeCache = new Map<string, string>();
+  }
   if (normalizeCache.has(text)) return normalizeCache.get(text)!;
   const result = text
     .toLowerCase()
@@ -1077,7 +1083,14 @@ function levenshteinDistance(a: string, b: string): number {
   return v1[b.length];
 }
 
+let cachedRoutesRef: JeepneyRoute[] | null = null;
+let cachedStopDestinations: StopDestination[] | null = null;
+
 function buildStopDestinations(routes: JeepneyRoute[]): StopDestination[] {
+  if (cachedRoutesRef === routes && cachedStopDestinations) {
+    return cachedStopDestinations;
+  }
+
   const byLabel = new Map<string, StopDestination>();
 
   const addCandidate = (name: string | undefined, coordinate?: Coordinate) => {
@@ -1129,7 +1142,9 @@ function buildStopDestinations(routes: JeepneyRoute[]): StopDestination[] {
     }
   }
 
-  return Array.from(byLabel.values());
+  cachedStopDestinations =  Array.from(byLabel.values());
+  cachedRoutesRef = routes;
+  return cachedStopDestinations;
 }
 
 function findStopDestinationByHints(normalized: string, routes: JeepneyRoute[]): StopDestination | null {
@@ -2695,31 +2710,29 @@ function buildGuardrailBlockedReply(
   category: GuardrailCategory,
   reason?: string,
 ): string {
-  const safeReason = reason ? formatForChatDisplay(reason) : '';
-
   if (language === 'tl') {
     if (category === 'unsafe') {
       return [
-        safeReason || 'Hindi ko ma-assist ang request na iyan.',
+        'Hindi ko ma-assist ang request na iyan.',
         'Pwede kitang tulungan sa routes, fares, at PARA app features.',
       ].join('\n\n');
     }
 
     return [
-      safeReason || 'Mukhang wala ito sa sakop ko ngayon.',
+      'Mukhang wala ito sa sakop ko ngayon.',
       'Nandito ako para sa commuting help: route guidance, fare estimate, at PARA app usage.',
     ].join('\n\n');
   }
 
   if (category === 'unsafe') {
     return [
-      safeReason || 'I cannot assist with that request.',
+      'I cannot assist with that request.',
       'I can still help with routes, fares, commuting guidance, and PARA app features.',
     ].join('\n\n');
   }
 
   return [
-    safeReason || 'That request looks outside my scope right now.',
+    'That request looks outside my scope right now.',
     'I can help with commuting topics such as route guidance, fare estimates, and PARA app usage.',
   ].join('\n\n');
 }
@@ -2916,6 +2929,9 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
+  // Yield to React Native JS Thread to prevent freezing during heavy calculations
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
   const destinationHint = parsed.destination
     ? toDestinationPoint(parsed.destination)
     : findStopDestinationByHints(normalized, routes);
@@ -3013,6 +3029,9 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
         usedGroq: false,
       };
     }
+
+    // Yield to JS event loop so React Native processes touch events
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
     const estimate = estimateFare(
       originCoordinate,
@@ -3118,6 +3137,10 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       || (language === 'tl' ? 'kasalukuyang lokasyon mo' : 'your current location');
 
     const resolvedOriginPlace = originFromMessage || nearestFromGps || null;
+
+    // Yield to thread again so user can interact and see loading states
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
     const routePlan = findRoutePlan(
       originCoordinate,
       destinationPoint,
