@@ -76,11 +76,11 @@ export default function AchievementsScreen() {
       <View style={[styles.topSection, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-            <View style={[styles.iconButtonCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#FFFFFF' }]}>
-              <Ionicons name="chevron-back" size={24} color={isDark ? '#FFFFFF' : COLORS.navy} />
+            <View style={[styles.iconButtonCircle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+              <Ionicons name="chevron-back" size={24} color="#0A1628" />
             </View>
           </TouchableOpacity>
-          <Text style={[styles.headerTitleText, { color: isDark ? '#FFFFFF' : '#000000' }]}>ACHIEVEMENTS</Text>
+          <Text style={[styles.headerTitleText, { color: '#0A1628' }]}>ACHIEVEMENTS</Text>
           <View style={{ width: 44, height: 44 }} />
         </View>
       </View>
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   headerTitleText: {
     fontFamily: 'Cubao',
     fontSize: TYPOGRAPHY.screenTitle,
-    color: '#000000',
+    color: '#0A1628',
   },
   iconButton: {
     width: 44,

@@ -94,10 +94,10 @@ export default function PointsHistoryScreen() {
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
       <View style={[styles.topSection, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={[styles.buttonBack, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#FFFFFF' }]} activeOpacity={0.7}>
-            <Ionicons name="chevron-back" size={24} color={isDark ? '#FFFFFF' : COLORS.navy} />
+          <TouchableOpacity onPress={() => router.back()} style={[styles.buttonBack, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={24} color="#0A1628" />
           </TouchableOpacity>
-          <Text style={[styles.headerTitleText, { color: isDark ? '#FFFFFF' : '#000000' }]}>POINTS</Text>
+          <Text style={[styles.headerTitleText, { color: '#0A1628' }]}>POINTS</Text>
           <View style={{ width: 44, height: 44 }} />
         </View>
       </View>
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   headerTitleText: {
     fontFamily: 'Cubao',
     fontSize: TYPOGRAPHY.screenTitle,
-    color: '#000000',
+    color: '#0A1628',
   },
   bottomSection: {
     flex: 1,
