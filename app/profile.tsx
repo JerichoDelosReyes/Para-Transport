@@ -224,7 +224,7 @@ export default function ProfileScreen() {
                   activeOpacity={isGuestAccount ? 0.8 : 1}
                   disabled={!isGuestAccount}
                 >
-                                    <View style={[styles.profileIconWrapper, !isEarned && styles.badgeLocked]}>
+                                    <View style={[styles.profileIconWrapper, { backgroundColor: badge.id === 'route_rookie' ? '#DDAA44' : '#ECE2CC' }, !isEarned && styles.badgeLocked]}>
                     {BADGE_IMAGES[badge.id] ? (
                       <Image 
                         source={BADGE_IMAGES[badge.id]} 
@@ -532,15 +532,14 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'transparent',
-    overflow: 'hidden',
+    backgroundColor: '#ECE2CC',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
   },
   badgeImage: {
-    width: '100%',
-    height: '100%',
+    width: 35,
+    height: 35,
   },
   badgeLocked: {
     backgroundColor: 'rgba(0,0,0,0.02)',

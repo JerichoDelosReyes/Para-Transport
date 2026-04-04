@@ -69,19 +69,19 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
-      <View style={[styles.topSection, { paddingTop: insets.top, backgroundColor: theme.headerBackground }]}>
+      <View style={[styles.topSection, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
         <View style={styles.header}>
           <TouchableOpacity 
             style={styles.backButton}
             onPress={() => router.back()}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <View style={[styles.backButtonCircle, { backgroundColor: theme.cardBackground }]}>
-              <Ionicons name="chevron-back" size={24} color={theme.text} />
+            <View style={[styles.backButtonCircle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+              <Ionicons name="chevron-back" size={24} color="#0A1628" />
             </View>
           </TouchableOpacity>
           
-          <Text style={[styles.headerTitle, { color: isDark ? theme.text : '#000000' }]}>SETTINGS</Text>
+          <Text style={[styles.headerTitle, { color: '#0A1628' }]}>SETTINGS</Text>
           
           <View style={{ width: 44 }} />
         </View>
@@ -160,11 +160,14 @@ export default function SettingsScreen() {
                 return (
                   <TouchableOpacity
                     key={option.key}
-                    style={[styles.discountPill, { backgroundColor: active ? theme.surfaceSecondary : theme.cardBackground, borderColor: active ? theme.accent : theme.cardBorder }]}
+                    style={[styles.discountPill, { 
+                      backgroundColor: 'transparent', 
+                      borderColor: active ? '#E8A020' : theme.cardBorder 
+                    }]}
                     activeOpacity={0.85}
                     onPress={() => setFareDiscountType(option.key)}
                   >
-                    <Text style={[styles.discountPillText, { color: active ? theme.accent : theme.text }]}>
+                    <Text style={[styles.discountPillText, { color: active ? '#E8A020' : theme.text }]}>
                       {option.label}
                     </Text>
                   </TouchableOpacity>
@@ -192,7 +195,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <TouchableOpacity style={[styles.logoutButton, { backgroundColor: theme.surface }]} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
 
@@ -221,7 +224,10 @@ export default function SettingsScreen() {
               style={styles.modalOption}
               onPress={() => { setThemeMode('dark'); setIsAppearanceModalVisible(false); }}
             >
-              <Text style={[styles.modalOptionText, { color: theme.text }]}>🌙  Dark</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="moon" size={20} color={theme.text} style={{ marginRight: 12 }} />
+                <Text style={[styles.modalOptionText, { color: theme.text }]}>Dark</Text>
+              </View>
               {themeMode === 'dark' && <Ionicons name="checkmark" size={20} color={theme.accent} />}
             </TouchableOpacity>
 
@@ -229,7 +235,10 @@ export default function SettingsScreen() {
               style={styles.modalOption}
               onPress={() => { setThemeMode('light'); setIsAppearanceModalVisible(false); }}
             >
-              <Text style={[styles.modalOptionText, { color: theme.text }]}>☀️  Light</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="sunny" size={20} color={theme.text} style={{ marginRight: 12 }} />
+                <Text style={[styles.modalOptionText, { color: theme.text }]}>Light</Text>
+              </View>
               {themeMode === 'light' && <Ionicons name="checkmark" size={20} color={theme.accent} />}
             </TouchableOpacity>
 
@@ -237,7 +246,10 @@ export default function SettingsScreen() {
               style={styles.modalOption}
               onPress={() => { setThemeMode('system'); setIsAppearanceModalVisible(false); }}
             >
-              <Text style={[styles.modalOptionText, { color: theme.text }]}>📱  Use Device Settings</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="phone-portrait" size={20} color={theme.text} style={{ marginRight: 12 }} />
+                <Text style={[styles.modalOptionText, { color: theme.text }]}>Use Device Settings</Text>
+              </View>
               {themeMode === 'system' && <Ionicons name="checkmark" size={20} color={theme.accent} />}
             </TouchableOpacity>
 
@@ -269,7 +281,7 @@ const styles = StyleSheet.create({
   discountPillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   discountPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
   discountPillText: { fontFamily: 'Inter-SemiBold', fontSize: 12 },
-  logoutButton: { marginTop: 10, backgroundColor: '#FFF0F0', borderRadius: RADIUS.card, paddingVertical: 16, alignItems: 'center' },
+  logoutButton: { marginTop: 10, borderRadius: RADIUS.card, paddingVertical: 16, alignItems: 'center' },
   logoutText: { fontFamily: 'SFPro-Bold', fontSize: 16, color: '#FF3B30' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', borderRadius: 20, padding: 20 },
