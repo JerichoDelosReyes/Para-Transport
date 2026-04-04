@@ -241,6 +241,17 @@ for (const place of dataset.places) {
   for (const alias of place.aliases) {
     aliasIndex.push({ alias: normalizeText(alias), place });
   }
+  // Add extra runtime aliases for SM Bacoor if Bacoor Terminal
+  if (place.name.toLowerCase().includes('bacoor terminal')) {
+    [
+      'sm bacoor',
+      'sm city bacoor',
+      'sm bacoor mall',
+      'sm bacoor terminal'
+    ].forEach((alias) => {
+      aliasIndex.push({ alias: normalizeText(alias), place });
+    });
+  }
 }
 
 const badgeAliasIndex: Array<{ alias: string; badge: Badge }> = [];
@@ -987,9 +998,9 @@ function uniqueLanguageHints(values: string[]): string[] {
 function extractDestinationHints(normalized: string): string[] {
   const hints: string[] = [normalized];
   const patterns = [
-    /\b(?:to|papunta|going to|destination|dest|sa)\s+([a-z0-9\s]{2,})$/,
+    /\b(?:to|papunta|pupunta|going to|destination|dest|sa)\s+([a-z0-9\s]{2,})$/,
     /\b(?:its|it is|it s|ay|is)\s+([a-z0-9\s]{2,})$/,
-    /\b(?:want to go|gusto ko pumunta|gusto ko magpunta|dalhin mo ko|dalhin mo ako)\s+(?:to|sa)?\s*([a-z0-9\s]{2,})$/,
+    /\b(?:want to go|gusto ko pumunta|gusto ko magpunta|dalhin mo ko|dalhin mo ako|pupunta ako ng|pupunta ako sa|papunta ako ng|papunta ako sa|ako ay nasa [a-z0-9\s]+ at pupunta|ako ay nasa [a-z0-9\s]+ papunta|ako ay pupunta sa|ako ay pupunta ng)\s*(?:to|sa|ng)?\s*([a-z0-9\s]{2,})$/,
   ];
 
   for (const pattern of patterns) {
@@ -997,6 +1008,13 @@ function extractDestinationHints(normalized: string): string[] {
     if (matched?.[1]) {
       hints.push(matched[1]);
     }
+  }
+
+  // Special: "Ako ay nasa {origin} at pupunta/papunta ako ng/sa {destination}"
+  const complexPattern = /ako ay nasa ([a-z0-9\s]+) (?:at )?(?:pupunta|papunta) ako (?:ng|sa)? ([a-z0-9\s]{2,})/;
+  const complexMatch = normalized.match(complexPattern);
+  if (complexMatch) {
+    hints.push(complexMatch[2]);
   }
 
   return uniqueHints(hints.map((hint) => squashRepeatedChars(hint)));
