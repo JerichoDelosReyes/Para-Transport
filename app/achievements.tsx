@@ -94,7 +94,7 @@ export default function AchievementsScreen() {
             <>
               <View style={styles.sectionHeader}>
                 <Ionicons name="trophy" size={24} color="#E8A020" />
-                <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>LEADERBOARD</Text>
+                <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>LEADERBOARD</Text>
               </View>
               
               <View style={[styles.leaderboardContainer, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
@@ -167,7 +167,7 @@ export default function AchievementsScreen() {
           ]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Ionicons name="medal" size={24} color="#E8A020" />
-              <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>BADGES</Text>
+              <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>BADGES</Text>
             </View>
             <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
               <Text style={{ fontFamily: 'Inter', fontSize: 13, color: theme.textSecondary, fontWeight: '500' }}>
