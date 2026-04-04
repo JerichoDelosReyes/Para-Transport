@@ -139,16 +139,20 @@ export default function ProfileScreen() {
                 <Ionicons name="radio" size={24} color={COLORS.navy} />
               </TouchableOpacity>
 
-              <View style={styles.quickStatDivider} />
+              {!isGuestAccount && (
+                <>
+                  <View style={styles.quickStatDivider} />
 
-              <TouchableOpacity 
-                style={[styles.quickStat, isGuestAccount && { opacity: 0.5 }]}
-                  onPress={() => isGuestAccount ? Alert.alert('Guest Mode', 'Points feature is not available for guest mode.') : router.navigate('/points-history')}
-                  activeOpacity={0.7}
-              >
-                <Text style={styles.quickStatValue}>{user?.points || 0}</Text>
-                <Text style={styles.quickStatLabel}>Points</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.quickStat}
+                    onPress={() => router.navigate('/points-history')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.quickStatValue}>{user?.points || 0}</Text>
+                    <Text style={styles.quickStatLabel}>Points</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
 

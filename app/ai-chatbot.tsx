@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 import { COLORS } from "../constants/theme";
 import { useRoutes } from "../hooks/useRoutes";
 import { getChatbotReply, type ChatbotConversationState } from "../services/chatbotService";
@@ -44,6 +45,7 @@ export default function AIChatbotScreen() {
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [currentLocationLabel, setCurrentLocationLabel] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [isTagalogGreeting, setIsTagalogGreeting] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const floatAnim = useRef(new Animated.Value(0)).current;
@@ -84,6 +86,41 @@ export default function AIChatbotScreen() {
   useEffect(() => {
     setStoredConversationState(conversationState);
   }, [conversationState, setStoredConversationState]);
+
+  useSpeechRecognitionEvent("start", () => setIsRecording(true));
+  useSpeechRecognitionEvent("end", () => setIsRecording(false));
+  useSpeechRecognitionEvent("result", (event) => {
+    if (event.results && event.results.length > 0) {
+      setInputText(event.results[0].transcript);
+    }
+  });
+  useSpeechRecognitionEvent("error", (event) => {
+    setIsRecording(false);
+    console.log("Speech recognition error:", event.error, event.message);
+  });
+
+  const handleMicPress = async () => {
+    if (isRecording) {
+      ExpoSpeechRecognitionModule.stop();
+      return;
+    }
+
+    try {
+      const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert("Permission Required", "Please enable microphone and speech recognition permissions.");
+        return;
+      }
+      
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-PH', // 'en-PH' handles both English and Taglish/Filipino terms natively on iOS
+        interimResults: true,
+        maxAlternatives: 1
+      });
+    } catch (error) {
+      console.log("Error starting speech recognition:", error);
+    }
+  };
 
   useEffect(() => {
     Animated.loop(
@@ -308,6 +345,14 @@ export default function AIChatbotScreen() {
     );
   };
 
+  const handleSendOrMic = () => {
+    if (!inputText.trim()) {
+      handleMicPress();
+      return;
+    }
+    handleSend();
+  };
+
   return (
     <LinearGradient
       colors={[COLORS.background, "#FDE8A8", "#D7F3DE"]}
@@ -457,21 +502,21 @@ export default function AIChatbotScreen() {
           <View style={[styles.inputWrapper, hasConversation ? styles.inputWrapperChat : null]}>
             <TextInput 
               style={styles.textInput}
-              placeholder="Ask Jeepie"
-              placeholderTextColor={COLORS.textMuted}
+              placeholder={isRecording ? "Listening..." : "Ask Jeepie"}
+              placeholderTextColor={isRecording ? COLORS.primary : COLORS.textMuted}
               value={inputText}
               onChangeText={setInputText}
               onSubmitEditing={handleSend}
             />
 
-            <TouchableOpacity style={[styles.micButton, isSending ? { opacity: 0.6 } : null]} onPress={handleSend} disabled={isSending}>
+            <TouchableOpacity style={[styles.micButton, isSending ? { opacity: 0.6 } : null]} onPress={handleSendOrMic} disabled={isSending}>
               {isSending ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <Ionicons 
-                  name={inputText.trim() ? "send" : "mic"} 
+                  name={inputText.trim() ? "send" : (isRecording ? "stop" : "mic")} 
                   size={22} 
-                  color={"#FFFFFF"} 
+                  color={isRecording ? "#FF4444" : "#FFFFFF"} 
                   style={inputText.trim() ? { transform: [{ translateX: 2 }, { translateY: -1 }] } : {}}
                 />
               )}

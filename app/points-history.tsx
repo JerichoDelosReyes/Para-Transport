@@ -1,26 +1,98 @@
-import React from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
 import { useStore } from '../store/useStore';
+import { supabase } from '../config/supabaseClient';
+import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep2.svg';
+
+const SkeletonCard = () => {
+  const animatedValue = React.useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(animatedValue, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(animatedValue, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      ])
+    ).start();
+  }, [animatedValue]);
+
+  const opacity = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.7]
+  });
+
+  return (
+    <View style={styles.historyCard}>
+      <View style={styles.historyHeader}>
+        <Animated.View style={[{ width: 140, height: 16, backgroundColor: '#E5E7EB', borderRadius: 4 }, { opacity }]} />
+        <Animated.View style={[{ width: 60, height: 28, backgroundColor: '#E5E7EB', borderRadius: 8 }, { opacity }]} />
+      </View>
+      <View style={styles.routeSection}>
+        <Animated.View style={[{ width: '80%', height: 16, backgroundColor: '#E5E7EB', borderRadius: 4, marginBottom: 8 }, { opacity }]} />
+        <Animated.View style={[{ width: '60%', height: 16, backgroundColor: '#E5E7EB', borderRadius: 4 }, { opacity }]} />
+      </View>
+      <View style={styles.metricsRow}>
+        <Animated.View style={[{ width: 70, height: 26, backgroundColor: '#E5E7EB', borderRadius: 6 }, { opacity }]} />
+      </View>
+    </View>
+  );
+};
 
 export default function PointsHistoryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useStore((state) => state.user);
+  
+  const [pointsHistory, setPointsHistory] = useState<any[]>(user?.points_history || []);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const pointsHistory = user?.points_history || [];
+  useEffect(() => {
+    async function fetchPointsHistory() {
+      if (!user?.id) {
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('points_history')
+          .eq('id', user.id)
+          .single();
+          
+        if (!error && data?.points_history) {
+          setPointsHistory(data.points_history || []);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    fetchPointsHistory();
+  }, [user?.id]);
 
   return (
     <View style={styles.screen}>
       <View style={[styles.topSection, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.buttonBack} activeOpacity={0.7}>
-            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+            <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
           </TouchableOpacity>
-          <Text style={styles.headerTitleText}>POINTS HISTORY</Text>
+          <Text style={styles.headerTitleText}>POINTS</Text>
           <View style={{ width: 44, height: 44 }} />
         </View>
       </View>
@@ -30,11 +102,16 @@ export default function PointsHistoryScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
         >
-          {pointsHistory.length === 0 ? (
+          {isLoading ? (
+            <>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </>
+          ) : pointsHistory.length === 0 ? (
              <View style={styles.emptyContainer}>
-               <Ionicons name="receipt-outline" size={48} color={COLORS.textMuted} />
-               <Text style={styles.emptyText}>No points history yet.</Text>
-               <Text style={styles.emptySubText}>Start traveling to earn points!</Text>
+               <JeepIllustration width={220} height={150} />
+               <Text style={styles.emptyTitle}>WALA PANG POINTS.</Text>
              </View>
           ) : (
             pointsHistory.map((item: any, index: number) => {
@@ -72,7 +149,7 @@ export default function PointsHistoryScreen() {
                   <View style={styles.metricsRow}>
                     <View style={styles.metricItem}>
                       <Ionicons name="time-outline" size={16} color={COLORS.textLabel} />
-                      <Text style={styles.metricText}>{item.time || Math.round(item.distance * 3) || 5} min</Text>
+                      <Text style={styles.metricText}>{item.time || Math.round((item.distance || 0) * 3) || 5} min</Text>
                     </View>
                     {isMultiplier && (
                        <View style={styles.metricItemGold}>
@@ -99,13 +176,6 @@ const styles = StyleSheet.create({
   topSection: {
     backgroundColor: COLORS.primary,
     zIndex: 10,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
   },
   header: {
     flexDirection: 'row',
@@ -119,15 +189,19 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   headerTitleText: {
-    fontFamily: 'Montserrat-Bold',
-    fontSize: TYPOGRAPHY.section,
-    color: '#FFFFFF',
-    letterSpacing: 1,
+    fontFamily: 'Cubao',
+    fontSize: TYPOGRAPHY.screenTitle,
+    color: '#000000',
   },
   bottomSection: {
     flex: 1,
@@ -135,28 +209,23 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 24,
+    paddingTop: 16,
     gap: 16,
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 60,
-    padding: 32,
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: COLORS.card,
+    padding: SPACING.cardPadding,
   },
-  emptyText: {
-    fontFamily: 'Inter',
-    fontWeight: '600',
-    fontSize: 18,
-    color: COLORS.navy,
-    marginTop: 16,
-  },
-  emptySubText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    color: COLORS.textMuted,
+  emptyTitle: {
     marginTop: 8,
-    textAlign: 'center',
+    fontFamily: 'Cubao',
+    fontSize: 24,
+    color: COLORS.navy,
   },
   historyCard: {
     backgroundColor: '#FFFFFF',

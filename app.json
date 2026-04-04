@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Para uses your location to find your current position and show routes to your destination.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSpeechRecognitionUsageDescription": "Para needs access to speech recognition to let you search for routes using your voice.",
+        "NSMicrophoneUsageDescription": "Para needs access to the microphone to convert your speech into text searches."
       },
       "bundleIdentifier": "com.para.app"
     },
@@ -30,7 +32,8 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO"
       ],
       "package": "com.para.app"
     },
@@ -44,7 +47,8 @@
         "expo-notifications",
         {
           "icon": "./assets/logo/appicon.png",
-          "color": "#E6F4FE"
+          "color": "#E6F4FE",
+          "mode": "development"
         }
       ],
       [
@@ -57,7 +61,8 @@
             "newArchEnabled": true
           }
         }
-      ]
+      ],
+      "expo-speech-recognition"
     ],
     "extra": {
       "eas": {

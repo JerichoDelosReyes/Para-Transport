@@ -2100,7 +2100,7 @@ export default function HomeScreen() {
                 {destinationQuery ? `${originQuery || currentLocationLabel} → ${destinationQuery}` : `Saan tayo, ${user?.username || 'Komyuter'}?`}
               </Text>
               <TouchableOpacity 
-                onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon! (Requires a native voice plugin)')} 
+                onPress={() => setIsSearchActive(true)} 
                 style={{ paddingHorizontal: 8 }}
               >
                 <Ionicons name="mic" size={20} color={COLORS.textMuted} />
