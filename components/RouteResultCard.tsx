@@ -10,16 +10,25 @@ type Props = {
   isSelected: boolean;
   onPress: (id: string) => void;
   onPressStartJourney?: () => void;
-  badgeLabel?: string;
+  rankLabel?: string;
+  metricTags?: string[];
 };
 
-export default function RouteResultCard({ matched, isSelected, onPress, badgeLabel, onPressStartJourney }: Props) {
+const TAG_COLORS: Record<string, { backgroundColor: string; textColor: string }> = {
+  Fastest: { backgroundColor: '#3B82F6', textColor: '#FFFFFF' },
+  'Least Transfer': { backgroundColor: '#8B5CF6', textColor: '#FFFFFF' },
+  Cheapest: { backgroundColor: '#10B981', textColor: '#FFFFFF' },
+};
+
+export default function RouteResultCard({ matched, isSelected, onPress, rankLabel, metricTags = [], onPressStartJourney }: Props) {
   const { theme, isDark } = useTheme();
   const { legs, distanceKm, estimatedMinutes } = matched;
   const isTransfer = legs.length > 1;
   const id = legs.map(l => l.route.properties.code).join('+');
   const formatPeso = (value: number): string => String(Math.max(0, Math.round(value)));
+  const legFareParts = legs.map((leg) => formatPeso(leg.estimatedFare));
   const totalTransitFare = legs.reduce((sum, leg) => sum + Math.max(0, Math.round(leg.estimatedFare)), 0);
+  const fareFormulaText = legFareParts.map((fare) => `₱${fare}`).join(' + ');
 
   return (
     <TouchableOpacity
@@ -27,31 +36,27 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
       activeOpacity={0.8}
       onPress={() => onPress(id)}
     >
-      {/* Top row: badges + ETA */}
+      {/* Top row: tags + ETA */}
       <View style={styles.topRow}>
         <View style={styles.badgeRow}>
-          {badgeLabel && (
+          {rankLabel && (
             <View style={styles.rankBadge}>
               <Ionicons name="trophy" size={10} color="#FFFFFF" />
-              <Text style={styles.rankBadgeText}>{badgeLabel}</Text>
+              <Text style={styles.rankBadgeText}>{rankLabel}</Text>
             </View>
           )}
-          {legs.map((leg, i) => (
-            <React.Fragment key={leg.route.properties.code}>
-              {i > 0 && (
-                <Ionicons name="walk-outline" size={14} color={COLORS.textMuted} style={{ marginHorizontal: 2 }} />
-              )}
-              <View style={[styles.codeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
-                <Text style={styles.codeText}>{leg.route.properties.name || leg.route.properties.code}</Text>
+          {metricTags.map((tag) => {
+            const colors = TAG_COLORS[tag] || {
+              backgroundColor: 'rgba(255,255,255,0.15)',
+              textColor: '#FFFFFF',
+            };
+
+            return (
+              <View key={tag} style={[styles.metricTag, { backgroundColor: colors.backgroundColor }]}> 
+                <Text style={[styles.metricTagText, { color: colors.textColor }]}>{tag}</Text>
               </View>
-            </React.Fragment>
-          ))}
-          {isTransfer && (
-            <View style={styles.transferBadge}>
-              <Ionicons name="swap-horizontal" size={11} color="#FF9800" />
-              <Text style={styles.transferText}>Transfer</Text>
-            </View>
-          )}
+            );
+          })}
         </View>
         <View style={styles.etaBadge}>
           <Ionicons name="time-outline" size={12} color={theme.textSecondary} />
@@ -59,42 +64,32 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
         </View>
       </View>
 
-      {/* Route name(s) */}
-      {legs.map((leg, i) => (
-        <Text key={i} style={[styles.routeName, { color: theme.text }]} numberOfLines={1}>
-          {i > 0 ? '↳ ' : ''}{leg.route.properties.name}
+      {/* Routes Row */}
+      <View style={styles.routeLegsRow}>
+        {legs.map((leg, i) => (
+          <React.Fragment key={leg.route.properties.code}>
+            {i > 0 && (
+              <Ionicons name="walk-outline" size={14} color={COLORS.textMuted} style={{ marginHorizontal: 2 }} />
+            )}
+            <View style={[styles.codeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
+              <Text style={styles.codeText}>{leg.route.properties.name || leg.route.properties.code}</Text>
+            </View>
+          </React.Fragment>
+        ))}
+        {isTransfer && (
+          <View style={styles.transferBadge}>
+            <Ionicons name="swap-horizontal" size={11} color="#FF9800" />
+            <Text style={styles.transferText}>Transfer</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.fareCalcRow}>
+        <Text style={[styles.fareCalcLabel, { color: theme.textSecondary }]}>Transit fare</Text>
+        <Text style={[styles.fareCalcValue, { color: theme.text }]}> 
+          {isTransfer ? `${fareFormulaText} = ₱${formatPeso(totalTransitFare)}` : `₱${formatPeso(totalTransitFare)}`}
         </Text>
-      ))}
-
-      {/* Via stops */}
-      {legs.length === 1 && (() => {
-        const { fromLabel, toLabel } = legs[0].route.properties;
-        if (fromLabel && toLabel) {
-          return (
-            <Text style={[styles.viaText, { color: theme.textSecondary }]} numberOfLines={1}>
-              {fromLabel} → {toLabel}
-            </Text>
-          );
-        } else if (fromLabel || toLabel) {
-          return (
-            <Text style={[styles.viaText, { color: theme.textSecondary }]} numberOfLines={1}>
-              {fromLabel || toLabel}
-            </Text>
-          );
-        }
-        return null;
-      })()}
-
-      {/* Per-leg fare breakdown for transfers */}
-      {isTransfer && (
-        <View style={styles.fareBreakdown}>
-          {legs.map((leg, i) => (
-            <Text key={i} style={[styles.fareBreakdownText, { color: theme.textSecondary }]}>
-              {leg.route.properties.code}: ₱{formatPeso(leg.estimatedFare)} ({leg.distanceKm.toFixed(1)} km)
-            </Text>
-          ))}
-        </View>
-      )}
+      </View>
 
       {/* Bottom row */}
       <View style={styles.bottomRow}>
@@ -153,6 +148,13 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 4,
   },
+  routeLegsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginBottom: 10,
+  },
   codeBadge: {
     backgroundColor: '#2196F3',
     borderRadius: 8,
@@ -176,19 +178,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.textMuted,
-  },
-  routeName: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.body,
-    fontWeight: '700',
-    color: COLORS.navy,
-    marginBottom: 2,
-  },
-  viaText: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    marginBottom: 10,
   },
   bottomRow: {
     flexDirection: 'row',
@@ -222,15 +211,27 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginBottom: -2,
   },
-  fareBreakdown: {
+  fareCalcRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
     marginBottom: 8,
-    gap: 2,
   },
-  fareBreakdownText: {
+  fareCalcLabel: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  fareCalcValue: {
+    flexShrink: 1,
+    textAlign: 'right',
     fontFamily: 'Inter',
     fontSize: 12,
-    color: COLORS.textMuted,
-    fontWeight: '500',
+    fontWeight: '700',
   },
   transferBadge: {
     flexDirection: 'row',
@@ -261,6 +262,16 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  metricTag: {
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  metricTagText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '700',
   },
   startJourneyBtn: {
     marginTop: 16,

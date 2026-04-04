@@ -1,8 +1,8 @@
-import React, { useRef, useEffect, useState, useMemo } from "react";
+import React, { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Animated, PanResponder } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS, RADIUS, TYPOGRAPHY } from "../constants/theme";
-import type { MatchedRoute, RankMode } from "../services/routeSearch";
+import type { MatchedRoute } from "../services/routeSearch";
 import RouteResultCard from "./RouteResultCard";
 import { useTheme } from '../src/theme/ThemeContext';
 
@@ -11,13 +11,35 @@ const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 // Pre-compute expansion snap states
 const FULL_HEIGHT = SCREEN_HEIGHT * 0.8;
 const HALF_HEIGHT = SCREEN_HEIGHT * 0.45;
+const TOP_ROUTE_LIMIT = 5;
+
+const compareLeastTransfer = (a: MatchedRoute, b: MatchedRoute): number => {
+  return (
+    a.transferCount - b.transferCount ||
+    a.estimatedMinutes - b.estimatedMinutes ||
+    a.estimatedFare - b.estimatedFare
+  );
+};
+
+const compareFastest = (a: MatchedRoute, b: MatchedRoute): number => {
+  return (
+    a.estimatedMinutes - b.estimatedMinutes ||
+    a.transferCount - b.transferCount ||
+    a.estimatedFare - b.estimatedFare
+  );
+};
+
+const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number => {
+  return (
+    a.estimatedFare - b.estimatedFare ||
+    a.transferCount - b.transferCount ||
+    a.estimatedMinutes - b.estimatedMinutes
+  );
+};
 
 type Props = {
   visible: boolean;
   matchedRoutes: MatchedRoute[];
-  rankedRoutes: MatchedRoute[];
-  rankTab: RankMode;
-  setRankTab: React.Dispatch<React.SetStateAction<RankMode>>;
   selectedRoute: string | null;
   setSelectedRoute: (id: string | null) => void;
   destinationName?: string;
@@ -26,18 +48,9 @@ type Props = {
   onStartJourney?: (id: string) => void;
 };
 
-const RANK_TABS = [
-  { key: "easiest", label: "Easiest" },
-  { key: "fastest", label: "Fastest" },
-  { key: "cheapest", label: "Cheapest" },
-] as const;
-
 export default function RouteRecommenderPanel({
   visible,
   matchedRoutes,
-  rankedRoutes,
-  rankTab,
-  setRankTab,
   selectedRoute,
   setSelectedRoute,
   onClose,
@@ -124,19 +137,76 @@ export default function RouteRecommenderPanel({
     [isExpanded, panY]
   );
 
-  const renderRouteCard = useMemo(
-    () => ({ item, index }: { item: MatchedRoute; index: number }) => {
+  const topRankedRoutes = useMemo(() => {
+    if (matchedRoutes.length <= TOP_ROUTE_LIMIT) {
+      return [...matchedRoutes].sort(compareLeastTransfer);
+    }
+
+    const indexed = matchedRoutes.map((route, index) => ({ route, index }));
+    const compositeScores = new Map<number, number>();
+
+    const applyRankScores = (
+      comparator: (a: MatchedRoute, b: MatchedRoute) => number,
+      weight: number,
+    ) => {
+      const ordered = [...indexed].sort((a, b) => comparator(a.route, b.route) || a.index - b.index);
+      ordered.forEach((item, rankIndex) => {
+        compositeScores.set(item.index, (compositeScores.get(item.index) || 0) + rankIndex * weight);
+      });
+    };
+
+    applyRankScores(compareLeastTransfer, 1);
+    applyRankScores(compareFastest, 1);
+    applyRankScores(compareCheapest, 1);
+
+    return [...indexed]
+      .sort((a, b) => {
+        const scoreDiff = (compositeScores.get(a.index) || 0) - (compositeScores.get(b.index) || 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        return (
+          compareLeastTransfer(a.route, b.route) ||
+          compareFastest(a.route, b.route) ||
+          compareCheapest(a.route, b.route) ||
+          a.index - b.index
+        );
+      })
+      .slice(0, TOP_ROUTE_LIMIT)
+      .map((item) => item.route);
+  }, [matchedRoutes]);
+
+  const metricBaselines = useMemo(() => {
+    if (matchedRoutes.length === 0) return null;
+
+    return {
+      fastestMinutes: Math.min(...matchedRoutes.map((route) => route.estimatedMinutes)),
+      leastTransfers: Math.min(...matchedRoutes.map((route) => route.transferCount)),
+      cheapestFare: Math.min(...matchedRoutes.map((route) => route.estimatedFare)),
+    };
+  }, [matchedRoutes]);
+
+  const getMetricTags = useCallback(
+    (route: MatchedRoute): string[] => {
+      if (!metricBaselines) return [];
+
+      const tags: string[] = [];
+      if (route.estimatedMinutes === metricBaselines.fastestMinutes) tags.push('Fastest');
+      if (route.transferCount === metricBaselines.leastTransfers) tags.push('Least Transfer');
+      if (Math.abs(route.estimatedFare - metricBaselines.cheapestFare) < 0.001) tags.push('Cheapest');
+      return tags;
+    },
+    [metricBaselines],
+  );
+
+  const renderRouteCard = useCallback(
+    ({ item, index }: { item: MatchedRoute; index: number }) => {
       const id = item.legs.map((l: any) => l.route.properties.code).join("+");
-      const badgeLabel =
-        index === 0 && rankedRoutes.length > 1
-          ? RANK_TABS.find((t) => t.key === rankTab)?.label
-          : undefined;
 
       return (
         <RouteResultCard
           matched={item}
           isSelected={selectedRoute === id}
-          badgeLabel={badgeLabel}
+          rankLabel={`Top ${index + 1}`}
+          metricTags={getMetricTags(item)}
           onPress={(pressedId: string) => {
             setSelectedRoute(selectedRoute === pressedId ? null : pressedId);
           }}
@@ -144,7 +214,7 @@ export default function RouteRecommenderPanel({
         />
       );
     },
-    [rankTab, rankedRoutes.length, selectedRoute, setSelectedRoute, onStartJourney]
+    [selectedRoute, setSelectedRoute, onStartJourney, getMetricTags]
   );
 
   const keyExtractor = useMemo(
@@ -152,35 +222,12 @@ export default function RouteRecommenderPanel({
     []
   );
 
-  const shownCount = rankedRoutes.length;
+  const shownCount = topRankedRoutes.length;
   const totalCount = matchedRoutes.length;
-  const routeSubtitle =
-    totalCount > shownCount
-      ? `Top ${shownCount} of ${totalCount} routes${destinationName ? ` to ${destinationName}` : ''}`
-      : `${shownCount} route${shownCount !== 1 ? 's' : ''}${destinationName ? ` to ${destinationName}` : ''}`;
 
   const listHeader = useMemo(
-    () => (
-      <>
-        {matchedRoutes.length > 1 && (
-          <View style={[styles.rankTabsRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(10,22,40,0.04)' }]}>
-            {RANK_TABS.map((tab) => (
-              <TouchableOpacity
-                key={tab.key}
-                style={[styles.rankTab, rankTab === tab.key && [styles.rankTabActive, { backgroundColor: isDark ? theme.surfaceSecondary : "#FFFFFF" }]]}
-                activeOpacity={0.8}
-                onPress={() => setRankTab(tab.key as RankMode)}
-              >
-                <Text style={[styles.rankTabText, { color: isDark ? theme.textSecondary : COLORS.textMuted }, rankTab === tab.key && [styles.rankTabTextActive, { color: isDark ? '#E8A020' : COLORS.navy }]]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </>
-    ),
-    [destinationName, matchedRoutes.length, rankTab, routeSubtitle, setRankTab, totalCount]
+    () => null,
+    []
   );
 
   const emptyList = useMemo(
@@ -214,7 +261,7 @@ export default function RouteRecommenderPanel({
       </View>
 
       <FlatList
-        data={rankedRoutes}
+        data={topRankedRoutes}
         keyExtractor={keyExtractor}
         renderItem={renderRouteCard}
         showsVerticalScrollIndicator={false}
@@ -291,35 +338,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.body,
     color: COLORS.textMuted,
     marginBottom: 16,
-  },
-  rankTabsRow: {
-    flexDirection: "row",
-    backgroundColor: "rgba(10,22,40,0.04)",
-    borderRadius: RADIUS.pill,
-    padding: 4,
-    marginBottom: 16,
-  },
-  rankTab: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: "center",
-    borderRadius: RADIUS.pill,
-  },
-  rankTabActive: {
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  rankTabText: {
-    fontFamily: "Inter-SemiBold",
-    fontSize: TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-  },
-  rankTabTextActive: {
-    color: COLORS.navy,
   },
   emptyResultCard: {
     alignItems: "center",
