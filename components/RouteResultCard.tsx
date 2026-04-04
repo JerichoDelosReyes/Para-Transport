@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../constants/theme';
 import type { MatchedRoute } from '../services/routeSearch';
+import { useTheme } from '../src/theme/ThemeContext';
 
 type Props = {
   matched: MatchedRoute;
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export default function RouteResultCard({ matched, isSelected, onPress, badgeLabel, onPressStartJourney }: Props) {
+  const { theme, isDark } = useTheme();
   const { legs, distanceKm, estimatedMinutes } = matched;
   const isTransfer = legs.length > 1;
   const id = legs.map(l => l.route.properties.code).join('+');
@@ -21,7 +23,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
 
   return (
     <TouchableOpacity
-      style={[styles.card, isSelected && styles.cardSelected]}
+      style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(10,22,40,0.06)' }, isSelected && styles.cardSelected]}
       activeOpacity={0.8}
       onPress={() => onPress(id)}
     >
@@ -52,14 +54,14 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
           )}
         </View>
         <View style={styles.etaBadge}>
-          <Ionicons name="time-outline" size={12} color={COLORS.textMuted} />
-          <Text style={styles.etaText}>{estimatedMinutes} min</Text>
+          <Ionicons name="time-outline" size={12} color={theme.textSecondary} />
+          <Text style={[styles.etaText, { color: theme.textSecondary }]}>{estimatedMinutes} min</Text>
         </View>
       </View>
 
       {/* Route name(s) */}
       {legs.map((leg, i) => (
-        <Text key={i} style={styles.routeName} numberOfLines={1}>
+        <Text key={i} style={[styles.routeName, { color: theme.text }]} numberOfLines={1}>
           {i > 0 ? '↳ ' : ''}{leg.route.properties.name}
         </Text>
       ))}
@@ -69,13 +71,13 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
         const { fromLabel, toLabel } = legs[0].route.properties;
         if (fromLabel && toLabel) {
           return (
-            <Text style={styles.viaText} numberOfLines={1}>
+            <Text style={[styles.viaText, { color: theme.textSecondary }]} numberOfLines={1}>
               {fromLabel} → {toLabel}
             </Text>
           );
         } else if (fromLabel || toLabel) {
           return (
-            <Text style={styles.viaText} numberOfLines={1}>
+            <Text style={[styles.viaText, { color: theme.textSecondary }]} numberOfLines={1}>
               {fromLabel || toLabel}
             </Text>
           );
@@ -87,7 +89,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
       {isTransfer && (
         <View style={styles.fareBreakdown}>
           {legs.map((leg, i) => (
-            <Text key={i} style={styles.fareBreakdownText}>
+            <Text key={i} style={[styles.fareBreakdownText, { color: theme.textSecondary }]}>
               {leg.route.properties.code}: ₱{formatPeso(leg.estimatedFare)} ({leg.distanceKm.toFixed(1)} km)
             </Text>
           ))}
@@ -97,23 +99,23 @@ export default function RouteResultCard({ matched, isSelected, onPress, badgeLab
       {/* Bottom row */}
       <View style={styles.bottomRow}>
         <View style={styles.distanceWrap}>
-          <Ionicons name="navigate-outline" size={13} color={COLORS.textMuted} />
-          <Text style={styles.distanceText}>{distanceKm.toFixed(1)} km</Text>
+          <Ionicons name="navigate-outline" size={13} color={theme.textSecondary} />
+          <Text style={[styles.distanceText, { color: theme.textSecondary }]}>{distanceKm.toFixed(1)} km</Text>
         </View>
         <View style={styles.fareWrap}>
-          {isTransfer && <Text style={styles.fareLabelText}>Total</Text>}
-          <Text style={styles.fareText}>₱{formatPeso(totalTransitFare)}</Text>
+          {isTransfer && <Text style={[styles.fareLabelText, { color: theme.textSecondary }]}>Total</Text>}
+          <Text style={[styles.fareText, { color: theme.text }]}>₱{formatPeso(totalTransitFare)}</Text>
         </View>
       </View>
 
       {/* Start Journey Button for Selected Route */}
       {isSelected && onPressStartJourney && (
         <TouchableOpacity
-          style={styles.startJourneyBtn}
+          style={[styles.startJourneyBtn, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}
           activeOpacity={0.9}
           onPress={() => onPressStartJourney()}
         >
-          <Text style={styles.startJourneyText}>Start Journey</Text>
+          <Text style={[styles.startJourneyText, { color: isDark ? COLORS.navy : '#FFFFFF' }]}>Start Journey</Text>
         </TouchableOpacity>
       )}
     </TouchableOpacity>

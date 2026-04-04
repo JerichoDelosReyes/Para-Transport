@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { COLORS, RADIUS, TYPOGRAPHY } from "../constants/theme";
 import type { MatchedRoute, RankMode } from "../services/routeSearch";
 import RouteResultCard from "./RouteResultCard";
+import { useTheme } from '../src/theme/ThemeContext';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -44,6 +45,7 @@ export default function RouteRecommenderPanel({
   routeTypeLabel,
   onStartJourney,
 }: Props) {
+  const { theme, isDark } = useTheme();
   // Start off-screen at 0 (bound safely behind bottom edge)
   const panY = useRef(new Animated.Value(0)).current; 
   const [isExpanded, setIsExpanded] = useState(false);
@@ -161,15 +163,15 @@ export default function RouteRecommenderPanel({
     () => (
       <>
         {matchedRoutes.length > 1 && (
-          <View style={styles.rankTabsRow}>
+          <View style={[styles.rankTabsRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(10,22,40,0.04)' }]}>
             {RANK_TABS.map((tab) => (
               <TouchableOpacity
                 key={tab.key}
-                style={[styles.rankTab, rankTab === tab.key && styles.rankTabActive]}
+                style={[styles.rankTab, rankTab === tab.key && [styles.rankTabActive, { backgroundColor: isDark ? theme.surfaceSecondary : "#FFFFFF" }]]}
                 activeOpacity={0.8}
                 onPress={() => setRankTab(tab.key as RankMode)}
               >
-                <Text style={[styles.rankTabText, rankTab === tab.key && styles.rankTabTextActive]}>
+                <Text style={[styles.rankTabText, { color: isDark ? theme.textSecondary : COLORS.textMuted }, rankTab === tab.key && [styles.rankTabTextActive, { color: isDark ? '#E8A020' : COLORS.navy }]]}>
                   {tab.label}
                 </Text>
               </TouchableOpacity>
@@ -183,10 +185,10 @@ export default function RouteRecommenderPanel({
 
   const emptyList = useMemo(
     () => (
-      <View style={styles.emptyResultCard}>
-        <Ionicons name="bus-outline" size={36} color={COLORS.textMuted} />
-        <Text style={styles.emptyResultTitle}>No {routeTypeLabel || 'transit'} routes found</Text>
-        <Text style={styles.emptyResultText}>
+      <View style={[styles.emptyResultCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(10,22,40,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(10,22,40,0.05)' }]}>
+        <Ionicons name="bus-outline" size={36} color={theme.textSecondary} />
+        <Text style={[styles.emptyResultTitle, { color: theme.text }]}>No {routeTypeLabel || 'transit'} routes found</Text>
+        <Text style={[styles.emptyResultText, { color: theme.textSecondary }]}>
           No {routeTypeLabel ? routeTypeLabel.toLowerCase() : 'transit'} routes pass near both your location and this destination.
         </Text>
       </View>
@@ -198,16 +200,16 @@ export default function RouteRecommenderPanel({
     <Animated.View 
       style={[
         styles.sheetContainer, 
-        { transform: [{ translateY: panY }] }
+        { transform: [{ translateY: panY }], backgroundColor: theme.cardBackground }
       ]}
       pointerEvents={visible ? 'auto' : 'none'}
     >
-      <View style={styles.sheetHeader} {...panResponder.panHandlers}>
+      <View style={[styles.sheetHeader, { backgroundColor: theme.cardBackground, borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(10,22,40,0.06)' }]} {...panResponder.panHandlers}>
         <TouchableOpacity style={styles.dragHandleWrap} onPress={toggleExpand} activeOpacity={0.9}>
-          <View style={styles.dragHandle} />
+          <View style={[styles.dragHandle, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]} />
         </TouchableOpacity>
         <View style={styles.sheetHeaderRow}>
-          <Text style={styles.sheetHeaderTitle}>ROUTES - {(routeTypeLabel || 'Transit').toUpperCase()}</Text>
+          <Text style={[styles.sheetHeaderTitle, { color: theme.text }]}>ROUTES</Text>
         </View>
       </View>
 
@@ -221,7 +223,7 @@ export default function RouteRecommenderPanel({
         ListHeaderComponent={listHeader}
         ListEmptyComponent={emptyList}
         ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-        ListFooterComponent={() => <View style={{ height: 120 }} />}
+        ListFooterComponent={() => <View style={{ height: 40 }} />}
         initialNumToRender={6}
         maxToRenderPerBatch={8}
         windowSize={7}
@@ -282,7 +284,7 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 250,
+    paddingBottom: 100,
   },
   routeResultSubtitle: {
     fontFamily: "Inter-Medium",

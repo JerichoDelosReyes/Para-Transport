@@ -2,8 +2,10 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { useTheme } from '../src/theme/ThemeContext';
 
 export default function JourneySummaryScreen() {
+  const { theme, isDark } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
@@ -15,40 +17,40 @@ export default function JourneySummaryScreen() {
   const time = Number(params.time || 15);
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.topSection, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <View style={[styles.topSection, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>JOURNEY SUMMARY</Text>
+          <Text style={[styles.headerTitle, { color: '#0A1628' }]}>JOURNEY SUMMARY</Text>
         </View>
       </View>
 
       <View style={styles.content}>
         <View style={styles.metricsWrap}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Distance</Text>
-            <Text style={styles.metricValue}>{distance} km</Text>
+          <View style={[styles.metricCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Distance</Text>
+            <Text style={[styles.metricValue, { color: theme.text }]}>{distance} km</Text>
           </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Fare</Text>
-            <Text style={styles.metricValue}>₱{fare}</Text>
+          <View style={[styles.metricCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Fare</Text>
+            <Text style={[styles.metricValue, { color: theme.text }]}>₱{fare}</Text>
           </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Time Elapsed</Text>
-            <Text style={styles.metricValue}>{time} min</Text>
+          <View style={[styles.metricCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Time Elapsed</Text>
+            <Text style={[styles.metricValue, { color: theme.text }]}>{time} min</Text>
           </View>
         </View>
 
-        <View style={styles.pointsCard}>
-          <Text style={styles.pointsLabel}>Points Earned</Text>
-          <Text style={styles.pointsValue}>+{points}</Text>
-          {multiplier > 1 && <Text style={styles.multiplierText}>({multiplier}x Multiplier!)</Text>}
+        <View style={[styles.pointsCard, { backgroundColor: isDark ? theme.cardBackground : '#FFF5CC', borderColor: theme.cardBorder }]}>
+          <Text style={[styles.pointsLabel, { color: isDark ? theme.textSecondary : COLORS.textLabel }]}>Points Earned</Text>
+          <Text style={[styles.pointsValue, { color: isDark ? theme.text : COLORS.navy }]}>+{points}</Text>
+          {multiplier > 1 && <Text style={[styles.multiplierText, { color: isDark ? '#E8A020' : COLORS.primary }]}>({multiplier}x Multiplier!)</Text>}
           <Text style={styles.badge}>🏅</Text>
         </View>
       </View>
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-        <TouchableOpacity style={styles.primaryButton} activeOpacity={0.9} onPress={() => router.replace('/(tabs)')}>
-          <Text style={styles.primaryText}>Confirm Fare</Text>
+        <TouchableOpacity style={[styles.primaryButton, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]} activeOpacity={0.9} onPress={() => router.replace('/(tabs)')}>
+          <Text style={[styles.primaryText, { color: isDark ? '#0A1628' : '#000000' }]}>Confirm Fare</Text>
         </TouchableOpacity>
       </View>
     </View>
