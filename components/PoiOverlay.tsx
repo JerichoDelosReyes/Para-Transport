@@ -39,28 +39,28 @@ const getPoiPriority = (feature: POIFeature): number => {
 };
 
 const getLabelGridSizeByZoom = (zoom: number): number => {
-  if (zoom >= 18) return 0.00045;
-  if (zoom >= 17.5) return 0.00055;
-  if (zoom >= 17) return 0.0008;
-  if (zoom >= 16.5) return 0.00115;
-  if (zoom >= 16) return 0.0015;
-  if (zoom >= 15) return 0.0019;
-  if (zoom >= 14) return 0.0022;
-  if (zoom >= 13) return 0.0025;
-  return 0.0025;
+  if (zoom >= 18) return 0.045;
+  if (zoom >= 17.5) return 0.55;
+  if (zoom >= 17) return 0.8;
+  if (zoom >= 16.5) return 0.0115;
+  if (zoom >= 16) return 0.015;
+  if (zoom >= 15) return 0.019;
+  if (zoom >= 14) return 0.022;
+  if (zoom >= 13) return 0.025;
+  return 0.25;
 };
 
 const getLabelLimitByZoom = (zoom: number): number => {
-  if (zoom >= 18) return 22;
-  if (zoom >= 17.5) return 16;
-  if (zoom >= 17) return 12;
-  if (zoom >= 16.5) return 9;
-  if (zoom >= 16) return 6;
-  if (zoom >= 15) return 4;
-  if (zoom >= 14) return 3;
-  if (zoom >= 13) return 2;
-  if (zoom >= 12) return 1;
-  return 0;
+  if (zoom >= 18) return 102;
+  if (zoom >= 17.5) return 89;
+  if (zoom >= 17) return 62;
+  if (zoom >= 16.5) return 46;
+  if (zoom >= 16) return 35;
+  if (zoom >= 15) return 24;
+  if (zoom >= 14) return 15;
+  if (zoom >= 13) return 9;
+  if (zoom >= 12) return 4;
+  return 10;
 };
 
 const pickVisiblePoiLabels = (
@@ -179,7 +179,7 @@ export default function PoiOverlay({
                 color: '#FFFF',
                 fontWeight: '600',
                 paddingHorizontal: 6,
-                paddingVertical: 100,
+                paddingVertical: 10,
                 borderRadius: 6,
                 overflow: 'hidden',
                 maxWidth: 120,
