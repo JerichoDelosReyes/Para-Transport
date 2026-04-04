@@ -40,12 +40,22 @@
     "plugins": [
       "expo-web-browser",
       "@maplibre/maplibre-react-native",
-
       [
         "expo-notifications",
         {
           "icon": "./assets/logo/appicon.png",
           "color": "#E6F4FE"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "newArchEnabled": true
+          },
+          "android": {
+            "newArchEnabled": true
+          }
         }
       ]
     ],
@@ -60,6 +70,7 @@
     },
     "updates": {
       "url": "https://u.expo.dev/34665852-31df-4ca2-b87a-510e5909f06c"
-    }
+    },
+    "newArchEnabled": true
   }
 }
