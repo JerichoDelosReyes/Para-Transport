@@ -8,6 +8,7 @@ export default function JourneySummaryScreen() {
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   
+  const multiplier = Number(params.multiplier || 1);
   const distance = Number(params.distance || 6).toFixed(1);
   const fare = Number(params.fare || 29).toFixed(2);
   const points = Number(params.points || 35);
@@ -40,6 +41,7 @@ export default function JourneySummaryScreen() {
         <View style={styles.pointsCard}>
           <Text style={styles.pointsLabel}>Points Earned</Text>
           <Text style={styles.pointsValue}>+{points}</Text>
+          {multiplier > 1 && <Text style={styles.multiplierText}>({multiplier}x Multiplier!)</Text>}
           <Text style={styles.badge}>🏅</Text>
         </View>
       </View>
@@ -112,6 +114,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: TYPOGRAPHY.label,
     color: COLORS.textLabel,
+  },
+  multiplierText: {
+    fontFamily: "Inter",
+    fontSize: 16,
+    color: COLORS.primary,
+    marginTop: 4,
+    textAlign: "center",
   },
   pointsValue: {
     marginTop: 6,

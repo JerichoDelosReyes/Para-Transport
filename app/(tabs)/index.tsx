@@ -1455,55 +1455,7 @@ export default function HomeScreen() {
     return () => clearInterval(id);
   }, [sim.state]);
 
-  // Record trip stats when simulation finishes (once per run)
-  useEffect(() => {
-    if (sim.state === 'idle') {
-      tripStatRecordedRef.current = false;
-      return;
-    }
-    if (sim.state === 'finished' && !tripStatRecordedRef.current) {
-      tripStatRecordedRef.current = true;
-      const distKm = routeSummary?.distanceKm ?? 0;
-      const fareAmt = selectedRoute?.estimatedFare ?? 0;
-      
-      const now = new Date();
-      const hour = now.getHours();
-      const min = now.getMinutes();
-      const day = now.getDay();
-      const timeVal = hour + min / 60;
-      
-      let multiplier = 1.0;
-      let label = 'Completed!';
-      
-      // Morning Rush: 6:00 AM - 9:00 AM
-      if (timeVal >= 6 && timeVal <= 9) {
-        multiplier = 1.5;
-        label = 'Morning Rush Bonus!';
-      }
-      // Evening Rush: 4:30 PM - 8:00 PM
-      else if (timeVal >= 16.5 && timeVal <= 20) {
-        multiplier = 1.5;
-        label = 'Evening Rush Bonus!';
-      }
-      
-      // Worst Time: Friday 5:00 PM - 6:00 PM
-      if (day === 5 && timeVal >= 17 && timeVal <= 18) {
-        multiplier = 2.0; 
-        label = 'Friday Rush Madness Bonus!';
-      }
-
-      const basePoints = Math.max(1, Math.round(distKm * 2));
-      const totalPoints = Math.round(basePoints * multiplier);
-
-      addTripStats({ distance: distKm, fare: fareAmt, points: totalPoints });
-      
-      Alert.alert(
-        label, 
-        `You arrived at your destination! Earned ${totalPoints} points (${multiplier}x multiplier).`
-      );
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sim.state]);
+  
 
   const activeUserPosition = useMemo(() => {
     if (sim.state !== 'idle' && sim.position) return sim.position;
@@ -1911,15 +1863,48 @@ export default function HomeScreen() {
           const timePassedSecs = Math.round((Date.now() - (journeySummaryData?.startTime || Date.now())) / 1000);
           const actualMinutes = Math.max(1, Math.round(timePassedSecs / 60));
           
-          router.navigate({
-            pathname: '/journey-summary',
-            params: {
-              distance: (journeySummaryData?.distanceMeters || 0) / 1000,
-              time: actualMinutes,
-              fare: selectedRoute?.estimatedFare || 0,
-              points: Math.round(((journeySummaryData?.distanceMeters || 0) / 1000) * 5)
+          (() => {
+            const distKm = (journeySummaryData?.distanceMeters || 0) / 1000;
+            const fareAmt = selectedRoute?.estimatedFare || 0;
+            
+            const now = new Date();
+            const hour = now.getHours();
+            const min = now.getMinutes();
+            const day = now.getDay();
+            const timeVal = hour + min / 60;
+            
+            let multiplier = 1.0;
+            
+            // Morning Rush: 6:00 AM - 9:00 AM
+            if (timeVal >= 6 && timeVal <= 9) {
+              multiplier = 1.5;
             }
-          });
+            // Evening Rush: 4:30 PM - 8:00 PM
+            else if (timeVal >= 16.5 && timeVal <= 20) {
+              multiplier = 1.5;
+            }
+            
+            // Worst Time: Friday 5:00 PM - 6:00 PM
+            if (day === 5 && timeVal >= 17 && timeVal <= 18) {
+              multiplier = 2.0; 
+            }
+
+            const basePoints = Math.max(1, Math.round(distKm * 2));
+            const totalPoints = Math.round(basePoints * multiplier);
+            
+            addTripStats({ distance: distKm, fare: fareAmt, points: totalPoints });
+            
+            router.navigate({
+              pathname: '/journey-summary',
+              params: {
+                distance: distKm,
+                time: actualMinutes,
+                fare: fareAmt,
+                points: totalPoints,
+                multiplier: multiplier
+              }
+            });
+          })();
         }, 2000);
       } else {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
