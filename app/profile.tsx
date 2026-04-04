@@ -224,7 +224,7 @@ export default function ProfileScreen() {
                   activeOpacity={isGuestAccount ? 0.8 : 1}
                   disabled={!isGuestAccount}
                 >
-                                    <View style={[styles.profileIconWrapper, !isEarned && styles.badgeLocked]}>
+                                    <View style={styles.profileIconWrapper}>
                     {BADGE_IMAGES[badge.id] ? (
                       <Image 
                         source={BADGE_IMAGES[badge.id]} 
