@@ -67,6 +67,8 @@ const createGuestUser = (): User => ({
 interface StoreState {
   user: User;
   sessionMode: SessionMode;
+  notificationsEnabled: boolean;
+  setNotificationsEnabled: (enabled: boolean) => void;
   hasHydrated: boolean;
   badgesData: BadgeData[];
   setBadgesData: (badges: BadgeData[]) => void;
@@ -113,6 +115,8 @@ export const useStore = create<StoreState>()(
     (set) => ({
       user: createGuestUser(),
       sessionMode: null,
+      notificationsEnabled: true,
+      setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
       hasHydrated: false,
       dismissedBroadcasts: [],
       badgesData: [],

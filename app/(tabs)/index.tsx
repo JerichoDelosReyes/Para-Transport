@@ -561,6 +561,7 @@ export default function HomeScreen() {
   }, [transitRoutes]);
   const [showTransitLayer, setShowTransitLayer] = useState(false);
   const user = useStore((state) => state.user);
+  const notificationsEnabled = useStore((state) => state.notificationsEnabled);
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
   const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
   const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
@@ -1799,6 +1800,8 @@ export default function HomeScreen() {
       }).start();
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      if (notificationsEnabled) {
         Notifications.requestPermissionsAsync().then(({ status }) => {
           if (status === 'granted') {
             Notifications.scheduleNotificationAsync({
@@ -1812,6 +1815,7 @@ export default function HomeScreen() {
             });
           }
         });
+      }
     });
   }, [currentLocation, destinationLocation, guidancePanY]);
 

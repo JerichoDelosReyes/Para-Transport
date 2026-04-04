@@ -28,7 +28,8 @@ export default function SettingsScreen() {
   const { clearRecents } = useRecentSearches();
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
   const insets = useSafeAreaInsets();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const notificationsEnabled = useStore((state) => state.notificationsEnabled);
+  const setNotificationsEnabled = useStore((state) => state.setNotificationsEnabled);
   
   const { theme, isDark, themeMode, setThemeMode } = useTheme();
   const [isAppearanceModalVisible, setIsAppearanceModalVisible] = useState(false);

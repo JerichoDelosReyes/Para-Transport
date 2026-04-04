@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { useColorScheme, Animated, View } from 'react-native';
+import { useColorScheme, Animated, View, StyleSheet, Dimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { lightColors, darkColors, ThemeColors } from './colors';
 
@@ -13,14 +13,48 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const { width, height } = Dimensions.get('window');
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const systemColorScheme = useColorScheme();
   const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
   const [isInitialized, setIsInitialized] = useState(false);
   
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const previousIsDark = useRef<boolean | null>(null);
+  // Base configuration
+  const currentIsDark = themeMode === 'system' ? systemColorScheme === 'dark' : themeMode === 'dark';
+  
+  // Animation state
+  const [renderedIsDark, setRenderedIsDark] = useState(currentIsDark);
+  const fadeOverlayAnim = useRef(new Animated.Value(0)).current;
+  const [overlayColor, setOverlayColor] = useState<string>('transparent');
+
+  useEffect(() => {
+    if (isInitialized && currentIsDark !== renderedIsDark) {
+      const targetIsDark = currentIsDark;
+      const targetBg = targetIsDark ? darkColors.background : lightColors.background;
+      
+      setOverlayColor(targetBg);
+      // Wait for it to set via React before animating
+      setTimeout(() => {
+        Animated.timing(fadeOverlayAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }).start(() => {
+          setRenderedIsDark(targetIsDark);
+          setTimeout(() => {
+            Animated.timing(fadeOverlayAnim, {
+              toValue: 0,
+              duration: 350,
+              useNativeDriver: true,
+            }).start(() => {
+              setOverlayColor('transparent');
+            });
+          }, 50);
+        });
+      }, 0);
+    }
+  }, [currentIsDark, isInitialized, renderedIsDark, fadeOverlayAnim]);
 
   useEffect(() => {
     const loadTheme = async () => {
@@ -38,22 +72,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     loadTheme();
   }, []);
 
-  const isDark = themeMode === 'system' ? systemColorScheme === 'dark' : themeMode === 'dark';
-  const theme = isDark ? darkColors : lightColors;
-
+  // Update initial rendered mode immediately upon loading preferences
   useEffect(() => {
     if (isInitialized) {
-      if (previousIsDark.current !== null && previousIsDark.current !== isDark) {
-        fadeAnim.setValue(0.85);
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-      }
-      previousIsDark.current = isDark;
+      setRenderedIsDark(themeMode === 'system' ? systemColorScheme === 'dark' : themeMode === 'dark');
     }
-  }, [isDark, fadeAnim, isInitialized]);
+  }, [isInitialized]);
+
+  const theme = renderedIsDark ? darkColors : lightColors;
 
   const setThemeMode = async (mode: ThemeMode) => {
     setThemeModeState(mode);
@@ -63,18 +89,29 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       } else {
         await AsyncStorage.setItem('para_theme_override', mode);
       }
-    } catch (e) {
-      console.error('Failed to save theme preferences', e);
-    }
+    } catch (e) {}
   };
 
-  if (!isInitialized) return null; // You might want to return a splash screen here
+  if (!isInitialized) return null;
 
   return (
-    <ThemeContext.Provider value={{ theme, isDark, themeMode, setThemeMode }}>
-      <Animated.View style={{ flex: 1, opacity: fadeAnim, backgroundColor: theme.background }}>
+    <ThemeContext.Provider value={{ theme, isDark: renderedIsDark, themeMode, setThemeMode }}>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
         {children}
-      </Animated.View>
+      </View>
+      {overlayColor !== 'transparent' && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: overlayColor,
+              opacity: fadeOverlayAnim,
+              zIndex: 999999,
+            }
+          ]}
+        />
+      )}
     </ThemeContext.Provider>
   );
 };
