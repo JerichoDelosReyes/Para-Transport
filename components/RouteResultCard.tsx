@@ -32,6 +32,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
   const fareFormulaText = legFareParts.map((fare) => `₱${fare}`).join(' + ');
   const extensionFare = tricycleExtension ? Math.max(0, Math.round(tricycleExtension.estimatedFare)) : 0;
   const totalWithExtensionFare = totalTransitFare + extensionFare;
+  const hasTerminalWalk = !!tricycleExtension && tricycleExtension.walkToTerminalKm > 0.05;
 
   return (
     <TouchableOpacity
@@ -107,7 +108,9 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
           </Text>
 
           <Text style={styles.extensionMetaText}>
-            Walk {tricycleExtension.walkToTerminalKm.toFixed(1)} km + Ride {tricycleExtension.rideDistanceKm.toFixed(1)} km
+            {hasTerminalWalk
+              ? `Walk ${tricycleExtension.walkToTerminalKm.toFixed(1)} km + Ride ${tricycleExtension.rideDistanceKm.toFixed(1)} km`
+              : `Drop-off at terminal • Ride ${tricycleExtension.rideDistanceKm.toFixed(1)} km`}
           </Text>
           <Text style={styles.extensionMetaText}>
             ~{tricycleExtension.estimatedMinutes} min • ₱{formatPeso(extensionFare)}

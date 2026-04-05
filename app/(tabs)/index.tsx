@@ -39,6 +39,7 @@ const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https:
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
 const ROUTING_NEAREST_BASE_URL = 'https://router.project-osrm.org/nearest/v1';
 const WALK_ROUTING_PROFILE = 'walking';
+const TRICYCLE_ROUTING_PROFILE = 'driving';
 const MAX_WALK_PATH_POINTS = 140;
 const WALK_PATH_CACHE_LIMIT = 400;
 // Keep in sync with services/routeSearch.ts MAX_LINE_POINTS so along-km slicing
@@ -397,8 +398,49 @@ const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number => {
   );
 };
 
+const routeSignature = (route: MatchedRoute): string =>
+  route.legs.map((leg) => leg.route.properties.code).join('>');
+
+const hasTransferWithTricycleExtension = (route: MatchedRoute): boolean =>
+  route.transferCount > 0 && !!route.tricycleExtension;
+
+const injectTransferTricycleOption = (
+  allRoutes: MatchedRoute[],
+  rankedRoutes: MatchedRoute[],
+  limit: number,
+): MatchedRoute[] => {
+  if (rankedRoutes.some(hasTransferWithTricycleExtension)) return rankedRoutes;
+
+  const candidate = [...allRoutes]
+    .filter(hasTransferWithTricycleExtension)
+    .sort(
+      (a, b) =>
+        compareLeastTransfer(a, b) ||
+        compareFastest(a, b) ||
+        compareCheapest(a, b),
+    )[0];
+
+  if (!candidate) return rankedRoutes;
+
+  const candidateSig = routeSignature(candidate);
+  if (rankedRoutes.some((route) => routeSignature(route) === candidateSig)) {
+    return rankedRoutes;
+  }
+
+  if (rankedRoutes.length < limit) {
+    return [...rankedRoutes, candidate];
+  }
+
+  const next = [...rankedRoutes];
+  next[next.length - 1] = candidate;
+  return next;
+};
+
 const rankTopRoutes = (routes: MatchedRoute[], limit = 5): MatchedRoute[] => {
-  if (routes.length <= limit) return [...routes].sort(compareLeastTransfer);
+  if (routes.length <= limit) {
+    const ranked = [...routes].sort(compareLeastTransfer);
+    return injectTransferTricycleOption(routes, ranked, limit);
+  }
 
   const indexed = routes.map((route, index) => ({ route, index }));
   const scores = new Map<number, number>();
@@ -414,7 +456,7 @@ const rankTopRoutes = (routes: MatchedRoute[], limit = 5): MatchedRoute[] => {
   applyRank(compareFastest);
   applyRank(compareCheapest);
 
-  return [...indexed]
+  const ranked = [...indexed]
     .sort((a, b) => {
       const scoreDiff = (scores.get(a.index) || 0) - (scores.get(b.index) || 0);
       if (scoreDiff !== 0) return scoreDiff;
@@ -427,6 +469,8 @@ const rankTopRoutes = (routes: MatchedRoute[], limit = 5): MatchedRoute[] => {
     })
     .slice(0, limit)
     .map((item) => item.route);
+
+  return injectTransferTricycleOption(routes, ranked, limit);
 };
 
 const MAP_ROUTE_TYPE_OPTIONS: Array<{ key: TransitRouteType; label: string }> = [
@@ -454,10 +498,17 @@ const makeWalkPathCacheKey = (from: MapCoordinate, to: MapCoordinate): string =>
   return `${roundCoordForKey(from.latitude)},${roundCoordForKey(from.longitude)}|${roundCoordForKey(to.latitude)},${roundCoordForKey(to.longitude)}`;
 };
 
+const makeRoadPathCacheKey = (
+  from: MapCoordinate,
+  to: MapCoordinate,
+  profile: 'walking' | 'driving',
+  destinationMode: 'road-end' | 'exact-end',
+): string => `${profile}|${makeWalkPathCacheKey(from, to)}|${destinationMode}`;
+
 const fetchRoadPath = async (
   from: MapCoordinate,
   to: MapCoordinate,
-  profile: 'walking',
+  profile: 'walking' | 'driving',
   options?: WalkPathResolveOptions,
 ): Promise<MapCoordinate[] | null> => {
   const coords = `${from.longitude},${from.latitude};${to.longitude},${to.latitude}`;
@@ -494,7 +545,7 @@ const fetchRoadPath = async (
 
 const fetchNearestRoadPoint = async (
   point: MapCoordinate,
-  profile: 'walking',
+  profile: 'walking' | 'driving',
 ): Promise<MapCoordinate | null> => {
   const coord = `${point.longitude},${point.latitude}`;
   const params = new URLSearchParams({ number: '1' });
@@ -636,7 +687,7 @@ const computeMetrics = (
   };
 };
 
-const routeSignature = (legs: TransitLeg[]): string => {
+const legSignature = (legs: TransitLeg[]): string => {
   return legs
     .map((leg) => {
       const mode = leg.transitRouteId || 'walk';
@@ -1463,16 +1514,17 @@ export default function HomeScreen() {
     }
   }, [pendingRouteSearch, handleSearchSelectRoute]);
 
-  const resolveWalkPathOnRoad = useCallback(async (
+  const resolvePathOnRoad = useCallback(async (
     from: MapCoordinate,
     to: MapCoordinate,
+    profile: 'walking' | 'driving',
     options?: WalkPathResolveOptions,
   ): Promise<MapCoordinate[]> => {
     const keepDestinationOnRoad = options?.keepDestinationOnRoad === true;
     const destinationMode = options?.keepDestinationOnRoad ? 'road-end' : 'exact-end';
-    const cacheKey = `${makeWalkPathCacheKey(from, to)}|${destinationMode}`;
+    const cacheKey = makeRoadPathCacheKey(from, to, profile, destinationMode);
     const reverseCacheAllowed = !keepDestinationOnRoad;
-    const reverseKey = `${makeWalkPathCacheKey(to, from)}|${destinationMode}`;
+    const reverseKey = makeRoadPathCacheKey(to, from, profile, destinationMode);
     const cache = walkPathCacheRef.current;
 
     const cached = cache.get(cacheKey);
@@ -1485,28 +1537,34 @@ export default function HomeScreen() {
       return reversed;
     }
 
-    let routedPath = await fetchRoadPath(from, to, WALK_ROUTING_PROFILE, options);
+    let routedPath = await fetchRoadPath(from, to, profile, options);
     let snappedDestination: MapCoordinate | null = null;
 
-    // Retry with nearest walkable-road snaps first so walking legs stay
+    // Retry with nearest road snaps so both walking and tricycle legs stay
     // road-following even when exact endpoints are off-network.
     if (!routedPath) {
       const [snappedFrom, snappedTo] = await Promise.all([
-        fetchNearestRoadPoint(from, WALK_ROUTING_PROFILE),
-        fetchNearestRoadPoint(to, WALK_ROUTING_PROFILE),
+        fetchNearestRoadPoint(from, profile),
+        fetchNearestRoadPoint(to, profile),
       ]);
 
       if (snappedTo) snappedDestination = snappedTo;
 
       if (snappedFrom && snappedTo) {
-        routedPath = await fetchRoadPath(snappedFrom, snappedTo, WALK_ROUTING_PROFILE, {
+        routedPath = await fetchRoadPath(snappedFrom, snappedTo, profile, {
           keepDestinationOnRoad: true,
         });
       } else if (keepDestinationOnRoad && snappedTo) {
-        routedPath = await fetchRoadPath(from, snappedTo, WALK_ROUTING_PROFILE, {
+        routedPath = await fetchRoadPath(from, snappedTo, profile, {
           keepDestinationOnRoad: true,
         });
       }
+    }
+
+    // Some local roads may not be routable for driving; fall back to walking
+    // profile so tricycle leg still follows real road geometry.
+    if (!routedPath && profile === TRICYCLE_ROUTING_PROFILE) {
+      routedPath = await fetchRoadPath(from, to, WALK_ROUTING_PROFILE, options);
     }
 
     const fallbackPath = [from, keepDestinationOnRoad && snappedDestination ? snappedDestination : to];
@@ -1529,6 +1587,18 @@ export default function HomeScreen() {
 
     return resolved;
   }, []);
+
+  const resolveWalkPathOnRoad = useCallback(
+    (from: MapCoordinate, to: MapCoordinate, options?: WalkPathResolveOptions) =>
+      resolvePathOnRoad(from, to, WALK_ROUTING_PROFILE, options),
+    [resolvePathOnRoad],
+  );
+
+  const resolveTricyclePathOnRoad = useCallback(
+    (from: MapCoordinate, to: MapCoordinate) =>
+      resolvePathOnRoad(from, to, TRICYCLE_ROUTING_PROFILE),
+    [resolvePathOnRoad],
+  );
 
   useEffect(() => {
     if (!selectedTransitRoute) return;
@@ -1610,18 +1680,49 @@ export default function HomeScreen() {
         });
       });
 
-      // 3. Walk from last alight to destination
+      // 3. Last-mile segment to destination.
       if (destinationLocation && selectedRoute.legs.length > 0) {
          const lastAlight = selectedRoute.legs[selectedRoute.legs.length - 1].alightingPoint;
-         legs.push({
-           transitRouteId: 'walk',
-           coordinates: [lastAlight, destinationLocation],
-           onTransit: false,
-           transitInfo: null,
-           boardAt: lastAlight,
-           alightAt: destinationLocation,
-           boardLabel: '', alightLabel: ''
-         });
+         const tricycleExtension = selectedRoute.tricycleExtension;
+
+         if (tricycleExtension) {
+           const terminalPoint = {
+             latitude: tricycleExtension.terminalLatitude,
+             longitude: tricycleExtension.terminalLongitude,
+           };
+           const boardPoint = lastAlight || terminalPoint;
+           const tricycleLegId = `tricycle-extension-${tricycleExtension.terminalId}`;
+
+           legs.push({
+             transitRouteId: tricycleLegId,
+             coordinates: [boardPoint, destinationLocation],
+             onTransit: true,
+             transitInfo: {
+               id: tricycleLegId,
+               name: `Tricycle via ${tricycleExtension.terminalName}`,
+               type: 'tricycle',
+               color: '#2E7D32',
+               fare: tricycleExtension.estimatedFare,
+               from: tricycleExtension.terminalName,
+               to: 'Destination',
+               verified: true,
+             },
+             boardAt: boardPoint,
+             alightAt: destinationLocation,
+             boardLabel: tricycleExtension.terminalName,
+             alightLabel: 'Destination'
+           });
+         } else {
+           legs.push({
+             transitRouteId: 'walk',
+             coordinates: [lastAlight, destinationLocation],
+             onTransit: false,
+             transitInfo: null,
+             boardAt: lastAlight,
+             alightAt: destinationLocation,
+             boardLabel: '', alightLabel: ''
+           });
+         }
       }
 
       return legs;
@@ -1644,20 +1745,31 @@ export default function HomeScreen() {
       // Render base legs immediately, then replace walking segments with road-following paths.
       setTransitLegs(baseTransitLegs);
 
-      const walkLegEntries = baseTransitLegs
-        .map((leg, idx) => ({ leg, idx }))
-        .filter(({ leg }) => !leg.onTransit && leg.coordinates.length >= 2);
+      const roadLegEntries = baseTransitLegs
+        .map((leg, idx) => {
+          const isTricycleLeg =
+            leg.onTransit &&
+            String(leg.transitInfo?.type || '')
+              .toLowerCase()
+              .includes('tricycle');
+          return { leg, idx, isTricycleLeg };
+        })
+        .filter(({ leg, isTricycleLeg }) =>
+          leg.coordinates.length >= 2 && (!leg.onTransit || isTricycleLeg),
+        );
 
-      if (walkLegEntries.length === 0) return;
+      if (roadLegEntries.length === 0) return;
 
       const resolved = await Promise.all(
-        walkLegEntries.map(async ({ leg, idx }) => {
+        roadLegEntries.map(async ({ leg, idx, isTricycleLeg }) => {
           const from = leg.coordinates[0];
           const to = leg.coordinates[leg.coordinates.length - 1];
-          const isFinalDestinationWalk = idx === baseTransitLegs.length - 1;
-          const path = await resolveWalkPathOnRoad(from, to, {
-            keepDestinationOnRoad: isFinalDestinationWalk,
-          });
+          const isFinalDestinationWalk = !leg.onTransit && idx === baseTransitLegs.length - 1;
+          const path = isTricycleLeg
+            ? await resolveTricyclePathOnRoad(from, to)
+            : await resolveWalkPathOnRoad(from, to, {
+                keepDestinationOnRoad: isFinalDestinationWalk,
+              });
           return { idx, path };
         }),
       );
@@ -1689,7 +1801,7 @@ export default function HomeScreen() {
     return () => {
       isCancelled = true;
     };
-  }, [baseTransitLegs, resolveWalkPathOnRoad]);
+  }, [baseTransitLegs, resolveWalkPathOnRoad, resolveTricyclePathOnRoad]);
 
   // Derive a perfect, continuous coordinate path matching transitLegs sequences
   const simCoordinates = useMemo(() => {
@@ -1823,11 +1935,14 @@ export default function HomeScreen() {
 
     visibleTransitLegs.forEach((leg, idx) => {
       if (!leg.coordinates || leg.coordinates.length < 2) return;
+      const legType = String(leg.transitInfo?.type || '').toLowerCase();
+      const isTricycleLeg = leg.onTransit && legType.includes('tricycle');
+
       lines.push({
         id: `route-seg-${idx}`,
         coordinates: leg.coordinates.map(toLngLat),
-        color: leg.onTransit ? '#E8A020' : '#888888',
-        width: leg.onTransit ? 5 : 3,
+        color: isTricycleLeg ? '#2E7D32' : leg.onTransit ? '#E8A020' : '#888888',
+        width: isTricycleLeg ? 4 : leg.onTransit ? 5 : 3,
       });
     });
 

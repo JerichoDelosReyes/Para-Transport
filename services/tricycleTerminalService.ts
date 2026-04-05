@@ -341,7 +341,6 @@ function buildTricycleLastMileExtension(
   let chosenTerminal: TricycleTerminal | null = null;
   let chosenWalkKm = Number.POSITIVE_INFINITY;
   let chosenRideKm = Number.POSITIVE_INFINITY;
-  let chosenScore = Number.POSITIVE_INFINITY;
 
   for (const terminal of terminals) {
     const walkKm = distanceKmBetween(lastAlight, terminal);
@@ -349,14 +348,15 @@ function buildTricycleLastMileExtension(
 
     const rideKm = distanceKmBetween(terminal, destination);
 
-    // Prioritize less walking; then prefer shorter tricycle ride.
-    const score = walkKm * 2 + rideKm;
-    if (score >= chosenScore) continue;
+    // Pick the nearest terminal first, then break ties by shorter tricycle ride.
+    const isBetterChoice =
+      walkKm < chosenWalkKm - 1e-6 ||
+      (Math.abs(walkKm - chosenWalkKm) <= 1e-6 && rideKm < chosenRideKm);
+    if (!isBetterChoice) continue;
 
     chosenTerminal = terminal;
     chosenWalkKm = walkKm;
     chosenRideKm = rideKm;
-    chosenScore = score;
   }
 
   if (!chosenTerminal) return undefined;
@@ -372,10 +372,41 @@ function buildTricycleLastMileExtension(
     terminalName: chosenTerminal.name,
     terminalLatitude: chosenTerminal.latitude,
     terminalLongitude: chosenTerminal.longitude,
-    walkToTerminalKm: chosenWalkKm,
+    // Route is dropped at terminal when extension is present.
+    walkToTerminalKm: 0,
     rideDistanceKm: chosenRideKm,
     estimatedFare,
     estimatedMinutes,
+  };
+}
+
+function applyTerminalDropoffToRoute(
+  route: MatchedRoute,
+  extension: TricycleLastMileExtension,
+): MatchedRoute {
+  if (!Array.isArray(route.legs) || route.legs.length === 0) return route;
+
+  const lastLegIndex = route.legs.length - 1;
+  const terminalPoint = {
+    latitude: extension.terminalLatitude,
+    longitude: extension.terminalLongitude,
+  };
+
+  const nextLegs = route.legs.map((leg, idx) => {
+    if (idx !== lastLegIndex) return leg;
+
+    return {
+      ...leg,
+      alightingPoint: terminalPoint,
+      // Force map slicer fallback to nearest-point mode for this adjusted drop-off.
+      alightingAlongKm: undefined,
+    };
+  });
+
+  return {
+    ...route,
+    legs: nextLegs,
+    alightingPoint: terminalPoint,
   };
 }
 
@@ -391,8 +422,16 @@ export async function attachTricycleLastMileExtensions(
 
     return routes.map((route) => {
       const extension = buildTricycleLastMileExtension(route, destination, terminals);
+      if (!extension) {
+        return {
+          ...route,
+          tricycleExtension: undefined,
+        };
+      }
+
+      const routeWithTerminalDropoff = applyTerminalDropoffToRoute(route, extension);
       return {
-        ...route,
+        ...routeWithTerminalDropoff,
         tricycleExtension: extension,
       };
     });
