@@ -39,28 +39,29 @@ const getPoiPriority = (feature: POIFeature): number => {
 };
 
 const getLabelGridSizeByZoom = (zoom: number): number => {
-  if (zoom >= 18) return 0.045;
-  if (zoom >= 17.5) return 0.55;
-  if (zoom >= 17) return 0.8;
-  if (zoom >= 16.5) return 0.0115;
-  if (zoom >= 16) return 0.015;
-  if (zoom >= 15) return 0.019;
-  if (zoom >= 14) return 0.022;
-  if (zoom >= 13) return 0.025;
-  return 0.25;
+  if (zoom >= 18) return 0.00035;
+  if (zoom >= 17.5) return 0.00042;
+  if (zoom >= 17) return 0.00060;
+  if (zoom >= 16.5) return 0.00090;
+  if (zoom >= 16) return 0.00125;
+  if (zoom >= 15) return 0.00160;
+  if (zoom >= 14) return 0.00200;
+  if (zoom >= 13) return 0.00240;
+  if (zoom >= 12) return 0.00300;
+  return 0.00400;
 };
 
 const getLabelLimitByZoom = (zoom: number): number => {
-  if (zoom >= 18) return 102;
-  if (zoom >= 17.5) return 89;
-  if (zoom >= 17) return 62;
-  if (zoom >= 16.5) return 46;
-  if (zoom >= 16) return 35;
-  if (zoom >= 15) return 24;
-  if (zoom >= 14) return 15;
-  if (zoom >= 13) return 9;
-  if (zoom >= 12) return 4;
-  return 10;
+  if (zoom >= 18) return 32;
+  if (zoom >= 17.5) return 24;
+  if (zoom >= 17) return 18;
+  if (zoom >= 16.5) return 14;
+  if (zoom >= 16) return 10;
+  if (zoom >= 15) return 6;
+  if (zoom >= 14) return 4;
+  if (zoom >= 13) return 3;
+  if (zoom >= 12) return 2;
+  return 0;
 };
 
 const pickVisiblePoiLabels = (
