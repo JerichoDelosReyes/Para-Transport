@@ -35,6 +35,8 @@ import { mapDiagnostics } from '../../services/mapDiagnosticsService';
 import { usePOI } from '../../hooks/usePOI';
 import PoiOverlay from '../../components/PoiOverlay';
 import { POI_MIN_RENDER_ZOOM } from '../../constants/poi';
+import type { POIFeature } from '../../types/poi';
+import PoiDrawer from '../../components/PoiDrawer';
 
 type PulsingMarkerProps = {
   pulseColor: string;
@@ -693,6 +695,7 @@ export default function HomeScreen() {
   const tripStatRecordedRef = useRef(false);
   const hasInitiallyPannedRef = useRef(false);
   const [showRecommender, setShowRecommender] = useState(false);
+  const [selectedPoi, setSelectedPoi] = useState<POIFeature | null>(null);
   const [simAutoFollow, setSimAutoFollow] = useState(true);
   const [simBlink, setSimBlink] = useState(true);
 
@@ -1106,6 +1109,7 @@ export default function HomeScreen() {
 
       setMatchedRoutes(results);
       setSelectedRouteId(null);
+      setSelectedPoi(null);
       setShowRecommender(true);
 
       if (results.length > 0) {
@@ -1949,6 +1953,7 @@ export default function HomeScreen() {
     setNearestStop(null);
     setSelectedTransitRoute(null);
     setShowRecommender(false);
+    setSelectedPoi(null);
     setMatchedRoutes([]);
     setSelectedRouteId(null);
     setSelectedRoute(null);
@@ -1962,6 +1967,27 @@ export default function HomeScreen() {
       sim.reset();
     }
   }, [selectedRouteType, setSelectedTransitRoute, sim]);
+
+  const handleSelectPoi = useCallback((poi: POIFeature) => {
+    setShowRecommender(false);
+    setSelectedPoi(poi);
+  }, []);
+
+  const handleRouteFromPoi = useCallback(
+    async (poi: POIFeature) => {
+      const destinationPlace: PlaceResult = {
+        id: String(poi.id),
+        title: poi.properties.title,
+        subtitle: String(poi.properties.category || poi.properties.landmark_type || 'POI'),
+        latitude: poi.geometry.coordinates[1],
+        longitude: poi.geometry.coordinates[0],
+      };
+
+      setSelectedPoi(null);
+      await handleSearchSelectRoute(null, destinationPlace);
+    },
+    [handleSearchSelectRoute],
+  );
 
   const stopGuidance = React.useCallback(() => {
     Notifications.dismissAllNotificationsAsync();
@@ -2172,6 +2198,7 @@ export default function HomeScreen() {
           currentZoom={currentZoom}
           activeUserCoordinate={activeUserPosition ? toLngLat(activeUserPosition) : undefined}
           minZoomLevel={POI_MIN_RENDER_ZOOM}
+          onSelectPoi={handleSelectPoi}
         />
       </MapLibreWrapper>
 
@@ -2213,7 +2240,10 @@ export default function HomeScreen() {
           <BlurView intensity={35} tint="light" style={[styles.recommenderGlassWrap, { marginBottom: 12 }]}>
             <TouchableOpacity
               style={styles.recommenderButton}
-              onPress={() => setShowRecommender(true)}
+              onPress={() => {
+                setSelectedPoi(null);
+                setShowRecommender(true);
+              }}
               activeOpacity={0.8}
             >
               <Ionicons name="list" size={21} color={COLORS.navy} />
@@ -2587,6 +2617,13 @@ export default function HomeScreen() {
         onClose={() => {
           setShowRecommender(false);
         }}
+      />
+
+      <PoiDrawer
+        poi={selectedPoi}
+        matchedRoute={selectedRoute}
+        onClose={() => setSelectedPoi(null)}
+        onRouteHere={handleRouteFromPoi}
       />
 
       {/* Full-screen search */}

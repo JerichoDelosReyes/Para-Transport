@@ -12,6 +12,7 @@ type PoiOverlayProps = {
   currentZoom: number;
   activeUserCoordinate?: LngLat;
   minZoomLevel?: number;
+  onSelectPoi?: (poi: POIFeature) => void;
 };
 
 const getPoiPriority = (feature: POIFeature): number => {
@@ -112,8 +113,14 @@ export default function PoiOverlay({
   currentZoom,
   activeUserCoordinate,
   minZoomLevel = POI_MIN_RENDER_ZOOM,
+  onSelectPoi,
 }: PoiOverlayProps) {
   const hasPoiFeatures = !!poiFeatureCollection && poiFeatureCollection.features.length > 0;
+
+  const poiById = useMemo(() => {
+    if (!poiFeatureCollection) return new Map<string, POIFeature>();
+    return new Map(poiFeatureCollection.features.map((feature) => [String(feature.id), feature]));
+  }, [poiFeatureCollection]);
 
   const visiblePoiLabels = useMemo(() => {
     if (!hasPoiFeatures || !poiFeatureCollection) return [];
@@ -155,10 +162,31 @@ export default function PoiOverlay({
 
   if (!hasPoiFeatures || !poiFeatureCollection) return null;
 
+  const handlePoiPress = (event: any) => {
+    if (!onSelectPoi) return;
+
+    const pressedFeature = event?.features?.[0];
+    const pressedId =
+      pressedFeature?.properties?.id ??
+      pressedFeature?.id ??
+      event?.payload?.id;
+
+    if (pressedId == null) return;
+
+    const selected = poiById.get(String(pressedId));
+    if (selected) {
+      onSelectPoi(selected);
+    }
+  };
+
   return (
     <>
       <MapLibreGL.Images images={POI_IMAGES as any} />
-      <MapLibreGL.ShapeSource id="poi-source" shape={poiFeatureCollection as any}>
+      <MapLibreGL.ShapeSource
+        id="poi-source"
+        shape={poiFeatureCollection as any}
+        onPress={handlePoiPress}
+      >
         <MapLibreGL.SymbolLayer
           id="poi-symbol-layer"
           minZoomLevel={minZoomLevel}
@@ -172,6 +200,7 @@ export default function PoiOverlay({
           key={`poi-label-${feature.id}`}
           id={`poi-label-${feature.id}`}
           coordinate={feature.geometry.coordinates as [number, number]}
+          onSelected={() => onSelectPoi?.(feature)}
         >
           <View collapsable={false} style={{ paddingLeft: 12 }}>
             <Text
