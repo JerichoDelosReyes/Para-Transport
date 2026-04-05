@@ -80,14 +80,29 @@ export default function SearchScreen({
   const originRef = useRef<TextInput>(null);
   const destRef = useRef<TextInput>(null);
 
+  const isCurrentLocationValue = (value?: string | null): boolean => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return true;
+
+    const currentLabel = String(currentLocationLabel || '').trim().toLowerCase();
+    return (
+      normalized === 'current location' ||
+      normalized === 'your location' ||
+      (currentLabel.length > 0 && normalized === currentLabel)
+    );
+  };
+
   // Reset or initialize state when opened
   useEffect(() => {
     if (visible) {
+      setOriginPlace(null);
+
       if (initialOrigin || initialDestination) {
-        setOriginText(initialOrigin || '');
+        const useCurrentAsOrigin = isCurrentLocationValue(initialOrigin);
+        setUsingCurrentLocation(useCurrentAsOrigin);
+        setOriginText(useCurrentAsOrigin ? '' : (initialOrigin || ''));
         setDestinationText(initialDestination || '');
-        setUsingCurrentLocation(false);
-        setActiveField(!initialDestination ? 'destination' : 'destination');
+        setActiveField('destination');
         // By setting destination text, it will trigger the search suggestions auto-fetch.
         setTimeout(() => destRef.current?.focus(), 300);
       } else {
@@ -99,7 +114,7 @@ export default function SearchScreen({
       }
       setSuggestions([]);
     }
-  }, [visible, initialOrigin, initialDestination]);
+  }, [visible, initialOrigin, initialDestination, currentLocationLabel]);
 
   // Active query text
   const activeQuery = activeField === 'origin' ? originText : destinationText;
@@ -299,11 +314,21 @@ export default function SearchScreen({
         setDestinationText(place.title);
 
         let resolvedOrigin: PlaceResult | null = null;
-        if (!usingCurrentLocation) {
-          resolvedOrigin = originPlace;
+        const typedOrigin = originText.trim();
+        const typedOriginIsCurrent = isCurrentLocationValue(typedOrigin);
+        const hasExplicitOrigin =
+          !!originPlace || (typedOrigin.length > 0 && !typedOriginIsCurrent);
 
-          if (!resolvedOrigin && originText.trim().length > 0) {
-            resolvedOrigin = await resolvePlaceFromText(originText);
+        if (hasExplicitOrigin) {
+          const originPlaceMatchesTyped =
+            !!originPlace &&
+            (typedOrigin.length === 0 ||
+              originPlace.title.trim().toLowerCase() === typedOrigin.toLowerCase());
+
+          if (originPlace && originPlaceMatchesTyped) {
+            resolvedOrigin = originPlace;
+          } else if (typedOrigin.length > 0 && !typedOriginIsCurrent) {
+            resolvedOrigin = await resolvePlaceFromText(typedOrigin);
             if (resolvedOrigin) {
               setOriginPlace(resolvedOrigin);
               setOriginText(resolvedOrigin.title);
@@ -413,6 +438,7 @@ export default function SearchScreen({
               value={usingCurrentLocation && !originText ? (currentLocationLabel || 'Current Location') : originText}
               onChangeText={(t) => {
                 setOriginText(t);
+                setOriginPlace(null);
                 if (usingCurrentLocation) {
                   setUsingCurrentLocation(false);
                 }
@@ -422,6 +448,7 @@ export default function SearchScreen({
                 if (usingCurrentLocation) {
                   setUsingCurrentLocation(false);
                   setOriginText('');
+                  setOriginPlace(null);
                 }
               }}
               returnKeyType="next"
@@ -519,6 +546,7 @@ export default function SearchScreen({
             if (activeField === 'origin') {
               setUsingCurrentLocation(true);
               setOriginText('');
+              setOriginPlace(null);
               setActiveField('destination');
               setTimeout(() => destRef.current?.focus(), 100);
             } else {
