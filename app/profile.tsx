@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Image } from 'react-native';
+import { useState, useEffect } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, ScrollView, Image, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -7,6 +7,8 @@ import { useStore } from '../store/useStore';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { BADGES } from '../constants/badges';
 import { BADGE_IMAGES } from '../constants/badgeImages';
+import { useTheme } from '../src/theme/ThemeContext';
+import { supabase } from '../config/supabaseClient';
 
 function getInitials(name: string) {
   if (!name) return 'PR';
@@ -16,103 +18,215 @@ function getInitials(name: string) {
 }
 
 export default function ProfileScreen() {
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useStore((state) => state.user);
+  const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
+
+  const [currentUserRank, setCurrentUserRank] = useState<number | null>(null);
+  const [isLoadingRank, setIsLoadingRank] = useState<boolean>(true);
+
+  useEffect(() => {
+    const fetchRank = async () => {
+      if (isGuestAccount || !user?.id) {
+        setIsLoadingRank(false);
+        return;
+      }
+      try {
+        setIsLoadingRank(true);
+        const { data, error } = await supabase.rpc('get_user_global_rank', { 
+          target_user_id: user.id, 
+          target_points: user.points || 0 
+        });
+        if (!error && data !== null) {
+          setCurrentUserRank(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch rank:', err);
+      } finally {
+        setIsLoadingRank(false);
+      }
+    };
+    fetchRank();
+  }, [user?.id, user?.points, isGuestAccount]);
+
+  const getRankStyle = (rank: number) => {
+    switch (rank) {
+      case 1:
+        return { backgroundColor: isDark ? 'rgba(220,160,32,0.4)' : '#FEF08A', color: isDark ? '#FFFFFF' : '#854D0E', emoji: '🥇' }; // Gold
+      case 2:
+        return { backgroundColor: isDark ? 'rgba(156,163,175,0.4)' : '#E5E7EB', color: isDark ? '#FFFFFF' : '#374151', emoji: '🥈' }; // Silver
+      case 3:
+        return { backgroundColor: isDark ? 'rgba(180,83,9,0.4)' : '#FED7AA', color: isDark ? '#FFFFFF' : '#92400E', emoji: '🥉' }; // Bronze
+      default:
+        return { backgroundColor: isDark ? theme.surfaceSecondary : 'rgba(0,0,0,0.04)', color: isDark ? '#FFFFFF' : COLORS.navy, emoji: '🏆' }; // Default
+    }
+  };
+
+  const rankStyle = currentUserRank !== null ? getRankStyle(currentUserRank) : null;
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.topSection, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <View style={[styles.topSection, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-            <View style={styles.iconButtonCircle}>
-              <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
+            <View style={[styles.iconButtonCircle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+              <Ionicons name="chevron-back" size={24} color="#0A1628" />
             </View>
           </TouchableOpacity>
-          <Text style={styles.headerTitleText}>PROFILE</Text>
+          <Text style={[styles.headerTitleText, { color: '#0A1628' }]}>PROFILE</Text>
           <TouchableOpacity onPress={() => router.navigate('/settings')} style={styles.iconButton}>
-            <View style={styles.iconButtonCircle}>
-              <Ionicons name="settings-outline" size={24} color={COLORS.navy} />
+            <View style={[styles.iconButtonCircle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+              <Ionicons name="settings-outline" size={24} color="#0A1628" />
             </View>
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.bottomSection}>
+      <View style={[styles.bottomSection, { backgroundColor: theme.background }]}>
         <ScrollView 
           style={styles.scrollArea}
           contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Avatar Area */}
-          <View style={styles.avatarSection}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(user?.name || '')}</Text>
+          <View style={[styles.avatarSection, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+            <View style={[styles.avatar, { borderColor: theme.background }]}>
+              <Text style={styles.avatarText}>{getInitials(user?.username || user?.full_name || '')}</Text>
             </View>
+
+            {/* Leaderboard Placement */}
+            {!isGuestAccount && (
+              (user?.points || 0) === 0 ? (
+                <TouchableOpacity 
+                  activeOpacity={0.7} 
+                  onPress={() => router.navigate('/achievements')} 
+                  style={[styles.rankBadge, { backgroundColor: '#F3F4F6' }]}
+                >
+                  <Text style={[styles.rankNumber, { color: '#6B7280', fontSize: 13 }]}>Ride to rank!</Text>
+                </TouchableOpacity>
+              ) : isLoadingRank ? (
+                <View style={[styles.rankBadge, { width: 70, height: 42, justifyContent: 'center' }]}>
+                  <ActivityIndicator size="small" color={COLORS.navy} />
+                </View>
+              ) : (currentUserRank !== null && rankStyle !== null) ? (
+                <TouchableOpacity 
+                  activeOpacity={0.7} 
+                  onPress={() => router.navigate('/achievements')} 
+                  style={[styles.rankBadge, { backgroundColor: rankStyle.backgroundColor }]}
+                >
+                  <Text style={styles.rankEmoji}>{rankStyle.emoji}</Text>
+                  <Text style={[styles.rankNumber, { color: rankStyle.color }]}>#{currentUserRank}</Text>
+                </TouchableOpacity>
+              ) : null
+            )}
           </View>
 
           {/* Top Info Area */}
           <View style={styles.infoArea}>
             <View style={styles.userInfo}>
-              <Text style={styles.name}>{user?.name || 'Passenger'}</Text>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>{user?.full_name || 'Passenger'}</Text>
+              {user?.username ? (
+                <Text style={[styles.username, { color: theme.textSecondary }]}>@{user.username}</Text>
+              ) : null}
             </View>
 
             <View style={styles.quickStatsRow}>
-              <View style={styles.quickStat}>
-                <Text style={styles.quickStatValue}>{user?.points || 0}</Text>
-                <Text style={styles.quickStatLabel}>Points</Text>
-              </View>
+              <TouchableOpacity 
+                style={[styles.quickStat, { flexDirection: 'row', gap: 6, alignItems: 'center' }]}
+                onPress={() => router.navigate('/broadcasts')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="radio" size={24} color={theme.text} />
+              </TouchableOpacity>
+
+              {!isGuestAccount && (
+                <>
+                  <View style={[styles.quickStatDivider, { backgroundColor: theme.cardBorder }]} />
+
+                  <TouchableOpacity 
+                    style={styles.quickStat}
+                    onPress={() => router.navigate('/points-history')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.quickStatValue, { color: theme.text }]}>{user?.points || 0}</Text>
+                    <Text style={[styles.quickStatLabel, { color: theme.textSecondary }]}>Points</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
 
           {/* Grid Stats */}
           <View style={styles.gridStats}>
-            <View style={styles.gridCard}>
-              <View style={styles.gridIconContainer}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground }]}>
+              <View style={[styles.gridIconContainer, { backgroundColor: theme.inputBackground }]}>
                 <Text style={styles.gridIconText}>🚗</Text>
               </View>
-              <Text style={styles.gridValue}>{user?.trips || 0}</Text>
-              <Text style={styles.gridLabel}>Total Trips</Text>
+              <Text style={[styles.gridValue, { color: theme.text }]}>{user?.total_trips || 0}</Text>
+              <Text style={[styles.gridLabel, { color: theme.textSecondary }]}>Total Trips</Text>
+              {(!user?.total_trips || user.total_trips === 0) && (
+                <Text style={[styles.gridPrompt, { color: theme.textSecondary }]}>Take your first ride!</Text>
+              )}
             </View>
             
-            <View style={styles.gridCard}>
-              <View style={styles.gridIconContainer}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground }]}>
+              <View style={[styles.gridIconContainer, { backgroundColor: theme.inputBackground }]}>
                 <Text style={styles.gridIconText}>📍</Text>
               </View>
-              <Text style={styles.gridValue}>{(user?.distance || 0).toFixed(1)} <Text style={styles.gridValueSmall}>km</Text></Text>
-              <Text style={styles.gridLabel}>Distance</Text>
+              <Text style={[styles.gridValue, { color: theme.text }]}>{(user?.total_distance || 0).toFixed(1)} <Text style={[styles.gridValueSmall, { color: theme.textSecondary }]}>km</Text></Text>
+              <Text style={[styles.gridLabel, { color: theme.textSecondary }]}>Distance</Text>
+              {(!user?.total_distance || user.total_distance === 0) && (
+                <Text style={[styles.gridPrompt, { color: theme.textSecondary }]}>Start exploring!</Text>
+              )}
             </View>
             
-            <View style={styles.gridCard}>
-              <View style={styles.gridIconContainer}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground }]}>
+              <View style={[styles.gridIconContainer, { backgroundColor: theme.inputBackground }]}>
                 <Text style={styles.gridIconText}>💰</Text>
               </View>
-              <Text style={styles.gridValue}><Text style={styles.gridValueSmall}>₱</Text>{(user?.spent || 0).toFixed(0)}</Text>
-              <Text style={styles.gridLabel}>Total Fare</Text>
+              <Text style={[styles.gridValue, { color: theme.text }]}><Text style={[styles.gridValueSmall, { color: theme.textSecondary }]}>₱</Text>{(user?.spent || 0).toFixed(0)}</Text>
+              <Text style={[styles.gridLabel, { color: theme.textSecondary }]}>Total Fare</Text>
+              {(!user?.spent || user.spent === 0) && (
+                <Text style={[styles.gridPrompt, { color: theme.textSecondary }]}>Save on rides!</Text>
+              )}
             </View>
 
-            <View style={styles.gridCard}>
-              <View style={styles.gridIconContainer}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground }]}>
+              <View style={[styles.gridIconContainer, { backgroundColor: theme.inputBackground }]}>
                 <Text style={styles.gridIconText}>🔥</Text>
               </View>
-              <Text style={styles.gridValue}>{user?.streak_count || 0}</Text>
-              <Text style={styles.gridLabel}>Current Streak</Text>
+              <Text style={[styles.gridValue, { color: theme.text }]}>{user?.streak_count || 0}</Text>
+              <Text style={[styles.gridLabel, { color: theme.textSecondary }]}>Current Streak</Text>
+              {(!user?.streak_count || user.streak_count === 0) && (
+                <Text style={[styles.gridPrompt, { color: theme.textSecondary }]}>Build your streak!</Text>
+              )}
             </View>
           </View>
 
           {/* Badges Section */}
-          <View style={styles.sectionHeaderContainer}>
-            <Text style={styles.sectionTitle}>Badges</Text>
-            <TouchableOpacity onPress={() => router.navigate('/achievements')}>
-              <Text style={styles.sectionLink}>View All</Text>
+          <View style={[styles.sectionHeaderContainer, isGuestAccount && { opacity: 0.5 }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Leaderboards and Badges</Text>
+            <TouchableOpacity onPress={() => isGuestAccount ? Alert.alert('Guest Mode', 'Badges feature is not available for guest mode.') : router.navigate('/achievements')}>
+              <Text style={[styles.sectionLink, { color: theme.accent }]}>View All</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.badgesWrapper}>
-            {BADGES.slice(0, 3).map((badge) => {
+          <View style={[styles.badgesWrapper, isGuestAccount && { opacity: 0.5 }]}>
+            {['route_rookie', 'multi_modal_commuter', 'route_comparator']
+              .map(id => BADGES.find(b => b.id === id))
+              .filter((b): b is import('../constants/badges').Badge => !!b)
+              .map((badge) => {
               const isEarned = user?.badges?.includes(badge.id) || false;
               return (
-                <View key={badge.id} style={[styles.badgeCard, !isEarned && styles.badgeLocked]}>
+                <TouchableOpacity 
+                  key={badge.id} 
+                  style={[styles.badgeCard, { backgroundColor: theme.cardBackground }, !isEarned && styles.badgeLocked]}
+                  onPress={() => isGuestAccount && Alert.alert('Guest Mode', 'Badges feature is not available for guest mode.')}
+                  activeOpacity={isGuestAccount ? 0.8 : 1}
+                  disabled={!isGuestAccount}
+                >
                                     <View style={styles.profileIconWrapper}>
                     {BADGE_IMAGES[badge.id] ? (
                       <Image 
@@ -124,13 +238,14 @@ export default function ProfileScreen() {
                       <Text style={[styles.badgeEmoji, !isEarned && { opacity: 0.3 }]}>{badge.icon}</Text>
                     )}
                   </View>
-                  <Text style={[styles.badgeName, !isEarned && { color: COLORS.textMuted }]}>{badge.name}</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.badgeName, { color: theme.text }, !isEarned && { color: theme.textSecondary }]}>{badge.name}</Text>
                   {!isEarned && (
-                    <View style={styles.lockOverlay}>
-                      <Ionicons name="lock-closed" size={14} color={COLORS.textMuted} />
+                    <View style={[styles.lockOverlay, { backgroundColor: theme.inputBackground }]}>
+                      <Ionicons name="lock-closed" size={14} color={theme.textSecondary} />
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
+
               );
             })}
           </View>
@@ -207,6 +322,23 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: COLORS.navy,
   },
+  rankBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  rankEmoji: {
+    fontSize: 16,
+  },
+  rankNumber: {
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    fontSize: 15,
+    color: COLORS.navy,
+  },
   bottomSection: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -233,6 +365,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: COLORS.navy,
     marginBottom: 4,
+  },
+  username: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    color: COLORS.textMuted,
   },
   quickStatsRow: {
     flexDirection: 'row',
@@ -303,6 +440,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textMuted,
   },
+  gridPrompt: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#E8A020',
+    marginTop: 6,
+  },
   sectionHeaderContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -326,6 +470,54 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
   },
+  leaderboardPlacementCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.card,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  lbPlacementLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  lbTrophyContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFBEB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lbPlacementTitle: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  lbPlacementSubtitle: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  lbPlacementRight: {
+    alignItems: 'flex-end',
+  },
+  lbRankValue: {
+    fontFamily: 'Inter',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#D97706',
+  },
   badgeCard: {
     width: '31%',
     height: 110,
@@ -340,9 +532,9 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   profileIconWrapper: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#d5a944',
     justifyContent: 'center',
     alignItems: 'center',

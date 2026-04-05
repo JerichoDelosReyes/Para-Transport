@@ -45,11 +45,4 @@ yarn-error.*
 client_*.json
 client_*.plist
 
-# Private/local route datasets
-data/routes.json
-data/tricycle_routes.json
-data/local_places.json
-data/gpx/*
-!data/gpx/README.md
-!data/gpx/.gitkeep
-!data/gpx/GPXHelper.md
+docs/api/futureImplementations/*

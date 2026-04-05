@@ -1,61 +1,87 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { useTheme } from '../src/theme/ThemeContext';
 
 export default function JourneySummaryScreen() {
+  const { theme, isDark } = useTheme();
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
+  
+  const multiplier = Number(params.multiplier || 1);
+  const distance = Number(params.distance || 6).toFixed(1);
+  const fare = Number(params.fare || 29).toFixed(2);
+  const points = Number(params.points || 35);
+  const time = Number(params.time || 15);
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={{ flex: 1, backgroundColor: COLORS.background }}><View style={styles.content}>
-        <Text style={styles.title}>JOURNEY SUMMARY</Text>
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <View style={[styles.topSection, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, { color: '#0A1628' }]}>JOURNEY SUMMARY</Text>
+        </View>
+      </View>
 
+      <View style={styles.content}>
         <View style={styles.metricsWrap}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Distance</Text>
-            <Text style={styles.metricValue}>6.0 km</Text>
+          <View style={[styles.metricCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Distance</Text>
+            <Text style={[styles.metricValue, { color: theme.text }]}>{distance} km</Text>
           </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Fare</Text>
-            <Text style={styles.metricValue}>₱29.00</Text>
+          <View style={[styles.metricCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Fare</Text>
+            <Text style={[styles.metricValue, { color: theme.text }]}>₱{fare}</Text>
+          </View>
+          <View style={[styles.metricCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Time Elapsed</Text>
+            <Text style={[styles.metricValue, { color: theme.text }]}>{time} min</Text>
           </View>
         </View>
 
-        <View style={styles.pointsCard}>
-          <Text style={styles.pointsLabel}>Points Earned</Text>
-          <Text style={styles.pointsValue}>+35</Text>
+        <View style={[styles.pointsCard, { backgroundColor: isDark ? theme.cardBackground : '#FFF5CC', borderColor: theme.cardBorder }]}>
+          <Text style={[styles.pointsLabel, { color: isDark ? theme.textSecondary : COLORS.textLabel }]}>Points Earned</Text>
+          <Text style={[styles.pointsValue, { color: isDark ? theme.text : COLORS.navy }]}>+{points}</Text>
+          {multiplier > 1 && <Text style={[styles.multiplierText, { color: isDark ? '#E8A020' : COLORS.primary }]}>({multiplier}x Multiplier!)</Text>}
           <Text style={styles.badge}>🏅</Text>
         </View>
       </View>
 
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.primaryButton} activeOpacity={0.9} onPress={() => router.replace('/(tabs)')}>
-          <Text style={styles.primaryText}>Confirm Fare</Text>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <TouchableOpacity style={[styles.primaryButton, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]} activeOpacity={0.9} onPress={() => router.replace('/(tabs)')}>
+          <Text style={[styles.primaryText, { color: isDark ? '#0A1628' : '#000000' }]}>Confirm Fare</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.9}>
-          <Text style={styles.secondaryText}>Share</Text>
-        </TouchableOpacity>
-      </View></View>
-    </SafeAreaView>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  topSection: {
     backgroundColor: COLORS.primary,
+    zIndex: 10,
+  },
+  header: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    height: 64,
+  },
+  headerTitle: {
+    fontFamily: 'Cubao',
+    fontSize: TYPOGRAPHY.screenTitle,
+    color: '#000000',
   },
   content: {
     flex: 1,
     paddingHorizontal: SPACING.screenX,
     paddingTop: 28,
     gap: SPACING.sectionGap,
-  },
-  title: {
-    fontFamily: 'Cubao',
-    fontSize: TYPOGRAPHY.screenTitle,
-    color: COLORS.navy,
   },
   metricsWrap: {
     gap: SPACING.cardGap,
@@ -91,6 +117,13 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.label,
     color: COLORS.textLabel,
   },
+  multiplierText: {
+    fontFamily: "Inter",
+    fontSize: 16,
+    color: COLORS.primary,
+    marginTop: 4,
+    textAlign: "center",
+  },
   pointsValue: {
     marginTop: 6,
     fontFamily: 'Cubao',
@@ -103,7 +136,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: SPACING.screenX,
-    paddingBottom: 24,
+    paddingTop: 16,
     gap: SPACING.cardGap,
   },
   primaryButton: {
@@ -124,21 +157,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.body,
     fontWeight: '700',
     color: '#0A1628',
-  },
-  secondaryButton: {
-    height: 56,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DFDFDF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  secondaryText: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.body,
-    fontWeight: '600',
-    color: COLORS.navy,
   },
 });

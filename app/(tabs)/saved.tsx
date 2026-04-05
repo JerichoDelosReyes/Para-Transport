@@ -4,16 +4,19 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
+import { useTheme } from '../../src/theme/ThemeContext';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 
 export default function SavedScreen() {
+  const { theme, isDark } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
   const bottomPadding = 48 + bottomSpace + 16;
-  const { user, removeSavedRoute, setSelectedTransitRoute, setPendingRouteSearch } = useStore();
+  const { user, removeSavedRoute, setSelectedTransitRoute, setPendingRouteSearch, sessionMode } = useStore();
+  const isGuestAccount = sessionMode === 'guest';
   const savedRoutes = user?.saved_routes || [];
   const [selectedRoute, setSelectedRoute] = useState<any>(null);
   const [isModalVisible, setModalVisible] = useState(false);
@@ -45,86 +48,91 @@ export default function SavedScreen() {
   };
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>SAVED</Text>
+    <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
+      <View style={[styles.header, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
+        <Text style={[styles.headerTitle, { color: '#0A1628' }]}>SAVED</Text>
         <ProfileButton />
       </View>
 
-      <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
-        {savedRoutes.length === 0 && (
-          <View style={styles.emptyState}>
+      <ScrollView style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
+        {isGuestAccount ? (
+          <View style={[styles.emptyState, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <JeepIllustration width={220} height={150} />
-            <Text style={styles.emptyTitle}>Wala pang saved.</Text>
+            <Text style={[styles.emptyTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>Sign in to save routes.</Text>
           </View>
+        ) : savedRoutes.length === 0 ? (
+          <View style={[styles.emptyState, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <JeepIllustration width={220} height={150} />
+            <Text style={[styles.emptyTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>Wala pang saved.</Text>
+          </View>
+        ) : (
+          savedRoutes.map((route) => (
+            <View key={route.id} style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <View style={styles.cardTop}>
+                <Text style={[styles.routeName, { color: theme.text }]}>{route.name}</Text>
+                <TouchableOpacity onPress={() => confirmRemove(route.id)}>
+                  <Ionicons name="bookmark" size={18} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.legSummary, { color: theme.textSecondary }]}>{route.legs.map((leg: any) => leg.mode).join(' • ')}</Text>
+              <View style={styles.cardBottom}>
+                <Text style={[styles.fare, { color: isDark ? '#FFFFFF' : COLORS.navy }]}>{route.total_fare ? `₱${route.total_fare.toFixed(2)}` : 'FARE VARIES'}</Text>
+                <TouchableOpacity style={[styles.ghostButton, { backgroundColor: theme.cardBackground, borderColor: isDark ? '#FFFFFF' : COLORS.navy }]} activeOpacity={0.9} onPress={() => openModal(route)}>
+                  <Text style={[styles.ghostButtonText, { color: isDark ? '#FFFFFF' : COLORS.navy }]}>Details</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
         )}
-
-        {savedRoutes.map((route) => (
-          <View key={route.id} style={styles.card}>
-            <View style={styles.cardTop}>
-              <Text style={styles.routeName}>{route.name}</Text>
-              <TouchableOpacity onPress={() => confirmRemove(route.id)}>
-                <Ionicons name="bookmark" size={18} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.legSummary}>{route.legs.map((leg: any) => leg.mode).join(' • ')}</Text>
-            <View style={styles.cardBottom}>
-              <Text style={styles.fare}>{route.total_fare ? `₱${route.total_fare.toFixed(2)}` : 'FARE VARIES'}</Text>
-              <TouchableOpacity style={styles.ghostButton} activeOpacity={0.9} onPress={() => openModal(route)}>
-                <Text style={styles.ghostButtonText}>View</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
       </ScrollView>
 
       <Modal visible={isModalVisible} animationType="fade" transparent>
         <View style={styles.modalBg}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
             {selectedRoute && (
               <>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle} numberOfLines={2}>
+                  <Text style={[styles.modalTitle, { color: theme.text }]} numberOfLines={2}>
                     {selectedRoute.name}
                   </Text>
                   <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="close" size={24} color={COLORS.navy} />
+                    <Ionicons name="close" size={24} color={isDark ? '#FFFFFF' : COLORS.navy} />
                   </TouchableOpacity>
                 </View>
                 
                 <View style={styles.modalBody}>
                   <View style={styles.modalRow}>
-                    <Text style={styles.modalLabel}>Fare</Text>
-                    <Text style={styles.modalValue}>{selectedRoute?.total_fare ? `₱${selectedRoute.total_fare.toFixed(2)}` : 'FARE VARIES'}</Text>
+                    <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>Fare</Text>
+                    <Text style={[styles.modalValue, { color: theme.text }]}>{selectedRoute?.total_fare ? `₱${selectedRoute.total_fare.toFixed(2)}` : 'FARE VARIES'}</Text>
                   </View>
                   <View style={styles.modalRow}>
-                    <Text style={styles.modalLabel}>Estimated Time</Text>
-                    <Text style={styles.modalValue}>{selectedRoute?.estimated_minutes ? `${selectedRoute.estimated_minutes} mins` : 'Varies'}</Text>
+                    <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>Estimated Time</Text>
+                    <Text style={[styles.modalValue, { color: theme.text }]}>{selectedRoute?.estimated_minutes ? `${selectedRoute.estimated_minutes} mins` : 'Varies'}</Text>
                   </View>
                   <View style={styles.modalRow}>
-                    <Text style={styles.modalLabel}>Total Distance</Text>
-                    <Text style={styles.modalValue}>{selectedRoute?.total_km ? `${selectedRoute.total_km} km` : 'Varies'}</Text>
+                    <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>Total Distance</Text>
+                    <Text style={[styles.modalValue, { color: theme.text }]}>{selectedRoute?.total_km ? `${selectedRoute.total_km} km` : 'Varies'}</Text>
                   </View>
 
                   <View style={styles.legsContainer}>
-                    <Text style={styles.legsTitle}>Route Legs</Text>
+                    <Text style={[styles.legsTitle, { color: theme.text }]}>Route Legs</Text>
                     {selectedRoute.legs.map((leg: any, i: number) => (
                       <View key={i} style={styles.legItem}>
                         <View style={styles.legPrefix}>
                           <View style={styles.legDot} />
-                          {i < selectedRoute.legs.length - 1 && <View style={styles.legLine} />}
+                          {i < selectedRoute.legs.length - 1 && <View style={[styles.legLine, { backgroundColor: theme.cardBorder }]} />}
                         </View>
                         <View style={styles.legDetails}>
-                          <Text style={styles.legMode}>Ride {leg.mode}</Text>
-                          <Text style={styles.legRoute}>{leg.from} → {leg.to}</Text>
+                          <Text style={[styles.legMode, { color: theme.text }]}>Ride {leg.mode}</Text>
+                          <Text style={[styles.legRoute, { color: theme.textSecondary }]}>{leg.from} → {leg.to}</Text>
                         </View>
                       </View>
                     ))}
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.primaryButton} onPress={handleViewRoute} activeOpacity={0.9}>
-                  <Text style={styles.primaryButtonText}>View Route</Text>
+                <TouchableOpacity style={[styles.primaryButton, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]} onPress={handleViewRoute} activeOpacity={0.9}>
+                  <Text style={[styles.primaryButtonText, { color: isDark ? COLORS.navy : '#000' }]}>View Route</Text>
                 </TouchableOpacity>
               </>
             )}

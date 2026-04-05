@@ -1,11 +1,12 @@
 import React from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
-import { BADGES } from '../constants/badges';
+import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
 import { useStore } from '../store/useStore';
+import { supabase } from '../config/supabaseClient';
+import { useTheme } from '../src/theme/ThemeContext';
 
 import { BADGE_IMAGES } from '../constants/badgeImages';
 
@@ -13,101 +14,229 @@ export default function AchievementsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useStore((state) => state.user);
+  const { theme, isDark } = useTheme();
   const unlockBadge = useStore((state) => state.unlockBadge);
+  const badgesData = useStore((state) => state.badgesData);
 
-  const getProgress = (badgeId: string) => {
-    const trips = (user)?.trips || 0;
-    const distance = user?.distance || 0;
-    const spent = user?.spent || 0;
-    const streak = user?.streak_count || 0;
+  const [leaderboard, setLeaderboard] = React.useState<any[]>([]);
+  const [loadingLeaderboard, setLoadingLeaderboard] = React.useState(true);
+  const [currentUserRank, setCurrentUserRank] = React.useState<number | null>(null);
 
-    switch (badgeId) {
-      case 'route_rookie': return trips;
-      case 'urban_navigator': return trips;
-      case 'frequent_rider': return trips;
-      case 'ultimate_commuter': return trips;
-      case 'long_hauler': return distance;
-      case 'thrifty_commuter': return spent;
-      case 'dedicated_commuter': return streak;
-      case 'habit_builder': return streak;
-      default: return 0; // Default active progress for non-tracked yet
-    }
+  React.useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        setLoadingLeaderboard(true);
+        // We use an RPC since RLS prevents users from reading others by default
+        const { data, error } = await supabase.rpc('get_top_leaderboard', { limit_val: 3 });
+        
+        if (error) {
+          console.error('Error fetching leaderboard (did you run the SQL migration?):', error);
+        } else if (data) {
+          setLeaderboard(data);
+        }
+
+        if (user && user.id && user.email !== 'guest@para.ph') {
+          const { data: rankData, error: rankError } = await supabase.rpc('get_user_global_rank', { 
+            target_user_id: user.id, 
+            target_points: user.points || 0 
+          });
+          
+          if (!rankError && rankData !== null) {
+            setCurrentUserRank(rankData);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoadingLeaderboard(false);
+      }
+    };
+
+    fetchLeaderboard();
+  }, [user]);
+
+  const getProgress = (badge: any) => {
+    return Number((user as any)[badge.condition_type]) || 0;
   };
 
   React.useEffect(() => {
     const currentBadges = user.badges || [];
-    BADGES.forEach((badge) => {
+    badgesData.forEach((badge) => {
       if (!currentBadges.includes(badge.id)) {
-        const progress = getProgress(badge.id);
-        if (progress >= badge.goal) {
+        const progress = getProgress(badge);
+        if (progress >= badge.condition_value) {
           unlockBadge(badge.id);
         }
       }
     });
-  }, [user.trips, user.distance, user.spent, user.streak_count, user.badges]);
+  }, [user.total_trips, user.total_distance, user.spent, user.streak_count, user.badges, badgesData]);
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
-        </TouchableOpacity>
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <View style={[styles.topSection, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+            <View style={[styles.iconButtonCircle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+              <Ionicons name="chevron-back" size={24} color="#0A1628" />
+            </View>
+          </TouchableOpacity>
+          <Text style={[styles.headerTitleText, { color: '#0A1628' }]}>ACHIEVEMENTS</Text>
+          <View style={{ width: 44, height: 44 }} />
+        </View>
       </View>
-      <ScrollView 
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.logoContainer}>
-          <Image 
-            source={require('../assets/logo/icon_achievement.png')} 
-            style={styles.logoImage} 
-            resizeMode="contain" 
-          />
-        </View>
-        <Text style={styles.pageTitle}>ACHIEVEMENT BADGES</Text>
-        
-        <View style={styles.grid}>
-          {BADGES.map((badge, idx) => {
-            const isEarned = user?.badges?.includes(badge.id) || false;
-            const progressValue = isEarned ? badge.goal : Math.min(badge.goal, getProgress(badge.id));
-            const fillWidth = `${(progressValue / badge.goal) * 100}%`;
-            const isLocked = !isEarned;
 
-            return (
-              <View key={badge.id || idx} style={[styles.card, isLocked && { opacity: 0.6 }]}>
-                <View style={[styles.iconWrapper]}>
-                  {BADGE_IMAGES[badge.id] ? (
-                    <Image 
-                      source={BADGE_IMAGES[badge.id]} 
-                      style={[styles.badgeImage, isLocked && { opacity: 0.3 }]} 
-                      resizeMode="contain" 
-                    />
-                  ) : (
-                    <Text style={[styles.iconTxt, isLocked && { opacity: 0.3 }]}>
-                      {badge.icon}
-                    </Text>
-                  )}
-                  {isLocked && (
-                    <View style={styles.lockOverlay}>
-                      <Ionicons name="lock-closed" size={16} color="#555" />
-                    </View>
-                  )}
-                </View>
-                <View style={styles.textWrapper}>
-                  <Text style={[styles.badgeName]}>{badge.name}</Text>
-                  <Text style={[styles.badgeDesc]}>
-                    {badge.description}
-                  </Text>
-                </View>
-                
-                <View style={[styles.progressContainer]}>
-                  <View style={[styles.progressBar, { width: fillWidth as any }]} />
-                </View>
+      <View style={styles.bottomSection}>
+        <ScrollView 
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {user?.email !== 'guest@para.ph' && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="trophy" size={24} color="#E8A020" />
+                <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>LEADERBOARD</Text>
               </View>
-            );
-          })}
-        </View>
-      </ScrollView>
+              
+              <View style={[styles.leaderboardContainer, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+                {loadingLeaderboard ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} style={{ marginTop: 24, marginBottom: 24 }} />
+                ) : leaderboard.length === 0 ? (
+                  <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No users ranked yet.</Text>
+                ) : (
+                  <>
+                    {leaderboard.map((lbUser, index) => {
+                      const isMe = lbUser.id === user?.id;
+                      // Determine the name to show 
+                      const displayName = lbUser.username ? `${lbUser.username}` : (lbUser.full_name || 'Anonymous User');
+                      
+                      let containerBg = isDark ? theme.surfaceSecondary : '#F3F4F6';
+                      let textColor = isDark ? '#FFFFFF' : '#4B5563';
+                      let ptsColor = theme.text;
+                      
+                      if (index === 0) {
+                        containerBg = isDark ? 'rgba(232,160,32,0.4)' : '#FEF08A';
+                        textColor = isDark ? '#FFFFFF' : '#854D0E';
+                        ptsColor = isDark ? '#E8A020' : '#D97706';
+                      } else if (index === 1) {
+                        containerBg = isDark ? 'rgba(156,163,175,0.4)' : '#E5E7EB';
+                        textColor = isDark ? '#FFFFFF' : '#374151';
+                        ptsColor = isDark ? '#D1D5DB' : '#4B5563';
+                      } else if (index === 2) {
+                        containerBg = isDark ? 'rgba(180,83,9,0.4)' : '#FFEDD5';
+                        textColor = isDark ? '#FFFFFF' : '#9A3412';
+                        ptsColor = isDark ? '#F59E0B' : '#B45309';
+                      }
+                      
+                      return (
+                        <View key={lbUser.id || index} style={[styles.leaderboardCard, isMe && [styles.leaderboardCardMe, { backgroundColor: isDark ? 'rgba(232, 160, 32, 0.15)' : '#FFFBEB' }]]}>
+                          <View style={[styles.rankContainer, { backgroundColor: containerBg }]}>
+                            <Text style={[styles.rankText, { color: textColor }]}>#{index + 1}</Text>
+                          </View>
+                          <View style={styles.lbInfo}>
+                            <Text style={[styles.lbName, isMe && styles.lbNameMe, { color: isDark ? '#FFFFFF' : '#1F2937' }]} numberOfLines={1}>
+                              {displayName}
+                            </Text>
+                          </View>
+                          <View style={styles.pointsContainer}>
+                            <Text style={[styles.pointsText, { color: ptsColor }]}>{lbUser.points || 0}</Text>
+                            <Text style={[styles.pointsLabel, { color: theme.textSecondary }]}>PTS</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                    
+                    {user?.points === 0 ? (
+                      <>
+                        <View style={[styles.leaderboardDivider, { backgroundColor: theme.cardBorder }]} />
+                        <View style={[styles.leaderboardCard, [styles.leaderboardCardMe, { backgroundColor: isDark ? 'rgba(232, 160, 32, 0.15)' : '#FFFBEB' }], { borderBottomWidth: 0, justifyContent: 'center' }]}>
+                          <Text style={[styles.lbName, { textAlign: 'center', color: theme.textSecondary, fontStyle: 'italic' }]}>
+                            Take your first ride to get on the leaderboard!
+                          </Text>
+                        </View>
+                      </>
+                    ) : currentUserRank && user?.id && !leaderboard.some(lb => lb.id === user.id) ? (
+                      <>
+                        <View style={[styles.leaderboardDivider, { backgroundColor: theme.cardBorder }]} />
+                        <View style={[styles.leaderboardCard, [styles.leaderboardCardMe, { backgroundColor: isDark ? 'rgba(232, 160, 32, 0.15)' : '#FFFBEB' }], { borderBottomWidth: 0 }]}>
+                          <View style={[styles.rankContainer, { backgroundColor: isDark ? theme.surfaceSecondary : '#F3F4F6' }]}>
+                            <Text style={[styles.rankText, { color: theme.textSecondary }]}>#{currentUserRank}</Text>
+                          </View>
+                          <View style={styles.lbInfo}>
+                            <Text style={[styles.lbName, styles.lbNameMe, { color: isDark ? '#FFFFFF' : '#1F2937' }]} numberOfLines={1}>
+                              {user.username ? `${user.username}` : (user.full_name || 'Anonymous User')}
+                            </Text>
+                          </View>
+                          <View style={styles.pointsContainer}>
+                            <Text style={[styles.pointsText, { color: theme.text }]}>{user.points || 0}</Text>
+                            <Text style={[styles.pointsLabel, { color: theme.textSecondary }]}>PTS</Text>
+                          </View>
+                        </View>
+                      </>
+                    ) : null}
+                  </>
+                )}
+              </View>
+            </>
+          )}
+
+          <View style={[
+            { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }, 
+            user?.email !== 'guest@para.ph' ? { marginTop: 32 } : {}
+          ]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="medal" size={24} color="#E8A020" />
+              <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>BADGES</Text>
+            </View>
+            <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
+              <Text style={{ fontFamily: 'Inter', fontSize: 13, color: theme.textSecondary, fontWeight: '500' }}>
+                {user?.badges?.length || 0} Unlocked  •  {Math.max(0, badgesData.length - (user?.badges?.length || 0))} Locked
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.grid}>
+            {[...badgesData].sort((a, b) => a.condition_value - b.condition_value).map((badge, idx) => {
+              const isEarned = user?.badges?.includes(badge.id) || false;
+              const progressValue = isEarned ? badge.condition_value : Math.min(badge.condition_value, getProgress(badge));
+              const fillWidth = `${(progressValue / badge.condition_value) * 100}%`;
+              const isLocked = !isEarned;
+
+              return (
+                <View key={badge.id || idx} style={[styles.card, { backgroundColor: theme.cardBackground }, isLocked && { opacity: 0.7 }]}>
+                  <View style={[styles.iconWrapper, isEarned && styles.iconWrapperEarned]}>
+                    {badge.icon_url || BADGE_IMAGES[badge.id] ? (
+                      <Image 
+                        source={(badge.icon_url && badge.icon_url.startsWith('http')) ? { uri: badge.icon_url } : BADGE_IMAGES[badge.id]} 
+                        style={[styles.badgeImage, isLocked && { opacity: 0.3 }]} 
+                        resizeMode="contain" 
+                      />
+                    ) : (
+                      <Text style={[styles.iconTxt, isLocked && { opacity: 0.3 }]}>
+                        🏆
+                      </Text>
+                    )}
+                    {isLocked && (
+                      <View style={[styles.lockOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)' }]}>
+                        <Ionicons name="lock-closed" size={14} color={theme.textSecondary} />
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.textWrapper}>
+                    <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.badgeName, { color: theme.text }]}>{badge.name}</Text>
+                    <Text style={[styles.badgeDesc, { color: theme.textSecondary }]}>
+                      {badge.description}
+                    </Text>
+                  </View>
+                  
+                  <View style={[styles.progressContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(10,22,40,0.1)' }]}>
+                    <View style={[styles.progressBar, { width: fillWidth as any }]} />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </View>
     </View>
   );
 }
@@ -115,40 +244,145 @@ export default function AchievementsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.primary, // matched the platform header gold
   },
-  header: {
-    paddingHorizontal: SPACING.screenX,
-    paddingBottom: 10,
+  topSection: {
+    backgroundColor: COLORS.primary,
     zIndex: 10,
   },
-  backBtn: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.screenX,
+    paddingVertical: 14,
+    height: 64,
+  },
+  headerTitleText: {
+    fontFamily: 'Cubao',
+    fontSize: TYPOGRAPHY.screenTitle,
+    color: '#0A1628',
+  },
+  iconButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  iconButtonCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomSection: {
+    flex: 1,
+  },
   content: {
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 10,
+    paddingTop: 24,
   },
-  logoContainer: {
+  sectionHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 16,
+    gap: 8,
   },
-  logoImage: {
-    width: 200, // scaled up for more prominence
-    height: 70,
-  },
-  pageTitle: {
-    fontFamily: 'Inter',
-    fontWeight: '800',
+  sectionTitle: {
+    fontFamily: 'Cubao',
     fontSize: 22,
-    color: '#1A1A2E',
+    color: COLORS.navy,
+  },
+  leaderboardContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.card,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+    marginBottom: 16,
+  },
+  leaderboardCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.04)',
+  },
+  leaderboardCardMe: {
+    backgroundColor: '#FFFBEB', // Light yellow tint for the user
+  },
+  leaderboardDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    marginHorizontal: 16,
+    marginVertical: 4,
+  },
+  rankContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  rankContainerTop: {
+    backgroundColor: '#FEF08A',
+  },
+  rankText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4B5563',
+  },
+  rankTextTop: {
+    color: '#854D0E',
+  },
+  lbInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  lbName: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.navy,
+  },
+  lbNameMe: {
+    color: '#D97706',
+    fontWeight: '700',
+  },
+  pointsContainer: {
+    alignItems: 'flex-end',
+  },
+  pointsText: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.navy,
+  },
+  pointsTextTop: {
+    color: '#B45309',
+  },
+  pointsLabel: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  emptyText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLORS.textMuted,
     textAlign: 'center',
-    marginBottom: 30,
+    padding: 24,
   },
   grid: {
     flexDirection: 'row',
@@ -158,30 +392,40 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '48%',
-    backgroundColor: '#FAF5E3',
-    borderRadius: 16,
-    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.card,
+    padding: 16,
     alignItems: 'center',
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   iconWrapper: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
     backgroundColor: '#d5a944',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+  },
+  iconWrapperEarned: {
+    // Keep styling structure
   },
   iconTxt: {
-    fontSize: 45,
+    fontSize: 36,
   },
   badgeImage: {
     width: 60,
@@ -191,47 +435,47 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
-    minHeight: 40,
+    marginBottom: 16,
+    minHeight: 44,
   },
   badgeName: {
     fontFamily: 'Inter',
     fontWeight: '700',
-    fontSize: 13,
-    color: '#1A1A2E',
+    fontSize: 14,
+    color: COLORS.navy,
     textAlign: 'center',
     marginBottom: 4,
   },
   badgeDesc: {
     fontFamily: 'Inter',
-    fontSize: 11,
-    color: '#4B4B4B',
+    fontSize: 12,
+    color: COLORS.textMuted,
     textAlign: 'center',
-    lineHeight: 14,
+    lineHeight: 16,
   },
   progressContainer: {
     height: 6,
-    backgroundColor: '#D1CBA8',
+    backgroundColor: 'rgba(10,22,40,0.1)',
     borderRadius: 3,
-    width: '80%',
+    width: '100%',
     overflow: 'hidden',
   },
   progressBar: {
     height: '100%',
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#E8A020',
     borderRadius: 3,
   },
   lockOverlay: {
     position: 'absolute',
-    bottom: -5,
-    right: -5,
-    backgroundColor: '#E0E0E0',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#FFFFFF',
     borderRadius: 15,
-    width: 30,
-    height: 30,
+    width: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.05)',
   }
 });

@@ -1,3 +1,4 @@
+import { useTheme } from "../src/theme/ThemeContext";
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Modal,
@@ -15,13 +16,20 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { COLORS, SPACING } from '../constants/theme';
 import { fuzzyFilter } from '../utils/fuzzySearch';
 import { useRecentSearches, RecentSearch } from '../hooks/useRecentSearches';
 import { useStore } from '../store/useStore';
+import LOCAL_PLACES from '../data/local_places';
 
 const GEOCODING_BASE_URL =
   process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
+const GEOCODING_TIMEOUT_MS = 6500;
+const CAVITE_VIEWBOX = '120.55,14.53,121.05,13.95';
+const GEOCODING_HEADERS: Record<string, string> = {
+  'Accept-Language': 'en',
+  'User-Agent': 'ParaTransport/1.0 (support@para.ph)',
+};
 
 export type PlaceResult = {
   id: string;
@@ -30,6 +38,8 @@ export type PlaceResult = {
   latitude: number;
   longitude: number;
 };
+
+export type TransitRouteType = 'jeepney' | 'bus' | 'combo';
 
 type SearchScreenProps = {
   visible: boolean;
@@ -50,33 +60,49 @@ export default function SearchScreen({
   onSelectRoute,
   onClearRoute,
 }: SearchScreenProps) {
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [activeField, setActiveField] = useState<'origin' | 'destination'>('destination');
   const [originText, setOriginText] = useState('');
   const [originPlace, setOriginPlace] = useState<PlaceResult | null>(null);
   const [destinationText, setDestinationText] = useState('');
   const [usingCurrentLocation, setUsingCurrentLocation] = useState(true);
-  const [destinationPlace, setDestinationPlace] = useState<PlaceResult | null>(null);
-  const [activeTab, setActiveTab] = useState<'recent' | 'favorites'>('recent');
 
   const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
   const [isFetching, setIsFetching] = useState(false);
+  const [isRecordingOrigin, setIsRecordingOrigin] = useState(false);
+  const [isRecordingDestination, setIsRecordingDestination] = useState(false);
 
-  const { recents, addRecent, clearRecents } = useRecentSearches();
-  const unlockBadge = useStore((state) => state.unlockBadge);
-  const { savePlace, removeSavedPlace, user } = useStore();
+  const { recents, addRecent } = useRecentSearches();
+  const { saveRoute, removeSavedRoute, user, sessionMode } = useStore();
+  const isGuestAccount = sessionMode === 'guest';
 
   const originRef = useRef<TextInput>(null);
   const destRef = useRef<TextInput>(null);
 
+  const isCurrentLocationValue = (value?: string | null): boolean => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return true;
+
+    const currentLabel = String(currentLocationLabel || '').trim().toLowerCase();
+    return (
+      normalized === 'current location' ||
+      normalized === 'your location' ||
+      (currentLabel.length > 0 && normalized === currentLabel)
+    );
+  };
+
   // Reset or initialize state when opened
   useEffect(() => {
     if (visible) {
+      setOriginPlace(null);
+
       if (initialOrigin || initialDestination) {
-        setOriginText(initialOrigin || '');
+        const useCurrentAsOrigin = isCurrentLocationValue(initialOrigin);
+        setUsingCurrentLocation(useCurrentAsOrigin);
+        setOriginText(useCurrentAsOrigin ? '' : (initialOrigin || ''));
         setDestinationText(initialDestination || '');
-        setUsingCurrentLocation(false);
-        setActiveField(!initialDestination ? 'destination' : 'destination');
+        setActiveField('destination');
         // By setting destination text, it will trigger the search suggestions auto-fetch.
         setTimeout(() => destRef.current?.focus(), 300);
       } else {
@@ -88,10 +114,104 @@ export default function SearchScreen({
       }
       setSuggestions([]);
     }
-  }, [visible, initialOrigin, initialDestination]);
+  }, [visible, initialOrigin, initialDestination, currentLocationLabel]);
 
   // Active query text
   const activeQuery = activeField === 'origin' ? originText : destinationText;
+
+  const mergeUniquePlaces = useCallback((...groups: PlaceResult[][]): PlaceResult[] => {
+    const merged: PlaceResult[] = [];
+    const seen = new Set<string>();
+
+    for (const group of groups) {
+      for (const place of group) {
+        const key = `${place.title.trim().toLowerCase()}|${place.latitude.toFixed(5)}|${place.longitude.toFixed(5)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(place);
+      }
+    }
+
+    return merged;
+  }, []);
+
+  const fetchGeocodingPlaces = useCallback(
+    async (query: string, limit: number, scopedToCavite: boolean): Promise<PlaceResult[]> => {
+      const q = query.trim();
+      if (q.length < 2) return [];
+
+      const params = new URLSearchParams({
+        q: scopedToCavite ? `${q}, Cavite, Philippines` : `${q}, Philippines`,
+        format: 'jsonv2',
+        limit: String(limit),
+        countrycodes: 'ph',
+        addressdetails: '0',
+      });
+
+      if (scopedToCavite) {
+        params.set('viewbox', CAVITE_VIEWBOX);
+        params.set('bounded', '1');
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), GEOCODING_TIMEOUT_MS);
+
+      try {
+        const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
+          headers: GEOCODING_HEADERS,
+          signal: controller.signal,
+        });
+
+        if (!res.ok) return [];
+
+        const data = await res.json();
+        return (Array.isArray(data) ? data : [])
+          .map((item: any, idx: number) => {
+            const dn = String(item.display_name || '').trim();
+            const parts = dn
+              .split(',')
+              .map((p: string) => p.trim())
+              .filter(Boolean);
+
+            return {
+              id: String(item.place_id || `${idx}`),
+              title: parts[0] || q,
+              subtitle: parts.slice(1).join(', ') || 'Philippines',
+              latitude: parseFloat(item.lat),
+              longitude: parseFloat(item.lon),
+            } as PlaceResult;
+          })
+          .filter((p: PlaceResult) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+    [],
+  );
+
+  const resolvePlaceFromText = useCallback(async (query: string): Promise<PlaceResult | null> => {
+    const q = query.trim();
+    if (q.length < 2) return null;
+
+    try {
+      const caviteFirst = await fetchGeocodingPlaces(q, 1, true);
+      if (caviteFirst.length > 0) return caviteFirst[0];
+
+      const nationwideFallback = await fetchGeocodingPlaces(q, 1, false);
+      if (nationwideFallback.length > 0) return nationwideFallback[0];
+
+      const localFallback = fuzzyFilter(
+        LOCAL_PLACES as PlaceResult[],
+        q,
+        (p) => [p.title, p.subtitle],
+        1,
+      ).map((r) => r.item as PlaceResult);
+
+      return localFallback[0] || null;
+    } catch {
+      return null;
+    }
+  }, [fetchGeocodingPlaces]);
 
   // Geocoding + fuzzy local search
   useEffect(() => {
@@ -107,48 +227,28 @@ export default function SearchScreen({
       setIsFetching(true);
 
       // Local fuzzy match on recents first
-      const localMatches = fuzzyFilter(recents, q, (r) => [r.title, r.subtitle], 3).map(
+      const recentMatches = fuzzyFilter(recents, q, (r) => [r.title, r.subtitle], 4).map(
         (r) => r.item as PlaceResult,
       );
+      const knownPlaceMatches = fuzzyFilter(
+        LOCAL_PLACES as PlaceResult[],
+        q,
+        (p) => [p.title, p.subtitle],
+        8,
+      ).map((r) => r.item as PlaceResult);
+
+      const localMatches = mergeUniquePlaces(recentMatches, knownPlaceMatches).slice(0, 10);
+      setSuggestions(localMatches);
 
       try {
-        const params = new URLSearchParams({
-          q: `${q}, Cavite, Philippines`,
-          format: 'json',
-          limit: '8',
-          countrycodes: 'ph',
-          addressdetails: '0',
-        });
+        let remote = await fetchGeocodingPlaces(q, 8, true);
+        if (remote.length === 0) {
+          remote = await fetchGeocodingPlaces(q, 8, false);
+        }
 
-        const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
-          headers: { 'Accept-Language': 'en' },
-        });
-
-        if (!res.ok) throw new Error(`${res.status}`);
-        const data = await res.json();
         if (cancelled) return;
 
-        const remote: PlaceResult[] = (Array.isArray(data) ? data : [])
-          .map((item: any, idx: number) => {
-            const dn = String(item.display_name || '').trim();
-            const parts = dn.split(',').map((p: string) => p.trim()).filter(Boolean);
-            return {
-              id: String(item.place_id || `${idx}`),
-              title: parts[0] || q,
-              subtitle: parts.slice(1).join(', ') || 'Philippines',
-              latitude: parseFloat(item.lat),
-              longitude: parseFloat(item.lon),
-            };
-          })
-          .filter((p: PlaceResult) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
-
-        // Merge: locals first (deduplicated), then remote
-        const seenIds = new Set(localMatches.map((l) => l.id));
-        const merged = [
-          ...localMatches,
-          ...remote.filter((r) => !seenIds.has(r.id)),
-        ].slice(0, 10);
-
+        const merged = mergeUniquePlaces(localMatches, remote).slice(0, 10);
         setSuggestions(merged);
       } catch {
         if (!cancelled) {
@@ -164,10 +264,44 @@ export default function SearchScreen({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [activeQuery, activeField, recents]);
+  }, [activeQuery, activeField, recents, fetchGeocodingPlaces, mergeUniquePlaces]);
+
+  const startRecording = async (field: 'origin' | 'destination') => {
+    if (field === 'origin') setIsRecordingOrigin(false);
+    if (field === 'destination') setIsRecordingDestination(false);
+    Alert.alert(
+      'Voice input unavailable',
+      'Speech recognition is not available in this currently installed build. Rebuild and reinstall your dev client to enable voice input.',
+    );
+  };
+
+  const handleMicPress = (field: 'origin' | 'destination') => {
+    setActiveField(field);
+    startRecording(field);
+  };
+
+  const handleSwapRoute = useCallback(() => {
+    const oldOriginText = originText;
+    const isDestCurrentLoc = destinationText === currentLocationLabel || destinationText.toLowerCase() === 'current location';
+    if (isDestCurrentLoc) {
+      setUsingCurrentLocation(true);
+      setOriginText('');
+    } else {
+      setUsingCurrentLocation(false);
+      setOriginText(destinationText);
+    }
+    
+    if (usingCurrentLocation) {
+      setDestinationText(currentLocationLabel || 'Current Location');
+    } else {
+      setDestinationText(oldOriginText);
+    }
+    setOriginPlace(null);
+    setSuggestions([]);
+  }, [originText, destinationText, usingCurrentLocation, currentLocationLabel]);
 
   const handleSelectPlace = useCallback(
-    (place: PlaceResult) => {
+    async (place: PlaceResult) => {
       addRecent(place);
 
       if (activeField === 'origin') {
@@ -178,14 +312,48 @@ export default function SearchScreen({
         setTimeout(() => destRef.current?.focus(), 100);
       } else {
         setDestinationText(place.title);
-        setDestinationPlace(place);
-        // Both fields filled → trigger route
-        const origin = usingCurrentLocation ? null : originPlace;
-        onSelectRoute(origin, place);
+
+        let resolvedOrigin: PlaceResult | null = null;
+        const typedOrigin = originText.trim();
+        const typedOriginIsCurrent = isCurrentLocationValue(typedOrigin);
+        const hasExplicitOrigin =
+          !!originPlace || (typedOrigin.length > 0 && !typedOriginIsCurrent);
+
+        if (hasExplicitOrigin) {
+          const originPlaceMatchesTyped =
+            !!originPlace &&
+            (typedOrigin.length === 0 ||
+              originPlace.title.trim().toLowerCase() === typedOrigin.toLowerCase());
+
+          if (originPlace && originPlaceMatchesTyped) {
+            resolvedOrigin = originPlace;
+          } else if (typedOrigin.length > 0 && !typedOriginIsCurrent) {
+            resolvedOrigin = await resolvePlaceFromText(typedOrigin);
+            if (resolvedOrigin) {
+              setOriginPlace(resolvedOrigin);
+              setOriginText(resolvedOrigin.title);
+            }
+          }
+
+          if (!resolvedOrigin) {
+            Alert.alert('Origin Not Found', 'Please pick your origin from suggestions or use Current Location.');
+            return;
+          }
+        }
+
+        onSelectRoute(resolvedOrigin, place);
       }
       setSuggestions([]);
     },
-    [activeField, originPlace, usingCurrentLocation, addRecent, onSelectRoute],
+    [
+      activeField,
+      originPlace,
+      originText,
+      usingCurrentLocation,
+      addRecent,
+      onSelectRoute,
+      resolvePlaceFromText,
+    ],
   );
 
   const handleRecentPress = useCallback(
@@ -197,87 +365,80 @@ export default function SearchScreen({
 
   
 
-  const isPlaceSaved = useCallback((placeId: string) => {
-    return user.saved_places?.some((p) => p.id === placeId) || false;
-  }, [user.saved_places]);
+  const isRouteSaved = () => {
+    const org = usingCurrentLocation ? (currentLocationLabel || 'Current Location') : originText;
+    const dst = destinationText;
+    if (!org || !dst) return false;
+    const routeId = `${org} - ${dst}`;
+    return user.saved_routes?.some(r => r.id === routeId) || false;
+  };
 
-  const toggleFavorite = useCallback((place: PlaceResult) => {
-    if (isPlaceSaved(place.id)) {
-      removeSavedPlace(place.id);
+  const handleFavorite = () => {
+    const org = usingCurrentLocation ? (currentLocationLabel || 'Current Location') : originText;
+    const dst = destinationText;
+    
+    if (!org || !dst) {
+      Alert.alert('Missing Fields', 'Please enter both origin and destination to save the route.');
+      return;
+    }
+
+    const routeId = `${org} - ${dst}`;
+    
+    if (isRouteSaved()) {
+      removeSavedRoute(routeId);
+      Alert.alert('Removed', 'Route has been removed from your Saved page.');
     } else {
-      savePlace(place);
+      saveRoute({
+        id: routeId,
+        name: `${org} to ${dst}`,
+        legs: [{ mode: 'Custom Route', from: org, to: dst, fare: 0, km: 0, minutes: 0, instructions: 'Custom saved route' }],
+        total_fare: 0,
+        total_km: 0,
+        estimated_minutes: 0,
+      });
+      Alert.alert('Saved!', 'Route has been saved to your Saved page.');
     }
-  }, [isPlaceSaved, removeSavedPlace, savePlace]);
+  };
 
-  const handleSwap = useCallback(() => {
-    const tempUsingCurrent = usingCurrentLocation;
-    const tempOriginText = originText;
-    const tempOriginPlace = originPlace;
-
-    setOriginText(destinationText);
-    setOriginPlace(destinationPlace);
-
-    const newDestText = tempUsingCurrent && !tempOriginText 
-      ? (currentLocationLabel || 'Current Location') 
-      : tempOriginText;
-    setDestinationText(newDestText);
-    setDestinationPlace(tempOriginPlace);
-
-    if (tempUsingCurrent) {
-      setUsingCurrentLocation(false);
-    }
-    
-    // Switch active field to destination to encourage flow
-    setActiveField('destination');
-    
-    // Achievement System: Adaptive Commuter
-    setTimeout(() => {
-      const user = useStore.getState().user;
-      if (!user.badges?.includes('adaptive_commuter')) {
-        unlockBadge('adaptive_commuter');
-      }
-    }, 1000);
-  }, [
-    usingCurrentLocation, 
-    originText, 
-    originPlace,
-    destinationText, 
-    destinationPlace, 
-    currentLocationLabel,
-    unlockBadge
-  ]);
+  const displayOrigin = usingCurrentLocation
+    ? currentLocationLabel || 'Current Location'
+    : originText;
 
   return (
     <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>
-      <View style={[styles.container, { paddingTop: Math.max(insets.top, 14) }]}>
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 14), backgroundColor: theme.background }]}>
         <View style={styles.safe}>
           {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.navy} />
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { flex: 1 }]}>Your Route</Text>
+          <Text style={[styles.headerTitle, { flex: 1, color: theme.text }]}>Your Route</Text>
+          <TouchableOpacity onPress={handleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name={isRouteSaved() ? "bookmark" : "bookmark-outline"} size={24} color={isRouteSaved() ? COLORS.primary : theme.text} />
+          </TouchableOpacity>
         </View>
 
         {/* Search Fields */}
-        <View style={styles.fieldsContainerOuter}>
-          <View style={styles.fieldsContainer}>
-          {/* Origin */}
-          <View
-            style={[
-              styles.fieldRow,
+        <View style={styles.fieldsContainer}>
+          <View style={{ flex: 1 }}>
+            {/* Origin */}
+            <View
+              style={[
+              styles.fieldRow, { backgroundColor: theme.cardBackground },
               activeField === 'origin' && styles.fieldRowActive,
             ]}
           >
             <View style={[styles.fieldDot, { backgroundColor: '#4A90D9' }]} />
             <TextInput
               ref={originRef}
-              style={styles.fieldInput}
+              style={[styles.fieldInput, { color: theme.text }]}
               placeholder="Where are you now?"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={theme.textSecondary}
               value={usingCurrentLocation && !originText ? (currentLocationLabel || 'Current Location') : originText}
               onChangeText={(t) => {
                 setOriginText(t);
+                setOriginPlace(null);
                 if (usingCurrentLocation) {
                   setUsingCurrentLocation(false);
                 }
@@ -287,6 +448,7 @@ export default function SearchScreen({
                 if (usingCurrentLocation) {
                   setUsingCurrentLocation(false);
                   setOriginText('');
+                  setOriginPlace(null);
                 }
               }}
               returnKeyType="next"
@@ -306,11 +468,15 @@ export default function SearchScreen({
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ marginRight: 12 }}
               >
-                <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+                <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon!')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="mic" size={20} color={COLORS.textMuted} />
+            <TouchableOpacity onPress={() => handleMicPress('origin')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              {isRecordingOrigin ? (
+                <ActivityIndicator size="small" color={theme.accent} />
+              ) : (
+                <Ionicons name="mic" size={20} color={theme.textSecondary} />
+              )}
             </TouchableOpacity>
           </View>
 
@@ -324,16 +490,16 @@ export default function SearchScreen({
           {/* Destination */}
           <View
             style={[
-              styles.fieldRow,
+              styles.fieldRow, { backgroundColor: theme.cardBackground },
               activeField === 'destination' && styles.fieldRowActive,
             ]}
           >
             <View style={[styles.fieldDot, { backgroundColor: '#E8A020' }]} />
             <TextInput
               ref={destRef}
-              style={styles.fieldInput}
+              style={[styles.fieldInput, { color: theme.text }]}
               placeholder="Where are you going?"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={theme.textSecondary}
               value={destinationText}
               onChangeText={setDestinationText}
               onFocus={() => setActiveField('destination')}
@@ -353,25 +519,21 @@ export default function SearchScreen({
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ marginRight: 12 }}
               >
-                <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+                <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon!')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="mic" size={20} color={COLORS.textMuted} />
+            <TouchableOpacity onPress={() => handleMicPress('destination')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              {isRecordingDestination ? (
+                <ActivityIndicator size="small" color={theme.accent} />
+              ) : (
+                <Ionicons name="mic" size={20} color={theme.textSecondary} />
+              )}
             </TouchableOpacity>
           </View>
-        </View>
-
-          <TouchableOpacity 
-            style={styles.swapBtn} 
-            onPress={handleSwap}
-            activeOpacity={0.7}
-          >
-            <View style={styles.swapBtnOuter}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="arrow-down-outline" size={20} color={COLORS.primary} style={{ marginRight: -4 }} />
-                <Ionicons name="arrow-up-outline" size={20} color={COLORS.primary} style={{ marginLeft: -4 }} />
-              </View>
+          </View>
+          <TouchableOpacity onPress={handleSwapRoute} style={styles.swapBtnWrapper} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <View style={[styles.swapBtn, { backgroundColor: theme.surfaceSecondary }]}>
+               <Ionicons name="swap-vertical" size={20} color={theme.text} />
             </View>
           </TouchableOpacity>
         </View>
@@ -384,10 +546,11 @@ export default function SearchScreen({
             if (activeField === 'origin') {
               setUsingCurrentLocation(true);
               setOriginText('');
+              setOriginPlace(null);
               setActiveField('destination');
               setTimeout(() => destRef.current?.focus(), 100);
             } else {
-              setDestinationText('Current Location');
+              setDestinationText(currentLocationLabel || 'Current Location');
             }
           }}
         >
@@ -400,14 +563,13 @@ export default function SearchScreen({
         {/* Divider */}
         <View style={styles.divider} />
 
-        
-        {/* Suggestions or Recents/Favorites */}
+        {/* Suggestions or Recents */}
         {activeQuery.trim().length >= 2 ? (
           <>
             {isFetching && suggestions.length === 0 ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator size="small" color="#E8A020" />
-                <Text style={styles.loadingText}>Searching places...</Text>
+                <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Searching places...</Text>
               </View>
             ) : (
               <FlatList
@@ -425,21 +587,18 @@ export default function SearchScreen({
                       <Ionicons name="location" size={18} color="#4A90D9" />
                     </View>
                     <View style={styles.resultTextWrap}>
-                      <Text style={styles.resultTitle} numberOfLines={1}>
+                      <Text style={[styles.resultTitle, { color: theme.text }]} numberOfLines={1}>
                         {item.title}
                       </Text>
-                      <Text style={styles.resultSubtitle} numberOfLines={2}>
+                      <Text style={[styles.resultSubtitle, { color: theme.textSecondary }]} numberOfLines={2}>
                         {item.subtitle}
                       </Text>
                     </View>
-                    <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <Ionicons name={isPlaceSaved(item.id) ? "star" : "star-outline"} size={22} color={isPlaceSaved(item.id) ? '#E8A020' : COLORS.textMuted} />
-                    </TouchableOpacity>
                   </TouchableOpacity>
                 )}
                 ListEmptyComponent={
                   !isFetching ? (
-                    <Text style={styles.emptyText}>No places found. Try a different search.</Text>
+                    <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No places found. Try a different search.</Text>
                   ) : null
                 }
               />
@@ -447,34 +606,12 @@ export default function SearchScreen({
           </>
         ) : (
           <>
-            <View style={styles.tabContainer}>
-              <TouchableOpacity 
-                style={[styles.tabBtn, activeTab === 'recent' && styles.tabBtnActive]} 
-                onPress={() => setActiveTab('recent')}
-              >
-                <Ionicons name="time" size={18} color={activeTab === 'recent' ? COLORS.primary : COLORS.textMuted} />
-                <Text style={[styles.tabText, activeTab === 'recent' && styles.tabTextActive]}>Recent</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.tabBtn, activeTab === 'favorites' && styles.tabBtnActive]} 
-                onPress={() => setActiveTab('favorites')}
-              >
-                <Ionicons name="star" size={18} color={activeTab === 'favorites' ? COLORS.primary : COLORS.textMuted} />
-                <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>Favorites</Text>
-              </TouchableOpacity>
-            </View>
-
-            {activeTab === 'recent' ? (
+            {!isGuestAccount && recents.length > 0 && (
               <>
-                {recents.length > 0 && (
-                  <TouchableOpacity
-                    onPress={clearRecents}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={{ alignSelf: 'flex-end', paddingHorizontal: 16, paddingBottom: 6 }}
-                  >
-                    <Text style={{ fontFamily: 'Inter', fontSize: 12, color: COLORS.textMuted }}>Clear</Text>
-                  </TouchableOpacity>
-                )}
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="time-outline" size={16} color={theme.text} />
+                  <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent</Text>
+                </View>
                 <FlatList
                   data={recents}
                   keyExtractor={(item) => item.id}
@@ -490,51 +627,17 @@ export default function SearchScreen({
                         <Ionicons name="location" size={18} color="#4A90D9" />
                       </View>
                       <View style={styles.resultTextWrap}>
-                        <Text style={styles.resultTitle} numberOfLines={1}>
+                        <Text style={[styles.resultTitle, { color: theme.text }]} numberOfLines={1}>
                           {item.title}
                         </Text>
-                        <Text style={styles.resultSubtitle} numberOfLines={2}>
+                        <Text style={[styles.resultSubtitle, { color: theme.textSecondary }]} numberOfLines={2}>
                           {item.subtitle}
                         </Text>
                       </View>
-                      <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                        <Ionicons name={isPlaceSaved(item.id) ? "star" : "star-outline"} size={22} color={isPlaceSaved(item.id) ? '#E8A020' : COLORS.textMuted} />
-                      </TouchableOpacity>
                     </TouchableOpacity>
                   )}
-                  ListEmptyComponent={<Text style={styles.emptyText}>No recent searches.</Text>}
                 />
               </>
-            ) : (
-              <FlatList
-                data={user.saved_places || []}
-                keyExtractor={(item) => item.id}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.listContent}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.resultRow}
-                    activeOpacity={0.7}
-                    onPress={() => handleRecentPress(item)}
-                  >
-                    <View style={styles.resultIcon}>
-                      <Ionicons name="location" size={18} color="#4A90D9" />
-                    </View>
-                    <View style={styles.resultTextWrap}>
-                      <Text style={styles.resultTitle} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.resultSubtitle} numberOfLines={2}>
-                        {item.subtitle}
-                      </Text>
-                    </View>
-                    <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <Ionicons name="star" size={22} color="#E8A020" />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                )}
-                ListEmptyComponent={<Text style={styles.emptyText}>No favorite places yet.</Text>}
-              />
             )}
           </>
         )}
@@ -547,7 +650,6 @@ export default function SearchScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   safe: {
     flex: 1,
@@ -566,63 +668,24 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: COLORS.navy,
   },
-  fieldsContainerOuter: {
+  fieldsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenX,
     marginBottom: 4,
+  },
+  swapBtnWrapper: {
+    marginLeft: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   swapBtn: {
+    backgroundColor: '#F0F0F0',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
-    paddingLeft: 12,
-  },
-  swapBtnOuter: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F3F4F6',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    marginHorizontal: SPACING.screenX,
-    marginTop: 12,
-    marginBottom: 8,
-    backgroundColor: '#F5F6F8',
-    borderRadius: 12,
-    padding: 4,
-  },
-  tabBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 6,
-  },
-  tabBtnActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  tabText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-  },
-  tabTextActive: {
-    color: COLORS.primary,
-  },
-  fieldsContainer: {
-    flex: 1,
-    paddingHorizontal: SPACING.screenX,
-    marginBottom: 4,
   },
   fieldRow: {
     flexDirection: 'row',
@@ -696,6 +759,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: SPACING.screenX,
+    paddingBottom: 350,
   },
   currentLocationBtn: {
     flexDirection: 'row',
