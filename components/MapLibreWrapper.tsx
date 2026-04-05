@@ -1,9 +1,16 @@
 import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Map, Camera, GeoJSONSource, Layer, Marker, Callout } from '@maplibre/maplibre-react-native';
 import { MAP_CONFIG } from '../constants/map';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/theme';
 import { mapDiagnostics } from '../services/mapDiagnosticsService';
+import { MapLibreComponents, mapLibreRuntimeLoadError } from '../services/mapLibreRuntime';
+
+const MapComponent = MapLibreComponents.Map;
+const CameraComponent = MapLibreComponents.Camera;
+const GeoJSONSourceComponent = MapLibreComponents.GeoJSONSource;
+const LayerComponent = MapLibreComponents.Layer;
+const MarkerComponent = MapLibreComponents.Marker;
+const CalloutComponent = MapLibreComponents.Callout;
 
 type LngLat = [number, number];
 
@@ -256,6 +263,23 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
 
     const lineSource = useMemo(() => toFeatureCollection(lines), [lines]);
 
+    useEffect(() => {
+      if (!MapComponent && mapLibreRuntimeLoadError) {
+        mapDiagnostics.logInitError(
+          mapLibreRuntimeLoadError instanceof Error
+            ? mapLibreRuntimeLoadError
+            : new Error(String(mapLibreRuntimeLoadError)),
+          'MapLibre native module unavailable',
+        );
+      }
+    }, []);
+
+    useEffect(() => {
+      if (!MapComponent && onMapReady) {
+        onMapReady();
+      }
+    }, [onMapReady]);
+
     const handleMapReady = async () => {
       try {
         const duration = Date.now() - mapInitStartRef.current;
@@ -280,8 +304,19 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
       }
     };
 
+    if (!MapComponent || !CameraComponent || !GeoJSONSourceComponent || !LayerComponent || !MarkerComponent || !CalloutComponent) {
+      return (
+        <View style={styles.mapUnavailableWrap}>
+          <Text style={styles.mapUnavailableTitle}>Map unavailable in this build</Text>
+          <Text style={styles.mapUnavailableText}>
+            Install and run a native dev build to enable MapLibre features.
+          </Text>
+        </View>
+      );
+    }
+
     return (
-      <Map
+      <MapComponent
         style={{ flex: 1 }}
         mapStyle={styleURL}
         compass={true}
@@ -315,7 +350,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
           });
         }}
       >
-        <Camera
+        <CameraComponent
           ref={cameraRef}
           center={initialCenterCoordinate}
           zoom={initialZoomLevel}
@@ -325,8 +360,8 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
         />
 
         {lines.length > 0 ? (
-          <GeoJSONSource id="route-lines" data={lineSource as any}>
-            <Layer
+          <GeoJSONSourceComponent id="route-lines" data={lineSource as any}>
+            <LayerComponent
               id="route-lines-layer"
               type="line"
               style={{
@@ -336,7 +371,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
                 lineJoin: 'round',
               }}
             />
-          </GeoJSONSource>
+          </GeoJSONSourceComponent>
         ) : null}
 
         {markers.map((marker) => {
@@ -344,7 +379,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
           const hasMetadata = !!marker.metadata;
 
           return (
-            <Marker
+            <MarkerComponent
               key={marker.id}
               id={marker.id}
               lngLat={marker.coordinate}
@@ -358,22 +393,22 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
                   {marker.children || <View style={{ width: 10, height: 10 }} />}
                 </TouchableOpacity>
                 {isSelected && hasMetadata ? (
-                  <Callout title={marker.metadata?.label || ''}>
+                  <CalloutComponent title={marker.metadata?.label || ''}>
                     <MapCallout
                       metadata={marker.metadata}
                       onClose={() => setSelectedMarkerId(null)}
                     />
-                  </Callout>
+                  </CalloutComponent>
                 ) : (
                   <View />
                 )}
               </>
-            </Marker>
+            </MarkerComponent>
           );
         })}
 
         {children}
-      </Map>
+      </MapComponent>
     );
   },
 );
@@ -440,5 +475,27 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '300',
     color: '#999999',
+  },
+  mapUnavailableWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.screenX,
+    backgroundColor: '#F3F4F6',
+  },
+  mapUnavailableTitle: {
+    fontFamily: 'Inter',
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '700',
+    color: COLORS.navy,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  mapUnavailableText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

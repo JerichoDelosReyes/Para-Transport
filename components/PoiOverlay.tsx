@@ -1,9 +1,13 @@
 import React, { useMemo } from 'react';
 import { Text, View } from 'react-native';
-import MapLibreGL from '@maplibre/maplibre-react-native';
-import { COLORS } from '../constants/theme';
 import { POI_ICON_MATCH_EXPRESSION, POI_IMAGES, POI_MIN_RENDER_ZOOM } from '../constants/poi';
 import type { POIFeature, POIFeatureCollection } from '../types/poi';
+import { MapLibreComponents } from '../services/mapLibreRuntime';
+
+const ImagesComponent = MapLibreComponents.Images;
+const GeoJSONSourceComponent = MapLibreComponents.GeoJSONSource;
+const LayerComponent = MapLibreComponents.Layer;
+const MarkerComponent = MapLibreComponents.Marker;
 
 type LngLat = [number, number];
 
@@ -115,6 +119,10 @@ export default function PoiOverlay({
   minZoomLevel = POI_MIN_RENDER_ZOOM,
   onSelectPoi,
 }: PoiOverlayProps) {
+  if (!GeoJSONSourceComponent || !LayerComponent) {
+    return null;
+  }
+
   const hasPoiFeatures = !!poiFeatureCollection && poiFeatureCollection.features.length > 0;
 
   const poiById = useMemo(() => {
@@ -181,46 +189,49 @@ export default function PoiOverlay({
 
   return (
     <>
-      <MapLibreGL.Images images={POI_IMAGES as any} />
-      <MapLibreGL.ShapeSource
+      {ImagesComponent ? <ImagesComponent images={POI_IMAGES as any} /> : null}
+      <GeoJSONSourceComponent
         id="poi-source"
-        shape={poiFeatureCollection as any}
+        data={poiFeatureCollection as any}
         onPress={handlePoiPress}
       >
-        <MapLibreGL.SymbolLayer
+        <LayerComponent
           id="poi-symbol-layer"
+          type="symbol"
           minZoomLevel={minZoomLevel}
           maxZoomLevel={22}
           style={iconLayerStyle as any}
         />
-      </MapLibreGL.ShapeSource>
+      </GeoJSONSourceComponent>
 
-      {visiblePoiLabels.map((feature) => (
-        <MapLibreGL.PointAnnotation
-          key={`poi-label-${feature.id}`}
-          id={`poi-label-${feature.id}`}
-          coordinate={feature.geometry.coordinates as [number, number]}
-          onSelected={() => onSelectPoi?.(feature)}
-        >
-          <View collapsable={false} style={{ paddingLeft: 12 }}>
-            <Text
-              style={{
-                fontSize: 11,
-                color: '#FFFF',
-                fontWeight: '600',
-                paddingHorizontal: 6,
-                paddingVertical: 10,
-                borderRadius: 6,
-                overflow: 'hidden',
-                maxWidth: 120,
-              }}
-              numberOfLines={2}
+      {MarkerComponent
+        ? visiblePoiLabels.map((feature) => (
+            <MarkerComponent
+              key={`poi-label-${feature.id}`}
+              id={`poi-label-${feature.id}`}
+              lngLat={feature.geometry.coordinates as [number, number]}
+              onPress={() => onSelectPoi?.(feature)}
             >
-              {feature.properties.title}
-            </Text>
-          </View>
-        </MapLibreGL.PointAnnotation>
-      ))}
+              <View collapsable={false} style={{ paddingLeft: 12 }}>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: '#FFFF',
+                    fontWeight: '600',
+                    paddingHorizontal: 6,
+                    paddingVertical: 10,
+                    borderRadius: 6,
+                    overflow: 'hidden',
+                    maxWidth: 120,
+                  }}
+                  numberOfLines={2}
+                >
+                  {feature.properties.title}
+                </Text>
+              </View>
+            </MarkerComponent>
+          ))
+        : null}
     </>
   );
 }
