@@ -20,9 +20,16 @@ import { COLORS, SPACING } from '../constants/theme';
 import { fuzzyFilter } from '../utils/fuzzySearch';
 import { useRecentSearches, RecentSearch } from '../hooks/useRecentSearches';
 import { useStore } from '../store/useStore';
+import LOCAL_PLACES from '../data/local_places';
 
 const GEOCODING_BASE_URL =
   process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
+const GEOCODING_TIMEOUT_MS = 6500;
+const CAVITE_VIEWBOX = '120.55,14.53,121.05,13.95';
+const GEOCODING_HEADERS: Record<string, string> = {
+  'Accept-Language': 'en',
+  'User-Agent': 'ParaTransport/1.0 (support@para.ph)',
+};
 
 export type PlaceResult = {
   id: string;
@@ -97,45 +104,99 @@ export default function SearchScreen({
   // Active query text
   const activeQuery = activeField === 'origin' ? originText : destinationText;
 
+  const mergeUniquePlaces = useCallback((...groups: PlaceResult[][]): PlaceResult[] => {
+    const merged: PlaceResult[] = [];
+    const seen = new Set<string>();
+
+    for (const group of groups) {
+      for (const place of group) {
+        const key = `${place.title.trim().toLowerCase()}|${place.latitude.toFixed(5)}|${place.longitude.toFixed(5)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(place);
+      }
+    }
+
+    return merged;
+  }, []);
+
+  const fetchGeocodingPlaces = useCallback(
+    async (query: string, limit: number, scopedToCavite: boolean): Promise<PlaceResult[]> => {
+      const q = query.trim();
+      if (q.length < 2) return [];
+
+      const params = new URLSearchParams({
+        q: scopedToCavite ? `${q}, Cavite, Philippines` : `${q}, Philippines`,
+        format: 'jsonv2',
+        limit: String(limit),
+        countrycodes: 'ph',
+        addressdetails: '0',
+      });
+
+      if (scopedToCavite) {
+        params.set('viewbox', CAVITE_VIEWBOX);
+        params.set('bounded', '1');
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), GEOCODING_TIMEOUT_MS);
+
+      try {
+        const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
+          headers: GEOCODING_HEADERS,
+          signal: controller.signal,
+        });
+
+        if (!res.ok) return [];
+
+        const data = await res.json();
+        return (Array.isArray(data) ? data : [])
+          .map((item: any, idx: number) => {
+            const dn = String(item.display_name || '').trim();
+            const parts = dn
+              .split(',')
+              .map((p: string) => p.trim())
+              .filter(Boolean);
+
+            return {
+              id: String(item.place_id || `${idx}`),
+              title: parts[0] || q,
+              subtitle: parts.slice(1).join(', ') || 'Philippines',
+              latitude: parseFloat(item.lat),
+              longitude: parseFloat(item.lon),
+            } as PlaceResult;
+          })
+          .filter((p: PlaceResult) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+    [],
+  );
+
   const resolvePlaceFromText = useCallback(async (query: string): Promise<PlaceResult | null> => {
     const q = query.trim();
     if (q.length < 2) return null;
 
-    const params = new URLSearchParams({
-      q: `${q}, Cavite, Philippines`,
-      format: 'json',
-      limit: '1',
-      countrycodes: 'ph',
-      addressdetails: '0',
-    });
-
     try {
-      const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
-        headers: { 'Accept-Language': 'en' },
-      });
-      if (!res.ok) return null;
+      const caviteFirst = await fetchGeocodingPlaces(q, 1, true);
+      if (caviteFirst.length > 0) return caviteFirst[0];
 
-      const data = await res.json();
-      const item = Array.isArray(data) ? data[0] : null;
-      if (!item) return null;
+      const nationwideFallback = await fetchGeocodingPlaces(q, 1, false);
+      if (nationwideFallback.length > 0) return nationwideFallback[0];
 
-      const dn = String(item.display_name || '').trim();
-      const parts = dn.split(',').map((p: string) => p.trim()).filter(Boolean);
+      const localFallback = fuzzyFilter(
+        LOCAL_PLACES as PlaceResult[],
+        q,
+        (p) => [p.title, p.subtitle],
+        1,
+      ).map((r) => r.item as PlaceResult);
 
-      const parsed: PlaceResult = {
-        id: String(item.place_id || `${Date.now()}`),
-        title: parts[0] || q,
-        subtitle: parts.slice(1).join(', ') || 'Philippines',
-        latitude: parseFloat(item.lat),
-        longitude: parseFloat(item.lon),
-      };
-
-      if (!Number.isFinite(parsed.latitude) || !Number.isFinite(parsed.longitude)) return null;
-      return parsed;
+      return localFallback[0] || null;
     } catch {
       return null;
     }
-  }, []);
+  }, [fetchGeocodingPlaces]);
 
   // Geocoding + fuzzy local search
   useEffect(() => {
@@ -151,48 +212,28 @@ export default function SearchScreen({
       setIsFetching(true);
 
       // Local fuzzy match on recents first
-      const localMatches = fuzzyFilter(recents, q, (r) => [r.title, r.subtitle], 3).map(
+      const recentMatches = fuzzyFilter(recents, q, (r) => [r.title, r.subtitle], 4).map(
         (r) => r.item as PlaceResult,
       );
+      const knownPlaceMatches = fuzzyFilter(
+        LOCAL_PLACES as PlaceResult[],
+        q,
+        (p) => [p.title, p.subtitle],
+        8,
+      ).map((r) => r.item as PlaceResult);
+
+      const localMatches = mergeUniquePlaces(recentMatches, knownPlaceMatches).slice(0, 10);
+      setSuggestions(localMatches);
 
       try {
-        const params = new URLSearchParams({
-          q: `${q}, Cavite, Philippines`,
-          format: 'json',
-          limit: '8',
-          countrycodes: 'ph',
-          addressdetails: '0',
-        });
+        let remote = await fetchGeocodingPlaces(q, 8, true);
+        if (remote.length === 0) {
+          remote = await fetchGeocodingPlaces(q, 8, false);
+        }
 
-        const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
-          headers: { 'Accept-Language': 'en' },
-        });
-
-        if (!res.ok) throw new Error(`${res.status}`);
-        const data = await res.json();
         if (cancelled) return;
 
-        const remote: PlaceResult[] = (Array.isArray(data) ? data : [])
-          .map((item: any, idx: number) => {
-            const dn = String(item.display_name || '').trim();
-            const parts = dn.split(',').map((p: string) => p.trim()).filter(Boolean);
-            return {
-              id: String(item.place_id || `${idx}`),
-              title: parts[0] || q,
-              subtitle: parts.slice(1).join(', ') || 'Philippines',
-              latitude: parseFloat(item.lat),
-              longitude: parseFloat(item.lon),
-            };
-          })
-          .filter((p: PlaceResult) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
-
-        // Merge: locals first (deduplicated), then remote
-        const seenIds = new Set(localMatches.map((l) => l.id));
-        const merged = [
-          ...localMatches,
-          ...remote.filter((r) => !seenIds.has(r.id)),
-        ].slice(0, 10);
-
+        const merged = mergeUniquePlaces(localMatches, remote).slice(0, 10);
         setSuggestions(merged);
       } catch {
         if (!cancelled) {
@@ -208,7 +249,7 @@ export default function SearchScreen({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [activeQuery, activeField, recents]);
+  }, [activeQuery, activeField, recents, fetchGeocodingPlaces, mergeUniquePlaces]);
 
   const startRecording = async (field: 'origin' | 'destination') => {
     if (field === 'origin') setIsRecordingOrigin(false);
