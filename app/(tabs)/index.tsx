@@ -526,7 +526,7 @@ export default function HomeScreen() {
   const [selectedRoute, setSelectedRoute] = useState<MatchedRoute | null>(null);
   const [transitLegs, setTransitLegs] = useState<TransitLeg[]>([]);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
-  const [showTricycleTerminals, setShowTricycleTerminals] = useState(false);
+  const [showTransitLayer, setShowTransitLayer] = useState(false);
   const [tricycleTerminalPoints, setTricycleTerminalPoints] = useState<TricycleTerminalMarker[]>([]);
   const [isTricycleTerminalLoading, setIsTricycleTerminalLoading] = useState(false);
   // Track programmatic camera updates (zoom buttons, locate user) to pass to MapLibreWrapper
@@ -557,7 +557,7 @@ export default function HomeScreen() {
   useEffect(() => {
     let isCancelled = false;
 
-    if (!showTricycleTerminals) return;
+    if (!showTransitLayer) return;
     if (tricycleTerminalPoints.length > 0 || isTricycleTerminalLoading) return;
 
     setIsTricycleTerminalLoading(true);
@@ -594,7 +594,7 @@ export default function HomeScreen() {
     return () => {
       isCancelled = true;
     };
-  }, [showTricycleTerminals, tricycleTerminalPoints.length, isTricycleTerminalLoading]);
+  }, [showTransitLayer, tricycleTerminalPoints.length, isTricycleTerminalLoading]);
 
   const selectedRouteTypeLabel = useMemo(
     () => routeTypeLabel(selectedRouteType),
@@ -685,7 +685,6 @@ export default function HomeScreen() {
   const transitStops = useMemo(() => {
     return transitRoutes.flatMap((route: any) => route.stops || []);
   }, [transitRoutes]);
-  const [showTransitLayer, setShowTransitLayer] = useState(false);
   const user = useStore((state) => state.user);
   const notificationsEnabled = useStore((state) => state.notificationsEnabled);
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
@@ -1743,7 +1742,7 @@ export default function HomeScreen() {
       });
     }
 
-    if (showTricycleTerminals) {
+    if (showTransitLayer) {
       tricycleTerminalPoints.forEach((terminal) => {
         markers.push({
           id: `tricycle-terminal-${terminal.id}`,
@@ -1825,7 +1824,7 @@ export default function HomeScreen() {
     }
 
     return markers;
-  }, [activeUserPosition, destinationLocation, showTricycleTerminals, tricycleTerminalPoints, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
+  }, [activeUserPosition, destinationLocation, showTransitLayer, tricycleTerminalPoints, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
 
   // Log marker/line updates for diagnostics
   useEffect(() => {
@@ -2334,19 +2333,10 @@ export default function HomeScreen() {
               <Text style={[styles.transitToggleText, showTransitLayer && { color: '#FFFFFF' }]}>
                 Transit
               </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.transitToggle, showTricycleTerminals && styles.transitToggleActive]}
-              onPress={() => setShowTricycleTerminals((prev) => !prev)}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="bicycle" size={16} color={showTricycleTerminals ? '#FFFFFF' : COLORS.navy} />
-              <Text style={[styles.transitToggleText, showTricycleTerminals && { color: '#FFFFFF' }]}>Trike</Text>
-              {isTricycleTerminalLoading ? (
+              {showTransitLayer && isTricycleTerminalLoading ? (
                 <ActivityIndicator
                   size="small"
-                  color={showTricycleTerminals ? '#FFFFFF' : COLORS.navy}
+                  color="#FFFFFF"
                   style={{ marginLeft: 2 }}
                 />
               ) : null}
