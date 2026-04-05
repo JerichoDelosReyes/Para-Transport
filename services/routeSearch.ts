@@ -11,6 +11,17 @@ export type RouteLeg = {
   estimatedMinutes: number;
 };
 
+export type TricycleLastMileExtension = {
+  terminalId: string;
+  terminalName: string;
+  terminalLatitude: number;
+  terminalLongitude: number;
+  walkToTerminalKm: number;
+  rideDistanceKm: number;
+  estimatedFare: number;
+  estimatedMinutes: number;
+};
+
 export type MatchedRoute = {
   /** Array of 1+ legs (single ride or transfer) */
   legs: RouteLeg[];
@@ -26,6 +37,8 @@ export type MatchedRoute = {
   route: JeepneyRoute;
   boardingPoint: { latitude: number; longitude: number };
   alightingPoint: { latitude: number; longitude: number };
+  /** Optional last-mile tricycle extension (advisory synthetic leg). */
+  tricycleExtension?: TricycleLastMileExtension;
 };
 
 export type RankMode = 'easiest' | 'fastest' | 'cheapest';

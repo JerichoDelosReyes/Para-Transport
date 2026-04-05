@@ -28,6 +28,7 @@ import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
 import { findRoutesForDestination, MatchedRoute, warmRouteSearchDataset } from '../../services/routeSearch';
+import { attachTricycleLastMileExtensions, loadTricycleTerminals, warmTricycleTerminalCache } from '../../services/tricycleTerminalService';
 import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
 import { loadRoutes } from '../../services/routeService';
@@ -62,6 +63,14 @@ type MapBounds = {
   maxLat: number;
   minLng: number;
   maxLng: number;
+};
+
+type TricycleTerminalMarker = {
+  id: string;
+  name: string;
+  city: string | null;
+  latitude: number;
+  longitude: number;
 };
 
 const INITIAL_REGION: MapRegion = {
@@ -517,6 +526,9 @@ export default function HomeScreen() {
   const [selectedRoute, setSelectedRoute] = useState<MatchedRoute | null>(null);
   const [transitLegs, setTransitLegs] = useState<TransitLeg[]>([]);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
+  const [showTricycleTerminals, setShowTricycleTerminals] = useState(false);
+  const [tricycleTerminalPoints, setTricycleTerminalPoints] = useState<TricycleTerminalMarker[]>([]);
+  const [isTricycleTerminalLoading, setIsTricycleTerminalLoading] = useState(false);
   // Track programmatic camera updates (zoom buttons, locate user) to pass to MapLibreWrapper
   const [programmaticCamera, setProgrammaticCamera] = useState<{
     center?: [number, number];
@@ -534,12 +546,55 @@ export default function HomeScreen() {
 
     const task = InteractionManager.runAfterInteractions(() => {
       warmRouteSearchDataset(routesBySelectedType);
+      void warmTricycleTerminalCache();
     });
 
     return () => {
       task.cancel?.();
     };
   }, [routesBySelectedType]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (!showTricycleTerminals) return;
+    if (tricycleTerminalPoints.length > 0 || isTricycleTerminalLoading) return;
+
+    setIsTricycleTerminalLoading(true);
+
+    loadTricycleTerminals()
+      .then((terminals) => {
+        if (isCancelled) return;
+
+        const normalized = (terminals || [])
+          .map((terminal) => {
+            const latitude = Number(terminal.latitude);
+            const longitude = Number(terminal.longitude);
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+            return {
+              id: String(terminal.id),
+              name: String(terminal.name || 'Tricycle Terminal'),
+              city: terminal.city ? String(terminal.city) : null,
+              latitude,
+              longitude,
+            };
+          })
+          .filter((terminal): terminal is TricycleTerminalMarker => !!terminal);
+
+        setTricycleTerminalPoints(normalized);
+      })
+      .catch(() => {
+        if (!isCancelled) setTricycleTerminalPoints([]);
+      })
+      .finally(() => {
+        if (!isCancelled) setIsTricycleTerminalLoading(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [showTricycleTerminals, tricycleTerminalPoints.length, isTricycleTerminalLoading]);
 
   const selectedRouteTypeLabel = useMemo(
     () => routeTypeLabel(selectedRouteType),
@@ -1062,6 +1117,10 @@ export default function HomeScreen() {
           `No ${selectedRouteTypeLabel.toLowerCase()} routes are loaded yet. Try switching to the other route type.`,
         );
         return;
+      }
+
+      if (results.length > 0) {
+        results = await attachTricycleLastMileExtensions(results, destinationPoint);
       }
 
       setMatchedRoutes(results);
@@ -1684,6 +1743,28 @@ export default function HomeScreen() {
       });
     }
 
+    if (showTricycleTerminals) {
+      tricycleTerminalPoints.forEach((terminal) => {
+        markers.push({
+          id: `tricycle-terminal-${terminal.id}`,
+          coordinate: [terminal.longitude, terminal.latitude],
+          children: (
+            <View style={styles.terminalMarker}>
+              <Image
+                source={require('../../assets/icons/tricycle-icon.png')}
+                style={styles.terminalIconImage}
+              />
+            </View>
+          ),
+          metadata: {
+            label: terminal.name,
+            type: 'Tricycle terminal',
+            subtitle: terminal.city || undefined,
+          },
+        });
+      });
+    }
+
     visibleTransitMarkers.forEach(({ leg, idx, showBoard, showDrop }) => {
       if (showBoard) {
         markers.push({
@@ -1744,7 +1825,7 @@ export default function HomeScreen() {
     }
 
     return markers;
-  }, [activeUserPosition, destinationLocation, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
+  }, [activeUserPosition, destinationLocation, showTricycleTerminals, tricycleTerminalPoints, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
 
   // Log marker/line updates for diagnostics
   useEffect(() => {
@@ -2253,6 +2334,22 @@ export default function HomeScreen() {
               <Text style={[styles.transitToggleText, showTransitLayer && { color: '#FFFFFF' }]}>
                 Transit
               </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.transitToggle, showTricycleTerminals && styles.transitToggleActive]}
+              onPress={() => setShowTricycleTerminals((prev) => !prev)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="bicycle" size={16} color={showTricycleTerminals ? '#FFFFFF' : COLORS.navy} />
+              <Text style={[styles.transitToggleText, showTricycleTerminals && { color: '#FFFFFF' }]}>Trike</Text>
+              {isTricycleTerminalLoading ? (
+                <ActivityIndicator
+                  size="small"
+                  color={showTricycleTerminals ? '#FFFFFF' : COLORS.navy}
+                  style={{ marginLeft: 2 }}
+                />
+              ) : null}
             </TouchableOpacity>
 
             {/* Simulation Play Button (top row, only when idle) */}
@@ -3046,7 +3143,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#1E2A3A',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2.5,
@@ -3056,6 +3153,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 5,
+  },
+  terminalIconImage: {
+    width: 19,
+    height: 19,
+    resizeMode: 'contain',
   },
   stopMarker: {
     width: 18,

@@ -23,12 +23,15 @@ const TAG_COLORS: Record<string, { backgroundColor: string; textColor: string }>
 export default function RouteResultCard({ matched, isSelected, onPress, rankLabel, metricTags = [], onPressStartJourney }: Props) {
   const { theme, isDark } = useTheme();
   const { legs, distanceKm, estimatedMinutes } = matched;
+  const tricycleExtension = matched.tricycleExtension;
   const isTransfer = legs.length > 1;
   const id = legs.map(l => l.route.properties.code).join('+');
   const formatPeso = (value: number): string => String(Math.max(0, Math.round(value)));
   const legFareParts = legs.map((leg) => formatPeso(leg.estimatedFare));
   const totalTransitFare = legs.reduce((sum, leg) => sum + Math.max(0, Math.round(leg.estimatedFare)), 0);
   const fareFormulaText = legFareParts.map((fare) => `₱${fare}`).join(' + ');
+  const extensionFare = tricycleExtension ? Math.max(0, Math.round(tricycleExtension.estimatedFare)) : 0;
+  const totalWithExtensionFare = totalTransitFare + extensionFare;
 
   return (
     <TouchableOpacity
@@ -84,12 +87,47 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
         )}
       </View>
 
+      {tricycleExtension ? (
+        <View
+          style={[
+            styles.extensionWrap,
+            {
+              backgroundColor: isDark ? 'rgba(94, 197, 126, 0.14)' : 'rgba(94, 197, 126, 0.12)',
+              borderColor: isDark ? 'rgba(94, 197, 126, 0.36)' : 'rgba(94, 197, 126, 0.45)',
+            },
+          ]}
+        >
+          <View style={styles.extensionHeader}>
+            <Ionicons name="bicycle-outline" size={13} color="#2E7D32" />
+            <Text style={styles.extensionTitle}>Last-mile Tricycle</Text>
+          </View>
+
+          <Text style={styles.extensionTerminalText} numberOfLines={1}>
+            {tricycleExtension.terminalName}
+          </Text>
+
+          <Text style={styles.extensionMetaText}>
+            Walk {tricycleExtension.walkToTerminalKm.toFixed(1)} km + Ride {tricycleExtension.rideDistanceKm.toFixed(1)} km
+          </Text>
+          <Text style={styles.extensionMetaText}>
+            ~{tricycleExtension.estimatedMinutes} min • ₱{formatPeso(extensionFare)}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.fareCalcRow}>
         <Text style={[styles.fareCalcLabel, { color: theme.textSecondary }]}>Transit fare</Text>
         <Text style={[styles.fareCalcValue, { color: theme.text }]}> 
           {isTransfer ? `${fareFormulaText} = ₱${formatPeso(totalTransitFare)}` : `₱${formatPeso(totalTransitFare)}`}
         </Text>
       </View>
+
+      {tricycleExtension ? (
+        <View style={styles.fareCalcRow}>
+          <Text style={[styles.fareCalcLabel, { color: theme.textSecondary }]}>Tricycle extension</Text>
+          <Text style={[styles.fareCalcValue, { color: theme.text }]}>₱{formatPeso(extensionFare)}</Text>
+        </View>
+      ) : null}
 
       {/* Bottom row */}
       <View style={styles.bottomRow}>
@@ -98,8 +136,12 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
           <Text style={[styles.distanceText, { color: theme.textSecondary }]}>{distanceKm.toFixed(1)} km</Text>
         </View>
         <View style={styles.fareWrap}>
-          {isTransfer && <Text style={[styles.fareLabelText, { color: theme.textSecondary }]}>Total</Text>}
-          <Text style={[styles.fareText, { color: theme.text }]}>₱{formatPeso(totalTransitFare)}</Text>
+          {(isTransfer || tricycleExtension) && (
+            <Text style={[styles.fareLabelText, { color: theme.textSecondary }]}>
+              {tricycleExtension ? 'Total + Last-mile' : 'Total'}
+            </Text>
+          )}
+          <Text style={[styles.fareText, { color: theme.text }]}>₱{formatPeso(totalWithExtensionFare)}</Text>
         </View>
       </View>
 
@@ -154,6 +196,40 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 4,
     marginBottom: 10,
+  },
+  extensionWrap: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  extensionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 4,
+  },
+  extensionTitle: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2E7D32',
+    textTransform: 'uppercase',
+    letterSpacing: 0.2,
+  },
+  extensionTerminalText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1D5C22',
+    marginBottom: 2,
+  },
+  extensionMetaText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#2E7D32',
   },
   codeBadge: {
     backgroundColor: '#2196F3',
