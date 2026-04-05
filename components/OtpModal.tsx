@@ -1,5 +1,6 @@
 import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import { useTheme } from '../src/theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 
 type Props = {
@@ -14,12 +15,15 @@ type Props = {
 };
 
 export default function OtpModal({ visible, email, otp, isLoading, errorMsg, onOtpChange, onVerify, onClose }: Props) {
+  const { theme, isDark } = useTheme();
+  const styles = createStyles(theme, isDark);
+  
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-            <Ionicons name="close" size={24} color={COLORS.navy} />
+            <Ionicons name="close" size={24} color={theme.text} />
           </TouchableOpacity>
           
           <Text style={styles.title}>VERIFY OTP</Text>
@@ -31,7 +35,7 @@ export default function OtpModal({ visible, email, otp, isLoading, errorMsg, onO
             onChangeText={(text) => onOtpChange(text.replace(/[^0-9]/g, ''))}
             style={styles.input} 
             placeholder="123456" 
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={theme.textSecondary}
             keyboardType="number-pad" 
             maxLength={6}
           />
@@ -43,7 +47,7 @@ export default function OtpModal({ visible, email, otp, isLoading, errorMsg, onO
             onPress={onVerify} 
             disabled={isLoading}
           >
-            {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Verify & Continue</Text>}
+            {isLoading ? <ActivityIndicator color="#0A1628" /> : <Text style={styles.primaryButtonText}>Verify & Continue</Text>}
           </TouchableOpacity>
         </View>
       </View>
@@ -51,7 +55,7 @@ export default function OtpModal({ visible, email, otp, isLoading, errorMsg, onO
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -59,7 +63,7 @@ const styles = StyleSheet.create({
     padding: SPACING.screenX,
   },
   sheet: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.surface,
     borderRadius: RADIUS.card,
     padding: 24,
     shadowColor: '#000',
@@ -75,14 +79,14 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: 'Cubao',
     fontSize: 28,
-    color: COLORS.navy,
+    color: theme.text,
     textAlign: 'center',
     marginTop: -8,
   },
   subtitle: {
     fontFamily: 'Inter',
     fontSize: 14,
-    color: COLORS.textMuted,
+    color: theme.textSecondary,
     textAlign: 'center',
     marginTop: 4,
     marginBottom: 24,
@@ -90,19 +94,19 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: 'Inter',
     fontSize: 14,
-    color: COLORS.textLabel,
+    color: theme.textSecondary,
     marginBottom: 8,
   },
   input: {
     height: 52,
     borderRadius: RADIUS.input,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
-    backgroundColor: COLORS.background,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#EFEFEF',
+    backgroundColor: theme.inputBackground || theme.background,
     paddingHorizontal: 14,
     fontFamily: 'Inter',
     fontSize: 18,
-    color: COLORS.textStrong,
+    color: theme.text,
     textAlign: 'center',
     letterSpacing: 8,
   },
@@ -117,12 +121,12 @@ const styles = StyleSheet.create({
     marginTop: 24,
     height: 52,
     borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonText: {
-    fontFamily: 'Inter',
+fontFamily: 'Inter',
     fontSize: 16,
     fontWeight: '700',
     color: COLORS.navy,

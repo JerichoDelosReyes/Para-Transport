@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
 import { useStore } from '../store/useStore';
 import { supabase } from '../config/supabaseClient';
+import { useTheme } from '../src/theme/ThemeContext';
 
 import { BADGE_IMAGES } from '../constants/badgeImages';
 
@@ -13,6 +14,7 @@ export default function AchievementsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useStore((state) => state.user);
+  const { theme, isDark } = useTheme();
   const unlockBadge = useStore((state) => state.unlockBadge);
   const badgesData = useStore((state) => state.badgesData);
 
@@ -70,15 +72,15 @@ export default function AchievementsScreen() {
   }, [user.total_trips, user.total_distance, user.spent, user.streak_count, user.badges, badgesData]);
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.topSection, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <View style={[styles.topSection, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-            <View style={styles.iconButtonCircle}>
-              <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
+            <View style={[styles.iconButtonCircle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+              <Ionicons name="chevron-back" size={24} color="#0A1628" />
             </View>
           </TouchableOpacity>
-          <Text style={styles.headerTitleText}>ACHIEVEMENTS</Text>
+          <Text style={[styles.headerTitleText, { color: '#0A1628' }]}>ACHIEVEMENTS</Text>
           <View style={{ width: 44, height: 44 }} />
         </View>
       </View>
@@ -92,14 +94,14 @@ export default function AchievementsScreen() {
             <>
               <View style={styles.sectionHeader}>
                 <Ionicons name="trophy" size={24} color="#E8A020" />
-                <Text style={styles.sectionTitle}>LEADERBOARD</Text>
+                <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>LEADERBOARD</Text>
               </View>
               
-              <View style={styles.leaderboardContainer}>
+              <View style={[styles.leaderboardContainer, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
                 {loadingLeaderboard ? (
                   <ActivityIndicator size="small" color={COLORS.primary} style={{ marginTop: 24, marginBottom: 24 }} />
                 ) : leaderboard.length === 0 ? (
-                  <Text style={styles.emptyText}>No users ranked yet.</Text>
+                  <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No users ranked yet.</Text>
                 ) : (
                   <>
                     {leaderboard.map((lbUser, index) => {
@@ -107,19 +109,37 @@ export default function AchievementsScreen() {
                       // Determine the name to show 
                       const displayName = lbUser.username ? `${lbUser.username}` : (lbUser.full_name || 'Anonymous User');
                       
+                      let containerBg = isDark ? theme.surfaceSecondary : '#F3F4F6';
+                      let textColor = isDark ? '#FFFFFF' : '#4B5563';
+                      let ptsColor = theme.text;
+                      
+                      if (index === 0) {
+                        containerBg = isDark ? 'rgba(232,160,32,0.4)' : '#FEF08A';
+                        textColor = isDark ? '#FFFFFF' : '#854D0E';
+                        ptsColor = isDark ? '#E8A020' : '#D97706';
+                      } else if (index === 1) {
+                        containerBg = isDark ? 'rgba(156,163,175,0.4)' : '#E5E7EB';
+                        textColor = isDark ? '#FFFFFF' : '#374151';
+                        ptsColor = isDark ? '#D1D5DB' : '#4B5563';
+                      } else if (index === 2) {
+                        containerBg = isDark ? 'rgba(180,83,9,0.4)' : '#FFEDD5';
+                        textColor = isDark ? '#FFFFFF' : '#9A3412';
+                        ptsColor = isDark ? '#F59E0B' : '#B45309';
+                      }
+                      
                       return (
-                        <View key={lbUser.id || index} style={[styles.leaderboardCard, isMe && styles.leaderboardCardMe]}>
-                          <View style={[styles.rankContainer, styles.rankContainerTop]}>
-                            <Text style={[styles.rankText, styles.rankTextTop]}>#{index + 1}</Text>
+                        <View key={lbUser.id || index} style={[styles.leaderboardCard, isMe && [styles.leaderboardCardMe, { backgroundColor: isDark ? 'rgba(232, 160, 32, 0.15)' : '#FFFBEB' }]]}>
+                          <View style={[styles.rankContainer, { backgroundColor: containerBg }]}>
+                            <Text style={[styles.rankText, { color: textColor }]}>#{index + 1}</Text>
                           </View>
                           <View style={styles.lbInfo}>
-                            <Text style={[styles.lbName, isMe && styles.lbNameMe]} numberOfLines={1}>
+                            <Text style={[styles.lbName, isMe && styles.lbNameMe, { color: isDark ? '#FFFFFF' : '#1F2937' }]} numberOfLines={1}>
                               {displayName}
                             </Text>
                           </View>
                           <View style={styles.pointsContainer}>
-                            <Text style={[styles.pointsText, styles.pointsTextTop]}>{lbUser.points || 0}</Text>
-                            <Text style={styles.pointsLabel}>PTS</Text>
+                            <Text style={[styles.pointsText, { color: ptsColor }]}>{lbUser.points || 0}</Text>
+                            <Text style={[styles.pointsLabel, { color: theme.textSecondary }]}>PTS</Text>
                           </View>
                         </View>
                       );
@@ -127,28 +147,28 @@ export default function AchievementsScreen() {
                     
                     {user?.points === 0 ? (
                       <>
-                        <View style={styles.leaderboardDivider} />
-                        <View style={[styles.leaderboardCard, styles.leaderboardCardMe, { borderBottomWidth: 0, justifyContent: 'center' }]}>
-                          <Text style={[styles.lbName, { textAlign: 'center', color: '#666', fontStyle: 'italic' }]}>
+                        <View style={[styles.leaderboardDivider, { backgroundColor: theme.cardBorder }]} />
+                        <View style={[styles.leaderboardCard, [styles.leaderboardCardMe, { backgroundColor: isDark ? 'rgba(232, 160, 32, 0.15)' : '#FFFBEB' }], { borderBottomWidth: 0, justifyContent: 'center' }]}>
+                          <Text style={[styles.lbName, { textAlign: 'center', color: theme.textSecondary, fontStyle: 'italic' }]}>
                             Take your first ride to get on the leaderboard!
                           </Text>
                         </View>
                       </>
                     ) : currentUserRank && user?.id && !leaderboard.some(lb => lb.id === user.id) ? (
                       <>
-                        <View style={styles.leaderboardDivider} />
-                        <View style={[styles.leaderboardCard, styles.leaderboardCardMe, { borderBottomWidth: 0 }]}>
-                          <View style={styles.rankContainer}>
-                            <Text style={styles.rankText}>#{currentUserRank}</Text>
+                        <View style={[styles.leaderboardDivider, { backgroundColor: theme.cardBorder }]} />
+                        <View style={[styles.leaderboardCard, [styles.leaderboardCardMe, { backgroundColor: isDark ? 'rgba(232, 160, 32, 0.15)' : '#FFFBEB' }], { borderBottomWidth: 0 }]}>
+                          <View style={[styles.rankContainer, { backgroundColor: isDark ? theme.surfaceSecondary : '#F3F4F6' }]}>
+                            <Text style={[styles.rankText, { color: theme.textSecondary }]}>#{currentUserRank}</Text>
                           </View>
                           <View style={styles.lbInfo}>
-                            <Text style={[styles.lbName, styles.lbNameMe]} numberOfLines={1}>
+                            <Text style={[styles.lbName, styles.lbNameMe, { color: isDark ? '#FFFFFF' : '#1F2937' }]} numberOfLines={1}>
                               {user.username ? `${user.username}` : (user.full_name || 'Anonymous User')}
                             </Text>
                           </View>
                           <View style={styles.pointsContainer}>
-                            <Text style={styles.pointsText}>{user.points || 0}</Text>
-                            <Text style={styles.pointsLabel}>PTS</Text>
+                            <Text style={[styles.pointsText, { color: theme.text }]}>{user.points || 0}</Text>
+                            <Text style={[styles.pointsLabel, { color: theme.textSecondary }]}>PTS</Text>
                           </View>
                         </View>
                       </>
@@ -159,9 +179,19 @@ export default function AchievementsScreen() {
             </>
           )}
 
-          <View style={[styles.sectionHeader, user?.email !== 'guest@para.ph' ? { marginTop: 32 } : {}]}>
-            <Ionicons name="medal" size={24} color="#E8A020" />
-            <Text style={styles.sectionTitle}>BADGES</Text>
+          <View style={[
+            { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }, 
+            user?.email !== 'guest@para.ph' ? { marginTop: 32 } : {}
+          ]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="medal" size={24} color="#E8A020" />
+              <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>BADGES</Text>
+            </View>
+            <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
+              <Text style={{ fontFamily: 'Inter', fontSize: 13, color: theme.textSecondary, fontWeight: '500' }}>
+                {user?.badges?.length || 0} Unlocked  •  {Math.max(0, badgesData.length - (user?.badges?.length || 0))} Locked
+              </Text>
+            </View>
           </View>
 
           <View style={styles.grid}>
@@ -172,7 +202,7 @@ export default function AchievementsScreen() {
               const isLocked = !isEarned;
 
               return (
-                <View key={badge.id || idx} style={[styles.card, isLocked && { opacity: 0.7 }]}>
+                <View key={badge.id || idx} style={[styles.card, { backgroundColor: theme.cardBackground }, isLocked && { opacity: 0.7 }]}>
                   <View style={[styles.iconWrapper, isEarned && styles.iconWrapperEarned]}>
                     {badge.icon_url || BADGE_IMAGES[badge.id] ? (
                       <Image 
@@ -186,19 +216,19 @@ export default function AchievementsScreen() {
                       </Text>
                     )}
                     {isLocked && (
-                      <View style={styles.lockOverlay}>
-                        <Ionicons name="lock-closed" size={14} color={COLORS.textMuted} />
+                      <View style={[styles.lockOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)' }]}>
+                        <Ionicons name="lock-closed" size={14} color={theme.textSecondary} />
                       </View>
                     )}
                   </View>
                   <View style={styles.textWrapper}>
-                    <Text style={[styles.badgeName]}>{badge.name}</Text>
-                    <Text style={[styles.badgeDesc]}>
+                    <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.badgeName, { color: theme.text }]}>{badge.name}</Text>
+                    <Text style={[styles.badgeDesc, { color: theme.textSecondary }]}>
                       {badge.description}
                     </Text>
                   </View>
                   
-                  <View style={[styles.progressContainer]}>
+                  <View style={[styles.progressContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(10,22,40,0.1)' }]}>
                     <View style={[styles.progressBar, { width: fillWidth as any }]} />
                   </View>
                 </View>
@@ -214,7 +244,6 @@ export default function AchievementsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   topSection: {
     backgroundColor: COLORS.primary,
@@ -231,7 +260,7 @@ const styles = StyleSheet.create({
   headerTitleText: {
     fontFamily: 'Cubao',
     fontSize: TYPOGRAPHY.screenTitle,
-    color: '#000000',
+    color: '#0A1628',
   },
   iconButton: {
     width: 44,

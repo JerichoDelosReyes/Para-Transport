@@ -1,6 +1,6 @@
 import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import MapLibreGL from '@maplibre/maplibre-react-native';
+import { Map, Camera, GeoJSONSource, Layer, Marker, Callout } from '@maplibre/maplibre-react-native';
 import { MAP_CONFIG } from '../constants/map';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/theme';
 import { mapDiagnostics } from '../services/mapDiagnosticsService';
@@ -195,12 +195,17 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
       if (externalCameraCenter || externalCameraZoom !== undefined || externalCameraPitch !== undefined || externalCameraHeading !== undefined) {
         isExternalUpdateRef.current = true;
         
-        cameraRef.current.setCamera({
-          centerCoordinate: externalCameraCenter,
-          zoomLevel: externalCameraZoom,
-          pitch: externalCameraPitch,
-          heading: externalCameraHeading,
-        });
+        const opts: any = {};
+        if (externalCameraCenter) opts.center = externalCameraCenter;
+        if (externalCameraZoom !== undefined) opts.zoom = externalCameraZoom;
+        if (externalCameraPitch !== undefined) opts.pitch = externalCameraPitch;
+        if (externalCameraHeading !== undefined) opts.bearing = externalCameraHeading;
+
+        if (opts.center) {
+          cameraRef.current.easeTo(opts);
+        } else if (opts.zoom !== undefined) {
+          cameraRef.current.zoomTo(opts.zoom, opts);
+        }
         
         // Disable flag after camera update so next user interaction is captured
         setTimeout(() => {
@@ -211,20 +216,41 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
 
     useImperativeHandle(ref, () => ({
       flyTo: (coordinate, duration = 600) => {
-        cameraRef.current?.flyTo(coordinate, duration);
+        cameraRef.current?.flyTo({ center: coordinate, duration });
       },
       fitBounds: (northEast, southWest, padding = 48, duration = 600) => {
-        cameraRef.current?.fitBounds(northEast, southWest, padding, duration);
+        let viewPadding;
+        if (typeof padding === 'number') {
+          viewPadding = { top: padding, right: padding, bottom: padding, left: padding };
+        } else if (Array.isArray(padding) && padding.length >= 2) {
+          viewPadding = { 
+            top: padding[0], bottom: padding[0], 
+            left: padding[1] || padding[0], right: padding[1] || padding[0] 
+          };
+        }
+        
+        cameraRef.current?.fitBounds(
+          [southWest[0], southWest[1], northEast[0], northEast[1]],
+          { padding: viewPadding, duration }
+        );
       },
       setCamera: (options) => {
-        cameraRef.current?.setCamera({
-          centerCoordinate: options.centerCoordinate,
-          zoomLevel: options.zoomLevel,
-          pitch: options.pitch,
-          heading: options.heading,
-          animationDuration: options.animationDuration,
-          animationMode: options.animationMode,
-        });
+        const opts: any = {};
+        if (options.centerCoordinate) opts.center = options.centerCoordinate;
+        if (options.zoomLevel !== undefined) opts.zoom = options.zoomLevel;
+        if (options.pitch !== undefined) opts.pitch = options.pitch;
+        if (options.heading !== undefined) opts.bearing = options.heading;
+        if (options.animationDuration !== undefined) opts.duration = options.animationDuration;
+
+        if (options.animationMode === 'flyTo' && opts.center) {
+          cameraRef.current?.flyTo(opts);
+        } else if (options.animationMode !== 'flyTo' && options.animationMode !== 'linearTo' && opts.center) {
+          cameraRef.current?.easeTo(opts);
+        } else if (opts.center) {
+          cameraRef.current?.jumpTo(opts);
+        } else if (opts.zoom !== undefined) {
+          cameraRef.current?.zoomTo(opts.zoom, opts);
+        }
       },
     }));
 
@@ -255,18 +281,21 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
     };
 
     return (
-      <MapLibreGL.MapView
+      <Map
         style={{ flex: 1 }}
         mapStyle={styleURL}
-        compassEnabled={false}
-        rotateEnabled={rotateEnabled}
-        pitchEnabled={pitchEnabled}
-        zoomEnabled
-        scrollEnabled
+        compass={true}
+        compassPosition={{ bottom: 318, right: 16 }}
+        compassHiddenFacingNorth={true}
+        touchRotate={rotateEnabled}
+        touchPitch={pitchEnabled}
+        touchZoom={true}
+        dragPan={true}
         onDidFinishLoadingMap={handleMapReady}
         onPress={onMapTouchStart}
         onLongPress={(event: any) => {
-          const coords = event?.geometry?.coordinates;
+          // MapLibre v11 gives coordinates in `event.nativeEvent.lngLat`
+          const coords = event?.nativeEvent?.lngLat || event?.geometry?.coordinates || event?.lngLat;
           if (!Array.isArray(coords) || coords.length < 2 || !onMapLongPress) return;
           onMapLongPress([coords[0], coords[1]]);
         }}
@@ -274,32 +303,32 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
           // Skip firing callback if this was an external programmatic update
           if (isExternalUpdateRef.current) return;
           
-          const properties = event?.properties;
-          const center = event?.geometry?.coordinates;
-          if (!properties || !onCameraChanged) return;
+          const viewState = event?.nativeEvent || event;
+          const center = viewState?.center;
+          if (!viewState || !onCameraChanged) return;
 
           onCameraChanged({
             centerCoordinate: Array.isArray(center) ? [center[0], center[1]] : undefined,
-            zoom: properties.zoomLevel,
-            pitch: properties.pitch,
-            heading: properties.heading,
+            zoom: viewState.zoom,
+            pitch: viewState.pitch,
+            heading: viewState.bearing !== undefined ? viewState.bearing : viewState.heading,
           });
         }}
       >
-        <MapLibreGL.Camera
+        <Camera
           ref={cameraRef}
-          centerCoordinate={externalCameraCenter ?? initialCenterCoordinate}
-          zoomLevel={externalCameraZoom ?? initialZoomLevel}
-          minZoomLevel={minZoomLevel}
-          maxZoomLevel={maxZoomLevel}
-          pitch={externalCameraPitch ?? MAP_CONFIG.THREE_D_CAMERA.defaultPitch}
-          heading={externalCameraHeading ?? 0}
+          center={initialCenterCoordinate}
+          zoom={initialZoomLevel}
+          minZoom={minZoomLevel}
+          maxZoom={maxZoomLevel}
+          pitch={MAP_CONFIG.THREE_D_CAMERA.defaultPitch}
         />
 
         {lines.length > 0 ? (
-          <MapLibreGL.ShapeSource id="route-lines" shape={lineSource as any}>
-            <MapLibreGL.LineLayer
+          <GeoJSONSource id="route-lines" data={lineSource as any}>
+            <Layer
               id="route-lines-layer"
+              type="line"
               style={{
                 lineColor: ['coalesce', ['get', 'color'], '#E8A020'],
                 lineWidth: ['coalesce', ['get', 'width'], 4],
@@ -307,7 +336,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
                 lineJoin: 'round',
               }}
             />
-          </MapLibreGL.ShapeSource>
+          </GeoJSONSource>
         ) : null}
 
         {markers.map((marker) => {
@@ -315,11 +344,11 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
           const hasMetadata = !!marker.metadata;
 
           return (
-            <MapLibreGL.PointAnnotation
+            <Marker
               key={marker.id}
               id={marker.id}
-              coordinate={marker.coordinate}
-              onSelected={() => setSelectedMarkerId(marker.id)}
+              lngLat={marker.coordinate}
+              onPress={() => setSelectedMarkerId(marker.id)}
             >
               <>
                 <TouchableOpacity
@@ -329,22 +358,22 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
                   {marker.children || <View style={{ width: 10, height: 10 }} />}
                 </TouchableOpacity>
                 {isSelected && hasMetadata ? (
-                  <MapLibreGL.Callout title={marker.metadata?.label || ''}>
+                  <Callout title={marker.metadata?.label || ''}>
                     <MapCallout
                       metadata={marker.metadata}
                       onClose={() => setSelectedMarkerId(null)}
                     />
-                  </MapLibreGL.Callout>
+                  </Callout>
                 ) : (
                   <View />
                 )}
               </>
-            </MapLibreGL.PointAnnotation>
+            </Marker>
           );
         })}
 
         {children}
-      </MapLibreGL.MapView>
+      </Map>
     );
   },
 );

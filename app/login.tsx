@@ -28,6 +28,7 @@ import {
   sendPasswordResetEmail,
   logUserAction
 } from '../services/authService';
+import { useTheme } from '../src/theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import OtpModal from '../components/OtpModal';
 
@@ -50,6 +51,8 @@ const HEADER_DOODLES: HeaderDoodle[] = [
 ];
 
 export default function LoginScreen() {
+  const { theme, isDark } = useTheme();
+  const styles = createStyles(theme, isDark);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const beginAuthSession = useStore((state) => state.beginAuthSession);
@@ -227,14 +230,14 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.screen}>
-      <StatusBar style="dark" translucent backgroundColor="transparent" />
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <StatusBar style="dark" translucent backgroundColor="#E8A020" />
 
       <KeyboardAvoidingView
-        style={styles.screen}
+        style={[styles.screen, { backgroundColor: theme.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.headerZone}>
+        <View style={[styles.headerZone, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}>
           {HEADER_DOODLES.map((doodle) => (
             <View
               key={doodle.id}
@@ -252,47 +255,47 @@ export default function LoginScreen() {
           ))}
 
           <View style={[styles.headerSafeContent, { paddingTop: insets.top }]}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
-              <Ionicons name="chevron-back" size={20} color={COLORS.navy} />
+            <TouchableOpacity style={[styles.backButton, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]} onPress={() => router.back()} activeOpacity={0.8}>
+              <Ionicons name="chevron-back" size={20} color="#0A1628" />
             </TouchableOpacity>
 
             <View style={styles.headerCenter}>
               <MinimalistJeep width={104} height={64} />
-              <Text style={styles.title}>LOG IN</Text>
-              <Text style={styles.headerCopy}>Tuloy na, tara na sa byahe.</Text>
+              <Text style={[styles.title, { color: '#0A1628' }]}>LOG IN</Text>
+              <Text style={[styles.headerCopy, { color: '#0A1628' }]}>Tuloy na, tara na sa byahe.</Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.formArea}>
+        <View style={[styles.formArea, { backgroundColor: theme.background }]}>
           <ScrollView
             contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.label}>Email</Text>
+            <Text style={[styles.label, { color: theme.textSecondary }]}>Email</Text>
             <TextInput
               value={email}
               onChangeText={setEmail}
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.inputBackground, color: theme.text }]}
               placeholder="someone@gmail.com"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={theme.textSecondary}
               autoCapitalize="none"
               keyboardType="email-address"
             />
 
-            <Text style={[styles.label, styles.labelTop]}>Password</Text>
-            <View style={styles.passwordWrap}>
+            <Text style={[styles.label, styles.labelTop, { color: theme.textSecondary }]}>Password</Text>
+            <View style={[styles.passwordWrap, { backgroundColor: theme.inputBackground }]}>
               <TextInput
                 value={password}
                 onChangeText={setPassword}
-                style={styles.passwordInput}
+                style={[styles.passwordInput, { color: theme.text }]}
                 placeholder="**********"
-                placeholderTextColor={COLORS.textMuted}
+                placeholderTextColor={theme.textSecondary}
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)}>
-                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={COLORS.navy} />
+                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -314,17 +317,17 @@ export default function LoginScreen() {
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#0A1628" />
               ) : (
                 <Text style={styles.primaryButtonText}>LOG IN</Text>
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.linkWrap} onPress={() => router.navigate('/register')} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.linkWrap} onPress={() => router.replace('/register')} activeOpacity={0.8}>
               <Text style={styles.linkText}>Create account</Text>
             </TouchableOpacity>
 
-            <Text style={styles.footerText}>Privacy Policy. Terms of Service</Text>
+            <Text style={[styles.footerText, { color: theme.textSecondary }]}>Privacy Policy. Terms of Service</Text>
           </ScrollView>
         </View>
 
@@ -348,16 +351,16 @@ export default function LoginScreen() {
           onRequestClose={() => setIsForgotModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Forgot Password</Text>
-              <Text style={styles.modalBody}>Enter your email and we will send a reset link.</Text>
+            <View style={[styles.modalCard, { backgroundColor: theme.cardBackground }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Forgot Password</Text>
+              <Text style={[styles.modalBody, { color: theme.textSecondary }]}>Enter your email and we will send a reset link.</Text>
 
               <TextInput
                 value={resetEmailInput}
                 onChangeText={setResetEmailInput}
-                style={styles.modalInput}
+                style={[styles.modalInput, { backgroundColor: theme.inputBackground, color: theme.text }]}
                 placeholder="someone@gmail.com"
-                placeholderTextColor={COLORS.textMuted}
+                placeholderTextColor={theme.textSecondary}
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
@@ -366,12 +369,12 @@ export default function LoginScreen() {
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
-                  style={styles.modalSecondaryButton}
+                  style={[styles.modalSecondaryButton, { backgroundColor: theme.surface }]}
                   onPress={() => setIsForgotModalVisible(false)}
                   activeOpacity={0.8}
                   disabled={isForgotSubmitting}
                 >
-                  <Text style={styles.modalSecondaryText}>Cancel</Text>
+                  <Text style={[styles.modalSecondaryText, { color: theme.text }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalPrimaryButton, isForgotSubmitting && styles.disabledButton]}
@@ -390,13 +393,13 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
   },
   headerZone: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
     minHeight: 290,
     borderBottomLeftRadius: 34,
     borderBottomRightRadius: 34,
@@ -427,19 +430,19 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 6,
     fontFamily: 'Cubao',
-    color: COLORS.navy,
+    color: theme.text,
     fontSize: 34,
   },
   headerCopy: {
     marginTop: 3,
     fontFamily: 'Inter',
     fontSize: 15,
-    color: COLORS.navy,
+    color: theme.text,
     opacity: 0.86,
   },
   formArea: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.background,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenX,
@@ -449,7 +452,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: 'Inter',
     fontSize: 15,
-    color: COLORS.textLabel,
+    color: theme.textSecondary,
     marginBottom: 8,
   },
   labelTop: {
@@ -469,7 +472,7 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     fontFamily: 'Inter',
     fontSize: 13,
-    color: COLORS.navy,
+    color: theme.text,
     textDecorationLine: 'underline',
     opacity: 0.9,
   },
@@ -480,22 +483,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenX,
   },
   modalCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: theme.cardBackground,
     borderRadius: RADIUS.card,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
+    borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)',
   },
   modalTitle: {
     fontFamily: 'Cubao',
     fontSize: 24,
-    color: COLORS.navy,
+    color: theme.text,
   },
   modalBody: {
     marginTop: 6,
     fontFamily: 'Inter',
     fontSize: 14,
-    color: COLORS.textStrong,
+    color: theme.text,
     opacity: 0.8,
   },
   modalInput: {
@@ -503,12 +506,12 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: RADIUS.input,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#EFEFEF',
+    backgroundColor: theme.surface,
     paddingHorizontal: 14,
     fontFamily: 'Inter',
     fontSize: 16,
-    color: COLORS.navy,
+    color: theme.text,
   },
   modalErrorText: {
     marginTop: 8,
@@ -529,12 +532,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.12)',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.12)',
   },
   modalSecondaryText: {
     fontFamily: 'Inter',
     fontSize: 14,
-    color: COLORS.navy,
+    color: theme.text,
     fontWeight: '600',
   },
   modalPrimaryButton: {
@@ -543,31 +546,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
   },
   modalPrimaryText: {
     fontFamily: 'Inter',
     fontSize: 14,
-    color: COLORS.navy,
+    color: theme.text,
     fontWeight: '700',
   },
   input: {
     height: 52,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#EFEFEF',
+    backgroundColor: theme.surface,
     paddingHorizontal: 14,
     fontFamily: 'Inter',
     fontSize: 17,
-    color: COLORS.navy,
+    color: theme.text,
   },
   passwordWrap: {
     height: 52,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFFFFF',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#EFEFEF',
+    backgroundColor: theme.surface,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -576,13 +579,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: 'Inter',
     fontSize: 17,
-    color: COLORS.navy,
+    color: theme.text,
   },
   primaryButton: {
     marginTop: 24,
     height: 56,
     borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.primary,
+    backgroundColor: isDark ? '#E8A020' : COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -599,7 +602,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.navy,
+    color: '#0A1628',
   },
   linkWrap: {
     marginTop: 14,
@@ -609,7 +612,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 15,
     fontWeight: '500',
-    color: COLORS.navy,
+    color: theme.text,
     textDecorationLine: 'underline',
   },
   footerText: {
@@ -617,6 +620,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: 'Inter',
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: theme.textSecondary,
   },
 });

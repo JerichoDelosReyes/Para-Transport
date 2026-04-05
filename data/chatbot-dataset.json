@@ -1012,7 +1012,7 @@
     {
       "id": "bacoor_terminal",
       "name": "Bacoor Terminal",
-      "aliases": ["bacoor terminal", "terminal bacoor"],
+      "aliases": ["bacoor terminal", "terminal bacoor", "sm bacoor", "sm city bacoor", "sm bacoor mall", "sm bacoor terminal"],
       "coordinate": { "latitude": 14.46, "longitude": 120.95 }
     },
     {
@@ -1378,8 +1378,8 @@
       ],
       "tl": [
         "Sige, matutulungan kita sa ruta. Saan ang destination mo?",
-        "Pwede kitang i-guide sa biyahe. Saan ka papunta?",
-        "Kaya kong mag-check ng route options. Pakisabi muna ang destination mo."
+        "Pwede kitang gabayan sa biyahe. Saan ka papunta?",
+        "Kaya kitang gabayan sa ruta. Pakisabi muna ang destination mo."
       ]
     },
     "askOrigin": {
@@ -1692,62 +1692,62 @@
   "fallbackMessages": {
     "outOfScope": {
       "en": [
-        "Sorry, I can only help with the Para app, fares, routes, transit, and commuting questions. If you want, ask me about fare estimates or route tips.",
-        "I can best assist with Para app and transport topics like fares, routes, and transit. Ask me anything in that area and I will gladly help.",
-        "I might not be the best for that topic yet. I focus on commute help: fares, jeepney routes, transit tips, and Para app questions."
+        "Sorry, I can only help with the Para app, fares, routes, transit, and commuting questions. Try asking about fare estimates, route options, or how to use Para features.",
+        "I focus on Para app and transport topics like fares, routes, and transit. For other topics, I might not have the answer yet, but I can help with anything about commuting.",
+        "That topic is outside my current scope. But for anything about fares, jeepney routes, transit tips, or Para app features, I am ready to help."
       ],
       "tl": [
-        "Pasensya na, sa Para app at commuting topics lang ako nakatuon, tulad ng pamasahe, ruta, at transit tips. Tanong ka lang doon at tutulungan kita.",
-        "Mas makakatulong ako sa Para app, pamasahe, ruta, at public transport concerns. Kung tungkol doon, game na game ako tumulong.",
-        "Hindi ko pa sakop ang topic na yan sa ngayon. Pero sa commuting, fares, at routes, handang-handa akong tumulong."
+        "Pasensya na, Para app at commuting topics lang ang sakop ko, tulad ng pamasahe, ruta, at transit tips. Subukan mong itanong ang tungkol sa fare, ruta, o app features at tutulungan kita.",
+        "Mas makakatulong ako sa Para app, pamasahe, ruta, at public transport concerns. Kung may tanong ka tungkol doon, game ako tumulong.",
+        "Hindi ko pa sakop ang topic na yan. Pero sa commuting, fares, at routes, handang-handa akong tumulong."
       ]
     },
     "unknown": {
       "en": [
-        "I am not fully sure about that yet, but I am still here to help. Try asking me about fares, routes, transit, or Para app features.",
-        "I do not have a solid answer for that right now. Ask me about fare estimates, route options, or transport tips and I will gladly assist.",
-        "I am still learning that part. If you want, I can help with commute topics first like jeepney fares, routes, and transit guidance."
+        "I am not sure about that yet, but I am still here to help. Try asking about fares, routes, or how to use Para features. If you want, I can also share tips for your commute.",
+        "I do not have a solid answer for that right now. You can ask about fare estimates, route options, or transport tips and I will gladly assist.",
+        "I am still learning that part. For now, I can help with anything about jeepney fares, routes, or Para app guidance."
       ],
       "tl": [
-        "Hindi pa buo ang sagot ko diyan sa ngayon, pero nandito pa rin ako para tumulong. Pwede kang magtanong tungkol sa pamasahe, ruta, transit, o app features.",
+        "Hindi pa buo ang sagot ko diyan, pero nandito pa rin ako para tumulong. Subukan mong itanong ang tungkol sa pamasahe, ruta, o app features.",
         "Wala pa akong solid na sagot diyan ngayon. Pero kung fare estimate, route options, o transport tips, tutulungan kita agad.",
-        "Inaayos ko pa yung part na yan. Samantala, game ako sa commute topics tulad ng pamasahe, jeepney routes, at transit guidance."
+        "Inaayos ko pa yung part na yan. Sa ngayon, game ako sa commute topics tulad ng pamasahe, jeepney routes, at app guidance."
       ]
     },
     "missingDestination": {
       "en": [
-        "Sure, I can calculate your fare. What destination are you heading to?",
-        "I can help with that fare estimate. Where are you going?",
-        "Let us compute it. What is your destination?"
+        "I can help with your fare or route, but I need your destination. Where are you headed?",
+        "Let me know your destination so I can check the best route or fare estimate for you.",
+        "What is your destination? You can type the full place name or a nearby landmark."
       ],
       "tl": [
-        "Sige, kaya kitang tulungan sa pamasahe. Saan ang destination mo?",
-        "Pwede natin i-estimate yan. Saan ka papunta?",
-        "Game, compute natin. Ano ang destination mo?"
+        "Kailangan ko ng destination para matulungan kita sa pamasahe o ruta. Saan ka papunta?",
+        "Sabihin mo ang destination mo para ma-check ko ang best route o fare estimate.",
+        "Ano ang destination mo? Pwede mong itype ang buong place name o malapit na landmark."
       ]
     },
     "askOrigin": {
       "en": [
-        "I can estimate the fare to {destination}, but I am not sure where you are right now. Where are you coming from?",
-        "I can compute your fare going to {destination}. May I know your current location first?",
-        "I can help with the fare to {destination}. What is your starting point?"
+        "I can estimate the fare to {destination}, but I need your starting point. Where are you coming from?",
+        "To check the route to {destination}, please share your current location or a nearby landmark.",
+        "What is your origin? You can type your current location, a pinned place, or a known terminal."
       ],
       "tl": [
-        "Kaya kong i-estimate ang pamasahe papuntang {destination}, pero hindi ko pa alam kung nasaan ka ngayon. Saan ka manggagaling?",
-        "Pwede kong i-compute ang pamasahe papuntang {destination}. Saan ka muna ngayon?",
-        "Tutulungan kita sa fare papuntang {destination}. Ano ang starting point mo?"
+        "Kaya kong i-estimate ang pamasahe papuntang {destination}, pero kailangan ko ng starting point mo. Saan ka manggagaling?",
+        "Para ma-check ang ruta papuntang {destination}, sabihin mo ang current location mo o malapit na landmark.",
+        "Ano ang origin mo? Pwede mong itype ang current location, pinned place, o kilalang terminal."
       ]
     },
     "unknownOrigin": {
       "en": [
-        "I could not match your current location to my fare dataset yet. Please share a nearby known place.",
-        "I still cannot map your starting point clearly. Can you send a nearby landmark so I can estimate better?",
-        "I need a clearer origin point. Please tell me a nearby terminal or landmark."
+        "I could not match your current location to my fare dataset yet. Please share a nearby known place, terminal, or landmark so I can help you better.",
+        "I still cannot map your starting point clearly. Try sending a nearby landmark, terminal, or pinned location for a more accurate estimate.",
+        "I need a clearer origin point. Please tell me a nearby terminal, landmark, or your pinned location."
       ],
       "tl": [
-        "Hindi ko pa ma-match ang location mo sa fare dataset ko. Paki-share ang malapit na kilalang lugar.",
-        "Hindi ko pa ma-pinpoint ang starting point mo. Pwede bang magbigay ka ng nearby landmark?",
-        "Kailangan ko ng mas malinaw na pinanggagalingan. Pakisabi ang malapit na terminal o landmark."
+        "Hindi ko pa ma-match ang location mo sa fare dataset ko. Paki-share ang malapit na kilalang lugar, terminal, o landmark para matulungan kita.",
+        "Hindi ko pa ma-pinpoint ang starting point mo. Subukan mong magbigay ng nearby landmark, terminal, o pinned location para mas accurate.",
+        "Kailangan ko ng mas malinaw na pinanggagalingan. Pakisabi ang malapit na terminal, landmark, o pinned location mo."
       ]
     }
   }

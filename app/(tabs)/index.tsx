@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
+import { useTheme } from '../../src/theme/ThemeContext';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { MAP_CONFIG } from '../../constants/map';
 import type { JeepneyRoute } from '../../types/routes';
@@ -26,7 +27,8 @@ import * as Haptics from 'expo-haptics';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
-import { findRoutesForDestination, rankRoutes, MatchedRoute, RankMode } from '../../services/routeSearch';
+import { findRoutesForDestination, MatchedRoute, warmRouteSearchDataset } from '../../services/routeSearch';
+import { attachTricycleLastMileExtensions, loadTricycleTerminals, warmTricycleTerminalCache } from '../../services/tricycleTerminalService';
 import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
 import { loadRoutes } from '../../services/routeService';
@@ -151,7 +153,6 @@ const ROUTING_NEAREST_BASE_URL = 'https://router.project-osrm.org/nearest/v1';
 const WALK_ROUTING_PROFILE = 'walking';
 const MAX_WALK_PATH_POINTS = 140;
 const WALK_PATH_CACHE_LIMIT = 400;
-const MAX_RANKED_ROUTE_OPTIONS = 5;
 
 type MapCoordinate = {
   latitude: number;
@@ -174,6 +175,14 @@ type MapBounds = {
   maxLat: number;
   minLng: number;
   maxLng: number;
+};
+
+type TricycleTerminalMarker = {
+  id: string;
+  name: string;
+  city: string | null;
+  latitude: number;
+  longitude: number;
 };
 
 const INITIAL_REGION: MapRegion = {
@@ -321,6 +330,68 @@ const routeTypeLabel = (routeType: TransitRouteType): string => {
   if (routeType === 'jeepney') return 'Jeepney';
   return 'Jeep + Bus';
 };
+
+const compareLeastTransfer = (a: MatchedRoute, b: MatchedRoute): number => {
+  return (
+    a.transferCount - b.transferCount ||
+    a.estimatedMinutes - b.estimatedMinutes ||
+    a.estimatedFare - b.estimatedFare
+  );
+};
+
+const compareFastest = (a: MatchedRoute, b: MatchedRoute): number => {
+  return (
+    a.estimatedMinutes - b.estimatedMinutes ||
+    a.transferCount - b.transferCount ||
+    a.estimatedFare - b.estimatedFare
+  );
+};
+
+const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number => {
+  return (
+    a.estimatedFare - b.estimatedFare ||
+    a.transferCount - b.transferCount ||
+    a.estimatedMinutes - b.estimatedMinutes
+  );
+};
+
+const rankTopRoutes = (routes: MatchedRoute[], limit = 5): MatchedRoute[] => {
+  if (routes.length <= limit) return [...routes].sort(compareLeastTransfer);
+
+  const indexed = routes.map((route, index) => ({ route, index }));
+  const scores = new Map<number, number>();
+
+  const applyRank = (comparator: (a: MatchedRoute, b: MatchedRoute) => number) => {
+    const ordered = [...indexed].sort((a, b) => comparator(a.route, b.route) || a.index - b.index);
+    ordered.forEach((item, rankIndex) => {
+      scores.set(item.index, (scores.get(item.index) || 0) + rankIndex);
+    });
+  };
+
+  applyRank(compareLeastTransfer);
+  applyRank(compareFastest);
+  applyRank(compareCheapest);
+
+  return [...indexed]
+    .sort((a, b) => {
+      const scoreDiff = (scores.get(a.index) || 0) - (scores.get(b.index) || 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      return (
+        compareLeastTransfer(a.route, b.route) ||
+        compareFastest(a.route, b.route) ||
+        compareCheapest(a.route, b.route) ||
+        a.index - b.index
+      );
+    })
+    .slice(0, limit)
+    .map((item) => item.route);
+};
+
+const MAP_ROUTE_TYPE_OPTIONS: Array<{ key: TransitRouteType; label: string }> = [
+  { key: 'jeepney', label: 'Jeep' },
+  { key: 'bus', label: 'Bus' },
+  { key: 'combo', label: 'Both' },
+];
 
 const roundCoordForKey = (value: number): string => value.toFixed(5);
 
@@ -546,6 +617,7 @@ const candidateHasMode = (candidate: RecommenderCandidate, mode: string): boolea
 };
 
 export default function HomeScreen() {
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
@@ -554,6 +626,7 @@ export default function HomeScreen() {
   const [destinationQuery, setDestinationQuery] = useState('');
   const [originQuery, setOriginQuery] = useState('');
   const [selectedRouteType, setSelectedRouteType] = useState<TransitRouteType>('jeepney');
+  const [showTransitPriority, setShowTransitPriority] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
   const [currentLocationLabel, setCurrentLocationLabel] = useState<string>('Current Location');
@@ -561,12 +634,13 @@ export default function HomeScreen() {
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number } | null>(null);
   const [matchedRoutes, setMatchedRoutes] = useState<MatchedRoute[]>([]);
-  const [rankTab, setRankTab] = useState<RankMode>('easiest');
-  const [rankedRoutes, setRankedRoutes] = useState<MatchedRoute[]>([]);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<MatchedRoute | null>(null);
   const [transitLegs, setTransitLegs] = useState<TransitLeg[]>([]);
   const [mapRegion, setMapRegion] = useState<MapRegion>(INITIAL_REGION);
+  const [showTricycleTerminals, setShowTricycleTerminals] = useState(false);
+  const [tricycleTerminalPoints, setTricycleTerminalPoints] = useState<TricycleTerminalMarker[]>([]);
+  const [isTricycleTerminalLoading, setIsTricycleTerminalLoading] = useState(false);
   const currentZoom = useMemo(() => latDeltaToZoom(mapRegion.latitudeDelta), [mapRegion.latitudeDelta]);
   const {
     featureCollection: poiFeatureCollection,
@@ -584,14 +658,66 @@ export default function HomeScreen() {
   const routesBySelectedType = useMemo(() => {
     return transitDataRoutes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
   }, [transitDataRoutes, selectedRouteType]);
+
+  useEffect(() => {
+    if (routesBySelectedType.length === 0) return;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      warmRouteSearchDataset(routesBySelectedType);
+      void warmTricycleTerminalCache();
+    });
+
+    return () => {
+      task.cancel?.();
+    };
+  }, [routesBySelectedType]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (!showTricycleTerminals) return;
+    if (tricycleTerminalPoints.length > 0 || isTricycleTerminalLoading) return;
+
+    setIsTricycleTerminalLoading(true);
+
+    loadTricycleTerminals()
+      .then((terminals) => {
+        if (isCancelled) return;
+
+        const normalized = (terminals || [])
+          .map((terminal) => {
+            const latitude = Number(terminal.latitude);
+            const longitude = Number(terminal.longitude);
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+            return {
+              id: String(terminal.id),
+              name: String(terminal.name || 'Tricycle Terminal'),
+              city: terminal.city ? String(terminal.city) : null,
+              latitude,
+              longitude,
+            };
+          })
+          .filter((terminal): terminal is TricycleTerminalMarker => !!terminal);
+
+        setTricycleTerminalPoints(normalized);
+      })
+      .catch(() => {
+        if (!isCancelled) setTricycleTerminalPoints([]);
+      })
+      .finally(() => {
+        if (!isCancelled) setIsTricycleTerminalLoading(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [showTricycleTerminals, tricycleTerminalPoints.length, isTricycleTerminalLoading]);
+
   const selectedRouteTypeLabel = useMemo(
     () => routeTypeLabel(selectedRouteType),
     [selectedRouteType],
   );
-
-  useEffect(() => {
-    setRankedRoutes(rankRoutes(matchedRoutes, rankTab).slice(0, MAX_RANKED_ROUTE_OPTIONS));
-  }, [matchedRoutes, rankTab]);
 
   const lastZoomedRouteIdRef = useRef<string | null>(null);
 
@@ -678,8 +804,8 @@ export default function HomeScreen() {
     return transitRoutes.flatMap((route: any) => route.stops || []);
   }, [transitRoutes]);
   const [showTransitLayer, setShowTransitLayer] = useState(false);
-  const [nearestStop, setNearestStop] = useState<any>(null);
   const user = useStore((state) => state.user);
+  const notificationsEnabled = useStore((state) => state.notificationsEnabled);
   const isGuestAccount = (user?.email || '').trim().toLowerCase() === 'guest@para.ph';
   const selectedTransitRoute = useStore((state) => state.selectedTransitRoute);
   const setSelectedTransitRoute = useStore((state) => state.setSelectedTransitRoute);
@@ -719,9 +845,13 @@ export default function HomeScreen() {
   }, []);
 
   const selectedOptionLabel = useMemo(() => {
-    if (!selectedRouteId) return 'Current Route';
-    return selectedRoute?.legs.map((l: any) => l.route.properties.code).join('+') || 'Current Route';
-  }, [selectedRouteId, selectedRoute]);
+    if (!selectedRoute || selectedRoute.legs.length === 0) return 'Current Route';
+
+    const firstRouteName = selectedRoute.legs[0]?.route?.properties?.name || 'Current Route';
+    if (selectedRoute.legs.length === 1) return firstRouteName;
+
+    return `${firstRouteName} +${selectedRoute.legs.length - 1} transfer`;
+  }, [selectedRoute]);
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -1055,8 +1185,9 @@ export default function HomeScreen() {
       setIsRouting(true);
 
       let routesForSearch = routesBySelectedType;
+      const shouldRefreshRoutesFromSource = routesForSearch.length === 0;
 
-      const bufferCandidates = [500, 900, 1400, 2200];
+      const bufferCandidates = [450, 900, 1600];
       let yieldedBeforeMatching = false;
       const yieldBeforeMatching = async () => {
         if (yieldedBeforeMatching) return;
@@ -1088,8 +1219,8 @@ export default function HomeScreen() {
       }
 
       // Fallback path: refresh from source only when local set is empty
-      // or when the first pass finds no candidates.
-      if (results.length === 0) {
+      // to avoid blocking no-result cases with an unnecessary network call.
+      if (results.length === 0 && shouldRefreshRoutesFromSource) {
         const loaded = await loadRoutes();
         const latestByType = loaded.routes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
         if (latestByType.length > 0) {
@@ -1107,13 +1238,17 @@ export default function HomeScreen() {
         return;
       }
 
+      if (results.length > 0) {
+        results = await attachTricycleLastMileExtensions(results, destinationPoint);
+      }
+
       setMatchedRoutes(results);
       setSelectedRouteId(null);
       setSelectedPoi(null);
       setShowRecommender(true);
 
       if (results.length > 0) {
-        const firstRanked = rankRoutes(results, 'easiest')[0];
+        const firstRanked = rankTopRoutes(results, 5)[0];
         if (firstRanked) {
           const firstId = firstRanked.legs.map((l: any) => l.route.properties.code).join('+');
           
@@ -1294,41 +1429,6 @@ export default function HomeScreen() {
       processPendingSearch();
     }
   }, [pendingRouteSearch, handleSearchSelectRoute]);
-
-  const handleFindNearestStop = useCallback(() => {
-    if (!currentLocation) {
-      Alert.alert('GPS Not Ready', 'Waiting for your current location.');
-      return;
-    }
-    if (transitStops.length === 0) {
-      Alert.alert('No Stops', 'No transit stops loaded yet.');
-      return;
-    }
-
-    let closest: any = null;
-    let closestDist = Infinity;
-    for (const stop of transitStops as any[]) {
-      const dlat = stop.coordinate.latitude - currentLocation.latitude;
-      const dlng = stop.coordinate.longitude - currentLocation.longitude;
-      const dist = dlat * dlat + dlng * dlng;
-      if (dist < closestDist) {
-        closestDist = dist;
-        closest = stop;
-      }
-    }
-
-    if (closest) {
-      setNearestStop(closest);
-      const nearestRegion: MapRegion = {
-        latitude: closest.coordinate.latitude,
-        longitude: closest.coordinate.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      };
-      //mapRegionRef.current = nearestRegion;
-      animateToRegion(nearestRegion, 600);
-    }
-  }, [currentLocation, transitStops]);
 
   const resolveWalkPathOnRoad = useCallback(async (
     from: MapCoordinate,
@@ -1611,55 +1711,7 @@ export default function HomeScreen() {
     return () => clearInterval(id);
   }, [sim.state]);
 
-  // Record trip stats when simulation finishes (once per run)
-  useEffect(() => {
-    if (sim.state === 'idle') {
-      tripStatRecordedRef.current = false;
-      return;
-    }
-    if (sim.state === 'finished' && !tripStatRecordedRef.current) {
-      tripStatRecordedRef.current = true;
-      const distKm = routeSummary?.distanceKm ?? 0;
-      const fareAmt = selectedRoute?.estimatedFare ?? 0;
-      
-      const now = new Date();
-      const hour = now.getHours();
-      const min = now.getMinutes();
-      const day = now.getDay();
-      const timeVal = hour + min / 60;
-      
-      let multiplier = 1.0;
-      let label = 'Completed!';
-      
-      // Morning Rush: 6:00 AM - 9:00 AM
-      if (timeVal >= 6 && timeVal <= 9) {
-        multiplier = 1.5;
-        label = 'Morning Rush Bonus!';
-      }
-      // Evening Rush: 4:30 PM - 8:00 PM
-      else if (timeVal >= 16.5 && timeVal <= 20) {
-        multiplier = 1.5;
-        label = 'Evening Rush Bonus!';
-      }
-      
-      // Worst Time: Friday 5:00 PM - 6:00 PM
-      if (day === 5 && timeVal >= 17 && timeVal <= 18) {
-        multiplier = 2.0; 
-        label = 'Friday Rush Madness Bonus!';
-      }
-
-      const basePoints = Math.max(1, Math.round(distKm * 2));
-      const totalPoints = Math.round(basePoints * multiplier);
-
-      addTripStats({ distance: distKm, fare: fareAmt, points: totalPoints });
-      
-      Alert.alert(
-        label, 
-        `You arrived at your destination! Earned ${totalPoints} points (${multiplier}x multiplier).`
-      );
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sim.state]);
+  
 
   const activeUserPosition = useMemo(() => {
     if (sim.state !== 'idle' && sim.position) return sim.position;
@@ -1812,6 +1864,28 @@ export default function HomeScreen() {
       });
     }
 
+    if (showTricycleTerminals) {
+      tricycleTerminalPoints.forEach((terminal) => {
+        markers.push({
+          id: `tricycle-terminal-${terminal.id}`,
+          coordinate: [terminal.longitude, terminal.latitude],
+          children: (
+            <View style={styles.terminalMarker}>
+              <Image
+                source={require('../../assets/icons/tricycle-icon.png')}
+                style={styles.terminalIconImage}
+              />
+            </View>
+          ),
+          metadata: {
+            label: terminal.name,
+            type: 'Tricycle terminal',
+            subtitle: terminal.city || undefined,
+          },
+        });
+      });
+    }
+
     visibleTransitMarkers.forEach(({ leg, idx, showBoard, showDrop }) => {
       if (showBoard) {
         markers.push({
@@ -1858,7 +1932,6 @@ export default function HomeScreen() {
           children: (
             <View style={[
               styles.transitStopMarker,
-              nearestStop?.id === stop.id && styles.nearestStopMarker,
             ]}>
               <Ionicons name="ellipse" size={6} color="#FFFFFF" />
             </View>
@@ -1873,7 +1946,7 @@ export default function HomeScreen() {
     }
 
     return markers;
-  }, [activeUserPosition, destinationLocation, visibleTransitMarkers, destinationQuery, visibleTransitStops, nearestStop?.id]);
+  }, [activeUserPosition, destinationLocation, showTricycleTerminals, tricycleTerminalPoints, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
 
   // Log marker/line updates for diagnostics
   useEffect(() => {
@@ -1950,7 +2023,6 @@ export default function HomeScreen() {
     if (nextType === selectedRouteType) return;
 
     setSelectedRouteType(nextType);
-    setNearestStop(null);
     setSelectedTransitRoute(null);
     setShowRecommender(false);
     setSelectedPoi(null);
@@ -2037,6 +2109,8 @@ export default function HomeScreen() {
       }).start();
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      if (notificationsEnabled) {
         Notifications.requestPermissionsAsync().then(({ status }) => {
           if (status === 'granted') {
             Notifications.scheduleNotificationAsync({
@@ -2050,6 +2124,7 @@ export default function HomeScreen() {
             });
           }
         });
+      }
     });
   }, [currentLocation, destinationLocation, guidancePanY]);
 
@@ -2101,15 +2176,48 @@ export default function HomeScreen() {
           const timePassedSecs = Math.round((Date.now() - (journeySummaryData?.startTime || Date.now())) / 1000);
           const actualMinutes = Math.max(1, Math.round(timePassedSecs / 60));
           
-          router.navigate({
-            pathname: '/journey-summary',
-            params: {
-              distance: (journeySummaryData?.distanceMeters || 0) / 1000,
-              time: actualMinutes,
-              fare: selectedRoute?.estimatedFare || 0,
-              points: Math.round(((journeySummaryData?.distanceMeters || 0) / 1000) * 5)
+          (() => {
+            const distKm = (journeySummaryData?.distanceMeters || 0) / 1000;
+            const fareAmt = selectedRoute?.estimatedFare || 0;
+            
+            const now = new Date();
+            const hour = now.getHours();
+            const min = now.getMinutes();
+            const day = now.getDay();
+            const timeVal = hour + min / 60;
+            
+            let multiplier = 1.0;
+            
+            // Morning Rush: 6:00 AM - 9:00 AM
+            if (timeVal >= 6 && timeVal <= 9) {
+              multiplier = 1.5;
             }
-          });
+            // Evening Rush: 4:30 PM - 8:00 PM
+            else if (timeVal >= 16.5 && timeVal <= 20) {
+              multiplier = 1.5;
+            }
+            
+            // Worst Time: Friday 5:00 PM - 6:00 PM
+            if (day === 5 && timeVal >= 17 && timeVal <= 18) {
+              multiplier = 2.0; 
+            }
+
+            const basePoints = Math.max(1, Math.round(distKm * 2));
+            const totalPoints = Math.round(basePoints * multiplier);
+            
+            addTripStats({ distance: distKm, fare: fareAmt, points: totalPoints, time: actualMinutes, multiplier: multiplier, origin: originQuery || 'Current Location', destination: destinationQuery || 'Destination' });
+            
+            router.navigate({
+              pathname: '/journey-summary',
+              params: {
+                distance: distKm,
+                time: actualMinutes,
+                fare: fareAmt,
+                points: totalPoints,
+                multiplier: multiplier
+              }
+            });
+          })();
         }, 2000);
       } else {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -2220,7 +2328,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </BlurView>
 
-        <View style={[styles.chatbotWrap]}>
+        <View style={[styles.chatbotWrap, { backgroundColor: '#CBA962', borderColor: isDark ? theme.cardBorder : '#FFFFFF' }]}>
           <TouchableOpacity 
             style={styles.locateButton} 
             onPress={() => router.push('/ai-chatbot')} 
@@ -2303,7 +2411,7 @@ export default function HomeScreen() {
         {/* Floating Top Header */}
         <View style={[styles.header, isSearchActive && { zIndex: 10 }]}>
           <TouchableOpacity
-              style={styles.searchPillWrapper}
+              style={[styles.searchPillWrapper, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}
               activeOpacity={0.8}
               onPress={() => setIsSearchActive(true)}
             >
@@ -2312,14 +2420,14 @@ export default function HomeScreen() {
                 style={{ width: 48, height: 20 }} 
                 resizeMode="contain"
               />
-              <Text style={[styles.searchInputText, {color: COLORS.textMuted, flex: 1, marginLeft: 6}]} numberOfLines={1}>
+              <Text style={[styles.searchInputText, {color: theme.textSecondary, flex: 1, marginLeft: 6}]} numberOfLines={1}>
                 {destinationQuery ? `${originQuery || currentLocationLabel} → ${destinationQuery}` : `Saan tayo, ${user?.username || 'Komyuter'}?`}
               </Text>
               <TouchableOpacity 
-                onPress={() => Alert.alert('Voice Search', 'Speech-to-text integration coming soon! (Requires a native voice plugin)')} 
+                onPress={() => setIsSearchActive(true)} 
                 style={{ paddingHorizontal: 8 }}
               >
-                <Ionicons name="mic" size={20} color={COLORS.textMuted} />
+                <Ionicons name="mic" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
               <ProfileButton />
             </TouchableOpacity>
@@ -2328,11 +2436,11 @@ export default function HomeScreen() {
         {/* Guidance Overlay */}
         {isGuidanceActive && guidanceSteps.length > 0 && (
           <Animated.View style={[styles.guidanceCardContainer, { transform: [{ translateY: guidancePanY }] }]}>
-            <View style={[styles.guidanceCard, { paddingTop: Math.max(insets.top, 24) + 16, position: 'relative' }]}>
+            <View style={[styles.guidanceCard, { paddingTop: Math.max(insets.top, 24) + 16, position: 'relative', backgroundColor: theme.cardBackground, borderColor: isDark ? theme.cardBorder : 'rgba(255,255,255,0.8)' }]}>
               <TouchableOpacity style={[styles.guidanceCloseBtn, { top: Math.max(insets.top, 24) + 8, right: 16 }]} onPress={stopGuidance}>
-                <Ionicons name="close" size={20} color={COLORS.textMuted} />
+                <Ionicons name="close" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
-              <View style={styles.guidanceIconBox}>
+              <View style={[styles.guidanceIconBox, { backgroundColor: isDark ? 'rgba(232,160,32,0.15)' : 'rgba(245,197,24,0.15)' }]}>
                 <Ionicons 
                   name={
                     guidanceSteps[currentStepIndex].type === 'walk' ? 'walk' :
@@ -2341,14 +2449,14 @@ export default function HomeScreen() {
                     guidanceSteps[currentStepIndex].type === 'transfer' ? 'swap-horizontal' :
                     guidanceSteps[currentStepIndex].type === 'alight' ? 'arrow-down' : 'checkmark-circle'
                   } 
-                  size={24} color={COLORS.primary} 
+                  size={24} color={isDark ? '#E8A020' : COLORS.primary} 
                 />
               </View>
               <View style={styles.guidanceTextWrap}>
                 <Animated.View style={{ opacity: guidanceStepFadeAnim }}>
-                  <Text style={styles.guidanceInstruction}>{guidanceSteps[currentStepIndex]?.instruction}</Text>
+                  <Text style={[styles.guidanceInstruction, { color: theme.text }]}>{guidanceSteps[currentStepIndex]?.instruction}</Text>
                   {currentStepIndex + 1 < guidanceSteps.length && (
-                    <Text style={styles.guidanceNextInstruction}>
+                    <Text style={[styles.guidanceNextInstruction, { color: theme.textSecondary }]}>
                       <Text style={{fontWeight:'700'}}>Then: </Text>
                       {guidanceSteps[currentStepIndex + 1]?.instruction}
                     </Text>
@@ -2356,8 +2464,8 @@ export default function HomeScreen() {
                 </Animated.View>
               </View>
               <View style={styles.guidanceEtaWrap}>
-                <Text style={styles.guidanceEta}>{Math.ceil((guidanceSteps[currentStepIndex]?.durationSeconds || 0) / 60)}</Text>
-                <Text style={styles.guidanceEtaMin}>min</Text>
+                <Text style={[styles.guidanceEta, { color: theme.text }]}>{Math.ceil((guidanceSteps[currentStepIndex]?.durationSeconds || 0) / 60)}</Text>
+                <Text style={[styles.guidanceEtaMin, { color: theme.textSecondary }]}>min</Text>
               </View>
             </View>
             <View style={styles.guidanceProgressBar}>
@@ -2391,6 +2499,22 @@ export default function HomeScreen() {
               </Text>
             </TouchableOpacity>
 
+            <TouchableOpacity
+              style={[styles.transitToggle, showTricycleTerminals && styles.transitToggleActive]}
+              onPress={() => setShowTricycleTerminals((prev) => !prev)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="bicycle" size={16} color={showTricycleTerminals ? '#FFFFFF' : COLORS.navy} />
+              <Text style={[styles.transitToggleText, showTricycleTerminals && { color: '#FFFFFF' }]}>Trike</Text>
+              {isTricycleTerminalLoading ? (
+                <ActivityIndicator
+                  size="small"
+                  color={showTricycleTerminals ? '#FFFFFF' : COLORS.navy}
+                  style={{ marginLeft: 2 }}
+                />
+              ) : null}
+            </TouchableOpacity>
+
             {/* Simulation Play Button (top row, only when idle) */}
             {simCoordinates.length >= 2 && sim.state === 'idle' && (
               <TouchableOpacity
@@ -2414,11 +2538,11 @@ export default function HomeScreen() {
             {routeSummary && topRightSummaryText && (
               <>
                 <View style={{ flex: 1 }} />
-                <View style={[styles.topRightSummaryCard, { flexShrink: 1 }]}>
-                  <Text style={styles.topRightSummaryTitle} numberOfLines={1}>
+                <View style={[styles.topRightSummaryCard, { flexShrink: 1, backgroundColor: isDark ? theme.surfaceSecondary : '#FFF' }]}>
+                  <Text style={[styles.topRightSummaryTitle, { color: theme.textSecondary }]} numberOfLines={1}>
                     {sim.state !== 'idle' ? `${selectedOptionLabel} (Live)` : selectedOptionLabel}
                   </Text>
-                  <Text style={styles.topRightSummaryValue} numberOfLines={2}>
+                  <Text style={[styles.topRightSummaryValue, { color: theme.text }]} numberOfLines={2}>
                     {topRightSummaryText}
                   </Text>
                 </View>
@@ -2426,87 +2550,62 @@ export default function HomeScreen() {
             )}
           </View>
 
-          {showTransitLayer && (
-            <View style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
-              <TouchableOpacity
-                style={styles.nearestStopBtn}
-                onPress={handleFindNearestStop}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="navigate" size={14} color={COLORS.navy} />
-                <Text style={styles.nearestStopBtnText}>Nearest Stop</Text>
-              </TouchableOpacity>
-
-              <View style={styles.routeTypeSelectorRow}>
-                <TouchableOpacity
-                  style={[
-                  styles.routeTypeSelectorButton,
-                  selectedRouteType === 'jeepney' && styles.routeTypeSelectorButtonActive,
-                ]}
-                activeOpacity={0.85}
-                onPress={() => handleRouteTypeChange('jeepney')}
-              >
-                <Text
-                  style={[
-                    styles.routeTypeSelectorText,
-                    selectedRouteType === 'jeepney' && styles.routeTypeSelectorTextActive,
-                  ]}
-                >
-                  Jeepney
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
+          <View style={styles.routeTypeFilterGroup}>
+            <TouchableOpacity 
+              activeOpacity={0.8}
+              onPress={() => setShowTransitPriority(prev => !prev)}
+              style={styles.transitPriorityHeader}
+            >
+              <Text style={[styles.routeTypeFilterLabel, { color: theme.textSecondary }]}>Transit Priority</Text>
+              <Ionicons 
+                name={showTransitPriority ? "chevron-up" : "chevron-down"} 
+                size={14} 
+                color={theme.textSecondary} 
+                style={{ marginLeft: 4 }}
+              />
+            </TouchableOpacity>
+            
+            {showTransitPriority && (
+              <View
                 style={[
-                  styles.routeTypeSelectorButton,
-                  selectedRouteType === 'combo' && styles.routeTypeSelectorButtonActive,
+                  styles.routeTypeFilterRow,
+                  {
+                    backgroundColor: theme.cardBackground,
+                    borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(10,22,40,0.08)',
+                  },
                 ]}
-                activeOpacity={0.85}
-                onPress={() => handleRouteTypeChange('combo')}
               >
-                <Text
-                  style={[
-                    styles.routeTypeSelectorText,
-                    selectedRouteType === 'combo' && styles.routeTypeSelectorTextActive,
-                  ]}
-                >
-                  Combo
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.routeTypeSelectorButton,
-                  selectedRouteType === 'bus' && styles.routeTypeSelectorButtonActive,
-                ]}
-                activeOpacity={0.85}
-                onPress={() => handleRouteTypeChange('bus')}
-              >
-                <Text
-                  style={[
-                    styles.routeTypeSelectorText,
-                    selectedRouteType === 'bus' && styles.routeTypeSelectorTextActive,
-                  ]}
-                >
-                  Bus
-                </Text>
-              </TouchableOpacity>
-            </View>
+                {MAP_ROUTE_TYPE_OPTIONS.map((option) => {
+                  const isActive = selectedRouteType === option.key;
+                  return (
+                    <TouchableOpacity
+                      key={option.key}
+                      style={[
+                        styles.routeTypeFilterPill,
+                        isActive && styles.routeTypeFilterPillActive,
+                      ]}
+                      activeOpacity={0.85}
+                      onPress={() => handleRouteTypeChange(option.key)}
+                    >
+                      <Text
+                        style={[
+                          styles.routeTypeFilterText,
+                          { color: isActive ? COLORS.navy : theme.textSecondary },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </View>
-          )}
+
+
         </View>
 
-        {nearestStop && showTransitLayer && (
-          <View style={styles.nearestStopCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="location" size={16} color={COLORS.primary} />
-              <Text style={styles.nearestStopName}>{nearestStop.name}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setNearestStop(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          </View>
-        )}
+
 
         {selectedTransitRoute &&
         (!normalizeTransitRouteType((selectedTransitRoute as any).type) ||
@@ -2514,20 +2613,20 @@ export default function HomeScreen() {
             selectedRouteType,
             normalizeTransitRouteType((selectedTransitRoute as any).type),
           )) ? (
-          <View style={styles.transitRouteCard}>
+          <View style={[styles.transitRouteCard, { backgroundColor: theme.cardBackground, shadowColor: isDark ? '#000' : '#000' }]}>
             <View style={styles.transitRouteHeader}>
               <View style={[styles.transitTypeBadge, { backgroundColor: selectedTransitRoute.color || '#1E88E5' }]}>
                 <Text style={styles.transitTypeBadgeText}>{selectedTransitRoute.label || 'Transit'}</Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedTransitRoute(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={22} color={COLORS.textMuted} />
+                <Ionicons name="close-circle" size={22} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.transitRouteTitle} numberOfLines={1}>
+            <Text style={[styles.transitRouteTitle, { color: theme.text }]} numberOfLines={1}>
               {selectedTransitRoute.ref ? `[${selectedTransitRoute.ref}] ` : ''}{selectedTransitRoute.name}
             </Text>
             {(selectedTransitRoute.from || selectedTransitRoute.to) ? (
-              <Text style={styles.transitRouteMeta} numberOfLines={1}>
+              <Text style={[styles.transitRouteMeta, { color: theme.textSecondary }]} numberOfLines={1}>
                 {selectedTransitRoute.from}{selectedTransitRoute.from && selectedTransitRoute.to ? ' -> ' : ''}{selectedTransitRoute.to}
               </Text>
             ) : null}
@@ -2536,12 +2635,12 @@ export default function HomeScreen() {
 
         {/* Simulation Panel */}
         {sim.state !== 'idle' && (
-          <View style={[styles.simPanelWrapper]}>
+          <View style={[styles.simPanelWrapper, { backgroundColor: theme.cardBackground }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               
               {/* Play/Pause/Replay Button */}
               <TouchableOpacity 
-                style={[styles.simPlayPauseBtn, { width: 44, height: 44, borderRadius: 22, flexShrink: 0 }]} 
+                style={[styles.simPlayPauseBtn, { width: 44, height: 44, borderRadius: 22, flexShrink: 0, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]} 
                 onPress={() => {
                   if (sim.state === 'finished') {
                     sim.reset(); sim.play();
@@ -2550,12 +2649,12 @@ export default function HomeScreen() {
                   }
                 }}
               >
-                <Ionicons name={sim.state === 'playing' ? 'pause' : sim.state === 'finished' ? 'refresh' : 'play'} size={22} color="#FFFFFF" style={sim.state === 'playing' || sim.state === 'finished' ? {} : { marginLeft: 3 }} />
+                <Ionicons name={sim.state === 'playing' ? 'pause' : sim.state === 'finished' ? 'refresh' : 'play'} size={22} color={isDark ? COLORS.navy : "#FFFFFF"} style={sim.state === 'playing' || sim.state === 'finished' ? {} : { marginLeft: 3 }} />
               </TouchableOpacity>
 
               {/* Title & Controls */}
               <View style={{ flex: 1, justifyContent: 'center' }}>
-                <Text style={[styles.simPanelStatusText, { fontSize: 13 }]} numberOfLines={1}>
+                <Text style={[styles.simPanelStatusText, { fontSize: 13, color: theme.text }]} numberOfLines={1}>
                   {destinationQuery ? `${originQuery || currentLocationLabel} → ${destinationQuery}` : sim.currentSegInfo?.label || 'Walking...'}
                 </Text>
                 
@@ -2570,17 +2669,17 @@ export default function HomeScreen() {
                     </Text>
                   </TouchableOpacity>
                   
-                  <Text style={{ fontSize: 11, color: '#71717A', marginLeft: 8, marginRight: 4, fontWeight: '500' }} numberOfLines={1}>
+                  <Text style={{ fontSize: 11, color: theme.textSecondary, marginLeft: 8, marginRight: 4, fontWeight: '500' }} numberOfLines={1}>
                     {sim.state === 'finished' ? 'Arrived' : `${Math.max(0, sim.remainingDistanceKm).toFixed(1)} km left`}
                   </Text>
                   {sim.currentSegInfo?.vehicleType === 'jeepney' ? (
-                    <Ionicons name="bus-outline" size={14} color="#71717A" />
+                    <Ionicons name="bus-outline" size={14} color={theme.textSecondary} />
                   ) : sim.currentSegInfo?.vehicleType === 'bus' ? (
-                    <Ionicons name="bus" size={14} color="#71717A" />
+                    <Ionicons name="bus" size={14} color={theme.textSecondary} />
                   ) : sim.currentSegInfo?.vehicleType === 'tricycle' ? (
-                    <Ionicons name="bicycle" size={14} color="#71717A" />
+                    <Ionicons name="bicycle" size={14} color={theme.textSecondary} />
                   ) : (
-                    <Ionicons name="walk" size={14} color="#71717A" />
+                    <Ionicons name="walk" size={14} color={theme.textSecondary} />
                   )}
                 </View>
               </View>
@@ -2592,8 +2691,8 @@ export default function HomeScreen() {
             </View>
 
             {/* Bottom Progress Bar */}
-            <View style={[styles.simProgressBarTrack, { height: 3, marginTop: 12, marginBottom: 0, backgroundColor: '#F3F4F6' }]}>
-              <View style={[styles.simProgressBarFill, { width: `${sim.progress * 100}%`, backgroundColor: COLORS.primary }]} />
+            <View style={[styles.simProgressBarTrack, { height: 3, marginTop: 12, marginBottom: 0, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' }]}>
+              <View style={[styles.simProgressBarFill, { width: `${sim.progress * 100}%`, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]} />
             </View>
           </View>
         )}
@@ -2603,9 +2702,6 @@ export default function HomeScreen() {
       <RouteRecommenderPanel
         visible={showRecommender}
         matchedRoutes={matchedRoutes}
-        rankedRoutes={rankedRoutes}
-        rankTab={rankTab}
-        setRankTab={setRankTab}
         selectedRoute={selectedRouteId}
         setSelectedRoute={(id: string | null) => setSelectedRouteId(id)}
         destinationName={destinationQuery}
@@ -2632,8 +2728,6 @@ export default function HomeScreen() {
         currentLocationLabel={currentLocationLabel}
         initialOrigin={pendingRouteSearch ? pendingRouteSearch.origin : originQuery}
         initialDestination={pendingRouteSearch ? pendingRouteSearch.destination : destinationQuery}
-        selectedRouteType={selectedRouteType}
-        onSelectRouteType={handleRouteTypeChange}
         onClearRoute={handleClearRoute}
         onClose={() => {
           setIsSearchActive(false);
@@ -2781,7 +2875,7 @@ const styles = StyleSheet.create({
   mapControls: {
     position: 'absolute',
     right: 16,
-    bottom: 90,
+    bottom: 86,
     zIndex: 10,
     alignItems: 'flex-end',
   },
@@ -2798,7 +2892,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 14,
     elevation: 6,
-    marginBottom: -16, // Move it further down
+    marginBottom: 0,
   },
   locateGlassWrap: {
     width: 48,
@@ -3219,7 +3313,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#1E2A3A',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2.5,
@@ -3229,6 +3323,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 5,
+  },
+  terminalIconImage: {
+    width: 19,
+    height: 19,
+    resizeMode: 'contain',
   },
   stopMarker: {
     width: 18,
@@ -3328,30 +3427,46 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.navy,
   },
-  routeTypeSelectorRow: {
+  routeTypeFilterGroup: {
+    gap: 6,
+    alignSelf: 'flex-start',
+  },
+  transitPriorityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(10,22,40,0.04)',
-    borderRadius: RADIUS.pill,
-    padding: 3,
+    paddingVertical: 2,
   },
-  routeTypeSelectorButton: {
-    paddingHorizontal: 10,
+  routeTypeFilterLabel: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginLeft: 2,
+  },
+  routeTypeFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    padding: 4,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1,
+  },
+  routeTypeFilterPill: {
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: RADIUS.pill,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  routeTypeSelectorButtonActive: {
-    backgroundColor: '#0A1628',
+  routeTypeFilterPillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
-  routeTypeSelectorText: {
+  routeTypeFilterText: {
     fontFamily: 'Inter',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: COLORS.navy,
-  },
-  routeTypeSelectorTextActive: {
-    color: '#FFFFFF',
   },
   transitErrorCard: {
     flexDirection: 'row',
@@ -3437,59 +3552,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 5,
-  },
-  nearestStopMarker: {
-    backgroundColor: COLORS.primary,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 3,
-  },
-  nearestStopBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: RADIUS.pill,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(10,22,40,0.08)',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  nearestStopBtnText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.navy,
-  },
-  nearestStopCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    marginHorizontal: SPACING.screenX,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(232,160,32,0.3)',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  nearestStopName: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.navy,
   },
   recommenderToggle: {
     position: 'absolute',

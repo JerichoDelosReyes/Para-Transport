@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
+import { useTheme } from '../../src/theme/ThemeContext';
 import { useStore } from '../../store/useStore';
 import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
 
@@ -13,6 +14,7 @@ type HistoryFilter = typeof HISTORY_FILTERS[number];
 const ITEMS_PER_PAGE = 10;
 
 export default function RoutesScreen() {
+  const { theme, isDark } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
@@ -79,26 +81,26 @@ export default function RoutesScreen() {
   };
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>History</Text>
+    <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: isDark ? '#E8A020' : '#F5C518' }]}>
+      <View style={[styles.header, { backgroundColor: isDark ? '#E8A020' : '#F5C518' }]}>
+        <Text style={[styles.headerTitle, { color: '#0A1628' }]}>HISTORY</Text>
         <ProfileButton />
       </View>
 
       <ScrollView
-        style={{ flex: 1, backgroundColor: COLORS.background }}
+        style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
         {isGuestAccount ? (
-          <View style={styles.emptyState}>
+          <View style={[styles.emptyState, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <JeepIllustration width={220} height={150} />
-            <Text style={styles.emptyTitle}>Sign in to view history.</Text>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>Sign in to view history.</Text>
           </View>
         ) : !user.commute_history || user.commute_history.length === 0 ? (
-          <View style={styles.emptyState}>
+          <View style={[styles.emptyState, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <JeepIllustration width={220} height={150} />
-            <Text style={styles.emptyTitle}>Wala pang history.</Text>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>WALA PANG HISTORY.</Text>
           </View>
         ) : (
           <>
@@ -107,11 +109,19 @@ export default function RoutesScreen() {
                 {HISTORY_FILTERS.map((mode) => (
                   <TouchableOpacity
                     key={mode}
-                    style={[styles.modePill, activeFilter === mode && styles.modePillActive]}
+                    style={[
+                      styles.modePill, 
+                      { backgroundColor: theme.cardBackground },
+                      activeFilter === mode && [styles.modePillActive, { backgroundColor: isDark ? '#0A1628' : '#0A1628' }]
+                    ]}
                     onPress={() => handleFilterChange(mode)}
                     activeOpacity={0.85}
                   >
-                    <Text style={[styles.modePillText, activeFilter === mode && styles.modePillTextActive]}>{mode}</Text>
+                    <Text style={[
+                      styles.modePillText, 
+                      { color: theme.textSecondary },
+                      activeFilter === mode && [styles.modePillTextActive, { color: '#FFFFFF' }]
+                    ]}>{mode}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -127,9 +137,9 @@ export default function RoutesScreen() {
                   r.name === targetName || (r.legs && r.legs[0]?.fromObj?.lat === item.origin?.lat && r.legs[0]?.toObj?.lat === item.destination?.lat && item.destination?.lat)
                 );
                 return (
-                    <View key={item.id || index} style={styles.historyCard}>
+                    <View key={item.id || index} style={[styles.historyCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
                       <View style={styles.historyCardTop}>
-                        <Text style={styles.historyRouteName} numberOfLines={1}>
+                        <Text style={[styles.historyRouteName, { color: theme.text }]} numberOfLines={1}>
                           {targetName}
                         </Text>
                         <TouchableOpacity
@@ -153,34 +163,35 @@ export default function RoutesScreen() {
                             }
                           }}
                         >
-                          <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={18} color={isSaved ? COLORS.primary : COLORS.textMuted} />
+                          <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={18} color={isSaved ? COLORS.primary : theme.textSecondary} />
                         </TouchableOpacity>
                       </View>
                       <View>
-                        <Text style={styles.historyLegSummary}>Recent Search</Text>
-                        <Text style={[styles.historyLegSummary, { marginTop: 2, fontSize: 10, color: '#9CA3AF' }]}>
+                        <Text style={[styles.historyLegSummary, { color: theme.textSecondary }]}>Recent Search</Text>
+                        <Text style={[styles.historyLegSummary, { marginTop: 2, fontSize: 10, color: theme.textSecondary }]}>
                           {item.timestamp ? (new Date(item.timestamp).toLocaleDateString() + ' at ' + new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'Recent'}
                         </Text>
                       </View>
                       <View style={[styles.historyCardBottom, { justifyContent: 'flex-end' }]}>
                         <TouchableOpacity 
-                          style={styles.historyGhostButton} 
+                          style={[styles.historyGhostButton, { borderColor: isDark ? theme.text : COLORS.navy, backgroundColor: theme.cardBackground }]} 
                           activeOpacity={0.9} 
                           onPress={() => {
                             setPendingRouteSearch({ origin: item.origin || null, destination: item.destination });
                             router.navigate('/(tabs)');
                           }}
                         >
-                          <Text style={styles.historyGhostButtonText}>View Route</Text>
+                          <Text style={[styles.historyGhostButtonText, { color: isDark ? theme.text : COLORS.navy }]}>View Route</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
                   );
               })
             ) : (
-              <View style={styles.emptyFilterState}>
-                <Text style={styles.emptyTitle}>No history found.</Text>
-              </View>
+             <View style={[styles.emptyFilterState, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+               <JeepIllustration width={220} height={150} />
+               <Text style={[styles.emptyTitle, { color: theme.text }]}>NO HISTORY FOUND.</Text>
+             </View>
             )}
 
             {totalPages > 1 && (

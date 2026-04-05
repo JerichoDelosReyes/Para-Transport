@@ -13,8 +13,8 @@ import {
 import { COLORS } from '../constants/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const DEFAULT_FULL_HEIGHT = SCREEN_HEIGHT * 0.8;
-const DEFAULT_HALF_HEIGHT = SCREEN_HEIGHT * 0.45;
+export const DEFAULT_FULL_HEIGHT = SCREEN_HEIGHT * 0.8;
+export const DEFAULT_HALF_HEIGHT = SCREEN_HEIGHT * 0.45;
 
 type BottomSheetProps = {
   visible: boolean;

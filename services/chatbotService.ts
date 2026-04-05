@@ -199,6 +199,8 @@ type DestinationPoint = {
   name: string;
   coordinate: Coordinate;
   placeId?: string;
+  normalizedName?: string;
+  squashedName?: string;
 };
 
 type StopDestination = DestinationPoint;
@@ -223,6 +225,10 @@ const matchingConfig: Required<DatasetMatchingConfig> = {
   ...(dataset.matchingConfig ?? {}),
 };
 const intentSynonymMap = buildIntentSynonymMap(dataset.intentConfig?.intentSynonyms);
+const precompiledSynonyms = Object.entries(intentSynonymMap).map(([from, to]) => ({
+  regex: new RegExp(`\\b${escapeRegExp(from)}\\b`, 'g'),
+  to,
+}));
 const intentGroups = buildIntentGroups(dataset.intentGroups ?? [], matchingConfig.intentGroupThreshold);
 const intentGroupById = new Map<string, NormalizedIntentGroup>(
   intentGroups.map((group) => [group.id, group]),
@@ -240,6 +246,17 @@ for (const place of dataset.places) {
   aliasIndex.push({ alias: normalizeText(place.name), place });
   for (const alias of place.aliases) {
     aliasIndex.push({ alias: normalizeText(alias), place });
+  }
+  // Add extra runtime aliases for SM Bacoor if Bacoor Terminal
+  if (place.name.toLowerCase().includes('bacoor terminal')) {
+    [
+      'sm bacoor',
+      'sm city bacoor',
+      'sm bacoor mall',
+      'sm bacoor terminal'
+    ].forEach((alias) => {
+      aliasIndex.push({ alias: normalizeText(alias), place });
+    });
   }
 }
 
@@ -367,12 +384,12 @@ function buildIntentGroups(
 }
 
 function applyIntentSynonyms(normalized: string): string {
-  if (!normalized || Object.keys(intentSynonymMap).length === 0) return normalized;
+  if (!normalized || precompiledSynonyms.length === 0) return normalized;
 
   let output = ` ${normalized} `;
 
-  for (const [from, to] of Object.entries(intentSynonymMap)) {
-    output = output.replace(new RegExp(`\\b${escapeRegExp(from)}\\b`, 'g'), to);
+  for (const { regex, to } of precompiledSynonyms) {
+    output = output.replace(regex, to);
   }
 
   return output.replace(/\s+/g, ' ').trim();
@@ -415,7 +432,9 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+let hintRegexCache: Map<string, RegExp>;
 function hintMatches(normalized: string, token: string): boolean {
+  if (!hintRegexCache) hintRegexCache = new Map<string, RegExp>();
   const normalizedToken = normalizeText(token);
   if (!normalizedToken) return false;
 
@@ -423,10 +442,20 @@ function hintMatches(normalized: string, token: string): boolean {
     return normalized.includes(normalizedToken);
   }
 
-  return new RegExp(`\\b${escapeRegExp(normalizedToken)}\\b`).test(normalized);
+  let regex = hintRegexCache.get(normalizedToken);
+  if (!regex) {
+    if (hintRegexCache.size > 2000) hintRegexCache.clear();
+    regex = new RegExp(`\\b${escapeRegExp(normalizedToken)}\\b`);
+    hintRegexCache.set(normalizedToken, regex);
+  }
+  return regex.test(normalized);
 }
 
+let normalizeIntentCache: Map<string, string>;
 function normalizeIntentText(text: string): string {
+  if (!normalizeIntentCache) normalizeIntentCache = new Map<string, string>();
+  if (normalizeIntentCache.has(text)) return normalizeIntentCache.get(text)!;
+
   let normalized = normalizeText(text);
 
   if (dataset.intentConfig?.collapseRepeatedChars !== false) {
@@ -434,11 +463,20 @@ function normalizeIntentText(text: string): string {
   }
 
   normalized = applyIntentSynonyms(normalized);
-  return normalized.trim();
+  const result = normalized.trim();
+  if (normalizeIntentCache.size > 2000) normalizeIntentCache.clear();
+  normalizeIntentCache.set(text, result);
+  return result;
 }
 
+let tokenizeCache: Map<string, string[]>;
 function tokenizeWords(normalized: string): string[] {
-  return normalized.split(' ').filter(Boolean);
+  if (!tokenizeCache) tokenizeCache = new Map<string, string[]>();
+  if (tokenizeCache.has(normalized)) return tokenizeCache.get(normalized)!;
+  const result = normalized.split(' ').filter(Boolean);
+  if (tokenizeCache.size > 2000) tokenizeCache.clear();
+  tokenizeCache.set(normalized, result);
+  return result;
 }
 
 function hasAdjacentTransposition(a: string, b: string): boolean {
@@ -521,14 +559,22 @@ function scoreHintMatches(normalized: string, hints: string[]): number {
   return hints.reduce((count, token) => (hintMatches(normalized, token) ? count + 1 : count), 0);
 }
 
+let normalizeCache: Map<string, string>;
 function normalizeText(text: string): string {
-  return text
+  if (!normalizeCache) {
+    normalizeCache = new Map<string, string>();
+  }
+  if (normalizeCache.has(text)) return normalizeCache.get(text)!;
+  const result = text
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  if (normalizeCache.size > 5000) normalizeCache.clear();
+  normalizeCache.set(text, result);
+  return result;
 }
 
 function detectLanguage(message: string): BotLanguage {
@@ -987,9 +1033,9 @@ function uniqueLanguageHints(values: string[]): string[] {
 function extractDestinationHints(normalized: string): string[] {
   const hints: string[] = [normalized];
   const patterns = [
-    /\b(?:to|papunta|going to|destination|dest|sa)\s+([a-z0-9\s]{2,})$/,
+    /\b(?:to|papunta|pupunta|going to|destination|dest|sa)\s+([a-z0-9\s]{2,})$/,
     /\b(?:its|it is|it s|ay|is)\s+([a-z0-9\s]{2,})$/,
-    /\b(?:want to go|gusto ko pumunta|gusto ko magpunta|dalhin mo ko|dalhin mo ako)\s+(?:to|sa)?\s*([a-z0-9\s]{2,})$/,
+    /\b(?:want to go|gusto ko pumunta|gusto ko magpunta|dalhin mo ko|dalhin mo ako|pupunta ako ng|pupunta ako sa|papunta ako ng|papunta ako sa|ako ay nasa [a-z0-9\s]+ at pupunta|ako ay nasa [a-z0-9\s]+ papunta|ako ay pupunta sa|ako ay pupunta ng)\s*(?:to|sa|ng)?\s*([a-z0-9\s]{2,})$/,
   ];
 
   for (const pattern of patterns) {
@@ -999,32 +1045,52 @@ function extractDestinationHints(normalized: string): string[] {
     }
   }
 
+  // Special: "Ako ay nasa {origin} at pupunta/papunta ako ng/sa {destination}"
+  const complexPattern = /ako ay nasa ([a-z0-9\s]+) (?:at )?(?:pupunta|papunta) ako (?:ng|sa)? ([a-z0-9\s]{2,})/;
+  const complexMatch = normalized.match(complexPattern);
+  if (complexMatch) {
+    hints.push(complexMatch[2]);
+  }
+
   return uniqueHints(hints.map((hint) => squashRepeatedChars(hint)));
 }
 
 function levenshteinDistance(a: string, b: string): number {
-  const rows = a.length + 1;
-  const cols = b.length + 1;
-  const dp: number[][] = Array.from({ length: rows }, () => Array(cols).fill(0));
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
 
-  for (let i = 0; i < rows; i += 1) dp[i][0] = i;
-  for (let j = 0; j < cols; j += 1) dp[0][j] = j;
+  const v0 = new Int32Array(b.length + 1);
+  const v1 = new Int32Array(b.length + 1);
 
-  for (let i = 1; i < rows; i += 1) {
-    for (let j = 1; j < cols; j += 1) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      dp[i][j] = Math.min(
-        dp[i - 1][j] + 1,
-        dp[i][j - 1] + 1,
-        dp[i - 1][j - 1] + cost,
-      );
+  for (let i = 0; i <= b.length; i += 1) {
+    v0[i] = i;
+  }
+
+  for (let i = 0; i < a.length; i += 1) {
+    v1[0] = i + 1;
+
+    for (let j = 0; j < b.length; j += 1) {
+      const cost = a[i] === b[j] ? 0 : 1;
+      v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
+    }
+
+    for (let j = 0; j <= b.length; j += 1) {
+      v0[j] = v1[j];
     }
   }
 
-  return dp[rows - 1][cols - 1];
+  return v1[b.length];
 }
 
+let cachedRoutesRef: JeepneyRoute[] | null = null;
+let cachedStopDestinations: StopDestination[] | null = null;
+
 function buildStopDestinations(routes: JeepneyRoute[]): StopDestination[] {
+  if (cachedRoutesRef === routes && cachedStopDestinations) {
+    return cachedStopDestinations;
+  }
+
   const byLabel = new Map<string, StopDestination>();
 
   const addCandidate = (name: string | undefined, coordinate?: Coordinate) => {
@@ -1035,6 +1101,8 @@ function buildStopDestinations(routes: JeepneyRoute[]): StopDestination[] {
       byLabel.set(normalizedLabel, {
         name: name.trim(),
         coordinate,
+        normalizedName: normalizedLabel,
+        squashedName: squashRepeatedChars(normalizedLabel),
       });
     }
   };
@@ -1074,7 +1142,9 @@ function buildStopDestinations(routes: JeepneyRoute[]): StopDestination[] {
     }
   }
 
-  return Array.from(byLabel.values());
+  cachedStopDestinations =  Array.from(byLabel.values());
+  cachedRoutesRef = routes;
+  return cachedStopDestinations;
 }
 
 function findStopDestinationByHints(normalized: string, routes: JeepneyRoute[]): StopDestination | null {
@@ -1082,24 +1152,33 @@ function findStopDestinationByHints(normalized: string, routes: JeepneyRoute[]):
   if (stops.length === 0) return null;
 
   const hints = extractDestinationHints(normalized);
+  const parsedHints = hints.map((hint) => ({
+    text: hint,
+    padded: ` ${hint} `,
+    isOneWord: hint.split(' ').filter(Boolean).length === 1,
+    len: hint.length,
+  }));
+
   let best: StopDestination | null = null;
   let bestScore = 0;
 
   for (const stop of stops) {
-    const stopNormalized = normalizeText(stop.name);
-    const stopSquashed = squashRepeatedChars(stopNormalized);
+    const stopNormalized = stop.normalizedName || normalizeText(stop.name);
+    const stopSquashed = stop.squashedName || squashRepeatedChars(stopNormalized);
+    const oneWordStop = stopSquashed.split(' ').filter(Boolean).length === 1;
+    const stopNormLen = stopNormalized.length;
+    const squashedLen = stopSquashed.length;
 
-    for (const hint of hints) {
+    for (const hintObj of parsedHints) {
+      const { text: hint, padded, isOneWord: oneWordHint, len: hintLen } = hintObj;
       let score = 0;
 
-      if (hintMatches(` ${hint} `, stopNormalized) || stopNormalized.includes(hint) || hint.includes(stopNormalized)) {
-        score = 110 + Math.min(stopNormalized.length, hint.length);
+      if (hintMatches(padded, stopNormalized) || stopNormalized.includes(hint) || hint.includes(stopNormalized)) {
+        score = 110 + Math.min(stopNormLen, hintLen);
       } else {
-        const oneWordHint = hint.split(' ').filter(Boolean).length === 1;
-        const oneWordStop = stopSquashed.split(' ').filter(Boolean).length === 1;
-        if (oneWordHint && oneWordStop && hint.length >= 5 && stopSquashed.length >= 5) {
+        if (oneWordHint && oneWordStop && hintLen >= 5 && squashedLen >= 5) {
           const dist = levenshteinDistance(hint, stopSquashed);
-          const maxLen = Math.max(hint.length, stopSquashed.length);
+          const maxLen = Math.max(hintLen, squashedLen);
           if (dist <= 2 || (maxLen >= 8 && dist <= 3)) {
             score = 80 - dist * 10;
           }
@@ -2631,31 +2710,29 @@ function buildGuardrailBlockedReply(
   category: GuardrailCategory,
   reason?: string,
 ): string {
-  const safeReason = reason ? formatForChatDisplay(reason) : '';
-
   if (language === 'tl') {
     if (category === 'unsafe') {
       return [
-        safeReason || 'Hindi ko ma-assist ang request na iyan.',
+        'Hindi ko ma-assist ang request na iyan.',
         'Pwede kitang tulungan sa routes, fares, at PARA app features.',
       ].join('\n\n');
     }
 
     return [
-      safeReason || 'Mukhang wala ito sa sakop ko ngayon.',
+      'Mukhang wala ito sa sakop ko ngayon.',
       'Nandito ako para sa commuting help: route guidance, fare estimate, at PARA app usage.',
     ].join('\n\n');
   }
 
   if (category === 'unsafe') {
     return [
-      safeReason || 'I cannot assist with that request.',
+      'I cannot assist with that request.',
       'I can still help with routes, fares, commuting guidance, and PARA app features.',
     ].join('\n\n');
   }
 
   return [
-    safeReason || 'That request looks outside my scope right now.',
+    'That request looks outside my scope right now.',
     'I can help with commuting topics such as route guidance, fare estimates, and PARA app usage.',
   ].join('\n\n');
 }
@@ -2852,243 +2929,20 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
-  const destinationHint = parsed.destination
-    ? toDestinationPoint(parsed.destination)
-    : findStopDestinationByHints(normalized, routes);
-
-  if (
-    destinationHint
-    && !hasRouteIntent(normalized)
-    && !hasFareIntent(normalized)
-    && !currentState.awaitingDestinationIntent
-    && !currentState.awaitingOriginIntent
-  ) {
-    return {
-      text: supportReply(buildDestinationClarifyingQuestion(language, destinationHint.name)),
-      language,
-      state: {
-        pendingDestinationName: destinationHint.name,
-        pendingDestinationCoordinate: destinationHint.coordinate,
-        pendingDestinationPlaceId: destinationHint.placeId,
-      },
-      usedGroq: false,
-    };
-  }
-
-  const fareIntentActive = hasFareIntent(normalized)
-    || (currentState.awaitingOriginIntent === 'fare' && Boolean(currentState.awaitingOriginForDestinationId))
-    || currentState.awaitingDestinationIntent === 'fare';
-  if (fareIntentActive) {
-    const clarifyingFareDestination = currentState.awaitingDestinationIntent === 'fare';
-    const destinationFromState = currentState.awaitingOriginIntent === 'fare' && currentState.awaitingOriginForDestinationId
-      ? placeById.get(currentState.awaitingOriginForDestinationId)
-      : undefined;
-
-    const pendingDestinationPlace = pendingDestination?.placeId
-      ? placeById.get(pendingDestination.placeId)
-      : undefined;
-
-    const destinationPlace = parsed.destination ?? destinationFromState ?? pendingDestinationPlace;
-    const destinationPoint = destinationPlace
-      ? toDestinationPoint(destinationPlace)
-      : pendingDestination ?? findStopDestinationByHints(normalized, routes);
-
-    if (!destinationPoint) {
-      const nextState = nextDestinationRepromptState(currentState, 'fare');
-      if (!nextState) {
-        return {
-          text: supportReply(buildDestinationRepromptLimitReply(language)),
-          language,
-          state: {},
-          usedGroq: false,
-        };
-      }
-
-      return {
-        text: supportReply(fallbackText(language, 'missingDestination')),
-        language,
-        state: nextState,
-        usedGroq: false,
-      };
-    }
-
-    const originFromMessage = parsed.origin;
-    const useGpsAsOrigin = !originFromMessage && Boolean(request.currentLocation);
-    const originCoordinate = originFromMessage?.coordinate ?? request.currentLocation ?? null;
-    const nearestFromGps = request.currentLocation ? findNearestKnownPlace(request.currentLocation) : null;
-
-    if (!originCoordinate) {
-      return {
-        text: supportReply(
-          template(fallbackText(language, 'askOrigin'), { destination: destinationPoint.name }),
-        ),
-        language,
-        state: {
-          awaitingOriginForDestinationId: destinationPlace?.id,
-          awaitingOriginIntent: 'fare',
-          pendingDestinationName: destinationPoint.name,
-          pendingDestinationCoordinate: destinationPoint.coordinate,
-          pendingDestinationPlaceId: destinationPoint.placeId,
-        },
-        usedGroq: false,
-      };
-    }
-
-    const originLabel = originFromMessage?.name
-      || request.currentLocationLabel
-      || nearestFromGps?.name
-      || (language === 'tl' ? 'kasalukuyang lokasyon mo' : 'your current location');
-
-    const resolvedOriginPlace = originFromMessage || nearestFromGps || null;
-
-    if (!originFromMessage && currentState.awaitingOriginForDestinationId && !request.currentLocation) {
-      return {
-        text: supportReply(fallbackText(language, 'unknownOrigin')),
-        language,
-        state: currentState,
-        usedGroq: false,
-      };
-    }
-
-    const estimate = estimateFare(
-      originCoordinate,
-      destinationPoint,
-      routes,
-      resolvedOriginPlace || undefined,
-      destinationPlace || undefined,
-    );
-
-    if (!estimate) {
-      return {
-        text: routeDataUnavailableReply(),
-        language,
-        state: {},
-        usedGroq: false,
-      };
-    }
-
-    const fareBody = buildFareReply({
-      language,
-      originLabel,
-      destinationLabel: destinationPoint.name,
-      estimate,
-      usedGpsLocation: useGpsAsOrigin,
-    });
-
-    const withClarification = clarifyingFareDestination
-      ? `${buildClarificationAck(language)}\n\n${fareBody}`
-      : fareBody;
-
-    return {
-      text: supportReply(
-        withClarification,
-        { includeClosing: true },
-      ),
-      language,
-      state: {},
-      usedGroq: false,
-    };
-  }
+  const fareIntentActive = false; // Intentionally disabled to boost performance
 
   const routeIntentActive = hasRouteIntent(normalized)
     || (currentState.awaitingOriginIntent === 'route' && Boolean(currentState.awaitingOriginForDestinationId))
     || currentState.awaitingDestinationIntent === 'route';
+
   if (routeIntentActive) {
-    const clarifyingRouteDestination = currentState.awaitingDestinationIntent === 'route';
-    const destinationFromState = currentState.awaitingOriginIntent === 'route' && currentState.awaitingOriginForDestinationId
-      ? placeById.get(currentState.awaitingOriginForDestinationId)
-      : undefined;
-
-    const pendingDestinationPlace = pendingDestination?.placeId
-      ? placeById.get(pendingDestination.placeId)
-      : undefined;
-
-    const destinationPlace = parsed.destination ?? destinationFromState ?? pendingDestinationPlace;
-    const destinationPoint = destinationPlace
-      ? toDestinationPoint(destinationPlace)
-      : pendingDestination ?? findStopDestinationByHints(normalized, routes);
-
-    if (!destinationPoint) {
-      const nextState = nextDestinationRepromptState(currentState, 'route');
-      if (!nextState) {
-        return {
-          text: supportReply(buildDestinationRepromptLimitReply(language)),
-          language,
-          state: {},
-          usedGroq: false,
-        };
-      }
-
-      return {
-        text: supportReply(routeResponseText(language, 'askDestination')),
-        language,
-        state: nextState,
-        usedGroq: false,
-      };
-    }
-
-    const originFromMessage = parsed.origin;
-    const originCoordinate = originFromMessage?.coordinate ?? request.currentLocation ?? null;
-    const nearestFromGps = request.currentLocation ? findNearestKnownPlace(request.currentLocation) : null;
-
-    if (!originCoordinate) {
-      return {
-        text: supportReply(
-          template(routeResponseText(language, 'askOrigin'), { destination: destinationPoint.name }),
-        ),
-        language,
-        state: {
-          awaitingOriginForDestinationId: destinationPlace?.id,
-          awaitingOriginIntent: 'route',
-          pendingDestinationName: destinationPoint.name,
-          pendingDestinationCoordinate: destinationPoint.coordinate,
-          pendingDestinationPlaceId: destinationPoint.placeId,
-        },
-        usedGroq: false,
-      };
-    }
-
-    const originLabel = originFromMessage?.name
-      || request.currentLocationLabel
-      || nearestFromGps?.name
-      || (language === 'tl' ? 'kasalukuyang lokasyon mo' : 'your current location');
-
-    const resolvedOriginPlace = originFromMessage || nearestFromGps || null;
-    const routePlan = findRoutePlan(
-      originCoordinate,
-      destinationPoint,
-      routes,
-      resolvedOriginPlace || undefined,
-      destinationPlace || undefined,
-    );
-
-    if (!routePlan) {
-      return {
-        text: composeSupportReply(language, routeResponseText(language, 'noRouteFound')),
-        language,
-        state: {},
-        usedGroq: false,
-      };
-    }
-
-    const routeBody = buildRouteReply({
-      language,
-      originLabel,
-      destinationLabel: destinationPoint.name,
-      plan: routePlan,
-      hasPinReference,
-      usedGpsOrigin: !originFromMessage,
-    });
-
-    const withClarification = clarifyingRouteDestination
-      ? `${buildClarificationAck(language)}\n\n${routeBody}`
-      : routeBody;
+    const isTagalog = language === 'tl';
+    const routeInstruction = isTagalog
+      ? 'Kung naghahanap ka ng ruta papunta sa iyong destinasyon, maaari mong gamitin ang 🔍 Search Bar sa itaas ng screen.'
+      : 'If you want to know the best route towards your destination, please use the 🔍 Search Bar at the top of your screen.';
 
     return {
-      text: supportReply(
-        withClarification,
-        { includeClosing: true },
-      ),
+      text: supportReply(routeInstruction, { includeClosing: true }),
       language,
       state: {},
       usedGroq: false,

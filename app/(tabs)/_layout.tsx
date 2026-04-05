@@ -1,5 +1,6 @@
+import { useTheme } from "../../src/theme/ThemeContext";
 import { Tabs } from 'expo-router';
-import { StyleSheet, View, Text, Animated, Dimensions, Platform, TouchableWithoutFeedback, Easing } from 'react-native';
+import { StyleSheet, View, Text, Animated, Dimensions, Platform, TouchableWithoutFeedback, Easing, AppState, AppStateStatus } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/theme';
 import { useEffect, useRef, useState } from 'react';
@@ -9,7 +10,7 @@ import { useStore } from '../../store/useStore';
 
 const { width } = Dimensions.get('window');
 
-function TabBarBackground() {
+function TabBarBackground({ theme }: { theme: any }) {
   const insets = useSafeAreaInsets();
   const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
   const height = 48 + bottomSpace;
@@ -30,13 +31,13 @@ function TabBarBackground() {
   return (
     <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height, backgroundColor: 'transparent', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 4 }}>
       <Svg width={width} height={height}>
-        <Path d={path} fill="#FFFFFF" />
+        <Path d={path} fill={theme.cardBackground} />
       </Svg>
     </View>
   );
 }
 
-function LiquidGlassHomeButton({ focused, onPress }: { focused: boolean, onPress: () => void }) {
+function LiquidGlassHomeButton({ focused, onPress, isDark }: { focused: boolean, onPress: () => void, isDark?: boolean }) {
   const idleAnim = useRef(new Animated.Value(0)).current;
   const pressAnim = useRef(new Animated.Value(0)).current;
 
@@ -96,8 +97,8 @@ function LiquidGlassHomeButton({ focused, onPress }: { focused: boolean, onPress
   return (
     <TouchableWithoutFeedback onPressIn={handlePressIn} onPressOut={handlePressOut}>
       <Animated.View style={[styles.homeButtonContainer, { transform: [{ scale: buttonScale }] }]}>
-        <View style={styles.homeButtonBase}>
-          <Ionicons name={focused ? 'home' : 'home-outline'} size={28} color="#FFFFFF" />
+        <View style={[styles.homeButtonBase, { backgroundColor: isDark ? '#E8A020' : '#E8A020' }]}>
+          <Ionicons name={focused ? 'home' : 'home-outline'} size={28} color={isDark ? '#0A1628' : '#FFF'} />
         </View>
       </Animated.View>
     </TouchableWithoutFeedback>
@@ -105,6 +106,7 @@ function LiquidGlassHomeButton({ focused, onPress }: { focused: boolean, onPress
 }
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
   const user = useStore((state) => state.user);
@@ -114,7 +116,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   return (
     <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
       {/* Cutout Background */}
-      <TabBarBackground />
+      <TabBarBackground theme={theme} />
       
       <View style={[styles.customTabBarContainer, { height: 48, paddingBottom: 0, marginBottom: bottomSpace }]}>
         {state.routes.map((route: any, index: number) => {
@@ -145,7 +147,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             return (
               <View key={route.key} style={styles.centerTabWrapper}>
                 <View style={[styles.homeButtonWrapper, { bottom: 12 }]}>
-                   <LiquidGlassHomeButton focused={isFocused} onPress={onPress} />
+                   <LiquidGlassHomeButton focused={isFocused} onPress={onPress} isDark={isDark} />
                 </View>
               </View>
             );
@@ -156,8 +158,8 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             return (
               <TouchableWithoutFeedback key={route.key} onPress={onPress}>
                 <View style={styles.tabItem}>
-                  <Ionicons name={isHistoryFocused ? 'map' : 'map-outline'} size={24} color={isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 2 }} />
-                  <Text style={[styles.tabLabel, { color: isHistoryFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
+                  <Ionicons name={isHistoryFocused ? 'map' : 'map-outline'} size={24} color={isHistoryFocused ? '#E8A020' : (isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.35)')} style={{ marginBottom: 2 }} />
+                  <Text style={[styles.tabLabel, { color: isHistoryFocused ? '#E8A020' : (isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.35)') }]}>
                     {label as string}
                   </Text>
                 </View>
@@ -171,8 +173,8 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           return (
             <TouchableWithoutFeedback key={route.key} onPress={onPress}>
               <View style={styles.tabItem}>
-                <Ionicons name={iconName as any} size={24} color={isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)'} style={{ marginBottom: 2 }} />
-                <Text style={[styles.tabLabel, { color: isFocused ? '#E8A020' : 'rgba(0,0,0,0.35)' }]}>
+                <Ionicons name={iconName as any} size={24} color={isFocused ? '#E8A020' : (isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.35)')} style={{ marginBottom: 2 }} />
+                <Text style={[styles.tabLabel, { color: isFocused ? '#E8A020' : (isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.35)') }]}>
                   {label as string}
                 </Text>
               </View>
@@ -185,6 +187,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabLayout() {
+  const { theme, isDark } = useTheme();
   const sessionMode = useStore((state) => state.sessionMode);
   const user = useStore((state) => state.user);
   const syncWithSupabase = useStore((state) => state.syncWithSupabase);
@@ -193,6 +196,16 @@ export default function TabLayout() {
     if (sessionMode === 'auth') {
       syncWithSupabase();
     }
+
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && sessionMode === 'auth') {
+        syncWithSupabase();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [sessionMode]);
 
   return (

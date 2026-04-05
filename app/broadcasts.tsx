@@ -4,7 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
+import { useTheme } from '../src/theme/ThemeContext';
+import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep2.svg';
 import { supabase } from '../config/supabaseClient';
 
 type BroadcastMessage = {
@@ -19,6 +21,7 @@ type BroadcastMessage = {
 export default function BroadcastsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { theme, isDark } = useTheme();
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -52,15 +55,15 @@ export default function BroadcastsScreen() {
   };
 
   return (
-    <View style={styles.screen}>
-      <View style={{ backgroundColor: COLORS.primary, paddingTop: insets.top }}>
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <View style={{ backgroundColor: isDark ? '#E8A020' : COLORS.primary, paddingTop: insets.top }}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-            <View style={styles.iconButtonCircle}>
-              <Ionicons name="chevron-back" size={24} color={COLORS.navy} />
+            <View style={[styles.iconButtonCircle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+              <Ionicons name="chevron-back" size={24} color="#0A1628" />
             </View>
           </TouchableOpacity>
-          <Text style={styles.headerTitleText}>BROADCASTS</Text>
+          <Text style={[styles.headerTitleText, { color: '#0A1628' }]}>BROADCASTS</Text>
           <View style={{ width: 44, height: 44 }} />
         </View>
       </View>
@@ -68,9 +71,12 @@ export default function BroadcastsScreen() {
       <View style={styles.bottomSection}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           {loading ? (
-            <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
+            <ActivityIndicator size="large" color={isDark ? theme.text : COLORS.primary} style={{ marginTop: 40 }} />
           ) : broadcasts.length === 0 ? (
-            <Text style={styles.emptyText}>No recent broadcasts found.</Text>
+            <View style={[styles.emptyContainer, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <JeepIllustration width={220} height={150} />
+              <Text style={[styles.emptyTitle, { color: theme.text }]}>WALA PANG BROADCASTS.</Text>
+            </View>
           ) : (
             broadcasts.map((b) => (
               <View key={b.id} style={styles.cardWrapper}>
@@ -108,7 +114,7 @@ const styles = StyleSheet.create({
   headerTitleText: {
     fontFamily: 'Cubao',
     fontSize: TYPOGRAPHY.screenTitle,
-    color: '#000000',
+    color: '#0A1628',
   },
   iconButton: {
     width: 44,
@@ -129,10 +135,24 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: SPACING.screenX,
-    paddingTop: 24,
+    paddingTop: 16,
     paddingBottom: 40,
   },
-  emptyText: { textAlign: 'center', color: COLORS.textMuted, marginTop: 40, fontFamily: 'Inter' },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: '#FFFFFF',
+    padding: SPACING.cardPadding,
+  },
+  emptyTitle: {
+    marginTop: 8,
+    fontFamily: 'Cubao',
+    fontSize: 24,
+    color: COLORS.navy,
+  },
   cardWrapper: {
     marginBottom: 16,
     borderRadius: 16,
