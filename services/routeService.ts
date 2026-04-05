@@ -11,10 +11,27 @@ const MAX_ROUTE_POINTS_BY_TYPE: Record<string, number> = {
   uv: 700,
 };
 
+type RouteTypeConfig = {
+  table: string;
+  stopTable: string;
+  type: 'jeepney' | 'tricycle' | 'bus' | 'uv';
+};
+
+const ROUTE_TYPE_CONFIGS: RouteTypeConfig[] = [
+  { table: 'jeepney_routes', stopTable: 'jeepney_route_stops', type: 'jeepney' },
+  { table: 'tricycle_routes', stopTable: 'tricycle_route_stops', type: 'tricycle' },
+  { table: 'bus_routes', stopTable: 'bus_route_stops', type: 'bus' },
+  { table: 'uv_express_routes', stopTable: 'uv_express_route_stops', type: 'uv' },
+];
+
 interface CachedData {
   routes: JeepneyRoute[];
   cachedAt: number;
 }
+
+let inMemoryCache: CachedData | null = null;
+let inFlightSupabaseFetch: Promise<JeepneyRoute[]> | null = null;
+let inFlightLoadRoutes: Promise<{ routes: JeepneyRoute[]; source: RouteSource }> | null = null;
 
 function downsamplePath(pathData: number[][], maxPoints: number): number[][] {
   if (!Array.isArray(pathData) || pathData.length <= maxPoints) return pathData;
@@ -72,69 +89,77 @@ function toJeepneyRoute(
 
 type RouteSource = 'supabase' | 'cache';
 
+async function fetchRoutesForType(config: RouteTypeConfig): Promise<JeepneyRoute[]> {
+  const { table, stopTable, type } = config;
+
+  try {
+    // 1. Fetch routes
+    const { data: routeRows, error: routeErr } = await supabase
+      .from(table)
+      .select('id, source_relation_id, route_code, name, label, from_label, to_label, description, operator, network, fare_base, status, path_data, is_active')
+      .eq('is_active', true)
+      .order('label');
+
+    if (routeErr || !routeRows || routeRows.length === 0) return [];
+
+    // 2. Fetch all stops for these routes in one query
+    const routeIds = routeRows.map((r: any) => r.id);
+    const { data: stopRows, error: stopErr } = await supabase
+      .from(stopTable)
+      .select('route_id, stop_name, latitude, longitude, stop_order')
+      .in('route_id', routeIds)
+      .order('stop_order');
+
+    if (stopErr) return [];
+
+    // 3. Group stops by route_id
+    const stopsByRoute: Record<string, any[]> = {};
+    for (const stop of stopRows || []) {
+      if (!stopsByRoute[stop.route_id]) stopsByRoute[stop.route_id] = [];
+      stopsByRoute[stop.route_id].push(stop);
+    }
+
+    // 4. Assemble JeepneyRoute objects
+    return routeRows
+      .filter((r: any) => {
+        const path = Array.isArray(r.path_data) ? r.path_data : [];
+        return path.length >= 2;
+      })
+      .map((r: any) => toJeepneyRoute(r, stopsByRoute[r.id] || [], type));
+  } catch (e) {
+    console.warn(`[routeService] Failed to fetch ${type} routes from Supabase:`, e);
+    return [];
+  }
+}
+
 /** Fetch all active routes + their stops from Supabase. */
 export async function fetchRoutesFromSupabase(): Promise<JeepneyRoute[]> {
-  const routeTypes: Array<{ table: string, stopTable: string, type: 'jeepney' | 'tricycle' | 'bus' | 'uv' }> = [
-    { table: 'jeepney_routes', stopTable: 'jeepney_route_stops', type: 'jeepney' },
-    { table: 'tricycle_routes', stopTable: 'tricycle_route_stops', type: 'tricycle' },
-    { table: 'bus_routes', stopTable: 'bus_route_stops', type: 'bus' },
-    { table: 'uv_express_routes', stopTable: 'uv_express_route_stops', type: 'uv' },
-  ];
+  if (inFlightSupabaseFetch) return inFlightSupabaseFetch;
 
-  let allMappedRoutes: JeepneyRoute[] = [];
+  inFlightSupabaseFetch = (async () => {
+    const allByType = await Promise.all(ROUTE_TYPE_CONFIGS.map((config) => fetchRoutesForType(config)));
+    return allByType.flat();
+  })();
 
-  for (const { table, stopTable, type } of routeTypes) {
-    try {
-      // 1. Fetch routes
-      const { data: routeRows, error: routeErr } = await supabase
-        .from(table)
-        .select('id, source_relation_id, route_code, name, label, from_label, to_label, description, operator, network, fare_base, status, path_data, is_active')
-        .eq('is_active', true)
-        .order('label');
-
-      if (routeErr || !routeRows || routeRows.length === 0) continue;
-
-      // 2. Fetch all stops for these routes in one query
-      const routeIds = routeRows.map((r: any) => r.id);
-      const { data: stopRows, error: stopErr } = await supabase
-        .from(stopTable)
-        .select('route_id, stop_name, latitude, longitude, stop_order')
-        .in('route_id', routeIds)
-        .order('stop_order');
-
-      if (stopErr) continue;
-
-      // 3. Group stops by route_id
-      const stopsByRoute: Record<string, any[]> = {};
-      for (const stop of stopRows || []) {
-        if (!stopsByRoute[stop.route_id]) stopsByRoute[stop.route_id] = [];
-        stopsByRoute[stop.route_id].push(stop);
-      }
-
-      // 4. Assemble JeepneyRoute objects
-      const mapped = routeRows
-        .filter((r: any) => {
-          const path = Array.isArray(r.path_data) ? r.path_data : [];
-          return path.length >= 2;
-        })
-        .map((r: any) => toJeepneyRoute(r, stopsByRoute[r.id] || [], type));
-        
-      allMappedRoutes = allMappedRoutes.concat(mapped);
-    } catch (e) {
-      console.warn(`[routeService] Failed to fetch ${type} routes from Supabase:`, e);
-    }
+  try {
+    return await inFlightSupabaseFetch;
+  } finally {
+    inFlightSupabaseFetch = null;
   }
-
-  return allMappedRoutes;
 }
 
 /** Read cached routes from AsyncStorage. Returns null if missing/expired. */
 export async function getCachedRoutes(): Promise<JeepneyRoute[] | null> {
+  if (inMemoryCache && Date.now() - inMemoryCache.cachedAt <= CACHE_TTL_MS) {
+    return inMemoryCache.routes;
+  }
+
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const cached: CachedData = JSON.parse(raw);
     if (Date.now() - cached.cachedAt > CACHE_TTL_MS) return null;
+    inMemoryCache = cached;
     return cached.routes;
   } catch {
     return null;
@@ -143,8 +168,10 @@ export async function getCachedRoutes(): Promise<JeepneyRoute[] | null> {
 
 /** Write routes to AsyncStorage cache. */
 export async function cacheRoutes(routes: JeepneyRoute[]): Promise<void> {
+  const data: CachedData = { routes, cachedAt: Date.now() };
+  inMemoryCache = data;
+
   try {
-    const data: CachedData = { routes, cachedAt: Date.now() };
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
   } catch {
     // Silently fail — cache is best-effort
@@ -157,29 +184,39 @@ export async function cacheRoutes(routes: JeepneyRoute[]): Promise<void> {
  *   2. AsyncStorage cache (offline / Supabase down)
  */
 export async function loadRoutes(): Promise<{ routes: JeepneyRoute[]; source: RouteSource }> {
-  // 1. Try Supabase
-  try {
-    const routes = await fetchRoutesFromSupabase();
-    if (routes.length > 0) {
-      cacheRoutes(routes); // fire-and-forget
-      console.log(`[routeService] Loaded ${routes.length} routes from Supabase`);
-      return { routes, source: 'supabase' };
-    }
-  } catch (err) {
-    console.warn('[routeService] Supabase fetch failed, trying cache:', err);
-  }
+  if (inFlightLoadRoutes) return inFlightLoadRoutes;
 
-  // 2. Try cache
-  try {
-    const cached = await getCachedRoutes();
-    if (cached && cached.length > 0) {
-      console.log(`[routeService] Loaded ${cached.length} routes from cache`);
-      return { routes: cached, source: 'cache' };
+  inFlightLoadRoutes = (async () => {
+    // 1. Try Supabase
+    try {
+      const routes = await fetchRoutesFromSupabase();
+      if (routes.length > 0) {
+        void cacheRoutes(routes);
+        console.log(`[routeService] Loaded ${routes.length} routes from Supabase`);
+        return { routes, source: 'supabase' as const };
+      }
+    } catch (err) {
+      console.warn('[routeService] Supabase fetch failed, trying cache:', err);
     }
-  } catch {
-    // fall through
-  }
 
-  console.warn('[routeService] No routes available from Supabase or cache');
-  return { routes: [], source: 'cache' };
+    // 2. Try cache
+    try {
+      const cached = await getCachedRoutes();
+      if (cached && cached.length > 0) {
+        console.log(`[routeService] Loaded ${cached.length} routes from cache`);
+        return { routes: cached, source: 'cache' as const };
+      }
+    } catch {
+      // fall through
+    }
+
+    console.warn('[routeService] No routes available from Supabase or cache');
+    return { routes: [], source: 'cache' as const };
+  })();
+
+  try {
+    return await inFlightLoadRoutes;
+  } finally {
+    inFlightLoadRoutes = null;
+  }
 }

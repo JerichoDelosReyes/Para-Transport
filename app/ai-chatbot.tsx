@@ -5,7 +5,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 import { COLORS } from "../constants/theme";
 import { useRoutes } from "../hooks/useRoutes";
 import { getChatbotReply, type ChatbotConversationState } from "../services/chatbotService";
@@ -89,39 +88,12 @@ export default function AIChatbotScreen() {
     setStoredConversationState(conversationState);
   }, [conversationState, setStoredConversationState]);
 
-  useSpeechRecognitionEvent("start", () => setIsRecording(true));
-  useSpeechRecognitionEvent("end", () => setIsRecording(false));
-  useSpeechRecognitionEvent("result", (event) => {
-    if (event.results && event.results.length > 0) {
-      setInputText(event.results[0].transcript);
-    }
-  });
-  useSpeechRecognitionEvent("error", (event) => {
-    setIsRecording(false);
-    console.log("Speech recognition error:", event.error, event.message);
-  });
-
   const handleMicPress = async () => {
-    if (isRecording) {
-      ExpoSpeechRecognitionModule.stop();
-      return;
-    }
-
-    try {
-      const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!granted) {
-        Alert.alert("Permission Required", "Please enable microphone and speech recognition permissions.");
-        return;
-      }
-      
-      ExpoSpeechRecognitionModule.start({
-        lang: 'en-PH', // 'en-PH' handles both English and Taglish/Filipino terms natively on iOS
-        interimResults: true,
-        maxAlternatives: 1
-      });
-    } catch (error) {
-      console.log("Error starting speech recognition:", error);
-    }
+    setIsRecording(false);
+    Alert.alert(
+      "Voice input unavailable",
+      "Speech recognition is not available in this currently installed build. Rebuild and reinstall your dev client to enable voice input.",
+    );
   };
 
   useEffect(() => {

@@ -559,6 +559,14 @@ function getRouteSearchDataset(routes: JeepneyRoute[]): RouteSearchDataset {
   return dataset;
 }
 
+/**
+ * Pre-build and cache route search indexes to reduce first-search latency.
+ */
+export function warmRouteSearchDataset(routes: JeepneyRoute[]): void {
+  if (!Array.isArray(routes) || routes.length === 0) return;
+  getRouteSearchDataset(routes);
+}
+
 function getPotentialNeighborIndexes(
   dataset: RouteSearchDataset,
   fromInfo: RouteInfo,

@@ -27,7 +27,7 @@ import * as Haptics from 'expo-haptics';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useStore } from '../../store/useStore';
 import RouteRecommenderPanel from '../../components/RouteRecommenderPanel';
-import { findRoutesForDestination, MatchedRoute } from '../../services/routeSearch';
+import { findRoutesForDestination, MatchedRoute, warmRouteSearchDataset } from '../../services/routeSearch';
 import { useRoutes } from '../../hooks/useRoutes';
 import { useSimulation } from '../../hooks/useSimulation';
 import { loadRoutes } from '../../services/routeService';
@@ -528,6 +528,19 @@ export default function HomeScreen() {
   const routesBySelectedType = useMemo(() => {
     return transitDataRoutes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
   }, [transitDataRoutes, selectedRouteType]);
+
+  useEffect(() => {
+    if (routesBySelectedType.length === 0) return;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      warmRouteSearchDataset(routesBySelectedType);
+    });
+
+    return () => {
+      task.cancel?.();
+    };
+  }, [routesBySelectedType]);
+
   const selectedRouteTypeLabel = useMemo(
     () => routeTypeLabel(selectedRouteType),
     [selectedRouteType],
@@ -998,8 +1011,9 @@ export default function HomeScreen() {
       setIsRouting(true);
 
       let routesForSearch = routesBySelectedType;
+      const shouldRefreshRoutesFromSource = routesForSearch.length === 0;
 
-      const bufferCandidates = [500, 900, 1400, 2200];
+      const bufferCandidates = [450, 900, 1600];
       let yieldedBeforeMatching = false;
       const yieldBeforeMatching = async () => {
         if (yieldedBeforeMatching) return;
@@ -1031,8 +1045,8 @@ export default function HomeScreen() {
       }
 
       // Fallback path: refresh from source only when local set is empty
-      // or when the first pass finds no candidates.
-      if (results.length === 0) {
+      // to avoid blocking no-result cases with an unnecessary network call.
+      if (results.length === 0 && shouldRefreshRoutesFromSource) {
         const loaded = await loadRoutes();
         const latestByType = loaded.routes.filter((route) => routeMatchesSelectedType(route, selectedRouteType));
         if (latestByType.length > 0) {

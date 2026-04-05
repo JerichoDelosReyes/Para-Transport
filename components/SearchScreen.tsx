@@ -16,11 +16,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { COLORS, SPACING } from '../constants/theme';
 import { fuzzyFilter } from '../utils/fuzzySearch';
 import { useRecentSearches, RecentSearch } from '../hooks/useRecentSearches';
 import { useStore } from '../store/useStore';
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 
 const GEOCODING_BASE_URL =
   process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
@@ -40,8 +39,6 @@ type SearchScreenProps = {
   currentLocationLabel?: string;
   initialOrigin?: string;
   initialDestination?: string;
-  selectedRouteType: TransitRouteType;
-  onSelectRouteType: (routeType: TransitRouteType) => void;
   onClose: () => void;
   onSelectRoute: (origin: PlaceResult | null, destination: PlaceResult) => void;
   onClearRoute?: (clearOrigin?: boolean, clearDestination?: boolean) => void;
@@ -52,13 +49,11 @@ export default function SearchScreen({
   currentLocationLabel,
   initialOrigin,
   initialDestination,
-  selectedRouteType,
-  onSelectRouteType,
   onClose,
   onSelectRoute,
   onClearRoute,
 }: SearchScreenProps) {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [activeField, setActiveField] = useState<'origin' | 'destination'>('destination');
   const [originText, setOriginText] = useState('');
@@ -216,53 +211,18 @@ export default function SearchScreen({
   }, [activeQuery, activeField, recents]);
 
   const startRecording = async (field: 'origin' | 'destination') => {
-    try {
-      const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!granted) {
-        Alert.alert("Permission Required", "Microphone access is required for voice search.");
-        return;
-      }
-
-      if (field === 'origin') setIsRecordingOrigin(true);
-      if (field === 'destination') setIsRecordingDestination(true);
-
-      ExpoSpeechRecognitionModule.start({
-        lang: 'en-PH', // Use 'en-PH' for local Philippine locations and Taglish mix
-        interimResults: true,
-        maxAlternatives: 1
-      });
-    } catch (error) {
-      console.warn("Speech recognition error:", error);
-    }
+    if (field === 'origin') setIsRecordingOrigin(false);
+    if (field === 'destination') setIsRecordingDestination(false);
+    Alert.alert(
+      'Voice input unavailable',
+      'Speech recognition is not available in this currently installed build. Rebuild and reinstall your dev client to enable voice input.',
+    );
   };
 
   const handleMicPress = (field: 'origin' | 'destination') => {
     setActiveField(field);
-    if ((field === 'origin' && isRecordingOrigin) || (field === 'destination' && isRecordingDestination)) {
-      ExpoSpeechRecognitionModule.stop();
-      if (field === 'origin') setIsRecordingOrigin(false);
-      if (field === 'destination') setIsRecordingDestination(false);
-      return;
-    }
     startRecording(field);
   };
-
-  useSpeechRecognitionEvent("result", (event) => {
-    if (event.results && event.results.length > 0) {
-      const transcript = event.results[0].transcript;
-      if (activeField === 'origin') {
-        setOriginText(transcript);
-        setUsingCurrentLocation(false);
-      } else {
-        setDestinationText(transcript);
-      }
-    }
-  });
-
-  useSpeechRecognitionEvent("end", () => {
-    setIsRecordingOrigin(false);
-    setIsRecordingDestination(false);
-  });
 
   const handleSwapRoute = useCallback(() => {
     const oldOriginText = originText;
