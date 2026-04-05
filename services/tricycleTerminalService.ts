@@ -49,9 +49,9 @@ type CachedTerminalData = {
 const TERMINAL_CACHE_KEY = '@para_tricycle_terminals_cache_v1';
 const TERMINAL_CACHE_TTL_MS = 1000 * 60 * 60;
 
-const MIN_LAST_MILE_DISTANCE_KM = 1.0;
+const MIN_LAST_MILE_DISTANCE_KM = 0.5;
 const MAX_LAST_MILE_DISTANCE_KM = 3.0;
-const MAX_WALK_TO_TERMINAL_KM = 0.7;
+const MAX_WALK_TO_TERMINAL_KM = 0.5;
 const TRICYCLE_SPEED_KMH = 24;
 const TRICYCLE_WAIT_MIN = 1.5;
 

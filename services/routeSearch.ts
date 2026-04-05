@@ -6,6 +6,10 @@ export type RouteLeg = {
   route: JeepneyRoute;
   boardingPoint: { latitude: number; longitude: number };
   alightingPoint: { latitude: number; longitude: number };
+  /** Along-route position (km) used to derive a stable on-path segment for map rendering. */
+  boardingAlongKm?: number;
+  /** Along-route position (km) used to derive a stable on-path segment for map rendering. */
+  alightingAlongKm?: number;
   distanceKm: number;
   estimatedFare: number;
   estimatedMinutes: number;
@@ -76,6 +80,9 @@ const BUFFER_DISTANCE = 500; // meters
 const TRANSFER_WALK_DISTANCE = 500; // meters
 const AVG_SPEED_KMH = 15;
 const WALK_SPEED_KMH = 4;
+const WALK_PATH_STRETCH_FACTOR = 1.2;
+const WALK_MINUTES_PER_METER = 60 / (WALK_SPEED_KMH * 1000);
+const RIDE_MINUTES_PER_METER = 60 / (AVG_SPEED_KMH * 1000);
 
 // Tuned to keep search responsive on mid-range phones.
 const MAX_LINE_POINTS = 160;
@@ -728,13 +735,8 @@ function snapPointToRouteForward(
     longitude: number;
     distanceMeters: number;
     alongMeters: number;
+    travelMinutes: number;
   }> = [];
-
-  let bestDistMeters = Number.POSITIVE_INFINITY;
-  let bestLat = coords[0].latitude;
-  let bestLng = coords[0].longitude;
-  let bestAlongMeters = Number.POSITIVE_INFINITY;
-  let found = false;
 
   for (let i = 0; i < coords.length - 1; i++) {
     const a = coords[i];
@@ -780,62 +782,60 @@ function snapPointToRouteForward(
     const distanceMeters = Math.sqrt(projX * projX + projY * projY);
     const latitude = point.latitude + projY / METERS_PER_DEG;
     const longitude = point.longitude + projX / lonScale;
+    const rideMeters = Math.max(0, alongMeters - minAlongMeters);
+    const travelMinutes = estimateEndpointTravelMinutes(distanceMeters, rideMeters);
 
     candidates.push({
       latitude,
       longitude,
       distanceMeters,
       alongMeters,
+      travelMinutes,
     });
-
-    if (
-      !found ||
-      distanceMeters < bestDistMeters ||
-      (Math.abs(distanceMeters - bestDistMeters) < 1e-6 && alongMeters < bestAlongMeters)
-    ) {
-      bestDistMeters = distanceMeters;
-      bestLat = latitude;
-      bestLng = longitude;
-      bestAlongMeters = alongMeters;
-      found = true;
-    }
   }
 
-  if (!found) return null;
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    return (
+      a.travelMinutes - b.travelMinutes ||
+      a.distanceMeters - b.distanceMeters ||
+      a.alongMeters - b.alongMeters
+    );
+  });
+
+  const best = candidates[0];
 
   if (tieMeters > 0 && candidates.length > 1) {
-    const thresholdMeters = bestDistMeters + tieMeters;
-    let tieBest = candidates[0];
-    let tieFound = false;
+    const thresholdMeters = best.distanceMeters + tieMeters;
+    const minuteThreshold = best.travelMinutes + 0.15;
+    let tieBest = best;
 
     for (const candidate of candidates) {
       if (candidate.distanceMeters > thresholdMeters) continue;
+      if (candidate.travelMinutes > minuteThreshold) continue;
       if (
-        !tieFound ||
         candidate.alongMeters < tieBest.alongMeters ||
         (Math.abs(candidate.alongMeters - tieBest.alongMeters) < 1e-6 &&
-          candidate.distanceMeters < tieBest.distanceMeters)
+          candidate.travelMinutes < tieBest.travelMinutes)
       ) {
         tieBest = candidate;
-        tieFound = true;
       }
     }
 
-    if (tieFound) {
-      return {
-        latitude: tieBest.latitude,
-        longitude: tieBest.longitude,
-        distanceMeters: tieBest.distanceMeters,
-        alongKm: tieBest.alongMeters / 1000,
-      };
-    }
+    return {
+      latitude: tieBest.latitude,
+      longitude: tieBest.longitude,
+      distanceMeters: tieBest.distanceMeters,
+      alongKm: tieBest.alongMeters / 1000,
+    };
   }
 
   return {
-    latitude: bestLat,
-    longitude: bestLng,
-    distanceMeters: bestDistMeters,
-    alongKm: bestAlongMeters / 1000,
+    latitude: best.latitude,
+    longitude: best.longitude,
+    distanceMeters: best.distanceMeters,
+    alongKm: best.alongMeters / 1000,
   };
 }
 
@@ -918,6 +918,16 @@ function collectRouteSnapsWithinDistance(
   return deduped;
 }
 
+function estimateEndpointTravelMinutes(endpointWalkMeters: number, rideMeters: number): number {
+  const adjustedWalkMeters = Math.max(0, endpointWalkMeters) * WALK_PATH_STRETCH_FACTOR;
+  const safeRideMeters = Math.max(0, rideMeters);
+  return adjustedWalkMeters * WALK_MINUTES_PER_METER + safeRideMeters * RIDE_MINUTES_PER_METER;
+}
+
+function estimateDirectPairTravelMinutes(pair: DirectSnapPair): number {
+  return estimateEndpointTravelMinutes(pair.endpointDistanceMeters, pair.rideDistanceMeters);
+}
+
 function findBestDirectForwardPair(
   origin: { latitude: number; longitude: number },
   destination: { latitude: number; longitude: number },
@@ -948,33 +958,9 @@ function findBestDirectForwardPair(
   }
 
   if (pairs.length === 0) return null;
-
-  let minEndpointDistance = Number.POSITIVE_INFINITY;
-  for (const pair of pairs) {
-    if (pair.endpointDistanceMeters < minEndpointDistance) {
-      minEndpointDistance = pair.endpointDistanceMeters;
-    }
-  }
-
-  const endpointThreshold = minEndpointDistance + DIRECT_PAIR_ENDPOINT_TIE_METERS;
-  const nearEndpointPairs = pairs.filter((pair) => pair.endpointDistanceMeters <= endpointThreshold);
-
-  // Keep boarding/alighting nearest first, then break ties by shorter ride.
-  nearEndpointPairs.sort((a, b) => {
-    return (
-      a.endpointDistanceMeters - b.endpointDistanceMeters ||
-      a.originSnap.distanceMeters - b.originSnap.distanceMeters ||
-      a.destinationSnap.distanceMeters - b.destinationSnap.distanceMeters ||
-      a.rideDistanceMeters - b.rideDistanceMeters
-    );
-  });
-
-  if (nearEndpointPairs.length > 0) {
-    return nearEndpointPairs[0];
-  }
-
   pairs.sort((a, b) => {
     return (
+      estimateDirectPairTravelMinutes(a) - estimateDirectPairTravelMinutes(b) ||
       a.endpointDistanceMeters - b.endpointDistanceMeters ||
       a.originSnap.distanceMeters - b.originSnap.distanceMeters ||
       a.destinationSnap.distanceMeters - b.destinationSnap.distanceMeters ||
@@ -992,6 +978,8 @@ function buildLegFromAlong(route: JeepneyRoute, from: AlongPoint, to: AlongPoint
     route,
     boardingPoint: { latitude: from.latitude, longitude: from.longitude },
     alightingPoint: { latitude: to.latitude, longitude: to.longitude },
+    boardingAlongKm: from.alongKm,
+    alightingAlongKm: to.alongKm,
     distanceKm,
     estimatedFare: calculateFare(distanceKm, route?.properties?.type || 'jeepney'),
     estimatedMinutes: Math.ceil((distanceKm / AVG_SPEED_KMH) * 60),

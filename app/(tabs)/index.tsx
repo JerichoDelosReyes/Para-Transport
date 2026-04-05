@@ -41,6 +41,9 @@ const ROUTING_NEAREST_BASE_URL = 'https://router.project-osrm.org/nearest/v1';
 const WALK_ROUTING_PROFILE = 'walking';
 const MAX_WALK_PATH_POINTS = 140;
 const WALK_PATH_CACHE_LIMIT = 400;
+// Keep in sync with services/routeSearch.ts MAX_LINE_POINTS so along-km slicing
+// and map rendering use the same coordinate basis.
+const ROUTE_SEGMENT_SLICE_POINTS = 160;
 
 type MapCoordinate = {
   latitude: number;
@@ -118,27 +121,178 @@ const sqDistApprox = (a: MapCoordinate, b: MapCoordinate): number => {
   return dLat * dLat + dLng * dLng;
 };
 
+const buildCumulativeMeters = (coordinates: MapCoordinate[]): number[] => {
+  if (!coordinates || coordinates.length === 0) return [0];
+
+  const cumulative: number[] = [0];
+  for (let i = 1; i < coordinates.length; i++) {
+    cumulative[i] = cumulative[i - 1] + Math.sqrt(sqDistApprox(coordinates[i - 1], coordinates[i]));
+  }
+  return cumulative;
+};
+
+const interpolateCoordinateAtMeters = (
+  coordinates: MapCoordinate[],
+  cumulativeMeters: number[],
+  targetMeters: number,
+): { point: MapCoordinate; segmentIndex: number } => {
+  if (coordinates.length < 2) {
+    return {
+      point: coordinates[0] || { latitude: 0, longitude: 0 },
+      segmentIndex: 0,
+    };
+  }
+
+  const totalMeters = cumulativeMeters[cumulativeMeters.length - 1] || 0;
+  const clampedMeters = Math.max(0, Math.min(totalMeters, targetMeters));
+
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const segStart = cumulativeMeters[i] || 0;
+    const segEnd = cumulativeMeters[i + 1] || segStart;
+
+    if (clampedMeters <= segEnd || i === coordinates.length - 2) {
+      const segLen = Math.max(0, segEnd - segStart);
+      const t = segLen > 0 ? Math.max(0, Math.min(1, (clampedMeters - segStart) / segLen)) : 0;
+
+      const a = coordinates[i];
+      const b = coordinates[i + 1];
+      return {
+        point: {
+          latitude: a.latitude + (b.latitude - a.latitude) * t,
+          longitude: a.longitude + (b.longitude - a.longitude) * t,
+        },
+        segmentIndex: i,
+      };
+    }
+  }
+
+  return {
+    point: coordinates[coordinates.length - 1],
+    segmentIndex: Math.max(0, coordinates.length - 2),
+  };
+};
+
+const dedupeConsecutiveCoordinates = (coordinates: MapCoordinate[]): MapCoordinate[] => {
+  if (coordinates.length <= 1) return coordinates;
+
+  const deduped: MapCoordinate[] = [];
+  for (const point of coordinates) {
+    const prev = deduped[deduped.length - 1];
+    if (prev && sqDistApprox(prev, point) <= 1) continue; // ~1 meter threshold
+    deduped.push(point);
+  }
+
+  return deduped;
+};
+
+const slicePolylineByAlongKm = (
+  coordinates: MapCoordinate[],
+  startAlongKm: number,
+  endAlongKm: number,
+): MapCoordinate[] => {
+  if (!coordinates || coordinates.length < 2) return [];
+
+  const cumulativeMeters = buildCumulativeMeters(coordinates);
+  const totalMeters = cumulativeMeters[cumulativeMeters.length - 1] || 0;
+  if (totalMeters <= 0) return [];
+
+  let startMeters = Math.max(0, Math.min(totalMeters, startAlongKm * 1000));
+  let endMeters = Math.max(0, Math.min(totalMeters, endAlongKm * 1000));
+
+  let reverse = false;
+  if (startMeters > endMeters) {
+    reverse = true;
+    const tmp = startMeters;
+    startMeters = endMeters;
+    endMeters = tmp;
+  }
+
+  const startSample = interpolateCoordinateAtMeters(coordinates, cumulativeMeters, startMeters);
+  const endSample = interpolateCoordinateAtMeters(coordinates, cumulativeMeters, endMeters);
+
+  const segment: MapCoordinate[] = [startSample.point];
+  for (let i = startSample.segmentIndex + 1; i <= endSample.segmentIndex; i++) {
+    segment.push(coordinates[i]);
+  }
+  segment.push(endSample.point);
+
+  const cleaned = dedupeConsecutiveCoordinates(segment);
+  return reverse ? [...cleaned].reverse() : cleaned;
+};
+
 const getSlicedMapCoordinates = (leg: any): MapCoordinate[] => {
-  const fullCoords = leg.route.coordinates;
-  if (!fullCoords || fullCoords.length === 0) return [];
-  
-  let bIdx = 0; let aIdx = fullCoords.length - 1;
-  let minDistB = Infinity; let minDistA = Infinity;
-  
+  const fullCoords: MapCoordinate[] = Array.isArray(leg?.route?.coordinates)
+    ? leg.route.coordinates
+    : [];
+  if (fullCoords.length < 2) return [];
+
+  const boardingAlongKm = Number(leg?.boardingAlongKm);
+  const alightingAlongKm = Number(leg?.alightingAlongKm);
+
+  if (
+    Number.isFinite(boardingAlongKm) &&
+    Number.isFinite(alightingAlongKm) &&
+    Math.abs(alightingAlongKm - boardingAlongKm) > 0.0001
+  ) {
+    // alongKm values are produced from simplified route geometry in routeSearch;
+    // slice on the same basis to prevent premature clipping/cut segments.
+    const alignedCoords = sampleCoordinates(fullCoords, ROUTE_SEGMENT_SLICE_POINTS);
+    const alongSegment = slicePolylineByAlongKm(alignedCoords, boardingAlongKm, alightingAlongKm);
+
+    if (alongSegment.length >= 2) {
+      const segmentKm = pathLengthMeters(alongSegment) / 1000;
+      const expectedKm = Number(leg?.distanceKm);
+      const ratio =
+        Number.isFinite(expectedKm) && expectedKm > 0.01
+          ? segmentKm / expectedKm
+          : 1;
+
+      const startGapMeters = Math.sqrt(
+        sqDistApprox(alongSegment[0], leg.boardingPoint),
+      );
+      const endGapMeters = Math.sqrt(
+        sqDistApprox(alongSegment[alongSegment.length - 1], leg.alightingPoint),
+      );
+
+      // If interpolation drifts too far from leg endpoints or expected distance,
+      // fall back to nearest-point slicing on full coordinates.
+      const endpointsReasonable = startGapMeters <= 140 && endGapMeters <= 140;
+      const lengthReasonable = ratio >= 0.6 && ratio <= 1.6;
+
+      if (endpointsReasonable && lengthReasonable) {
+        return alongSegment;
+      }
+    }
+  }
+
+  // Fallback for older legs without along-route metadata.
+  let bIdx = 0;
+  let aIdx = fullCoords.length - 1;
+  let minDistB = Infinity;
+  let minDistA = Infinity;
+
   for (let i = 0; i < fullCoords.length; i++) {
     const db = sqDistApprox(fullCoords[i], leg.boardingPoint);
-    if (db < minDistB) { minDistB = db; bIdx = i; }
+    if (db < minDistB) {
+      minDistB = db;
+      bIdx = i;
+    }
+
     const da = sqDistApprox(fullCoords[i], leg.alightingPoint);
-    if (da < minDistA) { minDistA = da; aIdx = i; }
+    if (da < minDistA) {
+      minDistA = da;
+      aIdx = i;
+    }
   }
-  
+
   const segment: MapCoordinate[] = [];
   if (bIdx <= aIdx) {
     for (let i = bIdx; i <= aIdx; i++) segment.push(fullCoords[i]);
   } else {
     for (let i = bIdx; i >= aIdx; i--) segment.push(fullCoords[i]);
   }
-  return segment;
+
+  return dedupeConsecutiveCoordinates(segment);
 };
 
 const buildBoundsFromCoordinates = (coordinates: MapCoordinate[]): MapBounds | null => {
@@ -1422,24 +1576,11 @@ export default function HomeScreen() {
       const originPoint = currentLocation; 
 
       selectedRoute.legs.forEach((leg: any, idx: number) => {
-        const fullCoords = leg.route.coordinates;
-        let bIdx = 0; let aIdx = fullCoords.length - 1;
-        let minDistB = Infinity; let minDistA = Infinity;
-        
-        for (let i = 0; i < fullCoords.length; i++) {
-          const db = sqDistApprox(fullCoords[i], leg.boardingPoint);
-          if (db < minDistB) { minDistB = db; bIdx = i; }
-          const da = sqDistApprox(fullCoords[i], leg.alightingPoint);
-          if (da < minDistA) { minDistA = da; aIdx = i; }
-        }
-        
-        // Isolate transit polyline between board and alight points
-        const segment = [];
-        if (bIdx <= aIdx) {
-          for (let i = bIdx; i <= aIdx; i++) segment.push(fullCoords[i]);
-        } else {
-          for (let i = bIdx; i >= aIdx; i--) segment.push(fullCoords[i]);
-        }
+        const segment = getSlicedMapCoordinates(leg);
+        const transitCoordinates =
+          segment.length >= 2
+            ? segment
+            : [leg.boardingPoint, leg.alightingPoint];
 
         // 1. Walk from start or prev stop to this board
         const prevPoint = idx === 0 ? originPoint : selectedRoute.legs[idx-1].alightingPoint;
@@ -1459,7 +1600,7 @@ export default function HomeScreen() {
         const meta = (transitRoutes as any[]).find((r) => r.id === leg.route.properties.code);
         legs.push({
           transitRouteId: leg.route.properties.code,
-          coordinates: segment,
+          coordinates: transitCoordinates,
           onTransit: true,
           transitInfo: meta || null,
           boardAt: leg.boardingPoint,
@@ -1707,6 +1848,10 @@ export default function HomeScreen() {
 
   const mapMarkers = useMemo<MapMarkerInput[]>(() => {
     const markers: MapMarkerInput[] = [];
+    const activeTricycleExtension = selectedRoute?.tricycleExtension;
+    const activeTricycleTerminalId = activeTricycleExtension?.terminalId
+      ? String(activeTricycleExtension.terminalId)
+      : null;
 
     if (activeUserPosition) {
       markers.push({
@@ -1744,6 +1889,8 @@ export default function HomeScreen() {
 
     if (showTransitLayer) {
       tricycleTerminalPoints.forEach((terminal) => {
+        if (activeTricycleTerminalId && String(terminal.id) === activeTricycleTerminalId) return;
+
         markers.push({
           id: `tricycle-terminal-${terminal.id}`,
           coordinate: [terminal.longitude, terminal.latitude],
@@ -1763,6 +1910,58 @@ export default function HomeScreen() {
         });
       });
     }
+
+    if (activeTricycleExtension) {
+      const walkText = activeTricycleExtension.walkToTerminalKm.toFixed(1);
+      const rideText = activeTricycleExtension.rideDistanceKm.toFixed(1);
+
+      markers.push({
+        id: 'active-tricycle-terminal',
+        coordinate: [activeTricycleExtension.terminalLongitude, activeTricycleExtension.terminalLatitude],
+        children: (
+          <View style={styles.activeTerminalMarkerWrap}>
+            <View style={styles.activeTerminalPopup}>
+              <Text style={styles.activeTerminalPopupHint}>Use this terminal</Text>
+              <Text style={styles.activeTerminalPopupName} numberOfLines={1}>
+                {activeTricycleExtension.terminalName}
+              </Text>
+            </View>
+            <View style={styles.activeTerminalMarker}>
+              <Image
+                source={require('../../assets/icons/tricycle-icon.png')}
+                style={styles.activeTerminalIconImage}
+              />
+            </View>
+          </View>
+        ),
+        metadata: {
+          label: activeTricycleExtension.terminalName,
+          type: 'Last-mile tricycle terminal',
+          subtitle: `Walk ${walkText} km • Ride ${rideText} km`,
+        },
+      });
+    }
+
+    visibleTransitLegs.forEach((leg, idx) => {
+      if (leg.onTransit || !leg.coordinates || leg.coordinates.length < 2) return;
+
+      const midpointIndex = Math.floor((leg.coordinates.length - 1) / 2);
+      const midpoint = leg.coordinates[midpointIndex] || leg.coordinates[0];
+
+      markers.push({
+        id: `walk-segment-${idx}`,
+        coordinate: toLngLat(midpoint),
+        children: (
+          <View style={styles.walkMarker}>
+            <Ionicons name="walk" size={13} color="#FFFFFF" />
+          </View>
+        ),
+        metadata: {
+          label: `Walk segment ${idx + 1}`,
+          type: 'Walking path',
+        },
+      });
+    });
 
     visibleTransitMarkers.forEach(({ leg, idx, showBoard, showDrop }) => {
       if (showBoard) {
@@ -1824,7 +2023,7 @@ export default function HomeScreen() {
     }
 
     return markers;
-  }, [activeUserPosition, destinationLocation, showTransitLayer, tricycleTerminalPoints, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
+  }, [activeUserPosition, destinationLocation, showTransitLayer, tricycleTerminalPoints, selectedRoute, visibleTransitLegs, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
 
   // Log marker/line updates for diagnostics
   useEffect(() => {
@@ -3147,6 +3346,59 @@ const styles = StyleSheet.create({
   terminalIconImage: {
     width: 19,
     height: 19,
+    resizeMode: 'contain',
+  },
+  activeTerminalMarkerWrap: {
+    alignItems: 'center',
+  },
+  activeTerminalPopup: {
+    maxWidth: 180,
+    backgroundColor: '#0A1628',
+    borderColor: 'rgba(255,255,255,0.35)',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  activeTerminalPopupHint: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#F5D061',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  activeTerminalPopupName: {
+    marginTop: 2,
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  activeTerminalMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E8A020',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.28,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 6,
+  },
+  activeTerminalIconImage: {
+    width: 24,
+    height: 24,
     resizeMode: 'contain',
   },
   stopMarker: {
