@@ -204,7 +204,7 @@ export default function RouteRecommenderPanel({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title={`ROUTES - ${(routeTypeLabel || 'Transit').toUpperCase()}`}
+      title="ROUTES"
     >
       <FlatList
         data={topRankedRoutes}

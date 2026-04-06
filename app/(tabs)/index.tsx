@@ -834,6 +834,7 @@ export default function HomeScreen() {
   const [showTransitPriority, setShowTransitPriority] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
+  const [originLocation, setOriginLocation] = useState<MapCoordinate | null>(null);
   const [currentLocationLabel, setCurrentLocationLabel] = useState<string>('Current Location');
   const [destinationLocation, setDestinationLocation] = useState<MapCoordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<MapCoordinate[]>([]);
@@ -941,7 +942,8 @@ export default function HomeScreen() {
           
           // Build a trimmed bounding point array specific to the user's travel points
           const trimCoords = [];
-          if (currentLocation) trimCoords.push(currentLocation);
+          const actualOrigin = originLocation || currentLocation;
+          if (actualOrigin) trimCoords.push(actualOrigin);
           const boardingPoint = route.legs[0]?.boardingPoint;
           if (boardingPoint) trimCoords.push(boardingPoint);
           const alightingPoint = route.legs[route.legs.length - 1]?.alightingPoint;
@@ -955,7 +957,7 @@ export default function HomeScreen() {
         
         if (lastZoomedRouteIdRef.current !== selectedRouteId) {
           lastZoomedRouteIdRef.current = selectedRouteId;
-          const originObj = route.legs[0]?.boardingPoint || currentLocation;
+          const originObj = route.legs[0]?.boardingPoint || originLocation || currentLocation;
           const destObj = route.legs[route.legs.length - 1]?.alightingPoint || destinationLocation;
           
           if (originObj && destObj) {
@@ -973,7 +975,7 @@ export default function HomeScreen() {
       setRouteCoordinates([]);
       lastZoomedRouteIdRef.current = null;
     }
-  }, [selectedRouteId, matchedRoutes, currentLocation, destinationLocation]);
+  }, [selectedRouteId, matchedRoutes, currentLocation, originLocation, destinationLocation]);
 
   // Normalize route data to a unified transit shape
   const transitRoutes = useMemo(() => {
@@ -1346,7 +1348,10 @@ export default function HomeScreen() {
 
   const handleClearRoute = useCallback((clearOrigin = true, clearDestination = true) => {
     if (clearDestination) setDestinationQuery('');
-    if (clearOrigin) setOriginQuery('');
+    if (clearOrigin) {
+      setOriginQuery('');
+      setOriginLocation(null);
+    }
     setDestinationLocation(null);
     setMatchedRoutes([]);
     setSelectedRouteId(null);
@@ -1379,6 +1384,12 @@ export default function HomeScreen() {
     const startPoint = actualOrigin
       ? { latitude: actualOrigin.latitude, longitude: actualOrigin.longitude }
       : currentLocation;
+      
+    if (actualOrigin) {
+      setOriginLocation(startPoint);
+    } else {
+      setOriginLocation(null);
+    }
       
     if (!startPoint) {
       animateToRegion({ ...destinationPoint, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 600);
@@ -1763,7 +1774,7 @@ export default function HomeScreen() {
   const baseTransitLegs = useMemo((): TransitLeg[] => {
     if (selectedRoute?.legs && selectedRoute.legs.length > 0) {
       const legs: TransitLeg[] = [];
-      const originPoint = currentLocation; 
+      const originPoint = originLocation || currentLocation;
 
       selectedRoute.legs.forEach((leg: any, idx: number) => {
         const segment = getSlicedMapCoordinates(leg);
@@ -1850,7 +1861,7 @@ export default function HomeScreen() {
     
     if (routeCoordinates.length < 2) return [];
     return buildTransitLegs(routeCoordinates, transitRoutes as any[], 55, 120);
-  }, [selectedRoute, routeCoordinates, transitRoutes, currentLocation, destinationLocation]);
+  }, [selectedRoute, routeCoordinates, transitRoutes, originLocation, currentLocation, destinationLocation]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -2123,6 +2134,22 @@ export default function HomeScreen() {
       });
     }
 
+    if (originLocation && (!currentLocation || originLocation.latitude !== currentLocation.latitude || originLocation.longitude !== currentLocation.longitude)) {
+      markers.push({
+        id: 'origin-marker',
+        coordinate: [originLocation.longitude, originLocation.latitude],
+        children: (
+            <View style={styles.boardMarker}>
+              <Ionicons name="location" size={14} color="#FFFFFF" />
+            </View>
+        ),
+        metadata: {
+          label: originQuery || 'Origin',
+          type: 'Pick-up point',
+        },
+      });
+    }
+
     if (showTransitLayer) {
       tricycleTerminalPoints.forEach((terminal) => {
         if (activeTricycleTerminalId && String(terminal.id) === activeTricycleTerminalId) return;
@@ -2259,7 +2286,7 @@ export default function HomeScreen() {
     }
 
     return markers;
-  }, [activeUserPosition, destinationLocation, showTransitLayer, tricycleTerminalPoints, selectedRoute, visibleTransitLegs, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
+  }, [activeUserPosition, currentLocation, originLocation, originQuery, destinationLocation, showTransitLayer, tricycleTerminalPoints, selectedRoute, visibleTransitLegs, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
 
   // Log marker/line updates for diagnostics
   useEffect(() => {
