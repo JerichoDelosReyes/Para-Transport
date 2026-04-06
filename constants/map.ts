@@ -2,7 +2,7 @@ const mapTilerKey = process.env.EXPO_PUBLIC_MAPTILER_KEY;
 const mapTilerStyle = process.env.EXPO_PUBLIC_MAPTILER_STYLE || 'openstreetmap';
 const cartoLightNoLabelsUrl = 'https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png';
 const canonicalLightStyleUrl =
-  'https://paragisstorage.blob.core.windows.net/styles/style-v20260405-001.json';
+  'https://paragisstorage.blob.core.windows.net/styles/style-v20260406-001.json';
 const canonicalDarkStyleUrl =
   'https://paragisstorage.blob.core.windows.net/styles/style-v20260403-002.json';
 const canonicalStyleUrl = canonicalDarkStyleUrl;
