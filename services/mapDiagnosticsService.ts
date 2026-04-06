@@ -123,7 +123,7 @@ class MapDiagnosticsService {
   /**
    * Log marker/overlay event for debugging overlay rendering
    */
-  logOverlayEvent(type: 'marker' | 'line', count: number, change: 'added' | 'updated' | 'removed') {
+  logOverlayEvent(type: 'marker' | 'line' | 'poi', count: number, change: 'added' | 'updated' | 'removed') {
     this.logEvent('info', `Overlay ${change}: ${type}`, {
       count,
       type,

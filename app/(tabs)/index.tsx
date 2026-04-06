@@ -34,6 +34,118 @@ import { useSimulation } from '../../hooks/useSimulation';
 import { loadRoutes } from '../../services/routeService';
 import { MapLibreWrapper, type MapLibreWrapperHandle, type MapLineInput, type MapMarkerInput } from '../../components/MapLibreWrapper';
 import { mapDiagnostics } from '../../services/mapDiagnosticsService';
+import { usePOI } from '../../hooks/usePOI';
+import PoiOverlay from '../../components/PoiOverlay';
+import { POI_MIN_RENDER_ZOOM } from '../../constants/poi';
+import type { POIFeature } from '../../types/poi';
+import PoiDrawer from '../../components/PoiDrawer';
+
+type PulsingMarkerProps = {
+  pulseColor: string;
+  children: React.ReactNode;
+};
+
+const PulsingMarker = React.memo(({ pulseColor, children }: PulsingMarkerProps) => {
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulseLoop.start();
+    return () => pulseLoop.stop();
+  }, [pulseAnim]);
+
+  const ringOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.4, 0.12],
+  });
+
+  const ringScale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.95, 1.4],
+  });
+
+  return (
+    <View style={styles.pulseWrap}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.pulseRing,
+          {
+            borderColor: pulseColor,
+            opacity: ringOpacity,
+            transform: [{ scale: ringScale }],
+          },
+        ]}
+      />
+      {children}
+    </View>
+  );
+});
+
+PulsingMarker.displayName = 'PulsingMarker';
+
+const BreathingUserCore = React.memo(() => {
+  const breatheAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const breathingLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breatheAnim, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(breatheAnim, {
+          toValue: 0,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    breathingLoop.start();
+    return () => breathingLoop.stop();
+  }, [breatheAnim]);
+
+  const coreScale = breatheAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.94, 1.06],
+  });
+
+  const coreOpacity = breatheAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.9, 1],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.liveUserCore,
+        {
+          opacity: coreOpacity,
+          transform: [{ scale: coreScale }],
+        },
+      ]}
+    >
+    </Animated.View>
+  );
+});
+
+BreathingUserCore.displayName = 'BreathingUserCore';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
@@ -734,6 +846,12 @@ export default function HomeScreen() {
   const [showTransitLayer, setShowTransitLayer] = useState(false);
   const [tricycleTerminalPoints, setTricycleTerminalPoints] = useState<TricycleTerminalMarker[]>([]);
   const [isTricycleTerminalLoading, setIsTricycleTerminalLoading] = useState(false);
+  const currentZoom = useMemo(() => latDeltaToZoom(mapRegion.latitudeDelta), [mapRegion.latitudeDelta]);
+  const {
+    featureCollection: poiFeatureCollection,
+    requestViewportPOIs,
+    poiCount,
+  } = usePOI();
   // Track programmatic camera updates (zoom buttons, locate user) to pass to MapLibreWrapper
   const [programmaticCamera, setProgrammaticCamera] = useState<{
     center?: [number, number];
@@ -907,6 +1025,7 @@ export default function HomeScreen() {
   const tripStatRecordedRef = useRef(false);
   const hasInitiallyPannedRef = useRef(false);
   const [showRecommender, setShowRecommender] = useState(false);
+  const [selectedPoi, setSelectedPoi] = useState<POIFeature | null>(null);
   const [simAutoFollow, setSimAutoFollow] = useState(true);
   const [simBlink, setSimBlink] = useState(true);
 
@@ -1329,6 +1448,7 @@ export default function HomeScreen() {
 
       setMatchedRoutes(results);
       setSelectedRouteId(null);
+      setSelectedPoi(null);
       setShowRecommender(true);
 
       if (results.length > 0) {
@@ -1972,12 +2092,12 @@ export default function HomeScreen() {
       markers.push({
         id: 'active-user-position',
         coordinate: toLngLat(activeUserPosition),
-        children: (
-          <View style={styles.liveUserMarker}>
-            <View style={styles.liveUserCore}>
-              <Ionicons name="person" size={13} color="#FFFFFF" />
+        children: ( 
+          <PulsingMarker pulseColor="#0EA5E9">
+            <View style={styles.liveUserMarker}>
+              <BreathingUserCore />
             </View>
-          </View>
+        </PulsingMarker>
         ),
         metadata: {
           label: 'Your Location',
@@ -1991,10 +2111,11 @@ export default function HomeScreen() {
         id: 'destination-marker',
         coordinate: toLngLat(destinationLocation),
         children: (
-          <View style={styles.alightMarker}>
-            <Ionicons name="location" size={14} color="#FFFFFF" />
-          </View>
-        ),
+            <View style={styles.alightMarker}>
+              <Ionicons name="location" size={14} color="#FFFFFF" />
+            </View>
+            )
+      ,
         metadata: {
           label: destinationQuery || 'Destination',
           type: 'Drop-off point',
@@ -2084,9 +2205,9 @@ export default function HomeScreen() {
           id: `board-${idx}`,
           coordinate: toLngLat(leg.boardAt),
           children: (
-            <View style={styles.boardMarker}>
-              <Ionicons name="arrow-up-circle" size={14} color="#FFFFFF" />
-            </View>
+              <View style={styles.boardMarker}>
+                <Ionicons name="arrow-up-circle" size={14} color="#ffffff" />
+              </View>
           ),
           metadata: {
             label: leg.transitInfo?.name || `Route ${idx + 1}`,
@@ -2102,9 +2223,9 @@ export default function HomeScreen() {
           id: `drop-${idx}`,
           coordinate: toLngLat(leg.alightAt),
           children: (
-            <View style={styles.alightMarker}>
-              <Ionicons name="arrow-down-circle" size={14} color="#FFFFFF" />
-            </View>
+              <View style={styles.alightMarker}>
+                <Ionicons name="arrow-down-circle" size={14} color="#FFFFFF" />
+              </View>
           ),
           metadata: {
             label: leg.transitInfo?.name || `Route ${idx + 1}`,
@@ -2153,6 +2274,15 @@ export default function HomeScreen() {
     }
   }, [mapLines.length]);
 
+  useEffect(() => {
+    const viewportBounds = regionToBounds(mapRegion, 0.2);
+    requestViewportPOIs(viewportBounds, currentZoom);
+  }, [mapRegion, currentZoom, requestViewportPOIs]);
+
+  useEffect(() => {
+    mapDiagnostics.logOverlayEvent('poi', poiCount, 'updated');
+  }, [poiCount]);
+
   // Auto-follow camera during simulation playback
   useEffect(() => {
     if (sim.state === 'playing' && sim.position && simAutoFollow && mapRef.current) {
@@ -2190,8 +2320,8 @@ export default function HomeScreen() {
     pitch?: number;
     heading?: number;
   }) => {
-    if (payload.centerCoordinate && payload.zoom !== undefined) {
-      const zoom = payload.zoom;
+    if (payload.centerCoordinate) {
+      const zoom = payload.zoom ?? latDeltaToZoom(mapRegion.latitudeDelta);
       const nextRegion: MapRegion = {
         latitude: payload.centerCoordinate[1],
         longitude: payload.centerCoordinate[0],
@@ -2200,7 +2330,7 @@ export default function HomeScreen() {
       };
       setMapRegion(nextRegion);
     }
-  }, [setMapRegion]);
+  }, [mapRegion.latitudeDelta, setMapRegion]);
 
   const handleRouteTypeChange = useCallback((nextType: TransitRouteType) => {
     if (nextType === selectedRouteType) return;
@@ -2208,6 +2338,7 @@ export default function HomeScreen() {
     setSelectedRouteType(nextType);
     setSelectedTransitRoute(null);
     setShowRecommender(false);
+    setSelectedPoi(null);
     setMatchedRoutes([]);
     setSelectedRouteId(null);
     setSelectedRoute(null);
@@ -2221,6 +2352,27 @@ export default function HomeScreen() {
       sim.reset();
     }
   }, [selectedRouteType, setSelectedTransitRoute, sim]);
+
+  const handleSelectPoi = useCallback((poi: POIFeature) => {
+    setShowRecommender(false);
+    setSelectedPoi(poi);
+  }, []);
+
+  const handleRouteFromPoi = useCallback(
+    async (poi: POIFeature) => {
+      const destinationPlace: PlaceResult = {
+        id: String(poi.id),
+        title: poi.properties.title,
+        subtitle: String(poi.properties.category || poi.properties.landmark_type || 'POI'),
+        latitude: poi.geometry.coordinates[1],
+        longitude: poi.geometry.coordinates[0],
+      };
+
+      setSelectedPoi(null);
+      await handleSearchSelectRoute(null, destinationPlace);
+    },
+    [handleSearchSelectRoute],
+  );
 
   const stopGuidance = React.useCallback(() => {
     Notifications.dismissAllNotificationsAsync();
@@ -2450,7 +2602,7 @@ export default function HomeScreen() {
           };
 
           handleRegionChangeComplete(nextRegion);
-          handleCameraChange(payload);
+          handleCameraChange({ ...payload, zoom });
         }}
         onMapLongPress={handleMapLongPress}
         onMapTouchStart={() => {
@@ -2461,7 +2613,15 @@ export default function HomeScreen() {
         externalCameraZoom={programmaticCamera?.zoom}
         externalCameraPitch={programmaticCamera?.pitch}
         externalCameraHeading={programmaticCamera?.heading}
-      />
+      >
+        <PoiOverlay
+          poiFeatureCollection={poiFeatureCollection}
+          currentZoom={currentZoom}
+          activeUserCoordinate={activeUserPosition ? toLngLat(activeUserPosition) : undefined}
+          minZoomLevel={POI_MIN_RENDER_ZOOM}
+          onSelectPoi={handleSelectPoi}
+        />
+      </MapLibreWrapper>
 
       {/* Map Controls */}
       <View style={styles.mapControls}>
@@ -2501,7 +2661,10 @@ export default function HomeScreen() {
           <BlurView intensity={35} tint="light" style={[styles.recommenderGlassWrap, { marginBottom: 12 }]}>
             <TouchableOpacity
               style={styles.recommenderButton}
-              onPress={() => setShowRecommender(true)}
+              onPress={() => {
+                setSelectedPoi(null);
+                setShowRecommender(true);
+              }}
               activeOpacity={0.8}
             >
               <Ionicons name="list" size={21} color={COLORS.navy} />
@@ -2854,6 +3017,13 @@ export default function HomeScreen() {
         onClose={() => {
           setShowRecommender(false);
         }}
+      />
+
+      <PoiDrawer
+        poi={selectedPoi}
+        matchedRoute={selectedRoute}
+        onClose={() => setSelectedPoi(null)}
+        onRouteHere={handleRouteFromPoi}
       />
 
       {/* Full-screen search */}
@@ -3896,23 +4066,35 @@ const styles = StyleSheet.create({
   simSpeedPillTextActive: {
     color: '#FFFFFF',
   },
-  liveUserMarker: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(14,165,233,0.2)',
+  pulseWrap: {
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pulseRing: {
+    position: 'absolute',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    backgroundColor: 'transparent',
+  },
+  liveUserMarker: {
+    width: 25,
+    height: 25,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fffafa',
+  },
   liveUserCore: {
-    width: 22,
-    height: 22,
+    width: 15,
+    height: 15,
     borderRadius: 11,
     backgroundColor: '#0EA5E9',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 4,
