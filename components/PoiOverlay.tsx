@@ -21,6 +21,8 @@ type PoiOverlayProps = {
   onSelectPoi?: (poi: POIFeature) => void;
 };
 
+const SHOPPING_MALL_TYPES = new Set(['shopping_mall', 'shoppingMall']);
+
 const getPoiPriority = (feature: POIFeature): number => {
   const poiType = (feature.properties.landmark_type || feature.properties.category || 'other').toLowerCase();
 
@@ -45,31 +47,34 @@ const getPoiPriority = (feature: POIFeature): number => {
   }
 };
 
-/* Will save for later, DO NOT REFACTOR OR MAKE CHANGES IN BLOCK OF COMMENT CODE. @noxen-cv
 const getLabelGridSizeByZoom = (zoom: number): number => {
-  if (zoom >= 18) return 0.00035;
-  if (zoom >= 17.5) return 0.00042;
-  if (zoom >= 17) return 0.00060;
+  if (zoom >= 18) return 0.00005;
+  if (zoom >= 17.5) return 0.00001;
+  if (zoom >= 17) return 0.00050;
   if (zoom >= 16.5) return 0.00090;
-  if (zoom >= 16) return 0.00025;
-  if (zoom >= 15) return 0.00060;
-  if (zoom >= 14) return 0.00001;
-  if (zoom >= 13) return 0.00040;
-  if (zoom >= 12) return 0.00300;
+  if (zoom >= 16) return 0.00290;
+  if (zoom >= 15) return 0.00390;
+  if (zoom >= 14) return 0.00520;
+  if (zoom >= 13) return 0.00690;
+  if (zoom >= 12) return 0.01000;
   return 0.00400;
 };
-*/
 
 const getLabelLimitByZoom = (zoom: number): number => {
-  if (zoom >= 18) return 102;
-  if (zoom >= 17.5) return 124;
-  if (zoom >= 17) return 118;
-  if (zoom >= 16.5) return 114;
-  if (zoom >= 16) return 110;
-  if (zoom >= 15) return 110;
-  if (zoom >= 14) return 10;
-  if (zoom >= 13) return 10;
-  if (zoom >= 12) return 15;
+  if (zoom >= 18) return 125;
+  if (zoom >= 17.5) return 100;
+  if (zoom >= 17) return 63;
+  if (zoom >= 16.5) return 43;
+  if (zoom >= 16) return 30;
+  if (zoom >= 15) return 24;
+  if (zoom >= 14) return 17;
+  if (zoom >= 13) return 13;
+  if (zoom >= 12) return 6;
+  return 0;
+};
+
+const getShoppingMallLabelLimitByZoom = (zoom: number): number => {
+  if (zoom <= 16) return 20;
   return 0;
 };
 
@@ -81,7 +86,7 @@ const pickVisiblePoiLabels = (
   const maxLabels = getLabelLimitByZoom(zoom);
   if (features.length === 0 || maxLabels <= 0) return [];
 
-/*  const cellSize = getLabelGridSizeByZoom(zoom); /* Will save for later, DO NOT REFACTOR OR MAKE CHANGES IN BLOCK OF COMMENT CODE. @noxen-cv  */
+  const cellSize = getLabelGridSizeByZoom(zoom);
   const occupied = new Set<string>();
 
   const sorted = [...features].sort((a, b) => {
@@ -102,7 +107,6 @@ const pickVisiblePoiLabels = (
       }
     }
 
-    /* /* Will save for later, DO NOT REFACTOR OR MAKE CHANGES IN BLOCK OF COMMENT CODE. @noxen-cv
     const gridX = Math.floor(lng / cellSize);
     const gridY = Math.floor(lat / cellSize);
     const key = `${gridX}:${gridY}`;
@@ -112,7 +116,6 @@ const pickVisiblePoiLabels = (
     selected.push(feature);
 
     if (selected.length >= maxLabels) break;
-    */
   }
 
   return selected;
@@ -147,10 +150,39 @@ export default function PoiOverlay({
     };
   }, [poiFeatureCollection, selectedPoiId]);
 
+  const shoppingMallFeatureCollection = useMemo(() => {
+    if (!filteredPoiFeatureCollection) return null;
+    return {
+      ...filteredPoiFeatureCollection,
+      features: filteredPoiFeatureCollection.features.filter((feature) => {
+        const poiType = String(feature.properties.landmark_type || feature.properties.category || 'other').toLowerCase();
+        return SHOPPING_MALL_TYPES.has(poiType);
+      }),
+    };
+  }, [filteredPoiFeatureCollection]);
+
+  const regularPoiFeatureCollection = useMemo(() => {
+    if (!filteredPoiFeatureCollection) return null;
+    return {
+      ...filteredPoiFeatureCollection,
+      features: filteredPoiFeatureCollection.features.filter((feature) => {
+        const poiType = String(feature.properties.landmark_type || feature.properties.category || 'other').toLowerCase();
+        return !SHOPPING_MALL_TYPES.has(poiType);
+      }),
+    };
+  }, [filteredPoiFeatureCollection]);
+
   const visiblePoiLabels = useMemo(() => {
-    if (!hasPoiFeatures || !filteredPoiFeatureCollection) return [];
-    return pickVisiblePoiLabels(filteredPoiFeatureCollection.features, currentZoom, activeUserCoordinate);
-  }, [hasPoiFeatures, filteredPoiFeatureCollection, currentZoom, activeUserCoordinate]);
+    if (!hasPoiFeatures || !regularPoiFeatureCollection) return [];
+    return pickVisiblePoiLabels(regularPoiFeatureCollection.features, currentZoom, activeUserCoordinate);
+  }, [hasPoiFeatures, regularPoiFeatureCollection, currentZoom, activeUserCoordinate]);
+
+  const visibleShoppingMallLabels = useMemo(() => {
+    if (!shoppingMallFeatureCollection) return [];
+    const maxLabels = getShoppingMallLabelLimitByZoom(currentZoom);
+    if (maxLabels <= 0) return [];
+    return pickVisiblePoiLabels(shoppingMallFeatureCollection.features, currentZoom, activeUserCoordinate).slice(0, maxLabels);
+  }, [shoppingMallFeatureCollection, currentZoom, activeUserCoordinate]);
 
   const iconLayerStyle = useMemo(
     () => ({
@@ -161,7 +193,7 @@ export default function PoiOverlay({
       iconAnchor: 'bottom',
       iconPadding: 22,
       textColor: isDark ? '#FFFFFF' : '#0A1628',
-      textHaloColor: isDark ? '#000000' : '#FFFFFF',
+      textHaloColor: isDark ? '#000000' : '#000000',
       symbolSortKey: [
         'match',
         ['coalesce', ['get', 'landmark_type'], ['get', 'category'], 'other'],
@@ -183,6 +215,21 @@ export default function PoiOverlay({
         12,
         50,
       ],
+    }),
+    [isDark],
+  );
+
+  const shoppingMallIconLayerStyle = useMemo(
+    () => ({
+      iconImage: 'poi-shoppingMall',
+      iconSize: ['interpolate', ['linear'], ['zoom'], 12, 0.7, 14, 0.95, 16, 1.2],
+      iconAllowOverlap: true,
+      iconIgnorePlacement: true,
+      iconAnchor: 'bottom',
+      iconPadding: 28,
+      textColor: isDark ? '#FFFFFF' : '#0A1628',
+      textHaloColor: isDark ? '#000000' : '#000000',
+      symbolSortKey: 0,
     }),
     [isDark],
   );
@@ -211,7 +258,7 @@ export default function PoiOverlay({
       {ImagesComponent ? <ImagesComponent images={POI_IMAGES as any} /> : null}
       <GeoJSONSourceComponent
         id="poi-source"
-        data={filteredPoiFeatureCollection as any}
+        data={regularPoiFeatureCollection as any}
         onPress={handlePoiPress}
       >
         <LayerComponent
@@ -223,6 +270,20 @@ export default function PoiOverlay({
         />
       </GeoJSONSourceComponent>
 
+      <GeoJSONSourceComponent
+        id="poi-shopping-mall-source"
+        data={shoppingMallFeatureCollection as any}
+        onPress={handlePoiPress}
+      >
+        <LayerComponent
+          id="poi-shopping-mall-symbol-layer"
+          type="symbol"
+          minZoomLevel={0}
+          maxZoomLevel={16.05}
+          style={shoppingMallIconLayerStyle as any}
+        />
+      </GeoJSONSourceComponent>
+
       {MarkerComponent
         ? visiblePoiLabels.map((feature) => (
             <MarkerComponent
@@ -231,19 +292,54 @@ export default function PoiOverlay({
               lngLat={feature.geometry.coordinates as [number, number]}
               onPress={() => onSelectPoi?.(feature)}
             >
-              <View collapsable={false} style={{ paddingLeft: 12 }}>
+              <View collapsable={false} style={{ alignItems: 'center', width: 140, marginTop: 10 }}>
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontFamily: 'Inter Bold',
+                    fontSize: 11.5,
                     color: isDark ? '#FFFFFF' : '#0A1628',
                     textShadowColor: isDark ? '#000000' : '#FFFFFF',
-                    textShadowRadius: 2,
-                    fontWeight: '600',
+                    textShadowRadius: 100,
+                    fontWeight: '500',
                     paddingHorizontal: 6,
                     paddingVertical: 10,
                     borderRadius: 6,
                     overflow: 'hidden',
                     maxWidth: 120,
+                    textAlign: 'center'
+                  }}
+                  numberOfLines={2}
+                >
+                  {feature.properties.title}
+                </Text>
+              </View>
+            </MarkerComponent>
+          ))
+        : null}
+
+      {MarkerComponent
+        ? visibleShoppingMallLabels.map((feature) => (
+            <MarkerComponent
+              key={`poi-shopping-mall-label-${feature.id}`}
+              id={`poi-shopping-mall-label-${feature.id}`}
+              lngLat={feature.geometry.coordinates as [number, number]}
+              onPress={() => onSelectPoi?.(feature)}
+            >
+              <View collapsable={false} style={{ alignItems: 'center', width: 180, marginTop: 12 }}>
+                <Text
+                  style={{
+                    fontFamily: 'Inter Bold',
+                    fontSize: 14,
+                    color: isDark ? '#FFFFFF' : '#0A1628',
+                    textShadowColor: isDark ? '#000000' : '#FFFFFF',
+                    textShadowRadius: 100,
+                    fontWeight: '600',
+                    paddingHorizontal: 8,
+                    paddingVertical: 12,
+                    borderRadius: 8,
+                    overflow: 'hidden',
+                    maxWidth: 160,
+                    textAlign: 'center'
                   }}
                   numberOfLines={2}
                 >

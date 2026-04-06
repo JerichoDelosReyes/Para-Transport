@@ -2,6 +2,7 @@ export const POI_MIN_RENDER_ZOOM = 11;
 
 export const POI_IMAGES: Record<string, number> = {
   'poi-default': require('../assets/icons/poi/ic_place_48px.png'),
+ 'poi-shoppingMall': require('../assets/icons/poi/ic_superLocal_shoppingMall.png'), 
   'poi-hospital': require('../assets/icons/poi/ic_local_hospital_48px.png'),
   'poi-hotel': require('../assets/icons/poi/ic_hotel_48px.png'),
   'poi-restaurant': require('../assets/icons/poi/ic_restaurant_48px.png'),
@@ -46,6 +47,8 @@ export const POI_ICON_MATCH_EXPRESSION: any[] = [
   'hotel', 'poi-hotel',
   'restaurant', 'poi-restaurant',
   'fast_food', 'poi-restaurant',
+  'shopping_center', 'poi-mall',
+  'shopping_mall', 'poi-shoppingMall',
   'cafe', 'poi-cafe',
   'coffee_shop', 'poi-cafe',
   'pharmacy', 'poi-pharmacy',
@@ -64,6 +67,7 @@ export const POI_ICON_MATCH_EXPRESSION: any[] = [
   'mall', 'poi-mall',
   'bar', 'poi-bar',
   'pub', 'poi-bar',
+  'convenience_store', 'poi-grocery',
   'nightclub', 'poi-drink',
   'pizza', 'poi-pizza',
   'cinema', 'poi-movie',

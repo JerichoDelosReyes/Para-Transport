@@ -671,12 +671,12 @@ const zoomToLatDelta = (zoomLevel: number): number => {
 const DEFAULT_POI_FOCUS_CAMERA: PoiFocusCameraConfig = {
   placement: {
     x: 0.5,
-    y: 0.12,
+    y: 0.35,
   },
-  // Change this to 'atLeastCurrent' or 'delta' if you want different zoom behavior.
-  zoomMode: 'atLeastCurrent',
-  targetZoom: 15.5,
-  zoomDelta: 5.25,
+  // Change this to 'atLeastCurrent' or 'delta' 'target' if you want different zoom behavior.
+  zoomMode: 'delta',
+  targetZoom: 5.5,
+  zoomDelta: 1.05,
   minZoom: POI_MIN_RENDER_ZOOM,
   maxZoom: 18,
 };
@@ -737,6 +737,7 @@ const POI_ICON_BY_LANDMARK_TYPE: Record<string, keyof typeof POI_IMAGES> = {
   library: 'poi-library',
   fuel: 'poi-gas',
   gas_station: 'poi-gas',
+  shopping_center: 'poi-mall',
   supermarket: 'poi-grocery',
   grocery: 'poi-grocery',
   bank: 'poi-bank',
@@ -758,6 +759,7 @@ const POI_ICON_BY_LANDMARK_TYPE: Record<string, keyof typeof POI_IMAGES> = {
   convenience: 'poi-convenience',
   charging_station: 'poi-ev',
   viewpoint: 'poi-see',
+  shopping_mall: 'poi-shoppingMall'
 };
 
 const getPoiIconKey = (poi: POIFeature): keyof typeof POI_IMAGES => {
@@ -4439,8 +4441,8 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   selectedPoiIcon: {
-    width: 28,
-    height: 28,
+    width: 33,
+    height: 33,
     resizeMode: 'contain',
   },
 });
