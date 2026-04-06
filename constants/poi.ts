@@ -1,4 +1,4 @@
-export const POI_MIN_RENDER_ZOOM = 12;
+export const POI_MIN_RENDER_ZOOM = 11;
 
 export const POI_IMAGES: Record<string, number> = {
   'poi-default': require('../assets/icons/poi/ic_place_48px.png'),

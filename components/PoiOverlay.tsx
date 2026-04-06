@@ -17,6 +17,7 @@ type PoiOverlayProps = {
   currentZoom: number;
   activeUserCoordinate?: LngLat;
   minZoomLevel?: number;
+  selectedPoiId?: string | null;
   onSelectPoi?: (poi: POIFeature) => void;
 };
 
@@ -118,6 +119,7 @@ export default function PoiOverlay({
   currentZoom,
   activeUserCoordinate,
   minZoomLevel = POI_MIN_RENDER_ZOOM,
+  selectedPoiId = null,
   onSelectPoi,
 }: PoiOverlayProps) {
   const { isDark } = useTheme();
@@ -133,10 +135,18 @@ export default function PoiOverlay({
     return new Map(poiFeatureCollection.features.map((feature) => [String(feature.id), feature]));
   }, [poiFeatureCollection]);
 
+  const filteredPoiFeatureCollection = useMemo(() => {
+    if (!poiFeatureCollection || !selectedPoiId) return poiFeatureCollection;
+    return {
+      ...poiFeatureCollection,
+      features: poiFeatureCollection.features.filter((feature) => String(feature.id) !== selectedPoiId),
+    };
+  }, [poiFeatureCollection, selectedPoiId]);
+
   const visiblePoiLabels = useMemo(() => {
-    if (!hasPoiFeatures || !poiFeatureCollection) return [];
-    return pickVisiblePoiLabels(poiFeatureCollection.features, currentZoom, activeUserCoordinate);
-  }, [hasPoiFeatures, poiFeatureCollection, currentZoom, activeUserCoordinate]);
+    if (!hasPoiFeatures || !filteredPoiFeatureCollection) return [];
+    return pickVisiblePoiLabels(filteredPoiFeatureCollection.features, currentZoom, activeUserCoordinate);
+  }, [hasPoiFeatures, filteredPoiFeatureCollection, currentZoom, activeUserCoordinate]);
 
   const iconLayerStyle = useMemo(
     () => ({
@@ -197,7 +207,7 @@ export default function PoiOverlay({
       {ImagesComponent ? <ImagesComponent images={POI_IMAGES as any} /> : null}
       <GeoJSONSourceComponent
         id="poi-source"
-        data={poiFeatureCollection as any}
+        data={filteredPoiFeatureCollection as any}
         onPress={handlePoiPress}
       >
         <LayerComponent

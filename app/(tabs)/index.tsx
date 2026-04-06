@@ -36,12 +36,17 @@ import { MapLibreWrapper, type MapLibreWrapperHandle, type MapLineInput, type Ma
 import { mapDiagnostics } from '../../services/mapDiagnosticsService';
 import { usePOI } from '../../hooks/usePOI';
 import PoiOverlay from '../../components/PoiOverlay';
+import { POI_IMAGES } from '../../constants/poi';
 import { POI_MIN_RENDER_ZOOM } from '../../constants/poi';
 import type { POIFeature } from '../../types/poi';
 import PoiDrawer from '../../components/PoiDrawer';
 
 type PulsingMarkerProps = {
   pulseColor: string;
+  children: React.ReactNode;
+};
+
+type BreathingCoreProps = {
   children: React.ReactNode;
 };
 
@@ -97,6 +102,47 @@ const PulsingMarker = React.memo(({ pulseColor, children }: PulsingMarkerProps) 
 });
 
 PulsingMarker.displayName = 'PulsingMarker';
+
+const BreathingCore = React.memo(({ children }: BreathingCoreProps) => {
+  const breatheAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const breathingLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breatheAnim, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(breatheAnim, {
+          toValue: 0,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    breathingLoop.start();
+    return () => breathingLoop.stop();
+  }, [breatheAnim]);
+
+  const scale = breatheAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.9, 1.08],
+  });
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ scale }],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+});
+
+BreathingCore.displayName = 'BreathingCore';
 
 const BreathingUserCore = React.memo(() => {
   const breatheAnim = useRef(new Animated.Value(0)).current;
@@ -179,6 +225,22 @@ type MapBounds = {
   maxLat: number;
   minLng: number;
   maxLng: number;
+};
+
+type ScreenPlacement = {
+  x: number;
+  y: number;
+};
+
+type PoiFocusZoomMode = 'target' | 'atLeastCurrent' | 'delta';
+
+type PoiFocusCameraConfig = {
+  placement: ScreenPlacement;
+  zoomMode: PoiFocusZoomMode;
+  targetZoom: number;
+  zoomDelta: number;
+  minZoom: number;
+  maxZoom: number;
 };
 
 type TricycleTerminalMarker = {
@@ -606,6 +668,103 @@ const zoomToLatDelta = (zoomLevel: number): number => {
   return 360 / Math.pow(2, safeZoom);
 };
 
+const DEFAULT_POI_FOCUS_CAMERA: PoiFocusCameraConfig = {
+  placement: {
+    x: 0.5,
+    y: 0.12,
+  },
+  // Change this to 'atLeastCurrent' or 'delta' if you want different zoom behavior.
+  zoomMode: 'atLeastCurrent',
+  targetZoom: 15.5,
+  zoomDelta: 5.25,
+  minZoom: POI_MIN_RENDER_ZOOM,
+  maxZoom: 18,
+};
+
+const clampScreenPlacement = (value: number): number => Math.max(0, Math.min(1, value));
+
+const getCameraCenterForPlacement = (
+  target: MapCoordinate,
+  region: MapRegion,
+  placement: ScreenPlacement,
+): MapCoordinate => {
+  const x = clampScreenPlacement(placement.x);
+  const y = clampScreenPlacement(placement.y);
+
+  return {
+    latitude: target.latitude - (0.5 - y) * region.latitudeDelta,
+    longitude: target.longitude - (x - 0.5) * region.longitudeDelta,
+  };
+};
+
+const clampZoom = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));
+
+const resolvePoiFocusZoom = (
+  currentZoomLevel: number,
+  config: PoiFocusCameraConfig,
+): number => {
+  const safeCurrent = clampZoom(currentZoomLevel, config.minZoom, config.maxZoom);
+
+  if (config.zoomMode === 'delta') {
+    return clampZoom(safeCurrent + config.zoomDelta, config.minZoom, config.maxZoom);
+  }
+
+  if (config.zoomMode === 'atLeastCurrent') {
+    return clampZoom(
+      Math.max(safeCurrent, config.targetZoom),
+      config.minZoom,
+      config.maxZoom,
+    );
+  }
+
+  return clampZoom(config.targetZoom, config.minZoom, config.maxZoom);
+};
+
+const POI_ICON_BY_LANDMARK_TYPE: Record<string, keyof typeof POI_IMAGES> = {
+  hospital: 'poi-hospital',
+  clinic: 'poi-hospital',
+  hotel: 'poi-hotel',
+  restaurant: 'poi-restaurant',
+  fast_food: 'poi-restaurant',
+  cafe: 'poi-cafe',
+  coffee_shop: 'poi-cafe',
+  pharmacy: 'poi-pharmacy',
+  airport: 'poi-airport',
+  train_station: 'poi-train',
+  station: 'poi-transfer',
+  church: 'poi-church',
+  library: 'poi-library',
+  fuel: 'poi-gas',
+  gas_station: 'poi-gas',
+  supermarket: 'poi-grocery',
+  grocery: 'poi-grocery',
+  bank: 'poi-bank',
+  atm: 'poi-atm',
+  parking: 'poi-parking',
+  mall: 'poi-mall',
+  bar: 'poi-bar',
+  pub: 'poi-bar',
+  nightclub: 'poi-drink',
+  pizza: 'poi-pizza',
+  cinema: 'poi-movie',
+  park: 'poi-terrain',
+  playground: 'poi-play',
+  post_office: 'poi-post-office',
+  copyshop: 'poi-printshop',
+  florist: 'poi-florist',
+  car_wash: 'poi-car-wash',
+  laundry: 'poi-laundry',
+  convenience: 'poi-convenience',
+  charging_station: 'poi-ev',
+  viewpoint: 'poi-see',
+};
+
+const getPoiIconKey = (poi: POIFeature): keyof typeof POI_IMAGES => {
+  const landmarkType = String(poi.properties.landmark_type || '').toLowerCase();
+  return POI_ICON_BY_LANDMARK_TYPE[landmarkType] || 'poi-default';
+};
+
 const makeWalkPathCacheKey = (from: MapCoordinate, to: MapCoordinate): string => {
   return `${roundCoordForKey(from.latitude)},${roundCoordForKey(from.longitude)}|${roundCoordForKey(to.latitude)},${roundCoordForKey(to.longitude)}`;
 };
@@ -846,6 +1005,7 @@ export default function HomeScreen() {
   const [showTransitLayer, setShowTransitLayer] = useState(false);
   const [tricycleTerminalPoints, setTricycleTerminalPoints] = useState<TricycleTerminalMarker[]>([]);
   const [isTricycleTerminalLoading, setIsTricycleTerminalLoading] = useState(false);
+  
   const currentZoom = useMemo(() => latDeltaToZoom(mapRegion.latitudeDelta), [mapRegion.latitudeDelta]);
   const {
     featureCollection: poiFeatureCollection,
@@ -2088,6 +2248,27 @@ export default function HomeScreen() {
       ? String(activeTricycleExtension.terminalId)
       : null;
 
+    if (selectedPoi) {
+      const selectedPoiIconKey = getPoiIconKey(selectedPoi);
+
+      markers.push({
+        id: `selected-poi-${selectedPoi.id}`,
+        coordinate: [selectedPoi.geometry.coordinates[0], selectedPoi.geometry.coordinates[1]],
+        children: (
+          <BreathingCore>
+            <Image
+              source={POI_IMAGES[selectedPoiIconKey]}
+              style={styles.selectedPoiIcon}
+            />
+          </BreathingCore>
+        ),
+        metadata: {
+          label: selectedPoi.properties.title,
+          type: String(selectedPoi.properties.landmark_type || selectedPoi.properties.category || 'POI'),
+        },
+      });
+    }
+
     if (activeUserPosition) {
       markers.push({
         id: 'active-user-position',
@@ -2259,7 +2440,7 @@ export default function HomeScreen() {
     }
 
     return markers;
-  }, [activeUserPosition, destinationLocation, showTransitLayer, tricycleTerminalPoints, selectedRoute, visibleTransitLegs, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
+  }, [selectedPoi, activeUserPosition, destinationLocation, showTransitLayer, tricycleTerminalPoints, selectedRoute, visibleTransitLegs, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
 
   // Log marker/line updates for diagnostics
   useEffect(() => {
@@ -2354,9 +2535,28 @@ export default function HomeScreen() {
   }, [selectedRouteType, setSelectedTransitRoute, sim]);
 
   const handleSelectPoi = useCallback((poi: POIFeature) => {
+    const poiCoordinate: MapCoordinate = {
+      latitude: poi.geometry.coordinates[1],
+      longitude: poi.geometry.coordinates[0],
+    };
+    const adjustedCenter = getCameraCenterForPlacement(
+      poiCoordinate,
+      mapRegion,
+      DEFAULT_POI_FOCUS_CAMERA.placement,
+    );
+    const focusZoom = resolvePoiFocusZoom(currentZoom, DEFAULT_POI_FOCUS_CAMERA);
+
     setShowRecommender(false);
     setSelectedPoi(poi);
-  }, []);
+    animateCamera(
+      {
+        center: adjustedCenter,
+        zoom: focusZoom,
+        animationMode: 'flyTo',
+      },
+      500,
+    );
+  }, [animateCamera, currentZoom, mapRegion]);
 
   const handleRouteFromPoi = useCallback(
     async (poi: POIFeature) => {
@@ -2619,6 +2819,7 @@ export default function HomeScreen() {
           currentZoom={currentZoom}
           activeUserCoordinate={activeUserPosition ? toLngLat(activeUserPosition) : undefined}
           minZoomLevel={POI_MIN_RENDER_ZOOM}
+          selectedPoiId={selectedPoi ? String(selectedPoi.id) : null}
           onSelectPoi={handleSelectPoi}
         />
       </MapLibreWrapper>
@@ -4211,5 +4412,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 4,
+  },
+  selectedPoiIcon: {
+    width: 28,
+    height: 28,
+    resizeMode: 'contain',
   },
 });
