@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 150 // Reduced to standard padding
+    paddingBottom: 350 // Reduced to standard padding
   },
   emptyResultCard: {
     alignItems: 'center',
