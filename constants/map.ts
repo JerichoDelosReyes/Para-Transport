@@ -4,7 +4,7 @@ const cartoLightNoLabelsUrl = 'https://basemaps.cartocdn.com/light_nolabels/{z}/
 const canonicalLightStyleUrl =
   'https://paragisstorage.blob.core.windows.net/styles/style-v20260406-001.json';
 const canonicalDarkStyleUrl =
-  'https://paragisstorage.blob.core.windows.net/styles/style-v20260403-002.json';
+  'https://paragisstorage.blob.core.windows.net/styles/style-v20260406-002.json';
 const canonicalStyleUrl = canonicalDarkStyleUrl;
 
 const styleUrlStrategy = process.env.EXPO_PUBLIC_PARAGIS_STYLE_STRATEGY || 'pinned';
