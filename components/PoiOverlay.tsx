@@ -45,29 +45,31 @@ const getPoiPriority = (feature: POIFeature): number => {
   }
 };
 
+/* Will save for later, DO NOT REFACTOR OR MAKE CHANGES IN BLOCK OF COMMENT CODE. @noxen-cv
 const getLabelGridSizeByZoom = (zoom: number): number => {
   if (zoom >= 18) return 0.00035;
   if (zoom >= 17.5) return 0.00042;
   if (zoom >= 17) return 0.00060;
   if (zoom >= 16.5) return 0.00090;
-  if (zoom >= 16) return 0.00125;
-  if (zoom >= 15) return 0.00160;
-  if (zoom >= 14) return 0.00200;
-  if (zoom >= 13) return 0.00240;
+  if (zoom >= 16) return 0.00025;
+  if (zoom >= 15) return 0.00060;
+  if (zoom >= 14) return 0.00001;
+  if (zoom >= 13) return 0.00040;
   if (zoom >= 12) return 0.00300;
   return 0.00400;
 };
+*/
 
 const getLabelLimitByZoom = (zoom: number): number => {
-  if (zoom >= 18) return 32;
-  if (zoom >= 17.5) return 24;
-  if (zoom >= 17) return 18;
-  if (zoom >= 16.5) return 14;
-  if (zoom >= 16) return 10;
-  if (zoom >= 15) return 6;
-  if (zoom >= 14) return 4;
-  if (zoom >= 13) return 3;
-  if (zoom >= 12) return 2;
+  if (zoom >= 18) return 102;
+  if (zoom >= 17.5) return 124;
+  if (zoom >= 17) return 118;
+  if (zoom >= 16.5) return 114;
+  if (zoom >= 16) return 110;
+  if (zoom >= 15) return 110;
+  if (zoom >= 14) return 10;
+  if (zoom >= 13) return 10;
+  if (zoom >= 12) return 15;
   return 0;
 };
 
@@ -79,7 +81,7 @@ const pickVisiblePoiLabels = (
   const maxLabels = getLabelLimitByZoom(zoom);
   if (features.length === 0 || maxLabels <= 0) return [];
 
-  const cellSize = getLabelGridSizeByZoom(zoom);
+/*  const cellSize = getLabelGridSizeByZoom(zoom); /* Will save for later, DO NOT REFACTOR OR MAKE CHANGES IN BLOCK OF COMMENT CODE. @noxen-cv  */
   const occupied = new Set<string>();
 
   const sorted = [...features].sort((a, b) => {
@@ -100,6 +102,7 @@ const pickVisiblePoiLabels = (
       }
     }
 
+    /* /* Will save for later, DO NOT REFACTOR OR MAKE CHANGES IN BLOCK OF COMMENT CODE. @noxen-cv
     const gridX = Math.floor(lng / cellSize);
     const gridY = Math.floor(lat / cellSize);
     const key = `${gridX}:${gridY}`;
@@ -109,6 +112,7 @@ const pickVisiblePoiLabels = (
     selected.push(feature);
 
     if (selected.length >= maxLabels) break;
+    */
   }
 
   return selected;
