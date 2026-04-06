@@ -9,6 +9,7 @@
     "web": "expo start --web",
     "supabase:types": "supabase gen types typescript --project-id $PROJECT_ID > types/supabase.ts",
     "generate:tricycle-terminals-fallback": "node scripts/generate_tricycle_terminal_fallback.js",
+    "find:tricycle-extension-tests": "node scripts/find_tricycle_extension_test_pairs.js",
     "import:tricycle-terminals": "node supabase/importers/import_tricycle_terminals_gpx.js",
     "verify:tricycle-terminals": "node supabase/importers/verify_tricycle_terminal_import.js"
   },

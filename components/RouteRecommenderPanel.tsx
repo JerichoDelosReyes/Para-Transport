@@ -44,6 +44,43 @@ const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number => {
   );
 };
 
+const routeSignature = (route: MatchedRoute): string =>
+  route.legs.map((leg) => leg.route.properties.code).join('>');
+
+const hasTransferWithTricycleExtension = (route: MatchedRoute): boolean =>
+  route.transferCount > 0 && !!route.tricycleExtension;
+
+const injectTransferTricycleOption = (
+  allRoutes: MatchedRoute[],
+  rankedRoutes: MatchedRoute[],
+  limit: number,
+): MatchedRoute[] => {
+  if (rankedRoutes.some(hasTransferWithTricycleExtension)) return rankedRoutes;
+
+  const candidate = [...allRoutes]
+    .filter(hasTransferWithTricycleExtension)
+    .sort(
+      (a, b) =>
+        compareLeastTransfer(a, b) ||
+        compareFastest(a, b) ||
+        compareCheapest(a, b),
+    )[0];
+
+  if (!candidate) return rankedRoutes;
+
+  const candidateSig = routeSignature(candidate);
+  if (rankedRoutes.some((route) => routeSignature(route) === candidateSig)) {
+    return rankedRoutes;
+  }
+
+  if (rankedRoutes.length < limit) {
+    return [...rankedRoutes, candidate];
+  }
+
+  const next = [...rankedRoutes];
+  next[next.length - 1] = candidate;
+  return next;
+};
 export default function RouteRecommenderPanel({
   visible,
   matchedRoutes,
@@ -57,7 +94,8 @@ export default function RouteRecommenderPanel({
 
   const topRankedRoutes = useMemo(() => {
     if (matchedRoutes.length <= TOP_ROUTE_LIMIT) {
-      return [...matchedRoutes].sort(compareLeastTransfer);
+      const ranked = [...matchedRoutes].sort(compareLeastTransfer);
+      return injectTransferTricycleOption(matchedRoutes, ranked, TOP_ROUTE_LIMIT);
     }
 
     const indexed = matchedRoutes.map((route, index) => ({ route, index }));
@@ -77,7 +115,7 @@ export default function RouteRecommenderPanel({
     applyRankScores(compareFastest, 1);
     applyRankScores(compareCheapest, 1);
 
-    return [...indexed]
+    const ranked = [...indexed]
       .sort((a, b) => {
         const scoreDiff = (compositeScores.get(a.index) || 0) - (compositeScores.get(b.index) || 0);
         if (scoreDiff !== 0) return scoreDiff;
@@ -91,6 +129,8 @@ export default function RouteRecommenderPanel({
       })
       .slice(0, TOP_ROUTE_LIMIT)
       .map((item) => item.route);
+
+    return injectTransferTricycleOption(matchedRoutes, ranked, TOP_ROUTE_LIMIT);
   }, [matchedRoutes]);
 
   const metricBaselines = useMemo(() => {
@@ -179,7 +219,6 @@ export default function RouteRecommenderPanel({
         initialNumToRender={6}
         maxToRenderPerBatch={8}
         windowSize={7}
-        removeClippedSubviews
       />
     </BottomSheet>
   );
@@ -189,7 +228,7 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 100,
+    paddingBottom: 330 // Increased more to ensure no cut-off
   },
   emptyResultCard: {
     alignItems: 'center',
