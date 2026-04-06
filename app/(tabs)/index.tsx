@@ -2806,33 +2806,30 @@ export default function HomeScreen() {
               onPress={() => setShowTransitLayer(prev => !prev)}
               activeOpacity={0.85}
             >
-              <Ionicons name="git-branch" size={16} color={showTransitLayer ? '#FFFFFF' : COLORS.navy} />
-              <Text style={[styles.transitToggleText, showTransitLayer && { color: '#FFFFFF' }]}>
-                Transit
-              </Text>
-              {showTransitLayer && isTricycleTerminalLoading ? (
-                <ActivityIndicator
-                  size="small"
-                  color="#FFFFFF"
-                  style={{ marginLeft: 2 }}
-                />
-              ) : null}
-            </TouchableOpacity>
+                {showTransitLayer && isTricycleTerminalLoading ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#FFFFFF"
+                  />
+                ) : (
+                  <Ionicons name="git-branch" size={18} color={showTransitLayer ? '#FFFFFF' : '#000000'} />
+                )}
+              </TouchableOpacity>
 
-            {/* Simulation Play Button (top row, only when idle) */}
-            {simCoordinates.length >= 2 && sim.state === 'idle' && (
-              <TouchableOpacity
-                style={styles.simPlayToggle}
-                onPress={() => {
-                  setSimAutoFollow(true);
-                  sim.play();
-                }}
-                activeOpacity={0.85}
-              >
-                <Ionicons
+              {/* Simulation Play Button (top row, only when idle) */}
+              {simCoordinates.length >= 2 && sim.state === 'idle' && (
+                <TouchableOpacity
+                  style={styles.simPlayToggle}
+                  onPress={() => {
+                    setSimAutoFollow(true);
+                    sim.play();
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons
                   name="play"
                   size={20}
-                  color={COLORS.navy}
+                  color="#000000"
                   style={{ marginLeft: 2 }}
                 />
               </TouchableOpacity>
@@ -2990,7 +2987,7 @@ export default function HomeScreen() {
 
               {/* Close Button */}
               <TouchableOpacity style={{ alignSelf: 'flex-start', padding: 4, marginRight: -4, marginTop: -4 }} onPress={() => sim.reset()} hitSlop={{top: 8, bottom:8, left:8, right:8}}>
-                <Ionicons name="close" size={20} color={COLORS.textMuted} />
+                <Ionicons name="close" size={20} color={isDark ? 'rgba(255,255,255,0.6)' : COLORS.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -3761,10 +3758,11 @@ const styles = StyleSheet.create({
   transitToggle: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: RADIUS.pill,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: 'rgba(10,22,40,0.08)',

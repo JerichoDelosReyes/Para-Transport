@@ -26,6 +26,21 @@ export function GlobalBroadcast() {
   const [activeBroadcast, setActiveBroadcast] = useState<BroadcastMessage | null>(null);
   const slideAnim = useRef(new Animated.Value(-150)).current; // Slide down from top
 
+  const dismissCurrent = () => {
+    Animated.timing(slideAnim, {
+      toValue: -150,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setActiveBroadcast(prevActive => {
+        if (prevActive) {
+          setBroadcasts(prev => prev.filter(b => b.id !== prevActive.id));
+        }
+        return null;
+      });
+    });
+  };
+
   // Automatically fetch active broadcasts and listen
   useEffect(() => {
     let unmounted = false;
@@ -117,19 +132,10 @@ export function GlobalBroadcast() {
     dismissCurrent();
   };
 
-  const dismissCurrent = () => {
-    Animated.timing(slideAnim, {
-      toValue: -150,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      if (activeBroadcast) {
-        setBroadcasts(prev => prev.filter(b => b.id !== activeBroadcast.id));
-        setActiveBroadcast(null);
-      }
-    });
-  };
-
+  // We hide it with CSS to keep the ref mounted instead of completely unmounting
+  // so animations can still trigger if needed. Wait, if activeBroadcast is null
+  // we can just return null and the next time a broadcast arrives it remounts
+  // with Animated starting from -150.
   if (!activeBroadcast) return null;
 
   const bgColors: Record<string, string> = {
