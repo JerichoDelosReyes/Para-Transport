@@ -176,6 +176,13 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
     const selectedMarker = markers.find((m) => m.id === selectedMarkerId);
     const mapInitStartRef = useRef<number>(Date.now());
     const isExternalUpdateRef = useRef(false);
+    const [resolvedMapStyle, setResolvedMapStyle] = useState(styleURL);
+    const hasStyleFallbackRef = useRef(false);
+
+    useEffect(() => {
+      setResolvedMapStyle(styleURL);
+      hasStyleFallbackRef.current = false;
+    }, [styleURL]);
 
     // Log initialization
     useEffect(() => {
@@ -304,6 +311,32 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
       }
     };
 
+    const handleMapLoadError = (event: any) => {
+      try {
+        const message =
+          String(event?.nativeEvent?.message || event?.message || '').toLowerCase();
+        const looksLikeStyleFailure =
+          message.includes('glyph') ||
+          message.includes('font') ||
+          message.includes('style') ||
+          message.includes('resource') ||
+          message.includes('404');
+
+        if (looksLikeStyleFailure && !hasStyleFallbackRef.current) {
+          hasStyleFallbackRef.current = true;
+          setResolvedMapStyle(MAP_CONFIG.MAPLIBRE_STYLE_DARK_URL);
+          mapDiagnostics.logEvent('warn', 'Map style fallback applied after style load error', {
+            attemptedStyleURL: styleURL,
+            fallbackStyleURL: MAP_CONFIG.MAPLIBRE_STYLE_DARK_URL,
+            message: event?.nativeEvent?.message || event?.message || 'Unknown style load error',
+          });
+        }
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        mapDiagnostics.logInitError(error, 'map load error fallback handler');
+      }
+    };
+
     if (!MapComponent || !CameraComponent || !GeoJSONSourceComponent || !LayerComponent || !MarkerComponent || !CalloutComponent) {
       return (
         <View style={styles.mapUnavailableWrap}>
@@ -318,7 +351,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
     return (
       <MapComponent
         style={{ flex: 1 }}
-        mapStyle={styleURL}
+        mapStyle={resolvedMapStyle}
         compass={true}
         compassPosition={{ bottom: 318, right: 16 }}
         compassHiddenFacingNorth={true}
@@ -327,6 +360,7 @@ export const MapLibreWrapper = forwardRef<MapLibreWrapperHandle, MapLibreWrapper
         touchZoom={true}
         dragPan={true}
         onDidFinishLoadingMap={handleMapReady}
+        onDidFailLoadingMap={handleMapLoadError}
         onPress={onMapTouchStart}
         onLongPress={(event: any) => {
           // MapLibre v11 gives coordinates in `event.nativeEvent.lngLat`

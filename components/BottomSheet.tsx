@@ -39,6 +39,20 @@ export default function BottomSheet({
   const { theme, isDark } = useTheme();
   const panY = useRef(new Animated.Value(0)).current;
   const [isExpanded, setIsExpanded] = useState(false);
+  const dragStartYRef = useRef(0);
+
+  const EXPANDED_TOP_GAP = 56;
+  const UPWARD_RESISTANCE = 0.22;
+  const expandedY = -Math.max(0, snapPoints.full - EXPANDED_TOP_GAP);
+
+  const rubberBandTop = (value: number) => {
+    if (value >= expandedY) {
+      return Math.min(0, value);
+    }
+
+    const overDrag = expandedY - value;
+    return expandedY - overDrag * UPWARD_RESISTANCE;
+  };
 
   useEffect(() => {
     if (visible) {
@@ -69,7 +83,7 @@ export default function BottomSheet({
   };
 
   const toggleExpand = () => {
-    const nextY = isExpanded ? -snapPoints.half : -snapPoints.full;
+    const nextY = isExpanded ? -snapPoints.half : expandedY;
     Animated.spring(panY, {
       toValue: nextY,
       tension: 60,
@@ -83,26 +97,25 @@ export default function BottomSheet({
       PanResponder.create({
         onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 10,
         onPanResponderGrant: () => {
-          panY.extractOffset();
+          dragStartYRef.current = isExpanded ? expandedY : -snapPoints.half;
         },
-        onPanResponderMove: Animated.event([null, { dy: panY }], {
-          useNativeDriver: false,
-        }),
+        onPanResponderMove: (_, gestureState) => {
+          const nextValue = rubberBandTop(dragStartYRef.current + gestureState.dy);
+          panY.setValue(nextValue);
+        },
         onPanResponderRelease: (_, gestureState) => {
-          panY.flattenOffset();
-
           if (gestureState.dy > 80) {
             handleDismissSpring();
           } else if (gestureState.dy < -50) {
             Animated.spring(panY, {
-              toValue: -snapPoints.full,
+              toValue: expandedY,
               tension: 60,
               friction: 12,
               useNativeDriver: true,
             }).start(() => setIsExpanded(true));
           } else {
             Animated.spring(panY, {
-              toValue: isExpanded ? -snapPoints.full : -snapPoints.half,
+              toValue: isExpanded ? expandedY : -snapPoints.half,
               tension: 60,
               friction: 12,
               useNativeDriver: true,
@@ -110,7 +123,7 @@ export default function BottomSheet({
           }
         },
       }),
-    [isExpanded, panY, snapPoints.full, snapPoints.half],
+    [expandedY, isExpanded, panY, snapPoints.half],
   );
 
   return (

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, RADIUS} from '../constants/theme';
 import type { POIFeature } from '../types/poi';
@@ -7,6 +7,8 @@ import type { MatchedRoute } from '../services/routeSearch';
 import BottomSheet from './BottomSheet';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.74;
+const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.5;
 
 type PoiDrawerProps = {
   poi: POIFeature | null;
@@ -35,9 +37,9 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
       visible={!!poi}
       onClose={onClose}
       title="PLACES"
-      snapPoints={{ full: SCREEN_HEIGHT * 0.58, half: SCREEN_HEIGHT * 0.42 }}
+      snapPoints={{ full: POI_DRAWER_FULL_HEIGHT, half: POI_DRAWER_HALF_HEIGHT }}
     >
-      <View style={styles.contentContainer}>
+      <ScrollView contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
         <Text style={styles.poiTitle} numberOfLines={2}>
           {title}
         </Text>
@@ -73,7 +75,7 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
           <Ionicons name="star-outline" size={42} color="rgba(10,22,40,0.45)" />
           <Text style={styles.comingSoonText}>More Details Coming Soon!</Text>
         </View>
-      </View>
+      </ScrollView>
     </BottomSheet>
   );
 }
@@ -82,7 +84,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 14,
-    paddingBottom: 48,
+    paddingBottom: 58,
   },
   poiTitle: {
     fontFamily: 'Inter',
