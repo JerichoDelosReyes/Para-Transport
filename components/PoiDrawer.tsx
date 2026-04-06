@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, RADIUS} from '../constants/theme';
+import { useTheme } from '../src/theme/ThemeContext';
 import type { POIFeature } from '../types/poi';
 import type { MatchedRoute } from '../services/routeSearch';
 import BottomSheet from './BottomSheet';
@@ -19,6 +20,8 @@ type PoiDrawerProps = {
 };
 
 export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onSavePoi }: PoiDrawerProps) {
+  const { theme, isDark } = useTheme();
+
   const typeLabel = useMemo(() => {
     if (!poi) return 'PLACE';
     return String(poi.properties.landmark_type || poi.properties.category || 'Place')
@@ -30,29 +33,41 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
   const distanceText =
     matchedRoute && Number.isFinite(matchedRoute.distanceKm)
       ? `: ${matchedRoute.distanceKm.toFixed(1)} km`
-      : ': Travel estimate coming soon';
+      : ': Unavailable';
 
   return (
     <BottomSheet
       visible={!!poi}
       onClose={onClose}
       title="PLACES"
+      contentContainerStyle={{ backgroundColor: theme.surface }}
       snapPoints={{ full: POI_DRAWER_FULL_HEIGHT, half: POI_DRAWER_HALF_HEIGHT }}
     >
       <ScrollView contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
-        <Text style={styles.poiTitle} numberOfLines={2}>
+        <Text style={[styles.poiTitle, { color: theme.text }]} numberOfLines={2}>
           {title}
         </Text>
 
-        <Text style={styles.poiCategory}>{typeLabel}</Text>
+        <Text style={[styles.poiCategory, { color: theme.text }]}>{typeLabel}</Text>
 
         <View style={styles.metaRow}>
-          <Image
-            source={require('../assets/icons/jeepney-icon-dark.png')}
-            style={styles.jeepIcon}
-            resizeMode="contain"
-          />
-          <Text style={styles.metaText}>{distanceText}</Text>
+          <View
+            style={[
+              styles.jeepIconWrap,
+              { backgroundColor: isDark ? theme.surfaceSecondary : 'rgba(10,22,40,0.06)' },
+            ]}
+          >
+            <Image
+              source={
+                isDark
+                  ? require('../assets/icons/jeepney-icon.png')
+                  : require('../assets/icons/jeepney-icon-dark.png')
+              }
+              style={styles.jeepIcon}
+              resizeMode="contain"
+            />
+          </View>
+          <Text style={[styles.metaText, { color: theme.textSecondary }]}>{distanceText}</Text>
         </View>
 
         <View style={styles.actionsRow}>
@@ -61,19 +76,19 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.saveButton}
+            style={[styles.saveButton, { backgroundColor: isDark ? theme.surfaceSecondary : '#E6E6E6' }]}
             activeOpacity={0.85}
             onPress={() => poi && onSavePoi?.(poi)}
           >
-            <Ionicons name="bookmark-outline" size={22} color={COLORS.navy} />
+            <Ionicons name="bookmark-outline" size={22} color={theme.text} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(10,22,40,0.15)' }]} />
 
         <View style={styles.comingSoonWrap}>
-          <Ionicons name="star-outline" size={42} color="rgba(10,22,40,0.45)" />
-          <Text style={styles.comingSoonText}>More Details Coming Soon!</Text>
+          <Ionicons name="star-outline" size={42} color={isDark ? 'rgba(255,255,255,0.6)' : 'rgba(10,22,40,0.45)'} />
+          <Text style={[styles.comingSoonText, { color: isDark ? 'rgba(255,255,255,0.72)' : 'rgba(10,22,40,0.45)' }]}>More Details Coming Soon!</Text>
         </View>
       </ScrollView>
     </BottomSheet>
@@ -105,6 +120,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 18,
     gap: 6,
+  },
+  jeepIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   jeepIcon: {
     width: 18,
