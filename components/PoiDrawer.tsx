@@ -61,10 +61,6 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
   }, [poi]);
 
   const title = poi?.properties.title || '';
-  const distanceText =
-    matchedRoute && Number.isFinite(matchedRoute.distanceKm)
-      ? `: ${matchedRoute.distanceKm.toFixed(1)} km`
-      : ': Travel estimate coming soon';
 
   return (
     <BottomSheet
@@ -79,15 +75,6 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
         </Text>
 
         <Text style={[styles.poiCategory, { color: theme.textSecondary }]}>{typeLabel}</Text>
-
-        <View style={styles.metaRow}>
-          <Image
-            source={isDark ? require('../assets/icons/jeepney-icon.png') : require('../assets/icons/jeepney-icon-dark.png')}
-            style={styles.jeepIcon}
-            resizeMode="contain"
-          />
-          <Text style={[styles.metaText, { color: isDark ? 'rgba(255,255,255,0.6)' : COLORS.textMuted }]}>{distanceText}</Text>
-        </View>
 
         <View style={styles.actionsRow}>
           <TouchableOpacity 

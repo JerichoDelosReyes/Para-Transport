@@ -2383,6 +2383,13 @@ export default function HomeScreen() {
   const handleSelectPoi = useCallback((poi: POIFeature) => {
     setShowRecommender(false);
     setSelectedPoi(poi);
+    
+    mapRef.current?.setCamera({
+      centerCoordinate: poi.geometry.coordinates as [number, number],
+      zoomLevel: 17,
+      animationDuration: 800,
+      animationMode: 'flyTo',
+    });
   }, []);
 
   const handleRouteFromPoi = useCallback(
