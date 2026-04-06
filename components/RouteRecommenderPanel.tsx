@@ -204,7 +204,7 @@ export default function RouteRecommenderPanel({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title={`ROUTES - ${(routeTypeLabel || 'Transit').toUpperCase()}`}
+      title="ROUTES"
     >
       <FlatList
         data={topRankedRoutes}
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 330 // Increased more to ensure no cut-off
+    paddingBottom: 350 // Reduced to standard padding
   },
   emptyResultCard: {
     alignItems: 'center',

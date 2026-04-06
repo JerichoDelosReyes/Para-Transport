@@ -110,11 +110,23 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
   const user = useStore((state) => state.user);
+  const isPanelVisible = useStore((state) => state.isPanelVisible);
+  const translateY = useRef(new Animated.Value(0)).current;
   
   const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
+  const TAB_BAR_HEIGHT = 48 + bottomSpace + 24;
+
+  useEffect(() => {
+    Animated.timing(translateY, {
+      toValue: isPanelVisible ? TAB_BAR_HEIGHT : 0,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [isPanelVisible]);
 
   return (
-    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+    <Animated.View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 0, transform: [{ translateY }] }}>
       {/* Cutout Background */}
       <TabBarBackground theme={theme} />
       
@@ -182,7 +194,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           );
         })}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

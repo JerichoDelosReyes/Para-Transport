@@ -26,6 +26,21 @@ export function GlobalBroadcast() {
   const [activeBroadcast, setActiveBroadcast] = useState<BroadcastMessage | null>(null);
   const slideAnim = useRef(new Animated.Value(-150)).current; // Slide down from top
 
+  const dismissCurrent = () => {
+    Animated.timing(slideAnim, {
+      toValue: -150,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setActiveBroadcast(prevActive => {
+        if (prevActive) {
+          setBroadcasts(prev => prev.filter(b => b.id !== prevActive.id));
+        }
+        return null;
+      });
+    });
+  };
+
   // Automatically fetch active broadcasts and listen
   useEffect(() => {
     let unmounted = false;
@@ -47,7 +62,7 @@ export function GlobalBroadcast() {
 
     fetchBroadcasts();
 
-    const channel = supabase.channel('realtime_broadcasts')
+    const channel = supabase.channel('realtime_broadcasts_channel')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'broadcasts' },
@@ -61,20 +76,15 @@ export function GlobalBroadcast() {
             }
           } else if (payload.eventType === 'UPDATE') {
             const upd = payload.new as BroadcastMessage;
-            if (!upd.is_active) {
-              setBroadcasts((prev) => prev.filter((b) => b.id !== upd.id));
-              // Dismissed via separate effect using activeBroadcast state
-            } else {
-              if (!currentDismissed.includes(upd.id)) {
-                setBroadcasts((prev) => {
-                  const copy = [...prev];
-                  const idx = copy.findIndex((b) => b.id === upd.id);
-                  if (idx !== -1) copy[idx] = upd;
-                  else copy.unshift(upd);
-                  return copy;
-                });
-              }
-            }
+            setBroadcasts((prev) => {
+                if (!upd.is_active) return prev.filter(b => b.id !== upd.id);
+                if (currentDismissed.includes(upd.id)) return prev;
+                const copy = [...prev];
+                const idx = copy.findIndex((b) => b.id === upd.id);
+                if (idx !== -1) copy[idx] = upd;
+                else copy.unshift(upd);
+                return copy;
+            });
           } else if (payload.eventType === 'DELETE') {
             const del = payload.old as { id: string };
             setBroadcasts((prev) => prev.filter((b) => b.id !== del.id));
@@ -117,19 +127,10 @@ export function GlobalBroadcast() {
     dismissCurrent();
   };
 
-  const dismissCurrent = () => {
-    Animated.timing(slideAnim, {
-      toValue: -150,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      if (activeBroadcast) {
-        setBroadcasts(prev => prev.filter(b => b.id !== activeBroadcast.id));
-        setActiveBroadcast(null);
-      }
-    });
-  };
-
+  // We hide it with CSS to keep the ref mounted instead of completely unmounting
+  // so animations can still trigger if needed. Wait, if activeBroadcast is null
+  // we can just return null and the next time a broadcast arrives it remounts
+  // with Animated starting from -150.
   if (!activeBroadcast) return null;
 
   const bgColors: Record<string, string> = {

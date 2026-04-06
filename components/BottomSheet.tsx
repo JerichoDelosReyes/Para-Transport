@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { useTheme } from '../src/theme/ThemeContext';
+import { useStore } from '../store/useStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 export const DEFAULT_FULL_HEIGHT = SCREEN_HEIGHT * 0.8;
@@ -37,12 +38,13 @@ export default function BottomSheet({
   disableHeaderBorder = false,
 }: BottomSheetProps) {
   const { theme, isDark } = useTheme();
+  const setPanelVisible = useStore((state) => state.setPanelVisible);
   const panY = useRef(new Animated.Value(0)).current;
   const [isExpanded, setIsExpanded] = useState(false);
   const dragStartYRef = useRef(0);
 
-  const EXPANDED_TOP_GAP = 56;
-  const UPWARD_RESISTANCE = 0.22;
+  const EXPANDED_TOP_GAP = 90;
+  const UPWARD_RESISTANCE = 0.17;
   const expandedY = -Math.max(0, snapPoints.full - EXPANDED_TOP_GAP);
 
   const rubberBandTop = (value: number) => {
@@ -55,6 +57,7 @@ export default function BottomSheet({
   };
 
   useEffect(() => {
+    setPanelVisible(visible);
     if (visible) {
       setIsExpanded(false);
       Animated.spring(panY, {

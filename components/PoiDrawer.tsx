@@ -1,15 +1,17 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { COLORS, TYPOGRAPHY, RADIUS} from '../constants/theme';
 import { useTheme } from '../src/theme/ThemeContext';
 import type { POIFeature } from '../types/poi';
 import type { MatchedRoute } from '../services/routeSearch';
 import BottomSheet from './BottomSheet';
+import { useStore } from '../store/useStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.74;
-const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.5;
+const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.54;
+const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.41;
 
 type PoiDrawerProps = {
   poi: POIFeature | null;
@@ -21,6 +23,35 @@ type PoiDrawerProps = {
 
 export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onSavePoi }: PoiDrawerProps) {
   const { theme, isDark } = useTheme();
+  const { user, savePlace, removeSavedPlace } = useStore();
+  
+  const savedPlaces = user?.saved_places || [];
+  
+  const isSaved = useMemo(() => {
+    if (!poi) return false;
+    const poiId = String(poi.properties.id || poi.properties.title);
+    return savedPlaces.some((p: any) => String(p.id) === poiId);
+  }, [poi, savedPlaces]);
+
+  const handleToggleSave = () => {
+    if (!poi) return;
+    const poiId = String(poi.properties.id || poi.properties.title);
+    
+    if (isSaved) {
+      removeSavedPlace(poiId);
+    } else {
+      savePlace({
+        id: poiId,
+        title: poi.properties.title,
+        category: poi.properties.category || poi.properties.landmark_type,
+        coords: poi.geometry.coordinates,
+        poi_data: poi,
+      });
+      
+      onClose();
+      router.push('/(tabs)/saved');
+    }
+  };
 
   const typeLabel = useMemo(() => {
     if (!poi) return 'PLACE';
@@ -71,24 +102,24 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
         </View>
 
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.routeButton} activeOpacity={0.9} onPress={() => poi && onRouteHere(poi)}>
-            <Text style={styles.routeButtonText}>Check Directions</Text>
+          <TouchableOpacity 
+            style={[styles.routeButton, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]} 
+            activeOpacity={0.9} 
+            onPress={() => poi && onRouteHere(poi)}
+          >
+            <Text style={[styles.routeButtonText, { color: COLORS.navy }]}>Check Directions</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: isDark ? theme.surfaceSecondary : '#E6E6E6' }]}
+            style={[styles.saveButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E6E6E6' }]}
             activeOpacity={0.85}
-            onPress={() => poi && onSavePoi?.(poi)}
+            onPress={() => {
+              handleToggleSave();
+              if (poi && onSavePoi) onSavePoi(poi);
+            }}
           >
-            <Ionicons name="bookmark-outline" size={22} color={theme.text} />
+            <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={22} color={isSaved ? (isDark ? '#E8A020' : COLORS.primary) : theme.text} />
           </TouchableOpacity>
-        </View>
-
-        <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(10,22,40,0.15)' }]} />
-
-        <View style={styles.comingSoonWrap}>
-          <Ionicons name="star-outline" size={42} color={isDark ? 'rgba(255,255,255,0.6)' : 'rgba(10,22,40,0.45)'} />
-          <Text style={[styles.comingSoonText, { color: isDark ? 'rgba(255,255,255,0.72)' : 'rgba(10,22,40,0.45)' }]}>More Details Coming Soon!</Text>
         </View>
       </ScrollView>
     </BottomSheet>
@@ -99,7 +130,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 14,
-    paddingBottom: 58,
+    paddingBottom: 24,
   },
   poiTitle: {
     fontFamily: 'Inter',
@@ -142,9 +173,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    marginTop: 16,
   },
   routeButton: {
-    marginTop: 16,
     height: 56,
     borderRadius: RADIUS.pill,
     backgroundColor: COLORS.primary,
@@ -159,34 +190,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   routeButtonText: {
-fontFamily: 'Inter',
+    fontFamily: 'Inter',
     fontSize: 16,
     fontWeight: '700',
     color: COLORS.navy,
   },
   saveButton: {
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
     borderRadius: 16,
     backgroundColor: '#E6E6E6',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  divider: {
-    marginTop: 18,
-    height: 1,
-    backgroundColor: 'rgba(10,22,40,0.15)',
-  },
-  comingSoonWrap: {
-    paddingTop: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  comingSoonText: {
-    fontFamily: 'Inter',
-    fontSize: TYPOGRAPHY.label,
-    fontWeight: '700',
-    color: 'rgba(10,22,40,0.45)',
   },
 });
