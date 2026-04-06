@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { COLORS, TYPOGRAPHY, RADIUS} from '../constants/theme';
 import type { POIFeature } from '../types/poi';
 import type { MatchedRoute } from '../services/routeSearch';
@@ -9,6 +10,8 @@ import { useTheme } from '../src/theme/ThemeContext';
 import { useStore } from '../store/useStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.38;
+const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.38;
 
 type PoiDrawerProps = {
   poi: POIFeature | null;
@@ -44,6 +47,9 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
         coords: poi.geometry.coordinates,
         poi_data: poi,
       });
+      
+      onClose();
+      router.push('/(tabs)/saved');
     }
   };
 
@@ -65,9 +71,9 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
       visible={!!poi}
       onClose={onClose}
       title="PLACES"
-      snapPoints={{ full: SCREEN_HEIGHT * 0.58, half: SCREEN_HEIGHT * 0.42 }}
+      snapPoints={{ full: POI_DRAWER_FULL_HEIGHT, half: POI_DRAWER_HALF_HEIGHT }}
     >
-      <View style={styles.contentContainer}>
+      <ScrollView contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
         <Text style={[styles.poiTitle, { color: theme.text }]} numberOfLines={2}>
           {title}
         </Text>
@@ -103,7 +109,7 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
             <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={22} color={isSaved ? (isDark ? '#E8A020' : COLORS.primary) : theme.text} />
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </BottomSheet>
   );
 }
@@ -112,7 +118,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 14,
-    paddingBottom: 48,
+    paddingBottom: 24,
   },
   poiTitle: {
     fontFamily: 'Inter',

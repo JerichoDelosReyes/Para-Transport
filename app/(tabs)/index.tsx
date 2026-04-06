@@ -2579,7 +2579,7 @@ export default function HomeScreen() {
     <View style={styles.screen}>
       <MapLibreWrapper
         ref={mapRef}
-        styleURL={MAP_CONFIG.RESOLVED_STYLE_URL}
+        styleURL={isDark ? MAP_CONFIG.MAPLIBRE_STYLE_DARK_URL : MAP_CONFIG.MAPLIBRE_STYLE_LIGHT_URL}
         initialCenterCoordinate={[INITIAL_REGION.longitude, INITIAL_REGION.latitude]}
         initialZoomLevel={latDeltaToZoom(INITIAL_REGION.latitudeDelta)}
         minZoomLevel={10}

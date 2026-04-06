@@ -62,7 +62,7 @@ export function GlobalBroadcast() {
 
     fetchBroadcasts();
 
-    const channel = supabase.channel('realtime_broadcasts')
+    const channel = supabase.channel('realtime_broadcasts_channel')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'broadcasts' },
@@ -76,20 +76,15 @@ export function GlobalBroadcast() {
             }
           } else if (payload.eventType === 'UPDATE') {
             const upd = payload.new as BroadcastMessage;
-            if (!upd.is_active) {
-              setBroadcasts((prev) => prev.filter((b) => b.id !== upd.id));
-              // Dismissed via separate effect using activeBroadcast state
-            } else {
-              if (!currentDismissed.includes(upd.id)) {
-                setBroadcasts((prev) => {
-                  const copy = [...prev];
-                  const idx = copy.findIndex((b) => b.id === upd.id);
-                  if (idx !== -1) copy[idx] = upd;
-                  else copy.unshift(upd);
-                  return copy;
-                });
-              }
-            }
+            setBroadcasts((prev) => {
+                if (!upd.is_active) return prev.filter(b => b.id !== upd.id);
+                if (currentDismissed.includes(upd.id)) return prev;
+                const copy = [...prev];
+                const idx = copy.findIndex((b) => b.id === upd.id);
+                if (idx !== -1) copy[idx] = upd;
+                else copy.unshift(upd);
+                return copy;
+            });
           } else if (payload.eventType === 'DELETE') {
             const del = payload.old as { id: string };
             setBroadcasts((prev) => prev.filter((b) => b.id !== del.id));

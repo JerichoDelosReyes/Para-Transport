@@ -77,7 +77,7 @@ interface StoreState {
   setFareDiscountType: (fareDiscountType: FareDiscountType) => void;
   insightDismissed: boolean;
   selectedTransitRoute: any | null;
-  pendingRouteSearch: { origin: any; destination: any } | null;
+  pendingRouteSearch: { origin?: any; destination?: any; destinationCoords?: any } | null;
   chatbotMessages: ChatbotPersistMessage[];
   chatbotConversationState: ChatbotPersistState;
   setUser: (user: User) => void;
@@ -90,7 +90,9 @@ interface StoreState {
   addTripStats: (stats: { distance: number; fare: number; points: number; time?: number; multiplier?: number; origin?: string; destination?: string }) => void;
   resetStreak: () => void;
   setSelectedTransitRoute: (route: any | null) => void;
-  setPendingRouteSearch: (search: { origin: any; destination: any } | null) => void;
+  isPanelVisible: boolean;
+  setPendingRouteSearch: (search: { origin?: any; destination?: any; destinationCoords?: any } | null) => void;
+  setPanelVisible: (visible: boolean) => void;
   setChatbotMessages: (messages: ChatbotPersistMessage[]) => void;
   setChatbotConversationState: (state: ChatbotPersistState) => void;
   clearChatbotMemory: () => void;
@@ -133,6 +135,7 @@ export const useStore = create<StoreState>()(
       insightDismissed: false,
       selectedTransitRoute: null,
       pendingRouteSearch: null,
+      isPanelVisible: false,
       chatbotMessages: [],
       chatbotConversationState: {},
       unlockedBadgeToShow: null,
@@ -273,6 +276,7 @@ export const useStore = create<StoreState>()(
       resetStreak: () => set((state) => ({ user: { ...state.user, streak_count: 0 } })),
       setSelectedTransitRoute: (route) => set({ selectedTransitRoute: route }),
       setPendingRouteSearch: (search) => set({ pendingRouteSearch: search }),
+      setPanelVisible: (visible) => set({ isPanelVisible: visible }),
       setChatbotMessages: (messages) => set({ chatbotMessages: messages }),
       setChatbotConversationState: (chatbotConversationState) => set({ chatbotConversationState }),
       clearChatbotMemory: () => set({ chatbotMessages: [], chatbotConversationState: {} }),

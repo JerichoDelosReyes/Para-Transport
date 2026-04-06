@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { POI_ICON_MATCH_EXPRESSION, POI_IMAGES, POI_MIN_RENDER_ZOOM } from '../constants/poi';
+import { useTheme } from '../src/theme/ThemeContext';
 import type { POIFeature, POIFeatureCollection } from '../types/poi';
 import { MapLibreComponents } from '../services/mapLibreRuntime';
 
@@ -119,6 +120,8 @@ export default function PoiOverlay({
   minZoomLevel = POI_MIN_RENDER_ZOOM,
   onSelectPoi,
 }: PoiOverlayProps) {
+  const { isDark } = useTheme();
+
   if (!GeoJSONSourceComponent || !LayerComponent) {
     return null;
   }
@@ -143,6 +146,8 @@ export default function PoiOverlay({
       iconIgnorePlacement: false,
       iconAnchor: 'bottom',
       iconPadding: 22,
+      textColor: isDark ? '#FFFFFF' : '#0A1628',
+      textHaloColor: isDark ? '#000000' : '#FFFFFF',
       symbolSortKey: [
         'match',
         ['coalesce', ['get', 'landmark_type'], ['get', 'category'], 'other'],
@@ -165,7 +170,7 @@ export default function PoiOverlay({
         50,
       ],
     }),
-    [],
+    [isDark],
   );
 
   if (!hasPoiFeatures || !poiFeatureCollection) return null;
@@ -216,7 +221,9 @@ export default function PoiOverlay({
                 <Text
                   style={{
                     fontSize: 11,
-                    color: '#FFFF',
+                    color: isDark ? '#FFFFFF' : '#0A1628',
+                    textShadowColor: isDark ? '#000000' : '#FFFFFF',
+                    textShadowRadius: 2,
                     fontWeight: '600',
                     paddingHorizontal: 6,
                     paddingVertical: 10,
