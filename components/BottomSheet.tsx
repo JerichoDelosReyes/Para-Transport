@@ -11,6 +11,7 @@ import {
   type StyleProp,
 } from 'react-native';
 import { COLORS } from '../constants/theme';
+import { useTheme } from '../src/theme/ThemeContext';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 export const DEFAULT_FULL_HEIGHT = SCREEN_HEIGHT * 0.8;
@@ -35,6 +36,7 @@ export default function BottomSheet({
   contentContainerStyle,
   disableHeaderBorder = false,
 }: BottomSheetProps) {
+  const { theme, isDark } = useTheme();
   const panY = useRef(new Animated.Value(0)).current;
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -119,6 +121,8 @@ export default function BottomSheet({
           height: snapPoints.full,
           bottom: -snapPoints.full,
           transform: [{ translateY: panY }],
+          backgroundColor: theme.surface,
+          shadowColor: isDark ? 'transparent' : '#000',
         },
       ]}
       pointerEvents={visible ? 'auto' : 'none'}
@@ -127,15 +131,16 @@ export default function BottomSheet({
         style={[
           styles.sheetHeader,
           disableHeaderBorder && { borderBottomWidth: 0 },
+          { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(10,22,40,0.06)' },
         ]}
         {...panResponder.panHandlers}
       >
         <TouchableOpacity style={styles.dragHandleWrap} onPress={toggleExpand} activeOpacity={0.9}>
-          <View style={styles.dragHandle} />
+          <View style={[styles.dragHandle, isDark && { backgroundColor: theme.accent }]} />
         </TouchableOpacity>
         {title ? (
           <View style={styles.sheetHeaderRow}>
-            <Text style={styles.sheetHeaderTitle}>{title}</Text>
+            <Text style={[styles.sheetHeaderTitle, { color: theme.text }]}>{title}</Text>
           </View>
         ) : null}
       </View>

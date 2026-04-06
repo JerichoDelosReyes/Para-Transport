@@ -36,7 +36,22 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(10,22,40,0.06)' }, isSelected && styles.cardSelected]}
+      style={[
+        styles.card,
+        {
+          backgroundColor: isSelected
+            ? isDark
+              ? 'rgba(232,160,32,0.1)' // Just a bit stronger overlay for selected dark
+              : 'rgba(232,160,32,0.06)'
+            : theme.cardBackground,
+          borderColor: isSelected
+            ? '#E8A020'
+            : isDark
+            ? 'rgba(255,255,255,0.06)'
+            : 'rgba(10,22,40,0.06)',
+          borderWidth: isSelected ? 2 : 1,
+        },
+      ]}
       activeOpacity={0.8}
       onPress={() => onPress(id)}
     >
@@ -99,20 +114,20 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
           ]}
         >
           <View style={styles.extensionHeader}>
-            <Ionicons name="bicycle-outline" size={13} color="#2E7D32" />
-            <Text style={styles.extensionTitle}>Last-mile Tricycle</Text>
+            <Ionicons name="bicycle-outline" size={13} color={isDark ? '#81C784' : '#2E7D32'} />
+            <Text style={[styles.extensionTitle, isDark && { color: '#81C784' }]}>Last-mile Tricycle</Text>
           </View>
 
-          <Text style={styles.extensionTerminalText} numberOfLines={1}>
+          <Text style={[styles.extensionTerminalText, isDark && { color: '#A5D6A7' }]} numberOfLines={1}>
             {tricycleExtension.terminalName}
           </Text>
 
-          <Text style={styles.extensionMetaText}>
+          <Text style={[styles.extensionMetaText, isDark && { color: '#81C784' }]}>
             {hasTerminalWalk
-              ? `Walk ${tricycleExtension.walkToTerminalKm.toFixed(1)} km + Ride ${tricycleExtension.rideDistanceKm.toFixed(1)} km`
-              : `Drop-off at terminal • Ride ${tricycleExtension.rideDistanceKm.toFixed(1)} km`}
+              ? `Walk ${(tricycleExtension.walkToTerminalKm || 0).toFixed(1)} km + Ride ${(tricycleExtension.rideDistanceKm || 0).toFixed(1)} km`
+              : `Drop-off at terminal • Ride ${(tricycleExtension.rideDistanceKm || 0).toFixed(1)} km`}
           </Text>
-          <Text style={styles.extensionMetaText}>
+          <Text style={[styles.extensionMetaText, isDark && { color: '#81C784' }]}>
             ~{tricycleExtension.estimatedMinutes} min • ₱{formatPeso(extensionFare)}
           </Text>
         </View>
@@ -164,7 +179,6 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
     borderRadius: RADIUS.card,
     padding: SPACING.cardPadding,
     borderWidth: 1,

@@ -219,7 +219,6 @@ export default function RouteRecommenderPanel({
         initialNumToRender={6}
         maxToRenderPerBatch={8}
         windowSize={7}
-        removeClippedSubviews
       />
     </BottomSheet>
   );
@@ -229,7 +228,7 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 100,
+    paddingBottom: 330 // Increased more to ensure no cut-off
   },
   emptyResultCard: {
     alignItems: 'center',
