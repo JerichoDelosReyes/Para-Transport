@@ -74,7 +74,7 @@ const getLabelLimitByZoom = (zoom: number): number => {
 };
 
 const getShoppingMallLabelLimitByZoom = (zoom: number): number => {
-  if (zoom <= 16) return 20;
+  if (zoom <= 16) return 100;
   return 0;
 };
 
@@ -222,7 +222,7 @@ export default function PoiOverlay({
   const shoppingMallIconLayerStyle = useMemo(
     () => ({
       iconImage: 'poi-shoppingMall',
-      iconSize: ['interpolate', ['linear'], ['zoom'], 12, 0.7, 14, 0.95, 16, 1.2],
+      iconSize: ['interpolate', ['linear'], ['zoom'], 1, 7, 14, 0.95, 6, 1.2],
       iconAllowOverlap: true,
       iconIgnorePlacement: true,
       iconAnchor: 'bottom',

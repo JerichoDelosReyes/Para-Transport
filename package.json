@@ -69,6 +69,7 @@
     "@svgr/plugin-jsx": "^8.1.0",
     "@types/react": "~19.1.10",
     "babel-preset-expo": "~54.0.10",
+    "eas-cli": "^18.5.0",
     "react-native-svg-transformer": "^1.5.3",
     "supabase": "^2.81.3",
     "typescript": "~5.9.2"

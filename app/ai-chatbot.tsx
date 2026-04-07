@@ -7,7 +7,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { COLORS } from "../constants/theme";
 import { useRoutes } from "../hooks/useRoutes";
-import { getChatbotReply, type ChatbotConversationState } from "../services/chatbotService";
+import { getChatbotReply, type ChatbotAction, type ChatbotConversationState } from "../services/chatbotService";
 import { useStore } from "../store/useStore";
 import { supabase } from '../config/supabaseClient';
 import { useTheme } from '../src/theme/ThemeContext';
@@ -20,11 +20,13 @@ const CHATBOT_STATES = {
 };
 const JEEPIE_AVATAR = require("../assets/AIChatbot/Jeepie.png");
 const MIN_TYPING_DURATION_MS = 900;
+const PLOT_HANDOFF_DELAY_MS = 180;
 
 type ChatMessage = {
   id: string;
   text: string;
   isUser: boolean;
+  action?: ChatbotAction;
 };
 
 const BOT_NAME = "Jeepie";
@@ -39,6 +41,7 @@ export default function AIChatbotScreen() {
   const setStoredMessages = useStore((state: any) => state.setChatbotMessages);
   const setStoredConversationState = useStore((state: any) => state.setChatbotConversationState);
   const clearChatbotMemory = useStore((state: any) => state.clearChatbotMemory);
+  const setPendingRouteSearch = useStore((state: any) => state.setPendingRouteSearch);
   const [messages, setMessages] = useState<ChatMessage[]>(() => storedMessages as ChatMessage[]);
   const [conversationState, setConversationState] = useState<ChatbotConversationState>(
     () => storedConversationState as ChatbotConversationState,
@@ -46,6 +49,7 @@ export default function AIChatbotScreen() {
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [currentLocationLabel, setCurrentLocationLabel] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [plottingMessageId, setPlottingMessageId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTagalogGreeting, setIsTagalogGreeting] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
@@ -260,6 +264,7 @@ export default function AIChatbotScreen() {
         id: `${Date.now()}-ai`,
         text: response.text,
         isUser: false,
+        action: response.action,
       };
 
       setMessages((prev) => [...prev, aiResponse]);
@@ -325,6 +330,22 @@ export default function AIChatbotScreen() {
       return;
     }
     handleSend();
+  };
+
+  const handleMessageActionPress = (messageId: string, action: ChatbotAction) => {
+    if (action.type !== "plot-route") return;
+
+    setPlottingMessageId(messageId);
+
+    setPendingRouteSearch({
+      origin: action.payload.origin ?? null,
+      destination: action.payload.destination,
+      routePreference: action.payload.routePreference,
+    });
+
+    setTimeout(() => {
+      router.navigate("/(tabs)");
+    }, PLOT_HANDOFF_DELAY_MS);
   };
 
   return (
@@ -423,15 +444,35 @@ export default function AIChatbotScreen() {
                   );
                 }
 
+                const plotAction = item.action?.type === "plot-route" ? item.action : null;
+                const isPlottingThisAction = plottingMessageId === item.id;
+
                 return (
                   <View style={styles.aiMessageRow}>
                     <View style={styles.aiMessageAvatarWrap}>
                       <Image source={JEEPIE_AVATAR} style={styles.aiMessageAvatarImage} />
                     </View>
-                    <View style={[styles.messageBubble, styles.aiBubble, isDark && { backgroundColor: theme.surfaceSecondary, borderColor: theme.cardBorder }]}><Text style={[styles.messageText, styles.aiMessageText, isDark && { color: theme.text }]}>
-                      
+                    <View style={[styles.messageBubble, styles.aiBubble, isDark && { backgroundColor: theme.surfaceSecondary, borderColor: theme.cardBorder }]}>
+                      <Text style={[styles.messageText, styles.aiMessageText, isDark && { color: theme.text }]}>
                         {item.text}
                       </Text>
+                      {plotAction ? (
+                        <TouchableOpacity
+                          style={[styles.messageActionButton, isDark && { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder }]}
+                          activeOpacity={0.85}
+                          onPress={() => handleMessageActionPress(item.id, plotAction)}
+                          disabled={isPlottingThisAction}
+                        >
+                          {isPlottingThisAction ? (
+                            <ActivityIndicator size="small" color={isDark ? theme.text : COLORS.navy} />
+                          ) : (
+                            <Ionicons name="map-outline" size={15} color={isDark ? theme.text : COLORS.navy} />
+                          )}
+                          <Text style={[styles.messageActionText, isDark && { color: theme.text }]}>
+                            {isPlottingThisAction ? "Plotting..." : (plotAction.label || "Plot")}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                   </View>
                 );
@@ -598,6 +639,24 @@ const styles = StyleSheet.create({
   messageText: { fontSize: 16, lineHeight: 22 },
   userMessageText: { color: "#FFFFFF" },
   aiMessageText: { color: COLORS.navy },
+  messageActionButton: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    columnGap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(10, 22, 40, 0.18)",
+    backgroundColor: "rgba(243, 198, 65, 0.18)",
+  },
+  messageActionText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.navy,
+  },
   typingBubble: {
     paddingVertical: 10,
   },

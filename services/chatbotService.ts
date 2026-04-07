@@ -5,6 +5,25 @@ import { BADGES, type Badge } from '../constants/badges';
 
 export type BotLanguage = 'en' | 'tl';
 export type ChatbotMode = 'assistant' | 'companion';
+export type ChatbotRoutePreference = 'easiest' | 'fastest' | 'cheapest';
+
+export type ChatbotRoutePayloadPoint =
+  | string
+  | {
+    name: string;
+    lat: number;
+    lon: number;
+  };
+
+export type ChatbotAction = {
+  type: 'plot-route';
+  label: string;
+  payload: {
+    origin?: ChatbotRoutePayloadPoint | null;
+    destination: ChatbotRoutePayloadPoint;
+    routePreference: ChatbotRoutePreference;
+  };
+};
 
 export type Coordinate = {
   latitude: number;
@@ -43,6 +62,7 @@ export type ChatbotResponse = {
   language: BotLanguage;
   state: ChatbotConversationState;
   usedGroq: boolean;
+  action?: ChatbotAction;
 };
 
 type GuardrailCategory = 'safe' | 'out_of_scope' | 'unsafe';
@@ -1297,7 +1317,7 @@ function hasFareIntent(normalized: string): boolean {
 function hasRouteIntent(normalized: string): boolean {
   if (hasIntentGroup(normalized, 'route')) return true;
 
-  if (/(route|ruta|navigate|navigation|directions|papunta|paano pumunta|how to go|get there|go to|dalhin|sakay papunta|how do i get|pinpoint|pinned|drop pin|pin location)/.test(normalized)) {
+  if (/(route|ruta|navigate|navigation|directions|papunta|paano pumunta|how to go|get there|go to|dalhin|sakay papunta|how do i get|pinpoint|pinned|drop pin|pin location|cheapest route|fastest route|least transfer|least-transfer|efficient route|best route|way to)/.test(normalized)) {
     return true;
   }
 
@@ -1314,6 +1334,12 @@ function hasRouteIntent(normalized: string): boolean {
     'how do i get',
     'drop pin',
     'pinpoint',
+    'cheapest route',
+    'fastest route',
+    'least transfer',
+    'efficient route',
+    'best route',
+    'way to',
   ]);
 }
 
@@ -2353,6 +2379,168 @@ function buildFareReply(params: {
   ].join('\n\n');
 }
 
+type RouteCommandEndpoints = {
+  originText?: string;
+  destinationText?: string;
+};
+
+type RoutePreferenceDetection = {
+  preference: ChatbotRoutePreference;
+  explicitlyRequested: boolean;
+};
+
+function detectRoutePreference(normalized: string): RoutePreferenceDetection {
+  if (/(cheapest|pinakamura|mura|tipid|budget|lowest fare|least fare|affordable)/.test(normalized)) {
+    return { preference: 'cheapest', explicitlyRequested: true };
+  }
+
+  if (/(fastest|quickest|pinakamabilis|mabilis|shortest time|no traffic|less traffic|avoid traffic|walang traffic|iwas traffic)/.test(normalized)) {
+    return { preference: 'fastest', explicitlyRequested: true };
+  }
+
+  if (/(least transfer|least-transfer|fewest transfer|minimal transfer|efficient|easiest|pinaka efficient|pinaka-efficient|konting lipat|isang sakay)/.test(normalized)) {
+    return { preference: 'easiest', explicitlyRequested: true };
+  }
+
+  return { preference: 'easiest', explicitlyRequested: false };
+}
+
+function routePreferenceText(language: BotLanguage, preference: ChatbotRoutePreference): string {
+  if (language === 'tl') {
+    if (preference === 'cheapest') return 'pinakamurang';
+    if (preference === 'fastest') return 'pinakamabilis';
+    return 'pinaka-efficient';
+  }
+
+  if (preference === 'cheapest') return 'cheapest';
+  if (preference === 'fastest') return 'fastest';
+  return 'most efficient';
+}
+
+function sanitizeRouteEndpointText(raw: string): string | null {
+  const cleaned = raw
+    .replace(/\b(with|using)\s+(the\s+)?(cheapest|fastest|least[\s-]+transfer|most\s+efficient|efficient|easiest|no traffic|less traffic|avoid traffic|walang traffic|iwas traffic)(\s+route)?\b.*$/i, '')
+    .replace(/\b(cheapest|fastest|least[\s-]+transfer|most\s+efficient|efficient|easiest|no traffic|less traffic|avoid traffic|walang traffic|iwas traffic)\s+route\b.*$/i, '')
+    .replace(/[!?.,]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned) return null;
+
+  const normalized = normalizeIntentText(cleaned);
+  if (!normalized) return null;
+  if (/^(cheapest|fastest|least transfer|least-transfer|efficient|most efficient|easiest|route|ruta|best route|suggested route)$/.test(normalized)) {
+    return null;
+  }
+
+  return cleaned;
+}
+
+function extractRouteCommandEndpoints(rawMessage: string): RouteCommandEndpoints {
+  const text = rawMessage.trim();
+  if (!text) return {};
+
+  const toFromMatch = text.match(/\b(?:to|going to|papunta(?:ng)?|pupunta(?:\s+ako)?(?:\s+(?:sa|ng))?)\s+(.+?)\s+\b(?:from|mula|galing)\b\s+(.+)/i);
+  if (toFromMatch?.[1] && toFromMatch?.[2]) {
+    // Command-mode rule: for "to A from B", keep the first mentioned place as origin.
+    const originText = sanitizeRouteEndpointText(toFromMatch[1]);
+    const destinationText = sanitizeRouteEndpointText(toFromMatch[2]);
+    if (originText || destinationText) {
+      return {
+        originText: originText || undefined,
+        destinationText: destinationText || undefined,
+      };
+    }
+  }
+
+  const fromToMatch = text.match(/\b(?:from|mula|galing)\s+(.+?)\s+\b(?:to|towards?|papunta(?:ng)?|sa)\b\s+(.+)/i);
+  if (fromToMatch?.[1] && fromToMatch?.[2]) {
+    const originText = sanitizeRouteEndpointText(fromToMatch[1]);
+    const destinationText = sanitizeRouteEndpointText(fromToMatch[2]);
+    if (destinationText || originText) {
+      return {
+        originText: originText || undefined,
+        destinationText: destinationText || undefined,
+      };
+    }
+  }
+
+  const destinationOnlyMatch = text.match(/\b(?:i want to go to|want to go to|go to|papunta(?:ng)?|pupunta(?:\s+ako)?(?:\s+(?:sa|ng))?|destination(?:\s+is)?)\s+(.+)/i);
+  if (destinationOnlyMatch?.[1]) {
+    const destinationText = sanitizeRouteEndpointText(destinationOnlyMatch[1]);
+    if (destinationText) {
+      return { destinationText };
+    }
+  }
+
+  const originOnlyMatch = text.match(/\b(?:from|mula|galing)\s+(.+)/i);
+  if (originOnlyMatch?.[1]) {
+    const originText = sanitizeRouteEndpointText(originOnlyMatch[1]);
+    if (originText) {
+      return { originText };
+    }
+  }
+
+  return {};
+}
+
+function toRoutePayloadPointFromPlace(place: DatasetPlace): ChatbotRoutePayloadPoint {
+  return {
+    name: place.name,
+    lat: place.coordinate.latitude,
+    lon: place.coordinate.longitude,
+  };
+}
+
+function toRoutePayloadPointFromDestination(point: DestinationPoint | StopDestination): ChatbotRoutePayloadPoint {
+  return {
+    name: point.name,
+    lat: point.coordinate.latitude,
+    lon: point.coordinate.longitude,
+  };
+}
+
+function buildRouteCommandReply(params: {
+  language: BotLanguage;
+  destinationLabel: string;
+  originLabel?: string | null;
+  routePreference: ChatbotRoutePreference;
+  mentionPreference: boolean;
+  usesCurrentLocation: boolean;
+}): string {
+  const { language, destinationLabel, originLabel, routePreference, mentionPreference, usesCurrentLocation } = params;
+  const safeOriginLabel = originLabel || (language === 'tl' ? 'iyong pinanggalingan' : 'your origin');
+  const preference = routePreferenceText(language, routePreference);
+  const routeDescriptorTl = mentionPreference ? `ang ${preference} na ruta` : 'ang ruta';
+  const routeDescriptorEn = mentionPreference ? `the ${preference} route` : 'a route';
+
+  if (language === 'tl') {
+    if (usesCurrentLocation) {
+      return [
+        `Maipa-plot ko ${routeDescriptorTl} papuntang ${destinationLabel} gamit ang current location mo bilang origin.`,
+        'I-tap ang Plot para buksan ang map at i-auto-plot agad.',
+      ].join('\n\n');
+    }
+
+    return [
+      `Maipa-plot ko ${routeDescriptorTl} mula ${safeOriginLabel} papuntang ${destinationLabel}.`,
+      'I-tap ang Plot para buksan ang map at i-auto-plot agad.',
+    ].join('\n\n');
+  }
+
+  if (usesCurrentLocation) {
+    return [
+      `I can plot ${routeDescriptorEn} to ${destinationLabel} using your current location as origin.`,
+      'Tap Plot to open the map and auto-plot it now.',
+    ].join('\n\n');
+  }
+
+  return [
+    `I can plot ${routeDescriptorEn} from ${safeOriginLabel} to ${destinationLabel}.`,
+    'Tap Plot to open the map and auto-plot it now.',
+  ].join('\n\n');
+}
+
 function pickTrivia(language: BotLanguage, history?: ChatbotHistoryMessage[]): string {
   const previous = lastAssistantReply(history);
   const previousNormalized = previous ? normalizeForRepeatCheck(previous) : '';
@@ -2864,6 +3052,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (
     resolvedGuide
+    && !hasRouteIntent(normalized)
     && !hasFareIntent(normalized)
     && !hasRouteListIntent(normalized)
     && mentions.length === 0
@@ -2932,20 +3121,96 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const fareIntentActive = false; // Intentionally disabled to boost performance
 
   const routeIntentActive = hasRouteIntent(normalized)
-    || (currentState.awaitingOriginIntent === 'route' && Boolean(currentState.awaitingOriginForDestinationId))
-    || currentState.awaitingDestinationIntent === 'route';
+    || (
+      !isPureSocialMessage(normalized)
+      && (
+        (currentState.awaitingOriginIntent === 'route' && Boolean(currentState.awaitingOriginForDestinationId))
+        || currentState.awaitingDestinationIntent === 'route'
+      )
+    );
 
   if (routeIntentActive) {
-    const isTagalog = language === 'tl';
-    const routeInstruction = isTagalog
-      ? 'Kung naghahanap ka ng ruta papunta sa iyong destinasyon, maaari mong gamitin ang 🔍 Search Bar sa itaas ng screen.'
-      : 'If you want to know the best route towards your destination, please use the 🔍 Search Bar at the top of your screen.';
+    const routePreferenceDetection = detectRoutePreference(normalized);
+    const routePreference = routePreferenceDetection.preference;
+    const extractedEndpoints = extractRouteCommandEndpoints(message);
+    const stopDestination = findStopDestinationByHints(normalized, routes);
+
+    const resolvedOriginPlace = parsed.origin;
+    const resolvedDestinationPoint: DestinationPoint | StopDestination | null = parsed.destination
+      ? toDestinationPoint(parsed.destination)
+      : pendingDestination
+        ? pendingDestination
+        : stopDestination;
+
+    const awaitingDestinationText = currentState.awaitingDestinationIntent === 'route'
+      ? sanitizeRouteEndpointText(message)
+      : null;
+
+    const fallbackDestinationText = extractedEndpoints.destinationText || awaitingDestinationText;
+    const fallbackOriginText = extractedEndpoints.originText || undefined;
+
+    if (!resolvedDestinationPoint && !fallbackDestinationText) {
+      const nextState = nextDestinationRepromptState(currentState, 'route');
+
+      if (!nextState) {
+        return {
+          text: supportReply(buildDestinationRepromptLimitReply(language)),
+          language,
+          state: {},
+          usedGroq: false,
+        };
+      }
+
+      const askDestinationText = language === 'tl'
+        ? `${routeResponseText(language, 'askDestination')}\n\nKung walang origin sa prompt mo, current location mo ang gagamitin ko.`
+        : `${routeResponseText(language, 'askDestination')}\n\nIf origin is not in your prompt, I will use your current location.`;
+
+      return {
+        text: supportReply(askDestinationText),
+        language,
+        state: nextState,
+        usedGroq: false,
+      };
+    }
+
+    const originPayload: ChatbotRoutePayloadPoint | null | undefined = resolvedOriginPlace
+      ? toRoutePayloadPointFromPlace(resolvedOriginPlace)
+      : (fallbackOriginText || null);
+
+    const destinationPayload: ChatbotRoutePayloadPoint = resolvedDestinationPoint
+      ? toRoutePayloadPointFromDestination(resolvedDestinationPoint)
+      : (fallbackDestinationText as string);
+
+    const destinationLabel = resolvedDestinationPoint?.name
+      || fallbackDestinationText
+      || (language === 'tl' ? 'iyong destination' : 'your destination');
+    const originLabel = resolvedOriginPlace?.name || fallbackOriginText || null;
+    const usesCurrentLocation = !originPayload;
 
     return {
-      text: supportReply(routeInstruction, { includeClosing: true }),
+      text: supportReply(
+        buildRouteCommandReply({
+          language,
+          destinationLabel,
+          originLabel,
+          routePreference,
+          mentionPreference: routePreferenceDetection.explicitlyRequested,
+          usesCurrentLocation,
+        }),
+        { includeClosing: true },
+      ),
       language,
       state: {},
       usedGroq: false,
+      action: {
+        type: 'plot-route',
+        label: 'Plot',
+        payload: {
+          origin: originPayload,
+          destination: destinationPayload,
+          routePreference,
+        },
+      },
     };
   }
 

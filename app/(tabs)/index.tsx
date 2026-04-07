@@ -22,6 +22,7 @@ Notifications.setNotificationHandler({
 import { ROUTE_COLORS } from '../../constants/routeVisuals';
 import SearchScreen, { PlaceResult, TransitRouteType } from '../../components/SearchScreen';
 import { buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
+import { fuzzyFilter } from '../../utils/fuzzySearch';
 import { GuidanceStep, generateGuidanceSteps, calculateDistance } from '../../utils/guidanceEngine';
 import * as Haptics from 'expo-haptics';
 import { ProfileButton } from '../../components/ProfileButton';
@@ -39,6 +40,7 @@ import PoiOverlay from '../../components/PoiOverlay';
 import { POI_IMAGES } from '../../constants/poi';
 import { POI_MIN_RENDER_ZOOM } from '../../constants/poi';
 import type { POIFeature } from '../../types/poi';
+import LOCAL_PLACES from '../../data/local_places';
 import PoiDrawer from '../../components/PoiDrawer';
 
 type PulsingMarkerProps = {
@@ -194,6 +196,12 @@ const BreathingUserCore = React.memo(() => {
 BreathingUserCore.displayName = 'BreathingUserCore';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
+const GEOCODING_TIMEOUT_MS = 6500;
+const CAVITE_VIEWBOX = '120.55,14.53,121.05,13.95';
+const GEOCODING_HEADERS: Record<string, string> = {
+  'Accept-Language': 'en',
+  'User-Agent': 'ParaTransport/1.0 (support@para.ph)',
+};
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
 const ROUTING_NEAREST_BASE_URL = 'https://router.project-osrm.org/nearest/v1';
 const WALK_ROUTING_PROFILE = 'walking';
@@ -518,6 +526,15 @@ const pointInBounds = (point: MapCoordinate, bounds: MapBounds): boolean => {
 };
 
 type VehicleRouteType = 'jeepney' | 'bus';
+type RoutePreferenceMode = 'easiest' | 'fastest' | 'cheapest';
+
+const normalizeRoutePreference = (value: unknown): RoutePreferenceMode | null => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'cheapest') return 'cheapest';
+  if (normalized === 'fastest') return 'fastest';
+  if (normalized === 'easiest') return 'easiest';
+  return null;
+};
 
 const normalizeTransitRouteType = (value: unknown): VehicleRouteType | null => {
   const normalized = String(value || '').trim().toLowerCase();
@@ -570,6 +587,21 @@ const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number => {
     a.transferCount - b.transferCount ||
     a.estimatedMinutes - b.estimatedMinutes
   );
+};
+
+const pickRouteByPreference = (
+  routes: MatchedRoute[],
+  preference: RoutePreferenceMode,
+): MatchedRoute | null => {
+  if (routes.length === 0) return null;
+
+  const comparator = preference === 'cheapest'
+    ? compareCheapest
+    : preference === 'fastest'
+      ? compareFastest
+      : compareLeastTransfer;
+
+  return [...routes].sort(comparator)[0] || null;
 };
 
 const routeSignature = (route: MatchedRoute): string =>
@@ -765,6 +797,11 @@ const POI_ICON_BY_LANDMARK_TYPE: Record<string, keyof typeof POI_IMAGES> = {
 const getPoiIconKey = (poi: POIFeature): keyof typeof POI_IMAGES => {
   const landmarkType = String(poi.properties.landmark_type || '').toLowerCase();
   return POI_ICON_BY_LANDMARK_TYPE[landmarkType] || 'poi-default';
+};
+
+const isShoppingMallPoi = (poi: POIFeature): boolean => {
+  const landmarkType = String(poi.properties.landmark_type || poi.properties.category || '').toLowerCase();
+  return landmarkType === 'shopping_mall' || landmarkType === 'shoppingmall';
 };
 
 const makeWalkPathCacheKey = (from: MapCoordinate, to: MapCoordinate): string => {
@@ -1523,7 +1560,11 @@ export default function HomeScreen() {
 
 
 
-  const handleSearchSelectRoute = useCallback(async (origin: PlaceResult | null, destination: PlaceResult) => {
+  const handleSearchSelectRoute = useCallback(async (
+    origin: PlaceResult | null,
+    destination: PlaceResult,
+    options?: { routePreference?: RoutePreferenceMode | null },
+  ) => {
     setIsSearchActive(false);
 
     const actualOrigin = origin || (currentLocation ? {
@@ -1625,7 +1666,10 @@ export default function HomeScreen() {
       setShowRecommender(true);
 
       if (results.length > 0) {
-        const firstRanked = rankTopRoutes(results, 5)[0];
+        const preferredFirst = options?.routePreference
+          ? pickRouteByPreference(results, options.routePreference)
+          : null;
+        const firstRanked = preferredFirst || rankTopRoutes(results, 5)[0];
         if (firstRanked) {
           const firstId = firstRanked.legs.map((l: any) => l.route.properties.code).join('+');
           
@@ -1655,7 +1699,7 @@ export default function HomeScreen() {
     } finally {
       setIsRouting(false);
     }
-  }, [currentLocation, routesBySelectedType, selectedRouteType, selectedRouteTypeLabel, addHistory]);
+  }, [currentLocation, currentLocationLabel, routesBySelectedType, selectedRouteType, selectedRouteTypeLabel, addHistory]);
 
   const handleMapLongPress = useCallback(async (coordinatePair: [number, number]) => {
     if (isRouting) return;
@@ -1720,33 +1764,83 @@ export default function HomeScreen() {
     const processPendingSearch = async () => {
       if (!pendingRouteSearch) return;
 
-      const { origin, destination } = pendingRouteSearch;
+      const { origin, destination, routePreference } = pendingRouteSearch;
+      const normalizedRoutePreference = normalizeRoutePreference(routePreference);
       setIsRouting(true);
 
       // Helper: resolve a place name with Nominatim geocoding
       const resolvePlace = async (name: string): Promise<PlaceResult | null> => {
-        const params = new URLSearchParams({
-          q: name,
-          format: 'json',
-          limit: '1',
-          countrycodes: 'ph',
-          viewbox: '120.7,14.55,121.1,14.35',
-          bounded: '0',
-          addressdetails: '0',
-        });
-        const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
-          headers: { 'Accept-Language': 'en' },
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
-        if (!data || data.length === 0) return null;
-        return {
-          id: data[0].place_id?.toString() || Math.random().toString(),
-          title: name,
-          subtitle: data[0].display_name || '',
-          latitude: parseFloat(data[0].lat),
-          longitude: parseFloat(data[0].lon),
+        const query = name.trim();
+        if (query.length < 2) return null;
+
+        const exactLocal = (LOCAL_PLACES as PlaceResult[]).find(
+          (place) => place.title.trim().toLowerCase() === query.toLowerCase(),
+        );
+        if (exactLocal) return exactLocal;
+
+        const fetchGeocodingPlace = async (scopedToCavite: boolean): Promise<PlaceResult | null> => {
+          const params = new URLSearchParams({
+            q: scopedToCavite ? `${query}, Cavite, Philippines` : `${query}, Philippines`,
+            format: 'jsonv2',
+            limit: '1',
+            countrycodes: 'ph',
+            addressdetails: '0',
+          });
+
+          if (scopedToCavite) {
+            params.set('viewbox', CAVITE_VIEWBOX);
+            params.set('bounded', '1');
+          }
+
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), GEOCODING_TIMEOUT_MS);
+
+          try {
+            const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
+              headers: GEOCODING_HEADERS,
+              signal: controller.signal,
+            });
+
+            if (!res.ok) return null;
+
+            const data = await res.json();
+            if (!Array.isArray(data) || data.length === 0) return null;
+
+            const first = data[0];
+            const latitude = parseFloat(first.lat);
+            const longitude = parseFloat(first.lon);
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+            const rawTitle = String(first.display_name || '').split(',')[0]?.trim();
+
+            return {
+              id: String(first.place_id || `${Date.now()}`),
+              title: rawTitle || query,
+              subtitle: String(first.display_name || ''),
+              latitude,
+              longitude,
+            };
+          } catch {
+            return null;
+          } finally {
+            clearTimeout(timeout);
+          }
         };
+
+        const caviteFirst = await fetchGeocodingPlace(true);
+        if (caviteFirst) return caviteFirst;
+
+        const nationwideFallback = await fetchGeocodingPlace(false);
+        if (nationwideFallback) return nationwideFallback;
+
+        const fuzzyLocal = fuzzyFilter(
+          LOCAL_PLACES as PlaceResult[],
+          query,
+          (place) => [place.title, place.subtitle],
+          1,
+        ).map((result) => result.item as PlaceResult);
+
+        return fuzzyLocal[0] || null;
       };
       
       try {
@@ -1791,7 +1885,9 @@ export default function HomeScreen() {
         }
 
         // 3. Call the search hander
-        await handleSearchSelectRoute(originPlace, destPlace);
+        await handleSearchSelectRoute(originPlace, destPlace, {
+          routePreference: normalizedRoutePreference,
+        });
         setPendingRouteSearch(null); // Clear after successful processing
 
       } catch (err) {
@@ -2263,6 +2359,7 @@ export default function HomeScreen() {
 
     if (selectedPoi) {
       const selectedPoiIconKey = getPoiIconKey(selectedPoi);
+      const shoppingMallSelected = isShoppingMallPoi(selectedPoi);
 
       markers.push({
         id: `selected-poi-${selectedPoi.id}`,
@@ -2271,7 +2368,8 @@ export default function HomeScreen() {
           <BreathingCore>
             <Image
               source={POI_IMAGES[selectedPoiIconKey]}
-              style={styles.selectedPoiIcon}
+              style={shoppingMallSelected ? styles.selectedPoiIconShoppingMall : styles.selectedPoiIcon}
+              resizeMode="contain"
             />
           </BreathingCore>
         ),
@@ -4427,6 +4525,9 @@ const styles = StyleSheet.create({
   selectedPoiIcon: {
     width: 33,
     height: 33,
-    resizeMode: 'contain',
+  },
+  selectedPoiIconShoppingMall: {
+    width: 100,
+    height: 100,
   },
 });
