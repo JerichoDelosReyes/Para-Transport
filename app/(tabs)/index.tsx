@@ -767,6 +767,11 @@ const getPoiIconKey = (poi: POIFeature): keyof typeof POI_IMAGES => {
   return POI_ICON_BY_LANDMARK_TYPE[landmarkType] || 'poi-default';
 };
 
+const isShoppingMallPoi = (poi: POIFeature): boolean => {
+  const landmarkType = String(poi.properties.landmark_type || poi.properties.category || '').toLowerCase();
+  return landmarkType === 'shopping_mall' || landmarkType === 'shoppingmall';
+};
+
 const makeWalkPathCacheKey = (from: MapCoordinate, to: MapCoordinate): string => {
   return `${roundCoordForKey(from.latitude)},${roundCoordForKey(from.longitude)}|${roundCoordForKey(to.latitude)},${roundCoordForKey(to.longitude)}`;
 };
@@ -2263,6 +2268,7 @@ export default function HomeScreen() {
 
     if (selectedPoi) {
       const selectedPoiIconKey = getPoiIconKey(selectedPoi);
+      const shoppingMallSelected = isShoppingMallPoi(selectedPoi);
 
       markers.push({
         id: `selected-poi-${selectedPoi.id}`,
@@ -2271,7 +2277,8 @@ export default function HomeScreen() {
           <BreathingCore>
             <Image
               source={POI_IMAGES[selectedPoiIconKey]}
-              style={styles.selectedPoiIcon}
+              style={shoppingMallSelected ? styles.selectedPoiIconShoppingMall : styles.selectedPoiIcon}
+              resizeMode="contain"
             />
           </BreathingCore>
         ),
@@ -4443,6 +4450,9 @@ const styles = StyleSheet.create({
   selectedPoiIcon: {
     width: 33,
     height: 33,
-    resizeMode: 'contain',
+  },
+  selectedPoiIconShoppingMall: {
+    width: 100,
+    height: 100,
   },
 });
