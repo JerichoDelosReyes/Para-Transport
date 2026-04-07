@@ -381,12 +381,12 @@ export default function AIChatbotScreen() {
     
     const plotTimeout = setTimeout(() => {
       setPlottingMessageId(null);
-      appendMessage({
+      setMessages((prev) => [...prev, {
         id: Math.random().toString(36).substring(7),
         text: "That location is coming soon! Please try another destination for now.",
         isUser: false,
         timestamp: Date.now(),
-      });
+      }]);
     }, 5000);
 
     // We can resolve it by attempting to fetch route beforehand?

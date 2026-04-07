@@ -10,6 +10,7 @@ type Props = {
   isSelected: boolean;
   onPress: (id: string) => void;
   onPressStartJourney?: () => void;
+  onStartSimulation?: () => void;
   rankLabel?: string;
   metricTags?: string[];
 };
@@ -20,7 +21,7 @@ const TAG_COLORS: Record<string, { backgroundColor: string; textColor: string }>
   Cheapest: { backgroundColor: '#10B981', textColor: '#FFFFFF' },
 };
 
-export default function RouteResultCard({ matched, isSelected, onPress, rankLabel, metricTags = [], onPressStartJourney }: Props) {
+export default function RouteResultCard({ matched, isSelected, onPress, rankLabel, metricTags = [], onPressStartJourney, onStartSimulation }: Props) {
   const { theme, isDark } = useTheme();
   const { legs, distanceKm, estimatedMinutes } = matched;
   const tricycleExtension = matched.tricycleExtension;
@@ -163,15 +164,28 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
         </View>
       </View>
 
-      {/* Start Journey Button for Selected Route */}
-      {isSelected && onPressStartJourney && (
-        <TouchableOpacity
-          style={[styles.startJourneyBtn, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}
-          activeOpacity={0.9}
-          onPress={() => onPressStartJourney()}
-        >
-          <Text style={[styles.startJourneyText, { color: isDark ? COLORS.navy : '#FFFFFF' }]}>Start Journey</Text>
-        </TouchableOpacity>
+      {/* Action Buttons for Selected Route */}
+      {isSelected && (
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+          {onPressStartJourney && (
+            <TouchableOpacity
+              style={[styles.startJourneyBtn, { flex: 1, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}
+              activeOpacity={0.9}
+              onPress={() => onPressStartJourney()}
+            >
+              <Text style={[styles.startJourneyText, { color: isDark ? COLORS.navy : '#FFFFFF' }]}>Start Journey</Text>
+            </TouchableOpacity>
+          )}
+          {onStartSimulation && (
+            <TouchableOpacity
+              style={[styles.startJourneyBtn, { flex: 1, backgroundColor: isDark ? 'rgba(232,160,32,0.2)' : 'rgba(10,22,40,0.06)' }]}
+              activeOpacity={0.9}
+              onPress={() => onStartSimulation()}
+            >
+              <Text style={[styles.startJourneyText, { color: isDark ? '#E8A020' : COLORS.navy }]}>Simulate</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
     </TouchableOpacity>
   );

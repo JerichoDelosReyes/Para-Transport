@@ -3314,6 +3314,16 @@ export default function HomeScreen() {
           const route = matchedRoutes.find(m => m.legs.map(l => l.route.properties.code).join('+') === id);
           if (route) startGuidance(id, route);
         }}
+        onStartSimulation={(id) => {
+          const route = matchedRoutes.find(m => m.legs.map(l => l.route.properties.code).join('+') === id);
+          if (route) {
+            startGuidance(id, route);
+            setTimeout(() => {
+              sim.reset();
+              sim.play();
+            }, 300); // ensure state settles
+          }
+        }}
         routeTypeLabel={selectedRouteTypeLabel}
         onClose={() => {
           setShowRecommender(false);
