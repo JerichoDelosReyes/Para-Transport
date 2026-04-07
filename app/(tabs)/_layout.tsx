@@ -12,8 +12,9 @@ const { width } = Dimensions.get('window');
 
 function TabBarBackground({ theme }: { theme: any }) {
   const insets = useSafeAreaInsets();
-  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
+  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : (Platform.OS === 'android' ? 24 : 24);
   const height = 48 + bottomSpace;
+  const svgHeight = height + 40; // extra padding at the bottom to cover gaps
   const cx = width / 2;
 
   // A smooth continuous notch for the button to sit in
@@ -23,14 +24,14 @@ function TabBarBackground({ theme }: { theme: any }) {
     C ${cx - 36},0 ${cx - 38},44 ${cx},44
     C ${cx + 38},44 ${cx + 36},0 ${cx + 52},0
     L ${width},0
-    L ${width},${height}
-    L 0,${height}
+    L ${width},${svgHeight}
+    L 0,${svgHeight}
     Z
   `;
 
   return (
-    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height, backgroundColor: 'transparent', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 4 }}>
-      <Svg width={width} height={height}>
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: svgHeight, backgroundColor: 'transparent', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 4 }}>
+      <Svg width={width} height={svgHeight}>
         <Path d={path} fill={theme.cardBackground} />
       </Svg>
     </View>
@@ -113,7 +114,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const isPanelVisible = useStore((state) => state.isPanelVisible);
   const translateY = useRef(new Animated.Value(0)).current;
   
-  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : 24;
+  const bottomSpace = insets.bottom > 0 ? insets.bottom * 0.6 : (Platform.OS === 'android' ? 24 : 24);
   const TAB_BAR_HEIGHT = 48 + bottomSpace + 24;
 
   useEffect(() => {
