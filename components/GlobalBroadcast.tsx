@@ -61,6 +61,11 @@ export function GlobalBroadcast() {
 
     fetchBroadcasts();
 
+    // Setup polling fallback in case Supabase Realtime isn't enabled on the table
+    const pollInterval = setInterval(() => {
+      fetchBroadcasts();
+    }, 10000); // Check every 10 seconds
+
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         fetchBroadcasts();
@@ -103,6 +108,7 @@ export function GlobalBroadcast() {
 
     return () => {
       unmounted = true;
+      clearInterval(pollInterval);
       sub.remove();
       supabase.removeChannel(channel);
     };

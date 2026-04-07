@@ -34,11 +34,20 @@ export default function BroadcastsScreen() {
         .order('created_at', { ascending: false })
         .limit(20);
       
-      if (data) setBroadcasts(data);
+      if (data) {
+        setBroadcasts((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
+          return data;
+        });
+      }
       setLoading(false);
     };
 
     fetchBroadcasts();
+
+    const pollInterval = setInterval(() => {
+      fetchBroadcasts();
+    }, 10000); // Check every 10 seconds
 
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
@@ -69,6 +78,7 @@ export default function BroadcastsScreen() {
       .subscribe();
 
     return () => {
+      clearInterval(pollInterval);
       sub.remove();
       supabase.removeChannel(channel);
     };
