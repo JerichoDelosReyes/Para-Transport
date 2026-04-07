@@ -301,8 +301,12 @@ export default function SearchScreen({
 
       setRecording(true);
       await ExpoSpeechRecognitionModule.start({
-        lang: "tl-PH",
+        lang: "en-US",
         interimResults: true,
+        requiresOnDeviceRecognition: false,
+        androidIntentOptions: {
+          EXTRA_LANGUAGE_MODEL: "free_form"
+        }
       });
     } catch (error) {
       console.log("Speech recognition start error:", error);

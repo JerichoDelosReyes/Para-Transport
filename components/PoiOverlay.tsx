@@ -222,11 +222,11 @@ export default function PoiOverlay({
   const shoppingMallIconLayerStyle = useMemo(
     () => ({
       iconImage: 'poi-shoppingMall',
-      iconSize: ['interpolate', ['linear'], ['zoom'], 1, 7, 14, 0.95, 6, 1.2],
+      iconSize: ['interpolate', ['linear'], ['zoom'], 13, 0.26, 15, 0.35, 17, 0.5, 19, 0.62],
       iconAllowOverlap: true,
       iconIgnorePlacement: true,
       iconAnchor: 'bottom',
-      iconPadding: 28,
+      iconPadding: 22,
       textColor: isDark ? '#FFFFFF' : '#0A1628',
       textHaloColor: isDark ? '#000000' : '#000000',
       symbolSortKey: 0,

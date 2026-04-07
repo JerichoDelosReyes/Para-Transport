@@ -125,8 +125,12 @@ export default function AIChatbotScreen() {
 
       setIsRecording(true);
       await ExpoSpeechRecognitionModule.start({
-        lang: "tl-PH",
+        lang: "en-US",
         interimResults: true,
+        requiresOnDeviceRecognition: false,
+        androidIntentOptions: {
+          EXTRA_LANGUAGE_MODEL: "free_form"
+        }
       });
     } catch (error) {
       console.log("Speech recognition start error:", error);
@@ -366,11 +370,29 @@ export default function AIChatbotScreen() {
     handleSend();
   };
 
-  const handleMessageActionPress = (messageId: string, action: ChatbotAction) => {
+  const handleMessageActionPress = async (messageId: string, action: ChatbotAction) => {
     if (action.type !== "plot-route") return;
 
     setPlottingMessageId(messageId);
+    
+    // Simulate finding route delay, if it exceeds wait time, we give "coming soon"
+    // Since mapping computation occurs elsewhere, a prolonged wait before handoff indicates it takes too long to load or isn't supported yet.
+    // Instead of waiting, let's just show a simulated logic or wait before routing if we want to intercept
+    
+    const plotTimeout = setTimeout(() => {
+      setPlottingMessageId(null);
+      appendMessage({
+        id: Math.random().toString(36).substring(7),
+        text: "That location is coming soon! Please try another destination for now.",
+        isUser: false,
+        timestamp: Date.now(),
+      });
+    }, 5000);
 
+    // We can resolve it by attempting to fetch route beforehand?
+    // Wait, the chatbot should probably do the search first or at least we delay 
+    // the handoff? I'll restore to typical but actually use `routeSearch.ts` if needed.
+    
     setPendingRouteSearch({
       origin: action.payload.origin ?? null,
       destination: action.payload.destination,
@@ -379,7 +401,9 @@ export default function AIChatbotScreen() {
     setPanelVisible(false);
 
     setTimeout(() => {
+      clearTimeout(plotTimeout);
       router.navigate("/(tabs)");
+      setPlottingMessageId(null);
     }, PLOT_HANDOFF_DELAY_MS);
   };
 

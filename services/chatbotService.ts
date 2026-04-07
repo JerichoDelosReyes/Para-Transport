@@ -1,4 +1,3 @@
-import LOCAL_PLACES from '../data/local_places';
 import datasetJson from '../data/chatbot-dataset.json';
 import type { JeepneyRoute } from '../types/routes';
 import { findRoutesForDestination, rankRoutes } from './routeSearch';
@@ -3178,72 +3177,13 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       ? toRoutePayloadPointFromPlace(resolvedOriginPlace)
       : (fallbackOriginText || null);
 
-    let destinationPayload: ChatbotRoutePayloadPoint;
-    let finalDestinationLabel: string;
+    const destinationPayload: ChatbotRoutePayloadPoint = resolvedDestinationPoint
+      ? toRoutePayloadPointFromDestination(resolvedDestinationPoint)
+      : (fallbackDestinationText as string);
 
-    if (resolvedDestinationPoint) {
-      destinationPayload = toRoutePayloadPointFromDestination(resolvedDestinationPoint);
-      finalDestinationLabel = resolvedDestinationPoint.name || '';
-    } else if (fallbackDestinationText) {
-      const query = String(fallbackDestinationText).toLowerCase().replace(/[^a-z0-9]/g, '');
-      let bestMatch: ChatbotRoutePayloadPoint | null = null;
-      let bestName = '';
-      let bestScore = Number.POSITIVE_INFINITY;
-      const maxAllowedDist = Math.max(2, Math.ceil(query.length * 0.3));
-
-      const evaluateCandidate = (name: string | undefined, lat: number | undefined, lon: number | undefined) => {
-        if (!name || lat == null || lon == null) return;
-        const t = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (t === query) {
-          bestScore = 0;
-          bestMatch = { name, lat, lon };
-          bestName = name;
-          return;
-        }
-        if ((t.includes(query) || query.includes(t)) && query.length >= 4) {
-          if (bestScore > 0.5) {
-            bestScore = 0.5;
-            bestMatch = { name, lat, lon };
-            bestName = name;
-          }
-          return;
-        }
-        const dist = levenshteinDistance(query, t);
-        if (dist <= maxAllowedDist && dist < bestScore) {
-          bestScore = dist;
-          bestMatch = { name, lat, lon };
-          bestName = name;
-        }
-      };
-
-      for (const p of LOCAL_PLACES) evaluateCandidate(p.title, p.latitude, p.longitude);
-      for (const p of dataset.places) {
-        evaluateCandidate(p.name, p.lat, p.lon);
-        for (const alias of p.aliases) evaluateCandidate(alias, p.lat, p.lon);
-      }
-      for (const r of dataset.routes) {
-        for (const s of r.stops) evaluateCandidate(s.name, s.lat, s.lon);
-      }
-
-      if (bestMatch) {
-        destinationPayload = bestMatch;
-        finalDestinationLabel = bestName;
-      } else {
-        return {
-           text: supportReply(language === 'tl' 
-             ? "Hindi ko mahanap ang lugar na iyon sa records. Paki-check ang spelling o pili ng ibang landmark at susubukan ko itong i-plot." 
-             : "I couldn't clearly find that location in my records. Please try another destination or check the spelling."),
-           language,
-           state: {},
-           usedGroq: false
-        };
-      }
-    } else {
-      destinationPayload = '';
-      finalDestinationLabel = '';
-    }
-
-    const destinationLabel = finalDestinationLabel || fallbackDestinationText || (language === 'tl' ? 'iyong destination' : 'your destination');
+    const destinationLabel = resolvedDestinationPoint?.name
+      || fallbackDestinationText
+      || (language === 'tl' ? 'iyong destination' : 'your destination');
     const originLabel = resolvedOriginPlace?.name || fallbackOriginText || null;
     const usesCurrentLocation = !originPayload;
 

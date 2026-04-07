@@ -2231,18 +2231,20 @@ export default function HomeScreen() {
   }, [sim.state, sim.position, currentLocation]);
 
   const simPointIndex = useMemo(() => {
-    if (!sim.position || sim.state === 'idle' || simCoordinates.length < 2) return -1;
+    if (!isGuidanceActive) return -1;
+    const currentPos = sim.state !== 'idle' && sim.position ? sim.position : currentLocation;
+    if (!currentPos || simCoordinates.length < 2) return -1;
     let bestIdx = 0;
     let bestDist = Number.POSITIVE_INFINITY;
     for (let i = 0; i < simCoordinates.length; i++) {
-      const d = sqDistApprox(sim.position, simCoordinates[i]);
+      const d = sqDistApprox(currentPos, simCoordinates[i]);
       if (d < bestDist) {
         bestDist = d;
         bestIdx = i;
       }
     }
     return bestIdx;
-  }, [sim.position, sim.state, simCoordinates]);
+  }, [isGuidanceActive, sim.position, sim.state, currentLocation, simCoordinates]);
 
   const visibleTransitLegs = useMemo(() => {
     if (simPointIndex < 0) return transitLegs;
@@ -2782,16 +2784,16 @@ export default function HomeScreen() {
       }
     } else {
       if (currentStep.type === 'board') {
-        if (dist <= 30) {
+        if (dist <= 60) {
           if (boardTimeRef.current === 0) boardTimeRef.current = Date.now();
-          else if (Date.now() - boardTimeRef.current > 5000) shouldAdvance = true;
+          else if (Date.now() - boardTimeRef.current > 4000) shouldAdvance = true;
         } else {
           boardTimeRef.current = 0;
         }
       } else if (currentStep.type === 'ride' || currentStep.type === 'transfer' || currentStep.type === 'alight') {
-        if (dist <= 50) shouldAdvance = true;
+        if (dist <= 100) shouldAdvance = true;
       } else if (currentStep.type === 'walk' || currentStep.type === 'arrive') {
-        if (dist <= 20) shouldAdvance = true;
+        if (dist <= 60) shouldAdvance = true;
       }
     }
 
