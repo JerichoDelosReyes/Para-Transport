@@ -21,6 +21,7 @@ import { fuzzyFilter } from '../utils/fuzzySearch';
 import { useRecentSearches, RecentSearch } from '../hooks/useRecentSearches';
 import { useStore } from '../store/useStore';
 import LOCAL_PLACES from '../data/local_places';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
 const GEOCODING_BASE_URL =
   process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
@@ -266,13 +267,52 @@ export default function SearchScreen({
     };
   }, [activeQuery, activeField, recents, fetchGeocodingPlaces, mergeUniquePlaces]);
 
+  useSpeechRecognitionEvent("result", (event) => {
+    if (event.results && event.results.length > 0) {
+      if (activeField === 'origin') {
+        setOriginText(event.results[0].transcript);
+      } else {
+        setDestinationText(event.results[0].transcript);
+      }
+    }
+  });
+
+  useSpeechRecognitionEvent("end", () => {
+    setIsRecordingOrigin(false);
+    setIsRecordingDestination(false);
+  });
+
+  useSpeechRecognitionEvent("error", () => {
+    setIsRecordingOrigin(false);
+    setIsRecordingDestination(false);
+  });
+
   const startRecording = async (field: 'origin' | 'destination') => {
-    if (field === 'origin') setIsRecordingOrigin(false);
-    if (field === 'destination') setIsRecordingDestination(false);
-    Alert.alert(
-      'Voice input unavailable',
-      'Speech recognition is not available in this currently installed build. Rebuild and reinstall your dev client to enable voice input.',
-    );
+    const setRecording = field === 'origin' ? setIsRecordingOrigin : setIsRecordingDestination;
+    const isRecordingThisField = field === 'origin' ? isRecordingOrigin : isRecordingDestination;
+    
+    try {
+      if (isRecordingThisField) {
+        await ExpoSpeechRecognitionModule.stop();
+        setRecording(false);
+        return;
+      }
+
+      const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert("Permission Required", "Speech recognition requires microphone permissions.");
+        return;
+      }
+
+      setRecording(true);
+      await ExpoSpeechRecognitionModule.start({
+        lang: "tl-PH",
+        interimResults: true,
+      });
+    } catch (error) {
+      console.log("Speech recognition start error:", error);
+      setRecording(false);
+    }
   };
 
   const handleMicPress = (field: 'origin' | 'destination') => {

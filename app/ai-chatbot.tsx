@@ -11,6 +11,7 @@ import { getChatbotReply, type ChatbotAction, type ChatbotConversationState } fr
 import { useStore } from "../store/useStore";
 import { supabase } from '../config/supabaseClient';
 import { useTheme } from '../src/theme/ThemeContext';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
 const CHATBOT_STATES = {
   IDLE: require("../assets/AIChatbot/IDLE.png"),
@@ -92,12 +93,43 @@ export default function AIChatbotScreen() {
     setStoredConversationState(conversationState);
   }, [conversationState, setStoredConversationState]);
 
-  const handleMicPress = async () => {
+  useSpeechRecognitionEvent("result", (event) => {
+    if (event.results && event.results.length > 0) {
+      setInputText(event.results[0].transcript);
+    }
+  });
+
+  useSpeechRecognitionEvent("end", () => {
     setIsRecording(false);
-    Alert.alert(
-      "Voice input unavailable",
-      "Speech recognition is not available in this currently installed build. Rebuild and reinstall your dev client to enable voice input.",
-    );
+  });
+
+  useSpeechRecognitionEvent("error", (event) => {
+    setIsRecording(false);
+  });
+
+  const handleMicPress = async () => {
+    try {
+      if (isRecording) {
+        await ExpoSpeechRecognitionModule.stop();
+        setIsRecording(false);
+        return;
+      }
+
+      const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert("Permission Required", "Speech recognition requires microphone permissions.");
+        return;
+      }
+
+      setIsRecording(true);
+      await ExpoSpeechRecognitionModule.start({
+        lang: "tl-PH",
+        interimResults: true,
+      });
+    } catch (error) {
+      console.log("Speech recognition start error:", error);
+      setIsRecording(false);
+    }
   };
 
   useEffect(() => {

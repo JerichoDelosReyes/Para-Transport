@@ -2,7 +2,7 @@ export const POI_MIN_RENDER_ZOOM = 11;
 
 export const POI_IMAGES: Record<string, number> = {
   'poi-default': require('../assets/icons/poi/ic_place_48px.png'),
- 'poi-shoppingMall': require('../assets/icons/poi/ic_superLocal_shoppingMall.png'), 
+  'poi-shoppingMall': require('../assets/icons/poi/ic_local_mall_48px.png'), 
   'poi-hospital': require('../assets/icons/poi/ic_local_hospital_48px.png'),
   'poi-hotel': require('../assets/icons/poi/ic_hotel_48px.png'),
   'poi-restaurant': require('../assets/icons/poi/ic_restaurant_48px.png'),
