@@ -43,6 +43,8 @@ export default function AIChatbotScreen() {
   const setStoredConversationState = useStore((state: any) => state.setChatbotConversationState);
   const clearChatbotMemory = useStore((state: any) => state.clearChatbotMemory);
   const setPendingRouteSearch = useStore((state: any) => state.setPendingRouteSearch);
+  const setPanelVisible = useStore((state: any) => state.setPanelVisible);
+
   const [messages, setMessages] = useState<ChatMessage[]>(() => storedMessages as ChatMessage[]);
   const [conversationState, setConversationState] = useState<ChatbotConversationState>(
     () => storedConversationState as ChatbotConversationState,
@@ -374,6 +376,7 @@ export default function AIChatbotScreen() {
       destination: action.payload.destination,
       routePreference: action.payload.routePreference,
     });
+    setPanelVisible(false);
 
     setTimeout(() => {
       router.navigate("/(tabs)");

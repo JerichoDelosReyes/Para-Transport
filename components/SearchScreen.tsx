@@ -141,48 +141,43 @@ export default function SearchScreen({
       const q = query.trim();
       if (q.length < 2) return [];
 
-      const params = new URLSearchParams({
-        q: scopedToCavite ? `${q}, Cavite, Philippines` : `${q}, Philippines`,
-        format: 'jsonv2',
-        limit: String(limit),
-        countrycodes: 'ph',
-        addressdetails: '0',
-      });
-
-      if (scopedToCavite) {
-        params.set('viewbox', CAVITE_VIEWBOX);
-        params.set('bounded', '1');
-      }
+      const searchQ = scopedToCavite ? `${q}, Cavite, Philippines` : `${q}, Philippines`;
+      // Photon API base URL
+      const GEOCODING_BASE_URL = 'https://photon.komoot.io';
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), GEOCODING_TIMEOUT_MS);
 
       try {
-        const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
-          headers: GEOCODING_HEADERS,
+        const res = await fetch(`${GEOCODING_BASE_URL}/api/?q=${encodeURIComponent(searchQ)}&limit=${limit}`, {
           signal: controller.signal,
         });
 
         if (!res.ok) return [];
 
         const data = await res.json();
-        return (Array.isArray(data) ? data : [])
-          .map((item: any, idx: number) => {
-            const dn = String(item.display_name || '').trim();
-            const parts = dn
-              .split(',')
-              .map((p: string) => p.trim())
-              .filter(Boolean);
+        const features = data.features || [];
+        
+        return features.map((feature: any, idx: number) => {
+          const [longitude, latitude] = feature.geometry.coordinates;
+          const props = feature.properties;
+          
+          const title = props.name || q;
+          
+          const subtitleParts = [props.city, props.state, props.country].filter(Boolean);
+          const subtitle = subtitleParts.join(', ') || 'Philippines';
 
-            return {
-              id: String(item.place_id || `${idx}`),
-              title: parts[0] || q,
-              subtitle: parts.slice(1).join(', ') || 'Philippines',
-              latitude: parseFloat(item.lat),
-              longitude: parseFloat(item.lon),
-            } as PlaceResult;
-          })
-          .filter((p: PlaceResult) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
+          return {
+            id: String(props.osm_id || `${idx}-${Date.now()}`),
+            title,
+            subtitle,
+            latitude,
+            longitude,
+          } as PlaceResult;
+        });
+      } catch (err) {
+        console.warn('Geocoding error:', err);
+        return [];
       } finally {
         clearTimeout(timeout);
       }

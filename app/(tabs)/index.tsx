@@ -1779,44 +1779,35 @@ export default function HomeScreen() {
         if (exactLocal) return exactLocal;
 
         const fetchGeocodingPlace = async (scopedToCavite: boolean): Promise<PlaceResult | null> => {
-          const params = new URLSearchParams({
-            q: scopedToCavite ? `${query}, Cavite, Philippines` : `${query}, Philippines`,
-            format: 'jsonv2',
-            limit: '1',
-            countrycodes: 'ph',
-            addressdetails: '0',
-          });
-
-          if (scopedToCavite) {
-            params.set('viewbox', CAVITE_VIEWBOX);
-            params.set('bounded', '1');
-          }
-
+          const q = scopedToCavite ? `${query}, Cavite, Philippines` : `${query}, Philippines`;
           const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), GEOCODING_TIMEOUT_MS);
+          // Use a shorter timeout to prevent hanging the UI excessively.
+          const timeout = setTimeout(() => controller.abort(), 4000);
 
           try {
-            const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
-              headers: GEOCODING_HEADERS,
+            // Using Photon (Komoot) as it is faster and doesn't heavily rate-limit or block standard fetches.
+            const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1`, {
               signal: controller.signal,
             });
 
             if (!res.ok) return null;
 
             const data = await res.json();
-            if (!Array.isArray(data) || data.length === 0) return null;
+            if (!data.features || data.features.length === 0) return null;
 
-            const first = data[0];
-            const latitude = parseFloat(first.lat);
-            const longitude = parseFloat(first.lon);
+            const feature = data.features[0];
+            const [longitude, latitude] = feature.geometry.coordinates;
             if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
 
-            const rawTitle = String(first.display_name || '').split(',')[0]?.trim();
+            const title = feature.properties.name || query;
+            const subtitle = [feature.properties.city, feature.properties.state]
+              .filter(Boolean)
+              .join(', ') || feature.properties.country || '';
 
             return {
-              id: String(first.place_id || `${Date.now()}`),
-              title: rawTitle || query,
-              subtitle: String(first.display_name || ''),
+              id: String(feature.properties.osm_id || `${Date.now()}`),
+              title,
+              subtitle,
               latitude,
               longitude,
             };
