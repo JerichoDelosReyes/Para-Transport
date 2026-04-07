@@ -24,11 +24,11 @@ export function GlobalBroadcast() {
   const sessionMode = useStore((state) => state.sessionMode);
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [activeBroadcast, setActiveBroadcast] = useState<BroadcastMessage | null>(null);
-  const slideAnim = useRef(new Animated.Value(150)).current; // Slide up from bottom
+  const slideAnim = useRef(new Animated.Value(-150)).current; // Slide down from top
 
   const dismissCurrent = () => {
     Animated.timing(slideAnim, {
-      toValue: 150,
+      toValue: -150,
       duration: 300,
       useNativeDriver: true,
     }).start(() => {
@@ -179,8 +179,7 @@ export function GlobalBroadcast() {
           styles.glassBackground, 
           { 
             backgroundColor: bgColors[activeBroadcast.type] || bgColors.info,
-            paddingBottom: Math.max(insets.bottom, 10) + 10,
-            paddingTop: 20,
+            paddingTop: Math.max(insets.top, 10) + 10,
           }
         ]}
       >
@@ -206,23 +205,23 @@ export function GlobalBroadcast() {
 const styles = StyleSheet.create({
   bannerContainer: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     width: windowWidth,
     zIndex: 99999,
   },
   glassBackground: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
     paddingHorizontal: 16,
     overflow: 'hidden',
-    borderTopWidth: 1,
+    borderBottomWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
   },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 0,
+    paddingBottom: 20,
   },
   icon: {
     marginRight: 12,
