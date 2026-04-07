@@ -3,7 +3,8 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, Alert, Pre
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
+import JeepIllustrationLight from '../../assets/illustrations/welcomeScreen-jeep2.svg';
+import JeepIllustrationDark from '../../assets/illustrations/welcomeScreen-jeep2-dark.svg';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
@@ -59,12 +60,20 @@ export default function SavedScreen() {
         
         {isGuestAccount ? (
           <View style={[styles.emptyState, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-            <JeepIllustration width={220} height={150} />
+            {isDark ? (
+              <JeepIllustrationDark width={220} height={150} />
+            ) : (
+              <JeepIllustrationLight width={220} height={150} />
+            )}
             <Text style={[styles.emptyTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>Sign in to save.</Text>
           </View>
         ) : savedRoutes.length === 0 ? (
           <View style={[styles.emptyState, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-            <JeepIllustration width={220} height={150} />
+            {isDark ? (
+              <JeepIllustrationDark width={220} height={150} />
+            ) : (
+              <JeepIllustrationLight width={220} height={150} />
+            )}
             <Text style={[styles.emptyTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>Wala pang saved routes.</Text>
           </View>
         ) : (
@@ -301,6 +310,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Cubao',
     fontSize: 24,
     color: COLORS.navy,
+    textAlign: 'center',
+    textTransform: 'uppercase',
   },
   card: {
     borderRadius: RADIUS.card,

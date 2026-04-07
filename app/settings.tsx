@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch, Modal, Pressable } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch, Modal, Pressable, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRouter, useNavigation } from 'expo-router';
@@ -180,7 +180,11 @@ export default function SettingsScreen() {
         </View>
 
         <View style={[styles.cardGroup, { backgroundColor: theme.cardBackground }]}>
-          <TouchableOpacity style={styles.settingRow} activeOpacity={0.7}>
+          <TouchableOpacity 
+            style={styles.settingRow} 
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL('https://github.com/JerichoDelosReyes/Para-Transport')}
+          >
             <View style={styles.rowLeft}>
               <Feather name="info" size={20} color={theme.text} style={styles.icon} />
               <Text style={[styles.settingLabel, { color: theme.text }]}>About Para</Text>
@@ -188,7 +192,11 @@ export default function SettingsScreen() {
             <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
           <View style={[styles.divider, { backgroundColor: theme.cardBorder }]} />
-          <TouchableOpacity style={styles.settingRow} activeOpacity={0.7}>
+          <TouchableOpacity 
+            style={styles.settingRow} 
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL('https://github.com/JerichoDelosReyes/Para-Transport/wiki/Privacy-Policy')}
+          >
             <View style={styles.rowLeft}>
               <Feather name="shield" size={20} color={theme.text} style={styles.icon} />
               <Text style={[styles.settingLabel, { color: theme.text }]}>Privacy Policy</Text>

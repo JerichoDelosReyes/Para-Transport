@@ -7,7 +7,8 @@ import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
 import { useTheme } from '../src/theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { supabase } from '../config/supabaseClient';
-import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep2.svg';
+import JeepIllustrationLight from '../assets/illustrations/welcomeScreen-jeep2.svg';
+import JeepIllustrationDark from '../assets/illustrations/welcomeScreen-jeep2-dark.svg';
 
 const SkeletonCard = () => {
   const animatedValue = React.useRef(new Animated.Value(0)).current;
@@ -115,7 +116,11 @@ export default function PointsHistoryScreen() {
             </>
           ) : pointsHistory.length === 0 ? (
              <View style={[styles.emptyContainer, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-               <JeepIllustration width={220} height={150} />
+               {isDark ? (
+                 <JeepIllustrationDark width={220} height={150} />
+               ) : (
+                 <JeepIllustrationLight width={220} height={150} />
+               )}
                <Text style={[styles.emptyTitle, { color: theme.text }]}>WALA PANG POINTS.</Text>
              </View>
           ) : (
@@ -229,6 +234,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Cubao',
     fontSize: 24,
     color: COLORS.navy,
+    textAlign: 'center',
   },
   historyCard: {
     backgroundColor: '#FFFFFF',
