@@ -44,6 +44,9 @@ const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number => {
   );
 };
 
+const routeId = (route: MatchedRoute): string =>
+  route.legs.map((leg) => leg.route.properties.code).join('+');
+
 const routeSignature = (route: MatchedRoute): string =>
   route.legs.map((leg) => leg.route.properties.code).join('>');
 
@@ -156,9 +159,86 @@ export default function RouteRecommenderPanel({
     [metricBaselines],
   );
 
+  const insightRoute = useMemo(() => {
+    if (selectedRoute) {
+      const selected = topRankedRoutes.find((route) => routeId(route) === selectedRoute);
+      if (selected) return selected;
+    }
+
+    return topRankedRoutes[0] || null;
+  }, [selectedRoute, topRankedRoutes]);
+
+  const routeInsightText = useMemo(() => {
+    if (!insightRoute) return null;
+
+    const tags = getMetricTags(insightRoute);
+    const hasFastest = tags.includes('Fastest');
+    const hasCheapest = tags.includes('Cheapest');
+    const hasLeastTransfer = tags.includes('Least Transfer');
+
+    let lead = 'Top route on the map';
+    if (hasFastest && hasCheapest && hasLeastTransfer) {
+      lead = 'Top route balances time, fare, and transfers';
+    } else if (hasFastest && hasCheapest) {
+      lead = 'Top route is fast and budget-friendly';
+    } else if (hasFastest && hasLeastTransfer) {
+      lead = 'Top route is fast with fewer transfers';
+    } else if (hasCheapest && hasLeastTransfer) {
+      lead = 'Top route is budget-friendly with fewer transfers';
+    } else if (hasFastest) {
+      lead = 'Top route is the fastest option';
+    } else if (hasCheapest) {
+      lead = 'Top route is the cheapest option';
+    } else if (hasLeastTransfer) {
+      lead = 'Top route has the fewest transfers';
+    }
+
+    const transferText =
+      insightRoute.transferCount === 0
+        ? 'with no transfers'
+        : `with ${insightRoute.transferCount} transfer${insightRoute.transferCount === 1 ? '' : 's'}`;
+
+    const tricycleHint = insightRoute.tricycleExtension
+      ? ' plus a last-mile tricycle option'
+      : '';
+
+    return `${lead}: about ${insightRoute.estimatedMinutes} min, ${insightRoute.distanceKm.toFixed(1)} km, and around ₱${Math.max(
+      0,
+      Math.round(insightRoute.estimatedFare),
+    )} ${transferText}${tricycleHint}.`;
+  }, [insightRoute, getMetricTags]);
+
+  const insightHeader = useMemo(() => {
+    if (!routeInsightText) return null;
+
+    return (
+      <View
+        style={[
+          styles.insightCard,
+          {
+            backgroundColor: isDark ? 'rgba(245,197,24,0.14)' : '#FFF6CC',
+            borderColor: '#E8A020',
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.insightIconWrap,
+            {
+              backgroundColor: isDark ? 'rgba(232,160,32,0.24)' : 'rgba(232,160,32,0.18)',
+            },
+          ]}
+        >
+          <Ionicons name="bulb-outline" size={16} color={isDark ? '#FFD970' : '#9A6B00'} />
+        </View>
+        <Text style={[styles.insightText, { color: isDark ? '#FFE8A3' : '#6D4C00' }]}>{routeInsightText}</Text>
+      </View>
+    );
+  }, [routeInsightText, isDark]);
+
   const renderRouteCard = useCallback(
     ({ item, index }: { item: MatchedRoute; index: number }) => {
-      const id = item.legs.map((leg: any) => leg.route.properties.code).join('+');
+      const id = routeId(item);
 
       return (
         <RouteResultCard
@@ -177,7 +257,7 @@ export default function RouteRecommenderPanel({
   );
 
   const keyExtractor = useCallback(
-    (item: MatchedRoute) => item.legs.map((leg: any) => leg.route.properties.code).join('+'),
+    (item: MatchedRoute) => routeId(item),
     [],
   );
 
@@ -210,6 +290,7 @@ export default function RouteRecommenderPanel({
         data={topRankedRoutes}
         keyExtractor={keyExtractor}
         renderItem={renderRouteCard}
+        ListHeaderComponent={insightHeader}
         showsVerticalScrollIndicator={false}
         bounces={false}
         contentContainerStyle={styles.sheetContent}
@@ -229,6 +310,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 350 // Reduced to standard padding
+  },
+  insightCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderWidth: 2,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  insightIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+    flexShrink: 0,
+  },
+  insightText: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
   },
   emptyResultCard: {
     alignItems: 'center',
