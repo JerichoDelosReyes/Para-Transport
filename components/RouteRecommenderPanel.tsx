@@ -47,6 +47,16 @@ const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number => {
 const routeId = (route: MatchedRoute): string =>
   route.legs.map((leg) => leg.route.properties.code).join('+');
 
+const transferLabel = (count: number): string =>
+  count === 0 ? 'No transfer' : `${count} transfer${count === 1 ? '' : 's'}`;
+
+const totalFareForInsight = (route: MatchedRoute): number => {
+  const extensionFare = route.tricycleExtension
+    ? Math.max(0, Math.round(route.tricycleExtension.estimatedFare || 0))
+    : 0;
+  return Math.max(0, Math.round(route.estimatedFare)) + extensionFare;
+};
+
 const routeSignature = (route: MatchedRoute): string =>
   route.legs.map((leg) => leg.route.properties.code).join('>');
 
@@ -159,54 +169,37 @@ export default function RouteRecommenderPanel({
     [metricBaselines],
   );
 
-  const insightRoute = useMemo(() => {
-    if (selectedRoute) {
-      const selected = topRankedRoutes.find((route) => routeId(route) === selectedRoute);
-      if (selected) return selected;
-    }
-
-    return topRankedRoutes[0] || null;
-  }, [selectedRoute, topRankedRoutes]);
-
   const routeInsightText = useMemo(() => {
-    if (!insightRoute) return null;
+    if (topRankedRoutes.length === 0) return null;
 
-    const tags = getMetricTags(insightRoute);
-    const hasFastest = tags.includes('Fastest');
-    const hasCheapest = tags.includes('Cheapest');
-    const hasLeastTransfer = tags.includes('Least Transfer');
+    const recommendedRoute = topRankedRoutes[0];
+    const recommendedIndex = 1;
+    const fastestMinutes = Math.min(...topRankedRoutes.map((route) => route.estimatedMinutes));
+    const cheapestFare = Math.min(...topRankedRoutes.map(totalFareForInsight));
+    const leastTransfers = Math.min(...topRankedRoutes.map((route) => route.transferCount));
+    const recommendedFare = totalFareForInsight(recommendedRoute);
+    const transferText = transferLabel(recommendedRoute.transferCount).toLowerCase();
 
-    let lead = 'Top route on the map';
-    if (hasFastest && hasCheapest && hasLeastTransfer) {
-      lead = 'Top route balances time, fare, and transfers';
-    } else if (hasFastest && hasCheapest) {
-      lead = 'Top route is fast and budget-friendly';
-    } else if (hasFastest && hasLeastTransfer) {
-      lead = 'Top route is fast with fewer transfers';
-    } else if (hasCheapest && hasLeastTransfer) {
-      lead = 'Top route is budget-friendly with fewer transfers';
-    } else if (hasFastest) {
-      lead = 'Top route is the fastest option';
-    } else if (hasCheapest) {
-      lead = 'Top route is the cheapest option';
-    } else if (hasLeastTransfer) {
-      lead = 'Top route has the fewest transfers';
+    const recommendedTags: string[] = [];
+    if (recommendedRoute.estimatedMinutes === fastestMinutes) recommendedTags.push('fastest');
+    if (recommendedFare === cheapestFare) recommendedTags.push('cheapest');
+    if (recommendedRoute.transferCount === leastTransfers) recommendedTags.push('least transfers');
+
+    const reasonText =
+      recommendedTags.length === 0
+        ? 'balanced time, fare, and transfers'
+        : recommendedTags.length === 1
+        ? `${recommendedTags[0]} profile`
+        : recommendedTags.length === 2
+        ? `${recommendedTags[0]} and ${recommendedTags[1]} profile`
+        : 'fastest, cheapest, and least-transfer profile';
+
+    if (topRankedRoutes.length === 1) {
+      return `Most recommended route (Option ${recommendedIndex}) has a ${reasonText}: ~${recommendedRoute.estimatedMinutes} min, ${recommendedRoute.distanceKm.toFixed(1)} km, around ₱${recommendedFare}, and ${transferText}.`;
     }
 
-    const transferText =
-      insightRoute.transferCount === 0
-        ? 'with no transfers'
-        : `with ${insightRoute.transferCount} transfer${insightRoute.transferCount === 1 ? '' : 's'}`;
-
-    const tricycleHint = insightRoute.tricycleExtension
-      ? ' plus a last-mile tricycle option'
-      : '';
-
-    return `${lead}: about ${insightRoute.estimatedMinutes} min, ${insightRoute.distanceKm.toFixed(1)} km, and around ₱${Math.max(
-      0,
-      Math.round(insightRoute.estimatedFare),
-    )} ${transferText}${tricycleHint}.`;
-  }, [insightRoute, getMetricTags]);
+    return `Across ${topRankedRoutes.length} suggested routes, Option ${recommendedIndex} is the most recommended with a ${reasonText}: ~${recommendedRoute.estimatedMinutes} min, ${recommendedRoute.distanceKm.toFixed(1)} km, around ₱${recommendedFare}, and ${transferText}. Fastest in this list is ~${fastestMinutes} min, cheapest is around ₱${cheapestFare}, and the least-transfer option has ${transferLabel(leastTransfers).toLowerCase()}.`;
+  }, [topRankedRoutes]);
 
   const insightHeader = useMemo(() => {
     if (!routeInsightText) return null;
@@ -244,7 +237,7 @@ export default function RouteRecommenderPanel({
         <RouteResultCard
           matched={item}
           isSelected={selectedRoute === id}
-          rankLabel={`Top ${index + 1}`}
+          rankLabel={`Option ${index + 1}`}
           metricTags={getMetricTags(item)}
           onPress={(pressedId: string) => {
             setSelectedRoute(selectedRoute === pressedId ? null : pressedId);
