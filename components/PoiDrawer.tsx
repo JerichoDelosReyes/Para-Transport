@@ -10,8 +10,8 @@ import BottomSheet from './BottomSheet';
 import { useStore } from '../store/useStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.38;
-const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.32;
+const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.45;
+const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.35;
 
 type PoiDrawerProps = {
   poi: POIFeature | null;
@@ -73,10 +73,6 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
   }, [poi]);
 
   const title = poi?.properties.title || '';
-  const distanceText =
-    matchedRoute && Number.isFinite(matchedRoute.distanceKm)
-      ? `: ${matchedRoute.distanceKm.toFixed(1)} km`
-      : ': Unavailable';
 
   return (
     <BottomSheet
@@ -93,25 +89,13 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
 
         <Text style={[styles.poiCategory, { color: theme.text }]}>{typeLabel}</Text>
 
-        <View style={styles.metaRow}>
-          <View
-            style={[
-              styles.jeepIconWrap,
-              { backgroundColor: isDark ? theme.surfaceSecondary : 'rgba(10,22,40,0.06)' },
-            ]}
-          >
-            <Image
-              source={
-                isDark
-                  ? require('../assets/icons/jeepney-icon.png')
-                  : require('../assets/icons/jeepney-icon-dark.png')
-              }
-              style={styles.jeepIcon}
-              resizeMode="contain"
-            />
+        {matchedRoute && Number.isFinite(matchedRoute.distanceKm) ? (
+          <View style={styles.metaRow}>
+            <Text style={[styles.metaText, { color: theme.textSecondary }]}>
+              {matchedRoute.distanceKm.toFixed(1)} km away
+            </Text>
           </View>
-          <Text style={[styles.metaText, { color: theme.textSecondary }]}>{distanceText}</Text>
-        </View>
+        ) : null}
 
         <View style={styles.actionsRow}>
           <TouchableOpacity 
@@ -162,18 +146,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 18,
-    gap: 6,
-  },
-  jeepIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  jeepIcon: {
-    width: 18,
-    height: 18,
   },
   metaText: {
     fontFamily: 'Inter',
