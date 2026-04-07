@@ -10,8 +10,8 @@ import BottomSheet from './BottomSheet';
 import { useStore } from '../store/useStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.54;
-const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.41;
+const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.38;
+const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.32;
 
 type PoiDrawerProps = {
   poi: POIFeature | null;
@@ -23,29 +23,41 @@ type PoiDrawerProps = {
 
 export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onSavePoi }: PoiDrawerProps) {
   const { theme, isDark } = useTheme();
-  const { user, savePlace, removeSavedPlace } = useStore();
+  const { user, saveRoute, removeSavedRoute } = useStore();
   
-  const savedPlaces = user?.saved_places || [];
+  const savedRoutes = user?.saved_routes || [];
   
   const isSaved = useMemo(() => {
     if (!poi) return false;
     const poiId = String(poi.properties.id || poi.properties.title);
-    return savedPlaces.some((p: any) => String(p.id) === poiId);
-  }, [poi, savedPlaces]);
+    return savedRoutes.some((r: any) => String(r.id) === poiId);
+  }, [poi, savedRoutes]);
 
   const handleToggleSave = () => {
     if (!poi) return;
     const poiId = String(poi.properties.id || poi.properties.title);
     
     if (isSaved) {
-      removeSavedPlace(poiId);
+      removeSavedRoute(poiId);
     } else {
-      savePlace({
+      saveRoute({
         id: poiId,
-        title: poi.properties.title,
-        category: poi.properties.category || poi.properties.landmark_type,
-        coords: poi.geometry.coordinates,
-        poi_data: poi,
+        name: `Current Location to ${poi.properties.title}`,
+        legs: [
+          {
+            mode: 'Custom Route',
+            from: 'Current Location',
+            to: poi.properties.title,
+            fromObj: 'Current Location',
+            toObj: { 
+              title: poi.properties.title, 
+              coords: poi.geometry.coordinates 
+            }
+          }
+        ],
+        total_fare: null,
+        estimated_minutes: null,
+        total_km: null
       });
       
       onClose();

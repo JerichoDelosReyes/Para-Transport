@@ -3031,39 +3031,37 @@ export default function HomeScreen() {
         {/* Transit layer controls */}
         <View style={styles.transitControlsContainer}>
           <View style={styles.transitControlsRow}>
-            <TouchableOpacity
-              style={[styles.transitToggle, showTransitLayer && styles.transitToggleActive]}
-              onPress={() => setShowTransitLayer(prev => !prev)}
-              activeOpacity={0.85}
-            >
-                {showTransitLayer && isTricycleTerminalLoading ? (
-                  <ActivityIndicator
-                    size="small"
-                    color="#FFFFFF"
-                  />
-                ) : (
-                  <Ionicons name="git-branch" size={18} color={showTransitLayer ? '#FFFFFF' : '#000000'} />
-                )}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity
+                style={[
+                  styles.transitToggle, 
+                  showTransitLayer && styles.transitToggleActive,
+                  { borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRightWidth: 0, width: 44 }
+                ]}
+                onPress={() => setShowTransitLayer(prev => !prev)}
+                activeOpacity={0.85}
+              >
+                  {showTransitLayer && isTricycleTerminalLoading ? (
+                    <ActivityIndicator
+                      size="small"
+                      color="#FFFFFF"
+                    />
+                  ) : (
+                    <Ionicons name="git-branch" size={20} color={showTransitLayer ? '#FFFFFF' : '#000000'} />
+                  )}
               </TouchableOpacity>
-
-              {/* Simulation Play Button (top row, only when idle) */}
-              {simCoordinates.length >= 2 && sim.state === 'idle' && (
-                <TouchableOpacity
-                  style={styles.simPlayToggle}
-                  onPress={() => {
-                    setSimAutoFollow(true);
-                    sim.play();
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons
-                  name="play"
-                  size={20}
-                  color="#000000"
-                  style={{ marginLeft: 2 }}
-                />
+              <TouchableOpacity
+                style={[
+                  styles.transitToggle, 
+                  showTransitLayer && styles.transitToggleActive,
+                  { borderTopLeftRadius: 0, borderBottomLeftRadius: 0, width: 32, paddingLeft: 2 }
+                ]}
+                onPress={() => setShowTransitPriority(prev => !prev)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name={showTransitPriority ? "chevron-up" : "chevron-down"} size={16} color={showTransitLayer ? '#FFFFFF' : '#000000'} />
               </TouchableOpacity>
-            )}
+            </View>
 
             {/* Live summary card — right side of the controls row */}
             {routeSummary && topRightSummaryText && (
@@ -3081,22 +3079,8 @@ export default function HomeScreen() {
             )}
           </View>
 
-          <View style={styles.routeTypeFilterGroup}>
-            <TouchableOpacity 
-              activeOpacity={0.8}
-              onPress={() => setShowTransitPriority(prev => !prev)}
-              style={styles.transitPriorityHeader}
-            >
-              <Text style={[styles.routeTypeFilterLabel, { color: theme.textSecondary }]}>Transit Priority</Text>
-              <Ionicons 
-                name={showTransitPriority ? "chevron-up" : "chevron-down"} 
-                size={14} 
-                color={theme.textSecondary} 
-                style={{ marginLeft: 4 }}
-              />
-            </TouchableOpacity>
-            
-            {showTransitPriority && (
+          {showTransitPriority && (
+            <View style={styles.routeTypeFilterGroup}>
               <View
                 style={[
                   styles.routeTypeFilterRow,
@@ -3130,9 +3114,8 @@ export default function HomeScreen() {
                   );
                 })}
               </View>
-            )}
-          </View>
-
+            </View>
+          )}
 
         </View>
 
@@ -4019,15 +4002,15 @@ const styles = StyleSheet.create({
   transitPriorityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 2,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: RADIUS.pill,
   },
   routeTypeFilterLabel: {
-    fontFamily: 'Inter',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginLeft: 2,
+    fontFamily: 'Cubao',
+    fontSize: 14,
+    letterSpacing: 1,
+    marginTop: 2,
   },
   routeTypeFilterRow: {
     flexDirection: 'row',
