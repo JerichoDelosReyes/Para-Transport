@@ -22,6 +22,7 @@ Notifications.setNotificationHandler({
 import { ROUTE_COLORS } from '../../constants/routeVisuals';
 import SearchScreen, { PlaceResult, TransitRouteType } from '../../components/SearchScreen';
 import { buildTransitLegs, TransitLeg } from '../../utils/routeSegments';
+import { fuzzyFilter } from '../../utils/fuzzySearch';
 import { GuidanceStep, generateGuidanceSteps, calculateDistance } from '../../utils/guidanceEngine';
 import * as Haptics from 'expo-haptics';
 import { ProfileButton } from '../../components/ProfileButton';
@@ -39,6 +40,7 @@ import PoiOverlay from '../../components/PoiOverlay';
 import { POI_IMAGES } from '../../constants/poi';
 import { POI_MIN_RENDER_ZOOM } from '../../constants/poi';
 import type { POIFeature } from '../../types/poi';
+import LOCAL_PLACES from '../../data/local_places';
 import PoiDrawer from '../../components/PoiDrawer';
 
 type PulsingMarkerProps = {
@@ -194,6 +196,12 @@ const BreathingUserCore = React.memo(() => {
 BreathingUserCore.displayName = 'BreathingUserCore';
 
 const GEOCODING_BASE_URL = process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
+const GEOCODING_TIMEOUT_MS = 6500;
+const CAVITE_VIEWBOX = '120.55,14.53,121.05,13.95';
+const GEOCODING_HEADERS: Record<string, string> = {
+  'Accept-Language': 'en',
+  'User-Agent': 'ParaTransport/1.0 (support@para.ph)',
+};
 const ROUTING_BASE_URL = 'https://router.project-osrm.org/route/v1';
 const ROUTING_NEAREST_BASE_URL = 'https://router.project-osrm.org/nearest/v1';
 const WALK_ROUTING_PROFILE = 'walking';
@@ -1757,28 +1765,77 @@ export default function HomeScreen() {
 
       // Helper: resolve a place name with Nominatim geocoding
       const resolvePlace = async (name: string): Promise<PlaceResult | null> => {
-        const params = new URLSearchParams({
-          q: name,
-          format: 'json',
-          limit: '1',
-          countrycodes: 'ph',
-          viewbox: '120.7,14.55,121.1,14.35',
-          bounded: '0',
-          addressdetails: '0',
-        });
-        const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
-          headers: { 'Accept-Language': 'en' },
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
-        if (!data || data.length === 0) return null;
-        return {
-          id: data[0].place_id?.toString() || Math.random().toString(),
-          title: name,
-          subtitle: data[0].display_name || '',
-          latitude: parseFloat(data[0].lat),
-          longitude: parseFloat(data[0].lon),
+        const query = name.trim();
+        if (query.length < 2) return null;
+
+        const exactLocal = (LOCAL_PLACES as PlaceResult[]).find(
+          (place) => place.title.trim().toLowerCase() === query.toLowerCase(),
+        );
+        if (exactLocal) return exactLocal;
+
+        const fetchGeocodingPlace = async (scopedToCavite: boolean): Promise<PlaceResult | null> => {
+          const params = new URLSearchParams({
+            q: scopedToCavite ? `${query}, Cavite, Philippines` : `${query}, Philippines`,
+            format: 'jsonv2',
+            limit: '1',
+            countrycodes: 'ph',
+            addressdetails: '0',
+          });
+
+          if (scopedToCavite) {
+            params.set('viewbox', CAVITE_VIEWBOX);
+            params.set('bounded', '1');
+          }
+
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), GEOCODING_TIMEOUT_MS);
+
+          try {
+            const res = await fetch(`${GEOCODING_BASE_URL}/search?${params.toString()}`, {
+              headers: GEOCODING_HEADERS,
+              signal: controller.signal,
+            });
+
+            if (!res.ok) return null;
+
+            const data = await res.json();
+            if (!Array.isArray(data) || data.length === 0) return null;
+
+            const first = data[0];
+            const latitude = parseFloat(first.lat);
+            const longitude = parseFloat(first.lon);
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+            const rawTitle = String(first.display_name || '').split(',')[0]?.trim();
+
+            return {
+              id: String(first.place_id || `${Date.now()}`),
+              title: rawTitle || query,
+              subtitle: String(first.display_name || ''),
+              latitude,
+              longitude,
+            };
+          } catch {
+            return null;
+          } finally {
+            clearTimeout(timeout);
+          }
         };
+
+        const caviteFirst = await fetchGeocodingPlace(true);
+        if (caviteFirst) return caviteFirst;
+
+        const nationwideFallback = await fetchGeocodingPlace(false);
+        if (nationwideFallback) return nationwideFallback;
+
+        const fuzzyLocal = fuzzyFilter(
+          LOCAL_PLACES as PlaceResult[],
+          query,
+          (place) => [place.title, place.subtitle],
+          1,
+        ).map((result) => result.item as PlaceResult);
+
+        return fuzzyLocal[0] || null;
       };
       
       try {

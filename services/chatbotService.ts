@@ -2442,9 +2442,10 @@ function extractRouteCommandEndpoints(rawMessage: string): RouteCommandEndpoints
 
   const toFromMatch = text.match(/\b(?:to|going to|papunta(?:ng)?|pupunta(?:\s+ako)?(?:\s+(?:sa|ng))?)\s+(.+?)\s+\b(?:from|mula|galing)\b\s+(.+)/i);
   if (toFromMatch?.[1] && toFromMatch?.[2]) {
-    const destinationText = sanitizeRouteEndpointText(toFromMatch[1]);
-    const originText = sanitizeRouteEndpointText(toFromMatch[2]);
-    if (destinationText || originText) {
+    // Command-mode rule: for "to A from B", keep the first mentioned place as origin.
+    const originText = sanitizeRouteEndpointText(toFromMatch[1]);
+    const destinationText = sanitizeRouteEndpointText(toFromMatch[2]);
+    if (originText || destinationText) {
       return {
         originText: originText || undefined,
         destinationText: destinationText || undefined,
@@ -3051,6 +3052,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
 
   if (
     resolvedGuide
+    && !hasRouteIntent(normalized)
     && !hasFareIntent(normalized)
     && !hasRouteListIntent(normalized)
     && mentions.length === 0
