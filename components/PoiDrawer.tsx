@@ -3,15 +3,15 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, ScrollView
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { COLORS, TYPOGRAPHY, RADIUS} from '../constants/theme';
+import { useTheme } from '../src/theme/ThemeContext';
 import type { POIFeature } from '../types/poi';
 import type { MatchedRoute } from '../services/routeSearch';
 import BottomSheet from './BottomSheet';
-import { useTheme } from '../src/theme/ThemeContext';
 import { useStore } from '../store/useStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.38;
-const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.38;
+const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.54;
+const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.41;
 
 type PoiDrawerProps = {
   poi: POIFeature | null;
@@ -64,13 +64,14 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
   const distanceText =
     matchedRoute && Number.isFinite(matchedRoute.distanceKm)
       ? `: ${matchedRoute.distanceKm.toFixed(1)} km`
-      : ': Travel estimate coming soon';
+      : ': Unavailable';
 
   return (
     <BottomSheet
       visible={!!poi}
       onClose={onClose}
       title="PLACES"
+      contentContainerStyle={{ backgroundColor: theme.surface }}
       snapPoints={{ full: POI_DRAWER_FULL_HEIGHT, half: POI_DRAWER_HALF_HEIGHT }}
     >
       <ScrollView contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
@@ -78,15 +79,26 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
           {title}
         </Text>
 
-        <Text style={[styles.poiCategory, { color: theme.textSecondary }]}>{typeLabel}</Text>
+        <Text style={[styles.poiCategory, { color: theme.text }]}>{typeLabel}</Text>
 
         <View style={styles.metaRow}>
-          <Image
-            source={isDark ? require('../assets/icons/jeepney-icon.png') : require('../assets/icons/jeepney-icon-dark.png')}
-            style={styles.jeepIcon}
-            resizeMode="contain"
-          />
-          <Text style={[styles.metaText, { color: isDark ? 'rgba(255,255,255,0.6)' : COLORS.textMuted }]}>{distanceText}</Text>
+          <View
+            style={[
+              styles.jeepIconWrap,
+              { backgroundColor: isDark ? theme.surfaceSecondary : 'rgba(10,22,40,0.06)' },
+            ]}
+          >
+            <Image
+              source={
+                isDark
+                  ? require('../assets/icons/jeepney-icon.png')
+                  : require('../assets/icons/jeepney-icon-dark.png')
+              }
+              style={styles.jeepIcon}
+              resizeMode="contain"
+            />
+          </View>
+          <Text style={[styles.metaText, { color: theme.textSecondary }]}>{distanceText}</Text>
         </View>
 
         <View style={styles.actionsRow}>
@@ -139,6 +151,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 18,
     gap: 6,
+  },
+  jeepIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   jeepIcon: {
     width: 18,

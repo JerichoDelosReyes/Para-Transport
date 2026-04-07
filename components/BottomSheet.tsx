@@ -43,8 +43,8 @@ export default function BottomSheet({
   const [isExpanded, setIsExpanded] = useState(false);
   const dragStartYRef = useRef(0);
 
-  const EXPANDED_TOP_GAP = 56;
-  const UPWARD_RESISTANCE = 0.22;
+  const EXPANDED_TOP_GAP = 90;
+  const UPWARD_RESISTANCE = 0.17;
   const expandedY = -Math.max(0, snapPoints.full - EXPANDED_TOP_GAP);
 
   const rubberBandTop = (value: number) => {
