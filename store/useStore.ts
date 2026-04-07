@@ -46,6 +46,15 @@ type ChatbotPersistState = {
 
 type SessionMode = 'guest' | 'auth' | null;
 
+type PendingRoutePreference = 'easiest' | 'fastest' | 'cheapest';
+
+type PendingRouteSearch = {
+  origin?: any;
+  destination?: any;
+  destinationCoords?: any;
+  routePreference?: PendingRoutePreference;
+};
+
 const createGuestUser = (): User => ({
   full_name: 'Komyuter',
   username: 'Komyuter',
@@ -77,7 +86,7 @@ interface StoreState {
   setFareDiscountType: (fareDiscountType: FareDiscountType) => void;
   insightDismissed: boolean;
   selectedTransitRoute: any | null;
-  pendingRouteSearch: { origin?: any; destination?: any; destinationCoords?: any } | null;
+  pendingRouteSearch: PendingRouteSearch | null;
   chatbotMessages: ChatbotPersistMessage[];
   chatbotConversationState: ChatbotPersistState;
   setUser: (user: User) => void;
@@ -91,7 +100,7 @@ interface StoreState {
   resetStreak: () => void;
   setSelectedTransitRoute: (route: any | null) => void;
   isPanelVisible: boolean;
-  setPendingRouteSearch: (search: { origin?: any; destination?: any; destinationCoords?: any } | null) => void;
+  setPendingRouteSearch: (search: PendingRouteSearch | null) => void;
   setPanelVisible: (visible: boolean) => void;
   setChatbotMessages: (messages: ChatbotPersistMessage[]) => void;
   setChatbotConversationState: (state: ChatbotPersistState) => void;

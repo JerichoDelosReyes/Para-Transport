@@ -518,6 +518,15 @@ const pointInBounds = (point: MapCoordinate, bounds: MapBounds): boolean => {
 };
 
 type VehicleRouteType = 'jeepney' | 'bus';
+type RoutePreferenceMode = 'easiest' | 'fastest' | 'cheapest';
+
+const normalizeRoutePreference = (value: unknown): RoutePreferenceMode | null => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'cheapest') return 'cheapest';
+  if (normalized === 'fastest') return 'fastest';
+  if (normalized === 'easiest') return 'easiest';
+  return null;
+};
 
 const normalizeTransitRouteType = (value: unknown): VehicleRouteType | null => {
   const normalized = String(value || '').trim().toLowerCase();
@@ -570,6 +579,21 @@ const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number => {
     a.transferCount - b.transferCount ||
     a.estimatedMinutes - b.estimatedMinutes
   );
+};
+
+const pickRouteByPreference = (
+  routes: MatchedRoute[],
+  preference: RoutePreferenceMode,
+): MatchedRoute | null => {
+  if (routes.length === 0) return null;
+
+  const comparator = preference === 'cheapest'
+    ? compareCheapest
+    : preference === 'fastest'
+      ? compareFastest
+      : compareLeastTransfer;
+
+  return [...routes].sort(comparator)[0] || null;
 };
 
 const routeSignature = (route: MatchedRoute): string =>
@@ -1523,7 +1547,11 @@ export default function HomeScreen() {
 
 
 
-  const handleSearchSelectRoute = useCallback(async (origin: PlaceResult | null, destination: PlaceResult) => {
+  const handleSearchSelectRoute = useCallback(async (
+    origin: PlaceResult | null,
+    destination: PlaceResult,
+    options?: { routePreference?: RoutePreferenceMode | null },
+  ) => {
     setIsSearchActive(false);
 
     const actualOrigin = origin || (currentLocation ? {
@@ -1625,7 +1653,10 @@ export default function HomeScreen() {
       setShowRecommender(true);
 
       if (results.length > 0) {
-        const firstRanked = rankTopRoutes(results, 5)[0];
+        const preferredFirst = options?.routePreference
+          ? pickRouteByPreference(results, options.routePreference)
+          : null;
+        const firstRanked = preferredFirst || rankTopRoutes(results, 5)[0];
         if (firstRanked) {
           const firstId = firstRanked.legs.map((l: any) => l.route.properties.code).join('+');
           
@@ -1655,7 +1686,7 @@ export default function HomeScreen() {
     } finally {
       setIsRouting(false);
     }
-  }, [currentLocation, routesBySelectedType, selectedRouteType, selectedRouteTypeLabel, addHistory]);
+  }, [currentLocation, currentLocationLabel, routesBySelectedType, selectedRouteType, selectedRouteTypeLabel, addHistory]);
 
   const handleMapLongPress = useCallback(async (coordinatePair: [number, number]) => {
     if (isRouting) return;
@@ -1720,7 +1751,8 @@ export default function HomeScreen() {
     const processPendingSearch = async () => {
       if (!pendingRouteSearch) return;
 
-      const { origin, destination } = pendingRouteSearch;
+      const { origin, destination, routePreference } = pendingRouteSearch;
+      const normalizedRoutePreference = normalizeRoutePreference(routePreference);
       setIsRouting(true);
 
       // Helper: resolve a place name with Nominatim geocoding
@@ -1791,7 +1823,9 @@ export default function HomeScreen() {
         }
 
         // 3. Call the search hander
-        await handleSearchSelectRoute(originPlace, destPlace);
+        await handleSearchSelectRoute(originPlace, destPlace, {
+          routePreference: normalizedRoutePreference,
+        });
         setPendingRouteSearch(null); // Clear after successful processing
 
       } catch (err) {
