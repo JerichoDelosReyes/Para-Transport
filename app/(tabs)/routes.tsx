@@ -7,7 +7,8 @@ import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { ProfileButton } from '../../components/ProfileButton';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { useStore } from '../../store/useStore';
-import JeepIllustration from '../../assets/illustrations/welcomeScreen-jeep2.svg';
+import JeepIllustrationLight from '../../assets/illustrations/welcomeScreen-jeep2.svg';
+import JeepIllustrationDark from '../../assets/illustrations/welcomeScreen-jeep2-dark.svg';
 
 const HISTORY_FILTERS = ['All', 'Today', 'Yesterday', 'Older'] as const;
 type HistoryFilter = typeof HISTORY_FILTERS[number];
@@ -94,12 +95,20 @@ export default function RoutesScreen() {
       >
         {isGuestAccount ? (
           <View style={[styles.emptyState, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-            <JeepIllustration width={220} height={150} />
+            {isDark ? (
+              <JeepIllustrationDark width={220} height={150} />
+            ) : (
+              <JeepIllustrationLight width={220} height={150} />
+            )}
             <Text style={[styles.emptyTitle, { color: theme.text }]}>Sign in to view history.</Text>
           </View>
         ) : !user.commute_history || user.commute_history.length === 0 ? (
           <View style={[styles.emptyState, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-            <JeepIllustration width={220} height={150} />
+            {isDark ? (
+              <JeepIllustrationDark width={220} height={150} />
+            ) : (
+              <JeepIllustrationLight width={220} height={150} />
+            )}
             <Text style={[styles.emptyTitle, { color: theme.text }]}>WALA PANG HISTORY.</Text>
           </View>
         ) : (
@@ -189,7 +198,11 @@ export default function RoutesScreen() {
               })
             ) : (
              <View style={[styles.emptyFilterState, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-               <JeepIllustration width={220} height={150} />
+               {isDark ? (
+                 <JeepIllustrationDark width={220} height={150} />
+               ) : (
+                 <JeepIllustrationLight width={220} height={150} />
+               )}
                <Text style={[styles.emptyTitle, { color: theme.text }]}>NO HISTORY FOUND.</Text>
              </View>
             )}
@@ -518,6 +531,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Cubao',
     fontSize: 24,
     color: COLORS.navy,
+    textAlign: 'center',
   },
   skeletonContainer: {
     paddingTop: 10,

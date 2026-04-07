@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, PanResponder
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep.svg';
+import JeepIllustrationLight from '../assets/illustrations/welcomeScreen-jeep.svg';
+import JeepIllustrationDark from '../assets/illustrations/welcomeScreen-jeep2-dark.svg';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { useTheme } from '../src/theme/ThemeContext';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -133,7 +134,11 @@ export default function WelcomeScreen() {
         </View>
 
         <View style={styles.heroZone}>
-          <JeepIllustration width="108%" height="108%" />
+          {isDark ? (
+            <JeepIllustrationDark width="108%" height="108%" />
+          ) : (
+            <JeepIllustrationLight width="108%" height="108%" />
+          )}
         </View>
       </View>
 

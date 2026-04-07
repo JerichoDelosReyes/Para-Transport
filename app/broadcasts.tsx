@@ -6,7 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
 import { useTheme } from '../src/theme/ThemeContext';
-import JeepIllustration from '../assets/illustrations/welcomeScreen-jeep2.svg';
+import JeepIllustrationLight from '../assets/illustrations/welcomeScreen-jeep2.svg';
+import JeepIllustrationDark from '../assets/illustrations/welcomeScreen-jeep2-dark.svg';
 import { supabase } from '../config/supabaseClient';
 
 type BroadcastMessage = {
@@ -74,7 +75,11 @@ export default function BroadcastsScreen() {
             <ActivityIndicator size="large" color={isDark ? theme.text : COLORS.primary} style={{ marginTop: 40 }} />
           ) : broadcasts.length === 0 ? (
             <View style={[styles.emptyContainer, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-              <JeepIllustration width={220} height={150} />
+              {isDark ? (
+                <JeepIllustrationDark width={220} height={150} />
+              ) : (
+                <JeepIllustrationLight width={220} height={150} />
+              )}
               <Text style={[styles.emptyTitle, { color: theme.text }]}>WALA PANG BROADCASTS.</Text>
             </View>
           ) : (
@@ -152,6 +157,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Cubao',
     fontSize: 24,
     color: COLORS.navy,
+    textAlign: 'center',
   },
   cardWrapper: {
     marginBottom: 16,
