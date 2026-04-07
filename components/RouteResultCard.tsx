@@ -10,7 +10,6 @@ type Props = {
   isSelected: boolean;
   onPress: (id: string) => void;
   onPressStartJourney?: () => void;
-  onStartSimulation?: () => void;
   rankLabel?: string;
   metricTags?: string[];
 };
@@ -21,7 +20,7 @@ const TAG_COLORS: Record<string, { backgroundColor: string; textColor: string }>
   Cheapest: { backgroundColor: '#10B981', textColor: '#FFFFFF' },
 };
 
-export default function RouteResultCard({ matched, isSelected, onPress, rankLabel, metricTags = [], onPressStartJourney, onStartSimulation }: Props) {
+export default function RouteResultCard({ matched, isSelected, onPress, rankLabel, metricTags = [], onPressStartJourney }: Props) {
   const { theme, isDark } = useTheme();
   const { legs, distanceKm, estimatedMinutes } = matched;
   const tricycleExtension = matched.tricycleExtension;
@@ -176,15 +175,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
               <Text style={[styles.startJourneyText, { color: isDark ? COLORS.navy : '#FFFFFF' }]}>Start Journey</Text>
             </TouchableOpacity>
           )}
-          {onStartSimulation && (
-            <TouchableOpacity
-              style={[styles.startJourneyBtn, { flex: 1, backgroundColor: isDark ? 'rgba(232,160,32,0.2)' : 'rgba(10,22,40,0.06)' }]}
-              activeOpacity={0.9}
-              onPress={() => onStartSimulation()}
-            >
-              <Text style={[styles.startJourneyText, { color: isDark ? '#E8A020' : COLORS.navy }]}>Simulate</Text>
-            </TouchableOpacity>
-          )}
+
         </View>
       )}
     </TouchableOpacity>

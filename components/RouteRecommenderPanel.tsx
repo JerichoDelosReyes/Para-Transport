@@ -16,7 +16,6 @@ type Props = {
   routeTypeLabel?: string;
   onClose: () => void;
   onStartJourney?: (id: string) => void;
-  onStartSimulation?: (id: string) => void;
 };
 
 const TOP_ROUTE_LIMIT = 5;
@@ -103,7 +102,6 @@ export default function RouteRecommenderPanel({
   onClose,
   routeTypeLabel,
   onStartJourney,
-  onStartSimulation,
 }: Props) {
   const { theme, isDark } = useTheme();
 
@@ -245,11 +243,10 @@ export default function RouteRecommenderPanel({
             setSelectedRoute(selectedRoute === pressedId ? null : pressedId);
           }}
           onPressStartJourney={() => onStartJourney?.(id)}
-          onStartSimulation={() => onStartSimulation?.(id)}
         />
       );
     },
-    [selectedRoute, setSelectedRoute, onStartJourney, onStartSimulation, getMetricTags],
+    [selectedRoute, setSelectedRoute, onStartJourney, getMetricTags],
   );
 
   const keyExtractor = useCallback(
