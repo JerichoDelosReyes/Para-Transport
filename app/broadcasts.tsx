@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, AppState } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +39,39 @@ export default function BroadcastsScreen() {
     };
 
     fetchBroadcasts();
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        fetchBroadcasts();
+      }
+    });
+
+    const channel = supabase.channel('realtime_broadcasts_page')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'broadcasts' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setBroadcasts((prev) => [payload.new as BroadcastMessage, ...prev].slice(0, 20));
+          } else if (payload.eventType === 'UPDATE') {
+            setBroadcasts((prev) => {
+              const copy = [...prev];
+              const idx = copy.findIndex((b) => b.id === payload.new.id);
+              if (idx !== -1) copy[idx] = payload.new as BroadcastMessage;
+              else copy.unshift(payload.new as BroadcastMessage);
+              return copy;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            setBroadcasts((prev) => prev.filter((b) => b.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      sub.remove();
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const bgColors: Record<string, string> = {
