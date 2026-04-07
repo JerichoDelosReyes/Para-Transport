@@ -3232,6 +3232,7 @@ export default function HomeScreen() {
       <PoiDrawer
         poi={selectedPoi}
         matchedRoute={selectedRoute}
+        currentLocationLabel={currentLocationLabel}
         onClose={() => setSelectedPoi(null)}
         onRouteHere={handleRouteFromPoi}
       />

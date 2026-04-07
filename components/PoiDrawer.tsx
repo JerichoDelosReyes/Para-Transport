@@ -16,12 +16,13 @@ const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.35;
 type PoiDrawerProps = {
   poi: POIFeature | null;
   matchedRoute?: MatchedRoute | null;
+  currentLocationLabel?: string;
   onClose: () => void;
   onRouteHere: (poi: POIFeature) => void;
   onSavePoi?: (poi: POIFeature) => void;
 };
 
-export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onSavePoi }: PoiDrawerProps) {
+export default function PoiDrawer({ poi, matchedRoute, currentLocationLabel, onClose, onRouteHere, onSavePoi }: PoiDrawerProps) {
   const { theme, isDark } = useTheme();
   const { user, saveRoute, removeSavedRoute } = useStore();
   
@@ -36,19 +37,22 @@ export default function PoiDrawer({ poi, matchedRoute, onClose, onRouteHere, onS
   const handleToggleSave = () => {
     if (!poi) return;
     const poiId = String(poi.properties.id || poi.properties.title);
+    const originLabel = currentLocationLabel && currentLocationLabel !== 'Current Location' 
+      ? currentLocationLabel 
+      : 'Current Location';
     
     if (isSaved) {
       removeSavedRoute(poiId);
     } else {
       saveRoute({
         id: poiId,
-        name: `Current Location to ${poi.properties.title}`,
+        name: `${originLabel} to ${poi.properties.title}`,
         legs: [
           {
             mode: 'Custom Route',
-            from: 'Current Location',
+            from: originLabel,
             to: poi.properties.title,
-            fromObj: 'Current Location',
+            fromObj: originLabel,
             toObj: { 
               title: poi.properties.title, 
               coords: poi.geometry.coordinates 
