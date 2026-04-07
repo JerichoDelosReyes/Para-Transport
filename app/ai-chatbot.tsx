@@ -20,6 +20,7 @@ const CHATBOT_STATES = {
 };
 const JEEPIE_AVATAR = require("../assets/AIChatbot/Jeepie.png");
 const MIN_TYPING_DURATION_MS = 900;
+const PLOT_HANDOFF_DELAY_MS = 180;
 
 type ChatMessage = {
   id: string;
@@ -48,6 +49,7 @@ export default function AIChatbotScreen() {
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [currentLocationLabel, setCurrentLocationLabel] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [plottingMessageId, setPlottingMessageId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTagalogGreeting, setIsTagalogGreeting] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
@@ -330,8 +332,10 @@ export default function AIChatbotScreen() {
     handleSend();
   };
 
-  const handleMessageActionPress = (action: ChatbotAction) => {
+  const handleMessageActionPress = (messageId: string, action: ChatbotAction) => {
     if (action.type !== "plot-route") return;
+
+    setPlottingMessageId(messageId);
 
     setPendingRouteSearch({
       origin: action.payload.origin ?? null,
@@ -339,7 +343,9 @@ export default function AIChatbotScreen() {
       routePreference: action.payload.routePreference,
     });
 
-    router.navigate("/(tabs)");
+    setTimeout(() => {
+      router.navigate("/(tabs)");
+    }, PLOT_HANDOFF_DELAY_MS);
   };
 
   return (
@@ -439,6 +445,7 @@ export default function AIChatbotScreen() {
                 }
 
                 const plotAction = item.action?.type === "plot-route" ? item.action : null;
+                const isPlottingThisAction = plottingMessageId === item.id;
 
                 return (
                   <View style={styles.aiMessageRow}>
@@ -453,11 +460,16 @@ export default function AIChatbotScreen() {
                         <TouchableOpacity
                           style={[styles.messageActionButton, isDark && { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder }]}
                           activeOpacity={0.85}
-                          onPress={() => handleMessageActionPress(plotAction)}
+                          onPress={() => handleMessageActionPress(item.id, plotAction)}
+                          disabled={isPlottingThisAction}
                         >
-                          <Ionicons name="map-outline" size={15} color={isDark ? theme.text : COLORS.navy} />
+                          {isPlottingThisAction ? (
+                            <ActivityIndicator size="small" color={isDark ? theme.text : COLORS.navy} />
+                          ) : (
+                            <Ionicons name="map-outline" size={15} color={isDark ? theme.text : COLORS.navy} />
+                          )}
                           <Text style={[styles.messageActionText, isDark && { color: theme.text }]}>
-                            {plotAction.label || "Plot"}
+                            {isPlottingThisAction ? "Plotting..." : (plotAction.label || "Plot")}
                           </Text>
                         </TouchableOpacity>
                       ) : null}
