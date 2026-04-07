@@ -10,8 +10,8 @@ import BottomSheet from './BottomSheet';
 import { useStore } from '../store/useStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.45;
-const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.35;
+const POI_DRAWER_FULL_HEIGHT = SCREEN_HEIGHT * 0.41;
+const POI_DRAWER_HALF_HEIGHT = SCREEN_HEIGHT * 0.31;
 
 type PoiDrawerProps = {
   poi: POIFeature | null;
