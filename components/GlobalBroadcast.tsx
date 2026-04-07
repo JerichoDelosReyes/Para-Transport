@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, Animated, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Animated, StyleSheet, Dimensions, AppState, AppStateStatus } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,8 +52,7 @@ export function GlobalBroadcast() {
         .eq('is_active', true)
         .order('created_at', { ascending: false });
       
-      if (!unmounted && data && data.length > 0) {
-        // Filter out those already dismissed
+      if (!unmounted && data) {
         const currentDismissed = useStore.getState().dismissedBroadcasts;
         const unseenBroadcasts = data.filter((b) => !currentDismissed.includes(b.id));
         setBroadcasts(unseenBroadcasts);
@@ -61,6 +60,12 @@ export function GlobalBroadcast() {
     };
 
     fetchBroadcasts();
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        fetchBroadcasts();
+      }
+    });
 
     const channel = supabase.channel('realtime_broadcasts_channel')
       .on(
@@ -72,7 +77,10 @@ export function GlobalBroadcast() {
           if (payload.eventType === 'INSERT') {
             const newBcast = payload.new as BroadcastMessage;
             if (newBcast.is_active && !currentDismissed.includes(newBcast.id)) {
-              setBroadcasts((prev) => [newBcast, ...prev]);
+              setBroadcasts((prev) => {
+                if (prev.some(b => b.id === newBcast.id)) return prev;
+                return [newBcast, ...prev];
+              });
             }
           } else if (payload.eventType === 'UPDATE') {
             const upd = payload.new as BroadcastMessage;
@@ -95,6 +103,7 @@ export function GlobalBroadcast() {
 
     return () => {
       unmounted = true;
+      sub.remove();
       supabase.removeChannel(channel);
     };
   }, []); // Run only once instead of detaching relentlessly

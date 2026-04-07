@@ -200,16 +200,16 @@ function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimat
         </Stack>
 
         <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 99999, elevation: 99999 }} pointerEvents="box-none">
-          {/* Custom Animated Splash Screen Overlay */}
-          {showAnimatedSplash && (
-            <CustomSplash onFinish={() => setShowAnimatedSplash(false)} />
-          )}
-
           {/* Global Broadcast Overlay */}
           <GlobalBroadcast />
 
           {/* Global Achievement Popup Overlay */}
           <AchievementPopup />
+
+          {/* Custom Animated Splash Screen Overlay (Last = Top Z-Index) */}
+          {showAnimatedSplash && (
+            <CustomSplash onFinish={() => setShowAnimatedSplash(false)} />
+          )}
         </View>
       </View>
     </SafeAreaProvider>
