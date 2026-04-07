@@ -3204,34 +3204,37 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                   );
                 })}
-                <TouchableOpacity
-                  style={[
-                    styles.routeTypeFilterPill,
-                    {
-                      marginLeft: 'auto',
-                      backgroundColor: isDark ? 'rgba(232,160,32,0.2)' : 'rgba(10,22,40,0.06)',
-                    },
-                  ]}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    if (sim.state !== 'idle') {
-                      sim.reset();
-                    } else {
-                      sim.reset();
-                      sim.play();
-                    }
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.routeTypeFilterText,
-                      { color: isDark ? '#E8A020' : COLORS.navy, fontWeight: '700' },
-                    ]}
-                  >
-                    {sim.state !== 'idle' ? 'Stop' : 'Simulate'}
-                  </Text>
-                </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                style={[
+                  styles.routeTypeFilterRow,
+                  {
+                    backgroundColor: isDark ? 'rgba(232,160,32,0.2)' : 'rgba(10,22,40,0.06)',
+                    borderColor: 'transparent',
+                    alignSelf: 'stretch',
+                    justifyContent: 'center',
+                    marginTop: 4,
+                  },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (sim.state !== 'idle') {
+                    sim.reset();
+                  } else {
+                    sim.reset();
+                    sim.play();
+                  }
+                }}
+              >
+                <Text
+                  style={[
+                    styles.routeTypeFilterText,
+                    { color: isDark ? '#E8A020' : COLORS.navy, fontWeight: '700', textAlign: 'center' },
+                  ]}
+                >
+                  {sim.state !== 'idle' ? 'Stop Simulation' : 'Start Simulation'}
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
