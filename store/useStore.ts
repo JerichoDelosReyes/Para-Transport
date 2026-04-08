@@ -94,6 +94,8 @@ interface StoreState {
   beginAuthSession: (user: User) => void;
   clearSession: () => void;
   setHasHydrated: (value: boolean) => void;
+  isBannedPopupVisible: boolean;
+  setBannedPopupVisible: (val: boolean) => void;
   dismissInsight: () => void;
   addPoints: (points: number) => void;
   addTripStats: (stats: { distance: number; fare: number; points: number; time?: number; multiplier?: number; origin?: string; destination?: string }) => void;
@@ -129,6 +131,8 @@ export const useStore = create<StoreState>()(
       notificationsEnabled: true,
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
       hasHydrated: false,
+      isBannedPopupVisible: false,
+      setBannedPopupVisible: (val) => set({ isBannedPopupVisible: val }),
       dismissedBroadcasts: [],
       badgesData: [],
       setBadgesData: (badgesData) => set({ badgesData }),
@@ -483,10 +487,16 @@ export const useStore = create<StoreState>()(
             // Re-validate session natively with Supabase to check if the user is banned or deleted from the backend
             const { data: authData, error: authError } = await supabase.auth.getUser();
             if (authError || !authData?.user) {
-              console.log('Session invalidated or user banned. Logging out automatically.');
-              await supabase.auth.signOut();
-              state.clearSession();
-              return;
+              const msg = (authError?.message || '').toLowerCase();
+              if (msg.includes('suspended') || msg.includes('banned') || msg.includes('user_banned')) {
+                state.setBannedPopupVisible(true);
+                return;
+              } else {
+                console.log('Session invalidated. Logging out automatically.');
+                await supabase.auth.signOut();
+                state.clearSession();
+                return;
+              }
             }
             const { data, error } = await supabase
               .from('users')

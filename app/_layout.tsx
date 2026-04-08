@@ -12,6 +12,7 @@ import { COLORS } from '../constants/theme';
 import { AchievementPopup } from '../components/AchievementPopup';
 import { GlobalBroadcast } from '../components/GlobalBroadcast';
 import { GlobalOfflineBanner } from '../components/GlobalOfflineBanner';
+import { GlobalBannedModal } from '../components/GlobalBannedModal';
 import { supabase } from '../config/supabaseClient';
 import { useStore } from '../store/useStore';
 
@@ -208,6 +209,22 @@ function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimat
         }
       }
     });
+
+    let banCheckInterval = null;
+    if (sessionMode === 'auth') {
+      // Very strict polling to kill current connection immediately when marked banned mid-flight inside the app
+      banCheckInterval = setInterval(async () => {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) {
+          const msg = error.message.toLowerCase();
+          if (msg.includes('suspended') || msg.includes('banned') || msg.includes('user_banned') || msg.includes('invalid_grant')) {
+            useStore.getState().setBannedPopupVisible(true);
+            clearInterval(banCheckInterval);
+          }
+        }
+      }, 15000); // 15 seconds real-time polling to boot users dynamically without waiting on foreground app switches
+    }
+    });
     
     // Globally run background checks when app returns to foreground
     const appSub = AppState.addEventListener('change', (next) => {
@@ -224,6 +241,7 @@ function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimat
     return () => {
       authSub.unsubscribe();
       appSub.remove();
+      if (banCheckInterval) clearInterval(banCheckInterval);
     };
   }, [sessionMode]);
 
@@ -244,6 +262,9 @@ function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimat
         <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 99999, elevation: 99999 }} pointerEvents="box-none">
           {/* Global Offline Info Banner Overlay */}
           <GlobalOfflineBanner />
+
+          {/* Global Ban Enforcement Popup */}
+          <GlobalBannedModal />
 
           {/* Global Broadcast Overlay */}
           <GlobalBroadcast />
