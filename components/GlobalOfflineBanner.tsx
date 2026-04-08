@@ -8,8 +8,10 @@ import { COLORS } from '../constants/theme';
 export function GlobalOfflineBanner() {
   const netInfo = useNetInfo();
   const insets = useSafeAreaInsets();
-  const slideAnim = useRef(new Animated.Value(-100)).current; // Slide down from top
-  const isOffline = netInfo.isConnected === false;
+  const slideAnim = useRef(new Animated.Value(150)).current; // Slide up from bottom
+  // Ignore null states. Show offline mostly if 'isConnected' explicitly false.
+  // We use strict false check on isConnected to avoid 'null' startup flashes.
+  const isOffline = netInfo.isConnected === false && (netInfo.isInternetReachable === false || netInfo.isInternetReachable === null);
 
   useEffect(() => {
     if (isOffline) {
@@ -20,7 +22,7 @@ export function GlobalOfflineBanner() {
       }).start();
     } else {
       Animated.timing(slideAnim, {
-        toValue: -100,
+        toValue: 150,
         duration: 300,
         useNativeDriver: true,
       }).start();
@@ -37,7 +39,7 @@ export function GlobalOfflineBanner() {
         styles.container,
         {
           transform: [{ translateY: slideAnim }],
-          top: Math.max(insets.top, 40) + 40, // Places it cleanly below the search bar
+          bottom: Math.max(insets.bottom, 20) + 90, // Places it cleanly at the same level as the transit button
         },
       ]}
       pointerEvents="none"
@@ -53,7 +55,7 @@ export function GlobalOfflineBanner() {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 50, // Starts off-screen, handled by animation & insets
+    bottom: 50, // Starts off-screen, handled by animation & insets
     alignSelf: 'center',
     backgroundColor: 'rgba(220, 38, 38, 0.9)', // Deep red, slightly translucent
     zIndex: 99998,
