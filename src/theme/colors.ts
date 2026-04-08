@@ -12,7 +12,7 @@ export const lightColors = {
   cardBorder: 'rgba(0,0,0,0.06)',
   mapStyle: 'streets',
   inputBackground: 'rgba(0,0,0,0.05)',
-  statusBar: 'dark-content' as const,
+  statusBar: 'dark' as const,
 };
 
 export const darkColors = {
@@ -29,7 +29,7 @@ export const darkColors = {
   cardBorder: 'rgba(255,255,255,0.08)',
   mapStyle: 'dataviz-dark',
   inputBackground: 'rgba(255,255,255,0.08)',
-  statusBar: 'light-content' as const,
+  statusBar: 'light' as const,
 };
 
 export type ThemeColors = typeof lightColors | typeof darkColors;

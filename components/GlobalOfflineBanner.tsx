@@ -37,7 +37,7 @@ export function GlobalOfflineBanner() {
         styles.container,
         {
           transform: [{ translateY: slideAnim }],
-          paddingTop: Math.max(insets.top, 20),
+          top: Math.max(insets.top, 40) + 40, // Places it cleanly below the search bar
         },
       ]}
       pointerEvents="none"
@@ -53,17 +53,18 @@ export function GlobalOfflineBanner() {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#DC2626', // Red indicating error/offline
-    zIndex: 99998, // Behind splash screen but above other specific things
-    paddingBottom: 10,
+    top: 50, // Starts off-screen, handled by animation & insets
+    alignSelf: 'center',
+    backgroundColor: 'rgba(220, 38, 38, 0.9)', // Deep red, slightly translucent
+    zIndex: 99998,
+    borderRadius: 30,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
   },
   content: {
     flexDirection: 'row',
@@ -72,12 +73,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   icon: {
-    marginRight: 4,
+    marginRight: 0,
   },
   text: {
     fontFamily: 'Inter',
-    fontWeight: '600',
-    fontSize: 14,
+    fontWeight: '700',
+    fontSize: 13,
     color: '#FFF',
   },
 });
