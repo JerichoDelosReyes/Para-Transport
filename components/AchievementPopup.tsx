@@ -72,7 +72,7 @@ export function AchievementPopup() {
             <View style={styles.textContainer}>
               <Text style={styles.title}>ACHIEVEMENT UNLOCKED!</Text>
               <Text style={[styles.name, { color: theme.text }]}>{badge.name}</Text>
-              <Text style={[styles.desc, { color: theme.textSecondary }]}>{badge.description}</Text>
+              <Text style={[styles.desc, { color: theme.textSecondary }]}>{badge.description?.split(/How to attain/i)[0]?.trim()}</Text>
             </View>
             <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
               <Ionicons name="close" size={20} color={theme.textSecondary} />

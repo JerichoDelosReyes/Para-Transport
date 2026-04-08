@@ -234,7 +234,7 @@ export default function AchievementsScreen() {
                   <View style={styles.textWrapper}>
                     <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.badgeName, { color: theme.text }]}>{badge.name}</Text>
                     <Text style={[styles.badgeDesc, { color: theme.textSecondary }]}>
-                      {badge.description}
+                      {badge.description?.split(/How to attain/i)[0]?.trim()}
                     </Text>
                   </View>
                   
