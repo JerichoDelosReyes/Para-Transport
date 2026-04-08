@@ -202,7 +202,7 @@ function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimat
   useEffect(() => {
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, session) => {
       // If the session drops natively (like their token is revoked or they are forced out)
-      if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || !session) {
+      if (event === 'SIGNED_OUT' || (event as string) === 'USER_DELETED' || !session) {
         if (sessionMode === 'auth') {
           clearSession();
           router.replace('/');
@@ -210,7 +210,7 @@ function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimat
       }
     });
 
-    let banCheckInterval = null;
+    let banCheckInterval: NodeJS.Timeout | null = null;
     if (sessionMode === 'auth') {
       // Very strict polling to kill current connection immediately when marked banned mid-flight inside the app
       banCheckInterval = setInterval(async () => {
@@ -219,12 +219,11 @@ function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimat
           const msg = error.message.toLowerCase();
           if (msg.includes('suspended') || msg.includes('banned') || msg.includes('user_banned') || msg.includes('invalid_grant')) {
             useStore.getState().setBannedPopupVisible(true);
-            clearInterval(banCheckInterval);
+            if (banCheckInterval) clearInterval(banCheckInterval);
           }
         }
       }, 15000); // 15 seconds real-time polling to boot users dynamically without waiting on foreground app switches
     }
-    });
     
     // Globally run background checks when app returns to foreground
     const appSub = AppState.addEventListener('change', (next) => {
@@ -241,7 +240,7 @@ function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimat
     return () => {
       authSub.unsubscribe();
       appSub.remove();
-      if (banCheckInterval) clearInterval(banCheckInterval);
+      if (banCheckInterval) if (banCheckInterval) clearInterval(banCheckInterval);
     };
   }, [sessionMode]);
 
