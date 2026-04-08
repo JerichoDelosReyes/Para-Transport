@@ -53,6 +53,16 @@ export default function AchievementsScreen() {
     };
 
     fetchLeaderboard();
+
+    const channel = supabase.channel('leaderboard-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+        fetchLeaderboard();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const getProgress = (badge: any) => {

@@ -60,6 +60,19 @@ function CustomSplash({ onFinish }: { onFinish: () => void }) {
       }
     };
     fetchAppConfig();
+
+    const channel = supabase.channel('public-config-1')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'badges' }, () => {
+        fetchAppConfig();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fare_matrices' }, () => {
+        fetchAppConfig();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
@@ -172,6 +185,19 @@ export default function RootLayout() {
       }
     };
     fetchAppConfig();
+
+    const channel = supabase.channel('public-config-2')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'badges' }, () => {
+        fetchAppConfig();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fare_matrices' }, () => {
+        fetchAppConfig();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
