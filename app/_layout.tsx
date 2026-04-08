@@ -11,6 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { AchievementPopup } from '../components/AchievementPopup';
 import { GlobalBroadcast } from '../components/GlobalBroadcast';
+import { GlobalOfflineBanner } from '../components/GlobalOfflineBanner';
 import { supabase } from '../config/supabaseClient';
 import { useStore } from '../store/useStore';
 
@@ -201,6 +202,9 @@ function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimat
         </Stack>
 
         <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 99999, elevation: 99999 }} pointerEvents="box-none">
+          {/* Global Offline Info Banner Overlay */}
+          <GlobalOfflineBanner />
+
           {/* Global Broadcast Overlay */}
           <GlobalBroadcast />
 
