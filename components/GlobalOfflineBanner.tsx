@@ -1,88 +1,76 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../constants/theme';
 
 export function GlobalOfflineBanner() {
   const netInfo = useNetInfo();
   const insets = useSafeAreaInsets();
-  const slideAnim = useRef(new Animated.Value(-150)).current; // Slide down from top
-  // Ignore null states. Show offline mostly if 'isConnected' explicitly false.
-  // We use strict false check on isConnected to avoid 'null' startup flashes.
-  // netInfo.isConnected === false usually means explicitly offline.
-  // Also ensuring netInfo.type !== 'none' is completely disconnected
-  const isOffline = netInfo.isConnected === false && netInfo.type === 'none';
 
-  useEffect(() => {
-    if (isOffline) {
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(slideAnim, {
-        toValue: -150,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [isOffline, slideAnim]);
-
+  // If we don't know the state yet, don't show the component
   if (netInfo.isConnected === null) {
-    return null; // Initial state don't show anything
+    return null;
+  }
+
+  // Show if clearly offline
+  const isOffline = netInfo.isConnected === false; // Usually sufficient to ensure no false positives without over-filtering 'none'
+
+  if (!isOffline) {
+    return null;
   }
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          transform: [{ translateY: slideAnim }],
-          top: Math.max(insets.top, 50) + 60, // Places it cleanly below the search bar
-        },
-      ]}
-      pointerEvents="none"
-    >
-      <View style={styles.content}>
-        <Ionicons name="cloud-offline" size={20} color="#FFF" style={styles.icon} />
-        <Text style={styles.text}>No internet connection</Text>
+    <View style={[styles.container, { top: Math.max(insets.top, 50) + 75 }]}>
+      <View style={styles.popup}>
+        <Ionicons name="cloud-offline-outline" size={24} color="#DC2626" style={styles.icon} />
+        <View style={styles.textContainer}>
+          <Text style={styles.title}>No Internet Connection</Text>
+          <Text style={styles.message}>Please check your network settings.</Text>
+        </View>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 0, // Starts off-screen, handled by animation & insets
     alignSelf: 'center',
-    backgroundColor: 'rgba(220, 38, 38, 0.9)', // Deep red, slightly translucent
     zIndex: 99998,
-    borderRadius: 30,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
+    width: '90%',
   },
-  content: {
+  popup: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.2)', // Slight red tint to border
   },
   icon: {
-    marginRight: 0,
+    marginRight: 16,
   },
-  text: {
+  textContainer: {
+    flex: 1,
+  },
+  title: {
     fontFamily: 'Inter',
     fontWeight: '700',
+    fontSize: 15,
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  message: {
+    fontFamily: 'Inter',
+    fontWeight: '400',
     fontSize: 13,
-    color: '#FFF',
+    color: '#4B5563',
   },
 });
