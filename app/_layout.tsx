@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from 'react';
 
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, Animated, StyleSheet, Easing, Image } from 'react-native';
+import { View, Animated, StyleSheet, Easing, Image, LogBox } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { AchievementPopup } from '../components/AchievementPopup';
@@ -14,6 +14,12 @@ import { GlobalBroadcast } from '../components/GlobalBroadcast';
 import { GlobalOfflineBanner } from '../components/GlobalOfflineBanner';
 import { supabase } from '../config/supabaseClient';
 import { useStore } from '../store/useStore';
+
+// Ignore MapLibre network errors as we have our own network connectivity indicator
+LogBox.ignoreLogs([
+  'MapLibre Native [ERROR] [-MLNNetworkCo',
+  'MapLibre Native [ERROR]',
+]);
 
 SplashScreen.preventAutoHideAsync();
 
