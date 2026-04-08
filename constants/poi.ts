@@ -1,4 +1,4 @@
-export const POI_MIN_RENDER_ZOOM = 11;
+export const POI_MIN_RENDER_ZOOM = 15; // Only show pins when zoomed in close to the street level
 
 export const POI_IMAGES: Record<string, number> = {
   'poi-default': require('../assets/icons/poi/ic_place_48px.png'),
