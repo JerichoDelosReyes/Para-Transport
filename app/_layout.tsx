@@ -4,9 +4,9 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState, useRef } from 'react';
 
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, Animated, StyleSheet, Easing, Image, LogBox } from 'react-native';
+import { View, Animated, StyleSheet, Easing, Image, LogBox, AppState, AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { AchievementPopup } from '../components/AchievementPopup';
@@ -192,6 +192,40 @@ export default function RootLayout() {
 
 function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimatedSplash: boolean, setShowAnimatedSplash: (v: boolean) => void }) {
   const { theme } = useTheme();
+  const sessionMode = useStore((state) => state.sessionMode);
+  const clearSession = useStore((state) => state.clearSession);
+  const syncWithSupabase = useStore((state) => state.syncWithSupabase);
+  const router = useRouter();
+
+  // Automatically enforce bans or deleted users from any screen (Global Check)
+  useEffect(() => {
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, session) => {
+      // If the session drops natively (like their token is revoked or they are forced out)
+      if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || !session) {
+        if (sessionMode === 'auth') {
+          clearSession();
+          router.replace('/');
+        }
+      }
+    });
+    
+    // Globally run background checks when app returns to foreground
+    const appSub = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && sessionMode === 'auth') {
+        syncWithSupabase();
+      }
+    });
+    
+    // Rigorously test sessionMode dropping organically
+    if (sessionMode === null) {
+      router.replace('/');
+    }
+
+    return () => {
+      authSub.unsubscribe();
+      appSub.remove();
+    };
+  }, [sessionMode]);
 
   return (
     <SafeAreaProvider>

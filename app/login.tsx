@@ -130,7 +130,14 @@ export default function LoginScreen() {
       });
       router.replace('/(tabs)');
     } catch (err: any) {
-      if (err.message && err.message.toLowerCase().includes('email not confirmed')) {
+      if (err.message && (err.message.toLowerCase().includes('banned') || err.message.toLowerCase().includes('user_banned'))) {
+         Alert.alert(
+           'Account Banned',
+           'You have been banned. Contact jericho.dlsreyes@gmail.com for inquiries.',
+           [{ text: 'OK' }]
+         );
+         setErrorMsg('');
+      } else if (err.message && err.message.toLowerCase().includes('email not confirmed')) {
          setIsOtpPending(true);
          setErrorMsg('');
       } else {
