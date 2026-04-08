@@ -1,5 +1,5 @@
 import { useTheme } from "../../src/theme/ThemeContext";
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { StyleSheet, View, Text, Animated, Dimensions, Platform, TouchableWithoutFeedback, Easing, AppState, AppStateStatus } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/theme';
@@ -204,6 +204,14 @@ export default function TabLayout() {
   const sessionMode = useStore((state) => state.sessionMode);
   const user = useStore((state) => state.user);
   const syncWithSupabase = useStore((state) => state.syncWithSupabase);
+  const router = useRouter();
+
+  useEffect(() => {
+    // If the user's session is forcibly removed (like a ban), kick them out
+    if (sessionMode === null) {
+      router.replace('/');
+    }
+  }, [sessionMode]);
 
   useEffect(() => {
     if (sessionMode === 'auth') {

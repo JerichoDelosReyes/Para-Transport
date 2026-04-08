@@ -480,6 +480,14 @@ export const useStore = create<StoreState>()(
         const state = useStore.getState();
         if (state.sessionMode === 'auth' && state.user?.id) {
           try {
+            // Re-validate session natively with Supabase to check if the user is banned or deleted from the backend
+            const { data: authData, error: authError } = await supabase.auth.getUser();
+            if (authError || !authData?.user) {
+              console.log('Session invalidated or user banned. Logging out automatically.');
+              await supabase.auth.signOut();
+              state.clearSession();
+              return;
+            }
             const { data, error } = await supabase
               .from('users')
               .select('points, streak_count, total_distance, total_trips, total_fare, badges, last_ride_at, saved_routes, saved_places, commute_history, points_history')
