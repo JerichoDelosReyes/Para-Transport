@@ -102,7 +102,8 @@ function CustomSplash({ onFinish }: { onFinish: () => void }) {
         StyleSheet.absoluteFill,
         {
           backgroundColor: '#E8A020', // Golden yellow background
-          zIndex: 9999,
+          zIndex: 9999999,
+          elevation: 9999999,
           justifyContent: 'center',
           alignItems: 'center',
           opacity: screenOpacityAnim,

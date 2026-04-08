@@ -4550,7 +4550,7 @@ const styles = StyleSheet.create({
     height: 33,
   },
   selectedPoiIconShoppingMall: {
-    width: 100,
-    height: 100,
+    width: 33,
+    height: 33,
   },
 });
