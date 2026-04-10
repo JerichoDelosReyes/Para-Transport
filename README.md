@@ -255,8 +255,6 @@ Core contributors (based on repository history):
 - Lance Acal: https://github.com/lncadrnn
 - Christian Valenzuela: https://github.com/noxen-cv
 
-If your handle is missing or needs correction, open a small README update pull request.
-
 ## References and Learning Resources
 
 - Expo docs: https://docs.expo.dev/
