@@ -55,6 +55,20 @@ The app combines map rendering, route search, and local transport data managemen
   <img src="./assets/illustrations/feat.jpg" alt="Para Mobile feature showcase" width="100%" />
 </p>
 
+## ADMIN SIDE OF PARA
+
+- Admin dashboard for system control
+- Push notifications (e.g., Libre Sakay alerts)
+- Manual fare updates (real-world changes)
+- GPX route import for fast data setup
+- Route monitoring (jeep • bus • tricycle)
+- Analytics & user insights
+- User activity logs
+
+<p align="center">
+  <img src="./assets/illustrations/admin.jpg" alt="Para Mobile feature showcase" width="100%" />
+</p>
+
 ## System Overview
 
 - Mobile client built with React Native and Expo Router
