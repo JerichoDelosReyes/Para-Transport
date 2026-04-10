@@ -1,23 +1,20 @@
 <div align="center">
-	<img src="./assets/logo/appicon.png" alt="Para Mobile Logo" width="120" />
-
-	<h1>Para Mobile</h1>
-	<p><strong>Local-First Commuter Navigation for Philippine Public Transport</strong></p>
-
-	<p>
-		<a href="https://expo.dev/"><img src="https://img.shields.io/badge/Expo-SDK_54-000020?style=for-the-badge&logo=expo&logoColor=white" alt="Expo SDK 54" /></a>
-		<a href="https://reactnative.dev/"><img src="https://img.shields.io/badge/React_Native-0.81-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React Native 0.81" /></a>
-		<a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5" /></a>
-		<a href="https://supabase.com/"><img src="https://img.shields.io/badge/Supabase-Postgres_%2B_Auth-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" /></a>
-		<a href="https://maplibre.org/"><img src="https://img.shields.io/badge/MapLibre-React_Native-1F6FEB?style=for-the-badge" alt="MapLibre React Native" /></a>
-	</p>
-
-	<p>
-		<a href="#key-features">Key Features</a> |
-		<a href="#installation-and-setup">Get Started</a> |
-		<a href="#how-to-use">How to Use</a> |
-		<a href="#contributing">Contributing</a>
-	</p>
+  <img src="./assets/logo/appicon.png" alt="Para Mobile Logo" width="120" />
+  <h1>Para Mobile</h1>
+  <p><strong>Local-First Commuter Navigation for Philippine Public Transport</strong></p>
+  <p>
+    <a href="https://expo.dev/"><img src="https://img.shields.io/badge/Expo-SDK_54-000020?style=for-the-badge&logo=expo&logoColor=white" alt="Expo SDK 54" /></a>
+    <a href="https://reactnative.dev/"><img src="https://img.shields.io/badge/React_Native-0.81-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React Native 0.81" /></a>
+    <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5" /></a>
+    <a href="https://supabase.com/"><img src="https://img.shields.io/badge/Supabase-Postgres_%2B_Auth-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" /></a>
+    <a href="https://maplibre.org/"><img src="https://img.shields.io/badge/MapLibre-React_Native-1F6FEB?style=for-the-badge" alt="MapLibre React Native" /></a>
+  </p>
+  <p>
+    <a href="#key-features">Key Features</a> |
+    <a href="#installation-and-setup">Get Started</a> |
+    <a href="#how-to-use">How to Use</a> |
+    <a href="#contributing">Contributing</a>
+  </p>
 </div>
 
 Para Mobile is a commuter-focused transit navigation app for the Philippines that helps users discover practical routes across jeepney, bus, tricycle, and UV Express networks.
@@ -45,37 +42,12 @@ The app combines map rendering, route search, and local transport data managemen
 - Zustand and AsyncStorage: lightweight local-first state and caching
 - Turf.js and custom search services: flexible geospatial routing logic
 
-### Challenges faced
-
-- Handling sparse or inconsistent local transit data formats
-- Balancing route quality with mobile performance constraints
-- Designing reliable map style fallback behavior across environments
-- Managing connector logic for walking and tricycle extension scenarios
-
 ### Planned improvements
 
 - Better crowdsourced route quality feedback loops
 - Expanded test coverage for route ranking and edge cases
 - Richer offline-first map and data behavior
 - More localized accessibility and guidance features
-
-## Table of Contents
-
-- [Key Features](#key-features)
-- [System Overview](#system-overview)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Installation and Setup](#installation-and-setup)
-- [Environment Variables](#environment-variables)
-- [Run the Project](#run-the-project)
-- [How to Use](#how-to-use)
-- [Importer and Data Maintenance](#importer-and-data-maintenance)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [Credits](#credits)
-- [References and Learning Resources](#references-and-learning-resources)
-- [Security](#security)
-- [License](#license)
 
 ## Key Features
 
@@ -214,12 +186,6 @@ npm run web
 4. Open a route to inspect segments, transfers, and map overlays.
 5. Save useful routes and revisit them from saved and history screens.
 
-### Account and authentication notes
-
-- You can explore key features as a guest.
-- For saved routes, profile, and persistent points and badges, sign in to an account.
-- No default username or password credentials are shipped with this repository.
-
 ### Usage examples for contributors
 
 - Generate fallback tricycle terminal data:
@@ -275,16 +241,6 @@ Typical flow:
 - If tunnel startup is unstable, use LAN mode.
 - If no routes appear, validate Supabase tables and environment variables.
 - If map style issues appear, test pinned and fallback style variables.
-
-## Contributing
-
-Contributions are welcome via issues and pull requests.
-
-Please include:
-
-- Problem statement
-- Scope and expected behavior
-- Testing notes and any migration or data impact
 
 ## Credits
 
