@@ -31,6 +31,7 @@ export default function BroadcastsScreen() {
       const { data } = await supabase
         .from('broadcasts')
         .select('*')
+        .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(20);
       
@@ -61,13 +62,23 @@ export default function BroadcastsScreen() {
         { event: '*', schema: 'public', table: 'broadcasts' },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setBroadcasts((prev) => [payload.new as BroadcastMessage, ...prev].slice(0, 20));
+            const newBcast = payload.new as BroadcastMessage;
+            if (newBcast.is_active) {
+              setBroadcasts((prev) => [newBcast, ...prev].slice(0, 20));
+            }
           } else if (payload.eventType === 'UPDATE') {
+            const upd = payload.new as BroadcastMessage;
             setBroadcasts((prev) => {
+              if (!upd.is_active) {
+                return prev.filter((b) => b.id !== upd.id);
+              }
               const copy = [...prev];
-              const idx = copy.findIndex((b) => b.id === payload.new.id);
-              if (idx !== -1) copy[idx] = payload.new as BroadcastMessage;
-              else copy.unshift(payload.new as BroadcastMessage);
+              const idx = copy.findIndex((b) => b.id === upd.id);
+              if (idx !== -1) copy[idx] = upd;
+              else {
+                copy.unshift(upd);
+                return copy.slice(0, 20);
+              }
               return copy;
             });
           } else if (payload.eventType === 'DELETE') {
