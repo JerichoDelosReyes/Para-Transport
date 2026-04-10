@@ -61,7 +61,7 @@ The app combines map rendering, route search, and local transport data managemen
 - Dark Mode and Light Mode: Switch between visual themes for better readability in day and night travel.
 
 <p align="center">
-  <img src="./assets/illustrations/feature-showcase.jpg" alt="Para Mobile feature showcase" width="100%" />
+  <img src=".assets/illustrations/feat.jpg" alt="Para Mobile feature showcase" width="100%" />
 </p>
 
 ## System Overview
