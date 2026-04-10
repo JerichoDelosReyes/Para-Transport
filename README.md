@@ -1,4 +1,24 @@
-# Para Mobile
+<div align="center">
+	<img src="./assets/logo/appicon.png" alt="Para Mobile Logo" width="120" />
+
+	<h1>Para Mobile</h1>
+	<p><strong>Local-First Commuter Navigation for Philippine Public Transport</strong></p>
+
+	<p>
+		<a href="https://expo.dev/"><img src="https://img.shields.io/badge/Expo-SDK_54-000020?style=for-the-badge&logo=expo&logoColor=white" alt="Expo SDK 54" /></a>
+		<a href="https://reactnative.dev/"><img src="https://img.shields.io/badge/React_Native-0.81-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React Native 0.81" /></a>
+		<a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5" /></a>
+		<a href="https://supabase.com/"><img src="https://img.shields.io/badge/Supabase-Postgres_%2B_Auth-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" /></a>
+		<a href="https://maplibre.org/"><img src="https://img.shields.io/badge/MapLibre-React_Native-1F6FEB?style=for-the-badge" alt="MapLibre React Native" /></a>
+	</p>
+
+	<p>
+		<a href="#key-features">Key Features</a> |
+		<a href="#installation-and-setup">Get Started</a> |
+		<a href="#how-to-use">How to Use</a> |
+		<a href="#contributing">Contributing</a>
+	</p>
+</div>
 
 Para Mobile is a commuter-focused transit navigation app for the Philippines that helps users discover practical routes across jeepney, bus, tricycle, and UV Express networks.
 
@@ -41,7 +61,7 @@ The app combines map rendering, route search, and local transport data managemen
 
 ## Table of Contents
 
-- [Features](#features)
+- [Key Features](#key-features)
 - [System Overview](#system-overview)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
@@ -57,16 +77,16 @@ The app combines map rendering, route search, and local transport data managemen
 - [Security](#security)
 - [License](#license)
 
-## Features
+## Key Features
 
-- Multi-modal route planning: jeepney, bus, tricycle, UV Express
-- Transfer-aware route recommendations (easiest, fastest, cheapest)
-- Last-mile tricycle extension routing support
-- Interactive map with overlays, POIs, and terminal markers
-- Guest mode and authenticated account mode
-- Saved routes, points history, and gamified badges
-- Broadcast announcements and global offline handling
-- AI chatbot-assisted trip planning flow
+- Unified Multi-Modal Routing: Plan trips across jeepney, bus, tricycle, and UV Express routes in one search flow.
+- Transfer-Aware Recommendations: Compare route options optimized for speed, simplicity, and fare impact.
+- Last-Mile Tricycle Extension: Bridge route gaps with terminal-aware extensions when direct lines are limited.
+- Interactive Map Experience: Explore route overlays, stops, POIs, and terminals with map-first trip inspection.
+- Local-First Reliability: Use cached transit data for resilient behavior when connectivity is unstable.
+- Personalized Commute Tools: Save routes, track journey history, and monitor points and badges.
+- Service Awareness Layer: Receive broadcast announcements and global offline status updates in-app.
+- AI-Assisted Planning: Use conversational prompts to discover practical route options faster.
 
 ## System Overview
 
