@@ -111,17 +111,6 @@ cd Para-Transport
 npm install
 ```
 
-## How to Use
-
-### Basic commuter flow
-
-1. Launch the app and allow location permission for better map context.
-2. Search for an origin and destination.
-3. Review recommended routes (fastest, easiest, cheapest).
-4. Open a route to inspect segments, transfers, and map overlays.
-5. Save useful routes and revisit them from saved and history screens.
-
-
 ## Credits
 
 Core contributors (based on repository history):
