@@ -1,122 +1,184 @@
-<div align="center">
-
 # Para Mobile
 
-**The Smart, Offline-Resilient Commuter App for Imus, Cavite**
+Para Mobile is a commuter-focused mobile application for navigating local public transportation networks in the Philippines. It is designed for practical, real-world travel planning across jeepney, bus, tricycle, and UV Express routes, with route recommendations that consider time, fare, and transfer complexity.
 
-[![React Native](https://img.shields.io/badge/React_Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](#)
-[![Expo](https://img.shields.io/badge/Expo-1B1F23?style=for-the-badge&logo=expo&logoColor=white)](#)
-[![Zustand](https://img.shields.io/badge/Zustand-4D4D4D?style=for-the-badge&logo=react&logoColor=white)](#)
-[![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](#)
-[![Turf.js](https://img.shields.io/badge/Turf.js-51A638?style=for-the-badge&logo=javascript&logoColor=white)](#)
+## Overview
 
-*“Para!” (verb): The Filipino word to hail or stop a jeepney.<br>Navigating the informal transit networks of the Philippines has never been easier.*
+Traditional navigation tools often underrepresent informal or community-curated transit networks. Para Mobile addresses this by combining:
 
-</div>
+- A local-first route discovery engine
+- Supabase-backed transit datasets
+- MapLibre-based interactive mapping
+- User-focused commute features such as saved routes, history, and points tracking
 
----
+The result is a routing experience tailored to day-to-day commuting conditions.
 
-## ✨ Overview
+## Core Features
 
-Para Mobile addresses the challenge of navigating informal public transportation networks where traditional mapping services lack coverage. By using Supabase-managed transit data and local spatial analysis, Para provides secure, offline-resilient route discovery without relying on costly external routing APIs.
+- Multi-modal route planning (jeepney, bus, tricycle, UV Express)
+- Transfer-aware route recommendations (easiest, fastest, cheapest)
+- Last-mile tricycle extension support
+- Interactive map with route overlays, POIs, and terminal markers
+- Saved routes and commute history
+- Account and guest session modes
+- Points, badges, and leaderboard tracking
+- Broadcast announcements and global offline status handling
+- AI chatbot-assisted trip planning flow
 
-Bringing clarity and confidence to your daily commute around the **Philippines**.
+## Technology Stack
 
-<br/>
+| Category | Stack |
+| --- | --- |
+| Mobile Framework | React Native, Expo, Expo Router |
+| Map Engine | MapLibre React Native |
+| Backend | Supabase (Postgres, Auth, Realtime) |
+| State Management | Zustand (persisted local store) |
+| Geospatial/Spatial Tools | Turf.js, custom route search engine |
+| Styling | Nativewind, React Native StyleSheet |
+| Local Persistence | AsyncStorage |
+| Notifications and Device APIs | Expo Notifications, Expo Location, Expo Haptics |
 
-## 🎯 Key Features
+## Mapping and Routing Design
 
-- 🗺️ **Smart Routing:** Discover direct and single-transfer routes using local spatial buffer analysis.
-- 📴 **Offline-Resilient:** Graph-Lite architecture designed to work beautifully off local mapping geometry.
-- 🚌 **Multi-Modal Transit:** Supports Jeepneys, Tricycles, Buses, and expandable local transport modes as the dataset grows.
-- 💸 **Cost-Aware Recommendations:** Prioritizes practical choices like Cheapest, Balanced, and Least Transfers based on route context.
-- 🏆 **Commuter Gamification:** Earn dynamic lifestyle milestones (like *“Thrifty Commuter”*) by logging your rides and minimizing spend.
-- 💾 **Personalized Experience:** Save custom locations, browse recent search history, and track fare totals visually.
-- 🌍 **Local Native Mapping:** Beautiful map rendering via `react-native-maps` and OpenStreetMap (OSM) tile integrations.
-- 🤖 **AI Chatbot (In Progress):** Conversational trip planning is being built so users can type requests like: *"I want to go to Cavite State University - Imus on a cheaper budget"* and receive budget-oriented route guidance.
+- Map rendering is powered by MapLibre with hosted style URLs and fallback strategies.
+- Route matching uses a transfer-aware best-first search pipeline with spatial candidate pruning.
+- Walking and tricycle connector geometry can be road-resolved through OSRM endpoints.
+- Transit route data is fetched from vehicle-specific Supabase tables and cached locally for resilience.
 
-<br/>
+## Data Sources and Pipeline
 
-## 🌟 What Makes Para Unique
+Para supports a structured transit import workflow:
 
-- **Hyperlocal-first routing:** Para is tuned for local commuting realities, where route visibility is often incomplete in global apps.
-- **Community-curated catalog:** Routes are maintained in Supabase and continuously improved over time from field data and operations updates.
-- **Transport context over generic navigation:** The app explicitly models jeepney, tricycle, bus, UV Express, and other transportation tradeoffs (fare, transfers, and practicality).
-- **Built for everyday commuters:** Features such as fare-aware suggestions, saved places, recent searches, and commuter achievements are designed for daily repeat use.
+1. Source route data from Overpass Turbo / OpenStreetMap exports (GPX/GeoJSON).
+2. Run importer scripts under supabase/importers to normalize and upsert route geometry and stops.
+3. Store routes in vehicle-specific tables:
+   - jeepney_routes / jeepney_route_stops
+   - bus_routes / bus_route_stops
+   - tricycle_routes / tricycle_route_stops
+   - uv_express_routes / uv_express_route_stops
+4. Load and cache normalized route data in-app for map display and route search.
 
-<br/>
+## Prerequisites
 
-## 🗂️ Data Availability Note
+- Node.js 18+
+- npm
+- Expo-compatible Android/iOS environment
+- Supabase project (for authenticated and synced features)
 
-- Transit routes are sourced from Supabase (`routes` and `route_stops` tables).
-- The mobile app keeps a short-lived local cache for offline resilience, but bundled local route JSON/GPX datasets are not used.
-- To add or update routes, apply database migrations/seeding workflows in Supabase instead of committing local route files.
+## Setup
 
-<br/>
+1. Clone the repository.
 
-## 🛠️ Technical Architecture
+```bash
+git clone https://github.com/JerichoDelosReyes/Para-Transport.git
+cd Para-Transport
+```
 
-| Category | Technology |
-| :--- | :--- |
-| **Frontend framework** | React Native + Expo Router |
-| **State Management** | Zustand (Local-first persistence) |
-| **Backend & Sync** | Supabase (Auth & Postgres DB synchronization) |
-| **Spatial Engine** | Turf.js (Geographical calculations & buffering) |
-| **Styling** | Nativewind & Custom StyleSheets (`Cubao` local fonts) |
-| **Data Validation** | Zod |
+2. Install dependencies.
 
-<br/>
+```bash
+npm install
+```
 
-## 🚀 Getting Started
+3. Create a .env file in the project root and define the required variables.
 
-Follow these minimal steps to set up the development environment locally.
+## Environment Variables
 
-### Prerequisites
-- **Node.js** (v18 or newer recommended)
-- **Expo CLI** (via `npm` or `npx`)
-- **Git**
-- iOS Simulator, Android Emulator, or a physical device with Expo Go.
+Required for app runtime:
 
-### Installation
+| Variable | Required | Description |
+| --- | --- | --- |
+| EXPO_PUBLIC_SUPABASE_URL | Yes | Supabase project URL |
+| EXPO_PUBLIC_SUPABASE_ANON_KEY | Yes | Supabase anon key for client access |
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/JerichoDelosReyes/Para-Transport.git
-   cd Para-Transport
-   ```
+Required for importer/admin scripts:
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+| Variable | Required | Description |
+| --- | --- | --- |
+| SUPABASE_SERVICE_ROLE_KEY | Yes (scripts) | Service role key for importer and maintenance scripts |
 
-3. **Set up Environment Variables:**
-   If authentication and backend syncing are required, set up your `.env`.
-   ```bash
-   cp .env.example .env
-   ```
+Optional map and geocoding configuration:
 
-4. **Launch the application:**
-   ```bash
-   npx expo start
-   ```
+| Variable | Description |
+| --- | --- |
+| EXPO_PUBLIC_GEOCODING_BASE_URL | Geocoding base URL (default: Nominatim) |
+| EXPO_PUBLIC_MAPLIBRE_STYLE_URL | Explicit MapLibre style URL |
+| EXPO_PUBLIC_PARAGIS_STYLE_STRATEGY | Style resolution strategy (for pinned/latest behavior) |
+| EXPO_PUBLIC_PARAGIS_STYLE_URL_PINNED | Pinned style URL |
+| EXPO_PUBLIC_PARAGIS_STYLE_URL_FALLBACK | Fallback style URL |
+| EXPO_PUBLIC_PARAGIS_STYLE_URL_LIGHT | Light style URL |
+| EXPO_PUBLIC_PARAGIS_STYLE_URL_DARK | Dark style URL |
+| EXPO_PUBLIC_MAPTILER_KEY | Optional MapTiler key |
+| EXPO_PUBLIC_MAPTILER_STYLE | Optional MapTiler style slug |
+| EXPO_PUBLIC_OSM_TILE_URL | Optional custom raster tile URL |
+| EXPO_PUBLIC_LIGHT_TILE_URL | Optional alternate light tile URL |
+| EXPO_PUBLIC_FEATURE_USE_MAPLIBRE | Feature flag for map renderer toggling |
 
-<br/>
+Optional chatbot configuration:
 
-## 🤝 Contributing
+| Variable | Description |
+| --- | --- |
+| EXPO_PUBLIC_GROQ_API_KEY | Client-side chatbot API key |
+| EXPO_PUBLIC_GROQ_GUARDRAIL_API_KEY | Optional guardrail-specific chatbot key |
 
-We welcome UI scaling and feature proposals! Please read our [Contributing Guidelines](CONTRIBUTING.md) to understand the workflow and architectural standards. Vulnerability reporting procedures are outlined in our [Security Policy](SECURITY.md).
+## Running the App
 
-> **📋 For Contributors:** All contributions are expected to adhere to the specified issue formats and architectural flow to keep the local Graph routing highly optimized.
+Recommended for native modules and map rendering:
 
-<br/>
+```bash
+npx expo start --dev-client --lan --clear
+```
 
-## 📜 License
+Other common commands:
 
-Project licensing is currently **To Be Determined.**
+```bash
+npm run start
+npm run android
+npm run ios
+npm run web
+```
 
-<br/>
+## Available Scripts
 
-<div align="center">
-  <i>Ingat sa byahe! (Have a safe trip!)</i>
-</div>
+| Command | Purpose |
+| --- | --- |
+| npm run start | Start Expo dev server |
+| npm run android | Run Android native build |
+| npm run ios | Run iOS native build |
+| npm run web | Run web target |
+| npm run supabase:types | Generate Supabase TypeScript types |
+| npm run generate:tricycle-terminals-fallback | Build fallback terminal dataset |
+| npm run find:tricycle-extension-tests | Find candidate test pairs for tricycle extension |
+| npm run import:tricycle-terminals | Import tricycle terminals from GPX |
+| npm run verify:tricycle-terminals | Verify tricycle terminal import output |
+
+## Import and Maintenance Notes
+
+The repository includes importer and maintenance scripts under:
+
+- supabase/importers
+- scripts
+
+These scripts require EXPO_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
+
+## Troubleshooting
+
+- If map or speech features are unavailable, verify you are running a dev client build (not a limited runtime).
+- If tunnel startup is unreliable in your network, prefer LAN mode for local development.
+- If no routes appear, verify Supabase route tables are populated and the app has valid environment variables.
+
+## Security
+
+For vulnerability reporting and security process details, see [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+Contributions are welcome through pull requests and issues. When proposing changes, include:
+
+- Clear problem statement
+- Scope and expected behavior
+- Testing notes
+
+## License
+
+License status is currently to be determined.
