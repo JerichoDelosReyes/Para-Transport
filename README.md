@@ -84,20 +84,6 @@ The app combines map rendering, route search, and local transport data managemen
 | Styling | Nativewind + StyleSheet |
 | Device APIs | Expo Location, Expo Notifications, Expo Haptics |
 
-## Project Structure
-
-```text
-app/                Screens and route groups (Expo Router)
-components/         Shared UI and map-related components
-services/           Routing, auth, caching, mapping, and POI services
-hooks/              Reusable stateful logic for UI and route behavior
-constants/          Static app configuration and visual constants
-data/               Local datasets and fallback files
-supabase/importers/ Data import scripts for transport routes and stops
-scripts/            Utility and data maintenance scripts
-types/              Shared TypeScript types
-```
-
 ## Installation and Setup
 
 ### Prerequisites
@@ -215,36 +201,6 @@ npm run import:tricycle-terminals
 ```bash
 npm run verify:tricycle-terminals
 ```
-
-### Optional visual documentation
-
-You can add screenshots or demos to make this README more visual:
-
-- Home and map screen
-- Route recommendation cards
-- Journey summary and points history
-- Saved routes and profile screens
-
-## Importer and Data Maintenance
-
-Transit data can be imported and normalized with scripts under:
-
-- supabase/importers
-- scripts
-
-Typical flow:
-
-1. Source route data (GPX or GeoJSON) from OSM or curated feeds.
-2. Normalize and import with the provided scripts.
-3. Verify generated records and geometry quality.
-4. Run the app and validate map rendering and route search behavior.
-
-## Troubleshooting
-
-- If maps or speech features fail, confirm you are running a dev client build.
-- If tunnel startup is unstable, use LAN mode.
-- If no routes appear, validate Supabase tables and environment variables.
-- If map style issues appear, test pinned and fallback style variables.
 
 ## Credits
 
