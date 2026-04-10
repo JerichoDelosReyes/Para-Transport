@@ -33,15 +33,6 @@ The app combines map rendering, route search, and local transport data managemen
 - Displays routes, POIs, and terminals on an interactive map
 - Supports saved routes, commute history, achievements, points, and profile features
 
-### Why this technology stack
-
-- Expo and React Native: fast iteration and cross-platform mobile delivery
-- Expo Router: predictable file-based navigation
-- MapLibre React Native: open and customizable map rendering
-- Supabase: simple backend for auth, realtime, and transit data storage
-- Zustand and AsyncStorage: lightweight local-first state and caching
-- Turf.js and custom search services: flexible geospatial routing logic
-
 ### Planned improvements
 
 - Live traffic monitoring through a user-generated heat map
