@@ -1,135 +1,181 @@
 # Para Mobile
 
-Para Mobile is a commuter-focused mobile application for navigating local public transportation networks in the Philippines. It is designed for practical, real-world travel planning across jeepney, bus, tricycle, and UV Express routes, with route recommendations that consider time, fare, and transfer complexity.
+Para Mobile is a commuter-focused transit navigation app for the Philippines that helps users discover practical routes across jeepney, bus, tricycle, and UV Express networks.
 
-## Overview
+## Project Description
 
-Traditional navigation tools often underrepresent informal or community-curated transit networks. Para Mobile addresses this by combining:
+Para Mobile was built to solve a common local commuting problem: traditional mapping tools often miss informal, community-curated, or rapidly changing transit paths.
 
-- A local-first route discovery engine
-- Supabase-backed transit datasets
-- MapLibre-based interactive mapping
-- User-focused commute features such as saved routes, history, and points tracking
+The app combines map rendering, route search, and local transport data management into one mobile workflow that is useful for daily commuters.
 
-The result is a routing experience tailored to day-to-day commuting conditions.
+### What the application does
 
-## Core Features
+- Finds route options across multiple public transport modes
+- Recommends paths by speed, simplicity, and estimated fare impact
+- Supports transfer-aware route planning and last-mile tricycle extensions
+- Displays routes, POIs, and terminals on an interactive map
+- Supports saved routes, commute history, achievements, points, and profile features
 
-- Multi-modal route planning (jeepney, bus, tricycle, UV Express)
+### Why this technology stack
+
+- Expo and React Native: fast iteration and cross-platform mobile delivery
+- Expo Router: predictable file-based navigation
+- MapLibre React Native: open and customizable map rendering
+- Supabase: simple backend for auth, realtime, and transit data storage
+- Zustand and AsyncStorage: lightweight local-first state and caching
+- Turf.js and custom search services: flexible geospatial routing logic
+
+### Challenges faced
+
+- Handling sparse or inconsistent local transit data formats
+- Balancing route quality with mobile performance constraints
+- Designing reliable map style fallback behavior across environments
+- Managing connector logic for walking and tricycle extension scenarios
+
+### Planned improvements
+
+- Better crowdsourced route quality feedback loops
+- Expanded test coverage for route ranking and edge cases
+- Richer offline-first map and data behavior
+- More localized accessibility and guidance features
+
+## Table of Contents
+
+- [Features](#features)
+- [System Overview](#system-overview)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Installation and Setup](#installation-and-setup)
+- [Environment Variables](#environment-variables)
+- [Run the Project](#run-the-project)
+- [How to Use](#how-to-use)
+- [Importer and Data Maintenance](#importer-and-data-maintenance)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [Credits](#credits)
+- [References and Learning Resources](#references-and-learning-resources)
+- [Security](#security)
+- [License](#license)
+
+## Features
+
+- Multi-modal route planning: jeepney, bus, tricycle, UV Express
 - Transfer-aware route recommendations (easiest, fastest, cheapest)
-- Last-mile tricycle extension support
-- Interactive map with route overlays, POIs, and terminal markers
-- Saved routes and commute history
-- Account and guest session modes
-- Points, badges, and leaderboard tracking
-- Broadcast announcements and global offline status handling
+- Last-mile tricycle extension routing support
+- Interactive map with overlays, POIs, and terminal markers
+- Guest mode and authenticated account mode
+- Saved routes, points history, and gamified badges
+- Broadcast announcements and global offline handling
 - AI chatbot-assisted trip planning flow
 
-## Technology Stack
+## System Overview
+
+- Mobile client built with React Native and Expo Router
+- Map layer rendered via MapLibre with fallback style strategy
+- Transit and user data managed through Supabase
+- Route computation performed by in-app services using geospatial logic
+- Importer pipeline normalizes route geometry and stop data before app use
+
+## Tech Stack
 
 | Category | Stack |
 | --- | --- |
 | Mobile Framework | React Native, Expo, Expo Router |
 | Map Engine | MapLibre React Native |
 | Backend | Supabase (Postgres, Auth, Realtime) |
-| State Management | Zustand (persisted local store) |
-| Geospatial/Spatial Tools | Turf.js, custom route search engine |
-| Styling | Nativewind, React Native StyleSheet |
-| Local Persistence | AsyncStorage |
-| Notifications and Device APIs | Expo Notifications, Expo Location, Expo Haptics |
+| Geospatial Tools | Turf.js, custom route search engine |
+| State Management | Zustand + AsyncStorage |
+| Styling | Nativewind + StyleSheet |
+| Device APIs | Expo Location, Expo Notifications, Expo Haptics |
 
-## Mapping and Routing Design
+## Project Structure
 
-- Map rendering is powered by MapLibre with hosted style URLs and fallback strategies.
-- Route matching uses a transfer-aware best-first search pipeline with spatial candidate pruning.
-- Walking and tricycle connector geometry can be road-resolved through OSRM endpoints.
-- Transit route data is fetched from vehicle-specific Supabase tables and cached locally for resilience.
+```text
+app/                Screens and route groups (Expo Router)
+components/         Shared UI and map-related components
+services/           Routing, auth, caching, mapping, and POI services
+hooks/              Reusable stateful logic for UI and route behavior
+constants/          Static app configuration and visual constants
+data/               Local datasets and fallback files
+supabase/importers/ Data import scripts for transport routes and stops
+scripts/            Utility and data maintenance scripts
+types/              Shared TypeScript types
+```
 
-## Data Sources and Pipeline
+## Installation and Setup
 
-Para supports a structured transit import workflow:
-
-1. Source route data from Overpass Turbo / OpenStreetMap exports (GPX/GeoJSON).
-2. Run importer scripts under supabase/importers to normalize and upsert route geometry and stops.
-3. Store routes in vehicle-specific tables:
-   - jeepney_routes / jeepney_route_stops
-   - bus_routes / bus_route_stops
-   - tricycle_routes / tricycle_route_stops
-   - uv_express_routes / uv_express_route_stops
-4. Load and cache normalized route data in-app for map display and route search.
-
-## Prerequisites
+### Prerequisites
 
 - Node.js 18+
 - npm
-- Expo-compatible Android/iOS environment
-- Supabase project (for authenticated and synced features)
+- Expo-compatible Android or iOS development environment
+- Supabase project for authenticated and synced features
 
-## Setup
-
-1. Clone the repository.
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/JerichoDelosReyes/Para-Transport.git
 cd Para-Transport
 ```
 
-2. Install dependencies.
+### 2. Install dependencies
 
 ```bash
 npm install
 ```
 
-3. Create a .env file in the project root and define the required variables.
+### 3. Create a local environment file
+
+Create a `.env` file in the root folder and define the required values below.
 
 ## Environment Variables
 
-Required for app runtime:
+### Required (app runtime)
 
 | Variable | Required | Description |
 | --- | --- | --- |
 | EXPO_PUBLIC_SUPABASE_URL | Yes | Supabase project URL |
-| EXPO_PUBLIC_SUPABASE_ANON_KEY | Yes | Supabase anon key for client access |
+| EXPO_PUBLIC_SUPABASE_ANON_KEY | Yes | Supabase anon key |
 
-Required for importer/admin scripts:
+### Required (importer and admin scripts)
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| SUPABASE_SERVICE_ROLE_KEY | Yes (scripts) | Service role key for importer and maintenance scripts |
+| SUPABASE_SERVICE_ROLE_KEY | Yes (scripts) | Service-role key for importers and maintenance scripts |
 
-Optional map and geocoding configuration:
+### Optional (map and geocoding)
 
 | Variable | Description |
 | --- | --- |
 | EXPO_PUBLIC_GEOCODING_BASE_URL | Geocoding base URL (default: Nominatim) |
 | EXPO_PUBLIC_MAPLIBRE_STYLE_URL | Explicit MapLibre style URL |
-| EXPO_PUBLIC_PARAGIS_STYLE_STRATEGY | Style resolution strategy (for pinned/latest behavior) |
+| EXPO_PUBLIC_PARAGIS_STYLE_STRATEGY | Style resolution strategy |
 | EXPO_PUBLIC_PARAGIS_STYLE_URL_PINNED | Pinned style URL |
 | EXPO_PUBLIC_PARAGIS_STYLE_URL_FALLBACK | Fallback style URL |
-| EXPO_PUBLIC_PARAGIS_STYLE_URL_LIGHT | Light style URL |
-| EXPO_PUBLIC_PARAGIS_STYLE_URL_DARK | Dark style URL |
+| EXPO_PUBLIC_PARAGIS_STYLE_URL_LIGHT | Light mode style URL |
+| EXPO_PUBLIC_PARAGIS_STYLE_URL_DARK | Dark mode style URL |
 | EXPO_PUBLIC_MAPTILER_KEY | Optional MapTiler key |
-| EXPO_PUBLIC_MAPTILER_STYLE | Optional MapTiler style slug |
-| EXPO_PUBLIC_OSM_TILE_URL | Optional custom raster tile URL |
+| EXPO_PUBLIC_MAPTILER_STYLE | Optional MapTiler style |
+| EXPO_PUBLIC_OSM_TILE_URL | Optional custom OSM raster tile URL |
 | EXPO_PUBLIC_LIGHT_TILE_URL | Optional alternate light tile URL |
-| EXPO_PUBLIC_FEATURE_USE_MAPLIBRE | Feature flag for map renderer toggling |
+| EXPO_PUBLIC_FEATURE_USE_MAPLIBRE | Feature flag for map renderer |
 
-Optional chatbot configuration:
+### Optional (chatbot)
 
 | Variable | Description |
 | --- | --- |
-| EXPO_PUBLIC_GROQ_API_KEY | Client-side chatbot API key |
-| EXPO_PUBLIC_GROQ_GUARDRAIL_API_KEY | Optional guardrail-specific chatbot key |
+| EXPO_PUBLIC_GROQ_API_KEY | Chatbot API key |
+| EXPO_PUBLIC_GROQ_GUARDRAIL_API_KEY | Optional guardrail API key |
 
-## Running the App
+## Run the Project
 
-Recommended for native modules and map rendering:
+Recommended command for native modules and map support:
 
 ```bash
 npx expo start --dev-client --lan --clear
 ```
 
-Other common commands:
+Common alternatives:
 
 ```bash
 npm run start
@@ -138,47 +184,115 @@ npm run ios
 npm run web
 ```
 
-## Available Scripts
+## How to Use
 
-| Command | Purpose |
-| --- | --- |
-| npm run start | Start Expo dev server |
-| npm run android | Run Android native build |
-| npm run ios | Run iOS native build |
-| npm run web | Run web target |
-| npm run supabase:types | Generate Supabase TypeScript types |
-| npm run generate:tricycle-terminals-fallback | Build fallback terminal dataset |
-| npm run find:tricycle-extension-tests | Find candidate test pairs for tricycle extension |
-| npm run import:tricycle-terminals | Import tricycle terminals from GPX |
-| npm run verify:tricycle-terminals | Verify tricycle terminal import output |
+### Basic commuter flow
 
-## Import and Maintenance Notes
+1. Launch the app and allow location permission for better map context.
+2. Search for an origin and destination.
+3. Review recommended routes (fastest, easiest, cheapest).
+4. Open a route to inspect segments, transfers, and map overlays.
+5. Save useful routes and revisit them from saved and history screens.
 
-The repository includes importer and maintenance scripts under:
+### Account and authentication notes
+
+- You can explore key features as a guest.
+- For saved routes, profile, and persistent points and badges, sign in to an account.
+- No default username or password credentials are shipped with this repository.
+
+### Usage examples for contributors
+
+- Generate fallback tricycle terminal data:
+
+```bash
+npm run generate:tricycle-terminals-fallback
+```
+
+- Find candidate extension test pairs:
+
+```bash
+npm run find:tricycle-extension-tests
+```
+
+- Import tricycle terminals from GPX:
+
+```bash
+npm run import:tricycle-terminals
+```
+
+- Verify imported terminal output:
+
+```bash
+npm run verify:tricycle-terminals
+```
+
+### Optional visual documentation
+
+You can add screenshots or demos to make this README more visual:
+
+- Home and map screen
+- Route recommendation cards
+- Journey summary and points history
+- Saved routes and profile screens
+
+## Importer and Data Maintenance
+
+Transit data can be imported and normalized with scripts under:
 
 - supabase/importers
 - scripts
 
-These scripts require EXPO_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
+Typical flow:
+
+1. Source route data (GPX or GeoJSON) from OSM or curated feeds.
+2. Normalize and import with the provided scripts.
+3. Verify generated records and geometry quality.
+4. Run the app and validate map rendering and route search behavior.
 
 ## Troubleshooting
 
-- If map or speech features are unavailable, verify you are running a dev client build (not a limited runtime).
-- If tunnel startup is unreliable in your network, prefer LAN mode for local development.
-- If no routes appear, verify Supabase route tables are populated and the app has valid environment variables.
-
-## Security
-
-For vulnerability reporting and security process details, see [SECURITY.md](SECURITY.md).
+- If maps or speech features fail, confirm you are running a dev client build.
+- If tunnel startup is unstable, use LAN mode.
+- If no routes appear, validate Supabase tables and environment variables.
+- If map style issues appear, test pinned and fallback style variables.
 
 ## Contributing
 
-Contributions are welcome through pull requests and issues. When proposing changes, include:
+Contributions are welcome via issues and pull requests.
 
-- Clear problem statement
+Please include:
+
+- Problem statement
 - Scope and expected behavior
-- Testing notes
+- Testing notes and any migration or data impact
+
+## Credits
+
+Core contributors (based on repository history):
+
+- Jericho Delos Reyes: https://github.com/JerichoDelosReyes
+- Adrian Norona: https://github.com/adrianorona
+- Lance Acal: https://github.com/lncadrnn
+- Christian Valenzuela: https://github.com/noxen-cv
+
+If your handle is missing or needs correction, open a small README update pull request.
+
+## References and Learning Resources
+
+- Expo docs: https://docs.expo.dev/
+- Expo Router docs: https://docs.expo.dev/router/introduction/
+- MapLibre React Native docs: https://maplibre.org/maplibre-react-native/docs/
+- Supabase docs: https://supabase.com/docs
+- Turf.js docs: https://turfjs.org/
+- OpenStreetMap and Overpass Turbo: https://www.openstreetmap.org/ and https://overpass-turbo.eu/
+- License chooser: https://choosealicense.com/
+
+## Security
+
+For vulnerability reporting and security procedures, see [SECURITY.md](SECURITY.md).
 
 ## License
 
-License status is currently to be determined.
+This repository currently does not declare a final license.
+
+Until a license file is added, all rights are reserved by default. If you want open usage and external contributions, add a `LICENSE` file (for example MIT or GPL-3.0) and update this section.
