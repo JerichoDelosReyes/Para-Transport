@@ -97,66 +97,6 @@ cd Para-Transport
 npm install
 ```
 
-### 3. Create a local environment file
-
-Create a `.env` file in the root folder and define the required values below.
-
-## Environment Variables
-
-### Required (app runtime)
-
-| Variable | Required | Description |
-| --- | --- | --- |
-| EXPO_PUBLIC_SUPABASE_URL | Yes | Supabase project URL |
-| EXPO_PUBLIC_SUPABASE_ANON_KEY | Yes | Supabase anon key |
-
-### Required (importer and admin scripts)
-
-| Variable | Required | Description |
-| --- | --- | --- |
-| SUPABASE_SERVICE_ROLE_KEY | Yes (scripts) | Service-role key for importers and maintenance scripts |
-
-### Optional (map and geocoding)
-
-| Variable | Description |
-| --- | --- |
-| EXPO_PUBLIC_GEOCODING_BASE_URL | Geocoding base URL (default: Nominatim) |
-| EXPO_PUBLIC_MAPLIBRE_STYLE_URL | Explicit MapLibre style URL |
-| EXPO_PUBLIC_PARAGIS_STYLE_STRATEGY | Style resolution strategy |
-| EXPO_PUBLIC_PARAGIS_STYLE_URL_PINNED | Pinned style URL |
-| EXPO_PUBLIC_PARAGIS_STYLE_URL_FALLBACK | Fallback style URL |
-| EXPO_PUBLIC_PARAGIS_STYLE_URL_LIGHT | Light mode style URL |
-| EXPO_PUBLIC_PARAGIS_STYLE_URL_DARK | Dark mode style URL |
-| EXPO_PUBLIC_MAPTILER_KEY | Optional MapTiler key |
-| EXPO_PUBLIC_MAPTILER_STYLE | Optional MapTiler style |
-| EXPO_PUBLIC_OSM_TILE_URL | Optional custom OSM raster tile URL |
-| EXPO_PUBLIC_LIGHT_TILE_URL | Optional alternate light tile URL |
-| EXPO_PUBLIC_FEATURE_USE_MAPLIBRE | Feature flag for map renderer |
-
-### Optional (chatbot)
-
-| Variable | Description |
-| --- | --- |
-| EXPO_PUBLIC_GROQ_API_KEY | Chatbot API key |
-| EXPO_PUBLIC_GROQ_GUARDRAIL_API_KEY | Optional guardrail API key |
-
-## Run the Project
-
-Recommended command for native modules and map support:
-
-```bash
-npx expo start --dev-client --lan --clear
-```
-
-Common alternatives:
-
-```bash
-npm run start
-npm run android
-npm run ios
-npm run web
-```
-
 ## How to Use
 
 ### Basic commuter flow
