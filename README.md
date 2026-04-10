@@ -44,10 +44,10 @@ The app combines map rendering, route search, and local transport data managemen
 
 ### Planned improvements
 
-- Better crowdsourced route quality feedback loops
-- Expanded test coverage for route ranking and edge cases
-- Richer offline-first map and data behavior
-- More localized accessibility and guidance features
+- Live traffic monitoring through a user-generated heat map
+- Safe mode trip option for security-aware route recommendations
+- LRT transit support as an additional mode
+- Expanded route coverage and stronger route computation capability
 
 ## Key Features
 
