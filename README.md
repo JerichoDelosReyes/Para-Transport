@@ -53,12 +53,16 @@ The app combines map rendering, route search, and local transport data managemen
 
 - Unified Multi-Modal Routing: Plan trips across jeepney, bus, tricycle, and UV Express routes in one search flow.
 - Transfer-Aware Recommendations: Compare route options optimized for speed, simplicity, and fare impact.
-- Last-Mile Tricycle Extension: Bridge route gaps with terminal-aware extensions when direct lines are limited.
-- Interactive Map Experience: Explore route overlays, stops, POIs, and terminals with map-first trip inspection.
+- Interactive Map Experience: Explore route overlays, stops, POIs, and terminals with a customized 3D map model.
 - Local-First Reliability: Use cached transit data for resilient behavior when connectivity is unstable.
 - Personalized Commute Tools: Save routes, track journey history, and monitor points and badges.
 - Service Awareness Layer: Receive broadcast announcements and global offline status updates in-app.
 - AI-Assisted Planning: Use conversational prompts to discover practical route options faster.
+- Dark Mode and Light Mode: Switch between visual themes for better readability in day and night travel.
+
+<p align="center">
+  <img src="./assets/illustrations/feature-showcase.jpg" alt="Para Mobile feature showcase" width="100%" />
+</p>
 
 ## System Overview
 
