@@ -121,31 +121,6 @@ npm install
 4. Open a route to inspect segments, transfers, and map overlays.
 5. Save useful routes and revisit them from saved and history screens.
 
-### Usage examples for contributors
-
-- Generate fallback tricycle terminal data:
-
-```bash
-npm run generate:tricycle-terminals-fallback
-```
-
-- Find candidate extension test pairs:
-
-```bash
-npm run find:tricycle-extension-tests
-```
-
-- Import tricycle terminals from GPX:
-
-```bash
-npm run import:tricycle-terminals
-```
-
-- Verify imported terminal output:
-
-```bash
-npm run verify:tricycle-terminals
-```
 
 ## Credits
 
