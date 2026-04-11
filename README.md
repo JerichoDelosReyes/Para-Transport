@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./assets/logo/appicon.png" alt="Para Mobile Logo" width="120" />
   <h1>Para Mobile</h1>
-  <p><strong>Local-First Commuter Navigation for Philippine Public Transport</strong></p>
+  <p><strong>Local Commuter Navigation for Philippine Public Transport</strong></p>
   <p>
     <a href="https://expo.dev/"><img src="https://img.shields.io/badge/Expo-SDK_54-000020?style=for-the-badge&logo=expo&logoColor=white" alt="Expo SDK 54" /></a>
     <a href="https://reactnative.dev/"><img src="https://img.shields.io/badge/React_Native-0.81-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React Native 0.81" /></a>
@@ -12,7 +12,6 @@
   <p>
     <a href="#key-features">Key Features</a> |
     <a href="#installation-and-setup">Get Started</a> |
-    <a href="#how-to-use">How to Use</a> |
     <a href="#contributing">Contributing</a>
   </p>
 </div>
