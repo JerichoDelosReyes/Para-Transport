@@ -54,7 +54,7 @@ The app combines map rendering, route search, and local transport data managemen
   <img src="./assets/illustrations/feat.jpg" alt="Para Mobile feature showcase" width="100%" />
 </p>
 
-## ADMIN SIDE OF PARA
+## Admin side of Para
 
 - Admin dashboard for system control
 - Push notifications (e.g., Libre Sakay alerts)
