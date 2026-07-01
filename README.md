@@ -112,7 +112,7 @@ npm install
 
 ## Credits
 
-Core contributors (based on repository history):
+Core contributors:
 
 - Jericho Delos Reyes: https://github.com/JerichoDelosReyes
 - Adrian Norona: https://github.com/adrianorona
