@@ -111,7 +111,11 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
             activeOpacity={0.7}
             onPress={() => setShowAlternates((prev) => !prev)}
           >
-            <Ionicons name="ellipsis-vertical" size={14} color={theme.textSecondary} />
+            <Ionicons
+              name={showAlternates ? 'close' : 'ellipsis-vertical'}
+              size={14}
+              color={showAlternates ? '#EF4444' : theme.textSecondary}
+            />
           </TouchableOpacity>
         )}
       </View>
