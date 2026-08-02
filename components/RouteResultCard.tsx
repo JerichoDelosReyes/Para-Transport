@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../constants/theme';
@@ -12,6 +12,8 @@ type Props = {
   onPressStartJourney?: () => void;
   rankLabel?: string;
   metricTags?: string[];
+  /** Other matched routes covering the same physical path (same stops), served by differently-tagged jeepneys. */
+  alternates?: MatchedRoute[];
 };
 
 const TAG_COLORS: Record<string, { backgroundColor: string; textColor: string }> = {
@@ -20,9 +22,11 @@ const TAG_COLORS: Record<string, { backgroundColor: string; textColor: string }>
   Cheapest: { backgroundColor: '#10B981', textColor: '#FFFFFF' },
 };
 
-export default function RouteResultCard({ matched, isSelected, onPress, rankLabel, metricTags = [], onPressStartJourney }: Props) {
+export default function RouteResultCard({ matched, isSelected, onPress, rankLabel, metricTags = [], onPressStartJourney, alternates = [] }: Props) {
   const { theme, isDark } = useTheme();
+  const [showAlternates, setShowAlternates] = useState(false);
   const { legs, distanceKm, estimatedMinutes } = matched;
+  const hasAlternates = alternates.length > 0;
   const tricycleExtension = matched.tricycleExtension;
   const isTransfer = legs.length > 1;
   const id = legs.map(l => l.route.properties.code).join('+');
@@ -101,7 +105,46 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
             <Text style={styles.transferText}>Transfer</Text>
           </View>
         )}
+        {hasAlternates && (
+          <TouchableOpacity
+            style={styles.moreButton}
+            activeOpacity={0.7}
+            onPress={() => setShowAlternates((prev) => !prev)}
+          >
+            <Ionicons name="ellipsis-vertical" size={14} color={theme.textSecondary} />
+          </TouchableOpacity>
+        )}
       </View>
+
+      {hasAlternates && showAlternates ? (
+        <View
+          style={[
+            styles.alternatesWrap,
+            {
+              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(10,22,40,0.03)',
+              borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(10,22,40,0.08)',
+            },
+          ]}
+        >
+          <Text style={[styles.alternatesLabel, { color: theme.textSecondary }]}>
+            Also runs this route ({alternates.length})
+          </Text>
+          {alternates.map((alt) => (
+            <View key={alt.legs.map((leg) => leg.route.properties.code).join('+')} style={styles.alternateRow}>
+              {alt.legs.map((leg, i) => (
+                <React.Fragment key={leg.route.properties.code}>
+                  {i > 0 && (
+                    <Ionicons name="walk-outline" size={12} color={COLORS.textMuted} style={{ marginHorizontal: 2 }} />
+                  )}
+                  <View style={[styles.codeBadge, styles.altCodeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
+                    <Text style={styles.codeText}>{leg.route.properties.name || leg.route.properties.code}</Text>
+                  </View>
+                </React.Fragment>
+              ))}
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       {tricycleExtension ? (
         <View
@@ -258,6 +301,39 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
+  },
+  moreButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(128,128,128,0.14)',
+  },
+  alternatesWrap: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 10,
+    gap: 6,
+  },
+  alternatesLabel: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 2,
+  },
+  alternateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  altCodeBadge: {
+    opacity: 0.75,
   },
   codeText: {
     fontFamily: 'Inter',

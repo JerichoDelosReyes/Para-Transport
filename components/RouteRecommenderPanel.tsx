@@ -47,6 +47,70 @@ const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number => {
 const routeId = (route: MatchedRoute): string =>
   route.legs.map((leg) => leg.route.properties.code).join('+');
 
+type RouteGroup = {
+  primary: MatchedRoute;
+  alternates: MatchedRoute[];
+};
+
+// Tolerance for treating two matched routes as "the same physical trip" even
+// though they're served by differently-named/coded jeepney lines that happen
+// to run the same corridor (e.g. several lines all pass Dasma -> Trece).
+const ROUTE_GROUP_POINT_TOLERANCE_METERS = 220;
+const ROUTE_GROUP_DISTANCE_TOLERANCE_RATIO = 0.2;
+const ROUTE_GROUP_MIN_DISTANCE_TOLERANCE_KM = 0.4;
+const METERS_PER_DEGREE = 111_320;
+
+const approxMetersBetween = (
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+): number => {
+  const latRad = ((a.latitude + b.latitude) / 2) * (Math.PI / 180);
+  const dLat = (a.latitude - b.latitude) * METERS_PER_DEGREE;
+  const dLng = (a.longitude - b.longitude) * METERS_PER_DEGREE * Math.cos(latRad);
+  return Math.sqrt(dLat * dLat + dLng * dLng);
+};
+
+const isSameItinerary = (a: MatchedRoute, b: MatchedRoute): boolean => {
+  if (a.legs.length !== b.legs.length) return false;
+
+  for (let i = 0; i < a.legs.length; i++) {
+    const legA = a.legs[i];
+    const legB = b.legs[i];
+    if (approxMetersBetween(legA.boardingPoint, legB.boardingPoint) > ROUTE_GROUP_POINT_TOLERANCE_METERS) {
+      return false;
+    }
+    if (approxMetersBetween(legA.alightingPoint, legB.alightingPoint) > ROUTE_GROUP_POINT_TOLERANCE_METERS) {
+      return false;
+    }
+  }
+
+  const distanceTolerance = Math.max(
+    ROUTE_GROUP_MIN_DISTANCE_TOLERANCE_KM,
+    a.distanceKm * ROUTE_GROUP_DISTANCE_TOLERANCE_RATIO,
+  );
+  if (Math.abs(a.distanceKm - b.distanceKm) > distanceTolerance) return false;
+
+  return true;
+};
+
+// Collapses routes that cover the same physical path (same boarding/alighting
+// points per leg) but are served by differently-tagged jeepney lines into a
+// single group, so the UI can show one card with the alternates tucked away.
+const groupRoutesByItinerary = (routes: MatchedRoute[]): RouteGroup[] => {
+  const groups: RouteGroup[] = [];
+
+  for (const route of routes) {
+    const existing = groups.find((group) => isSameItinerary(group.primary, route));
+    if (existing) {
+      existing.alternates.push(route);
+    } else {
+      groups.push({ primary: route, alternates: [] });
+    }
+  }
+
+  return groups;
+};
+
 const transferLabel = (count: number): string =>
   count === 0 ? 'No transfer' : `${count} transfer${count === 1 ? '' : 's'}`;
 
@@ -63,12 +127,12 @@ const routeSignature = (route: MatchedRoute): string =>
 const hasTransferWithTricycleExtension = (route: MatchedRoute): boolean =>
   route.transferCount > 0 && !!route.tricycleExtension;
 
-const injectTransferTricycleOption = (
+const injectTransferTricycleGroupOption = (
   allRoutes: MatchedRoute[],
-  rankedRoutes: MatchedRoute[],
+  rankedGroups: RouteGroup[],
   limit: number,
-): MatchedRoute[] => {
-  if (rankedRoutes.some(hasTransferWithTricycleExtension)) return rankedRoutes;
+): RouteGroup[] => {
+  if (rankedGroups.some((group) => hasTransferWithTricycleExtension(group.primary))) return rankedGroups;
 
   const candidate = [...allRoutes]
     .filter(hasTransferWithTricycleExtension)
@@ -79,19 +143,24 @@ const injectTransferTricycleOption = (
         compareCheapest(a, b),
     )[0];
 
-  if (!candidate) return rankedRoutes;
+  if (!candidate) return rankedGroups;
 
   const candidateSig = routeSignature(candidate);
-  if (rankedRoutes.some((route) => routeSignature(route) === candidateSig)) {
-    return rankedRoutes;
+  const alreadyPresent = rankedGroups.some(
+    (group) =>
+      routeSignature(group.primary) === candidateSig ||
+      group.alternates.some((alt) => routeSignature(alt) === candidateSig),
+  );
+  if (alreadyPresent) return rankedGroups;
+
+  const candidateGroup: RouteGroup = { primary: candidate, alternates: [] };
+
+  if (rankedGroups.length < limit) {
+    return [...rankedGroups, candidateGroup];
   }
 
-  if (rankedRoutes.length < limit) {
-    return [...rankedRoutes, candidate];
-  }
-
-  const next = [...rankedRoutes];
-  next[next.length - 1] = candidate;
+  const next = [...rankedGroups];
+  next[next.length - 1] = candidateGroup;
   return next;
 };
 export default function RouteRecommenderPanel({
@@ -106,46 +175,54 @@ export default function RouteRecommenderPanel({
   const { theme, isDark } = useTheme();
   const [showInsight, setShowInsight] = useState(false);
 
-  const topRankedRoutes = useMemo(() => {
+  const topRankedGroups = useMemo<RouteGroup[]>(() => {
+    if (matchedRoutes.length === 0) return [];
+
+    let rankedAll: MatchedRoute[];
+
     if (matchedRoutes.length <= TOP_ROUTE_LIMIT) {
-      const ranked = [...matchedRoutes].sort(compareLeastTransfer);
-      return injectTransferTricycleOption(matchedRoutes, ranked, TOP_ROUTE_LIMIT);
+      rankedAll = [...matchedRoutes].sort(compareLeastTransfer);
+    } else {
+      const indexed = matchedRoutes.map((route, index) => ({ route, index }));
+      const compositeScores = new Map<number, number>();
+
+      const applyRankScores = (
+        comparator: (a: MatchedRoute, b: MatchedRoute) => number,
+        weight: number,
+      ) => {
+        const ordered = [...indexed].sort((a, b) => comparator(a.route, b.route) || a.index - b.index);
+        ordered.forEach((item, rankIndex) => {
+          compositeScores.set(item.index, (compositeScores.get(item.index) || 0) + rankIndex * weight);
+        });
+      };
+
+      applyRankScores(compareLeastTransfer, 1);
+      applyRankScores(compareFastest, 1);
+      applyRankScores(compareCheapest, 1);
+
+      rankedAll = [...indexed]
+        .sort((a, b) => {
+          const scoreDiff = (compositeScores.get(a.index) || 0) - (compositeScores.get(b.index) || 0);
+          if (scoreDiff !== 0) return scoreDiff;
+
+          return (
+            compareLeastTransfer(a.route, b.route) ||
+            compareFastest(a.route, b.route) ||
+            compareCheapest(a.route, b.route) ||
+            a.index - b.index
+          );
+        })
+        .map((item) => item.route);
     }
 
-    const indexed = matchedRoutes.map((route, index) => ({ route, index }));
-    const compositeScores = new Map<number, number>();
-
-    const applyRankScores = (
-      comparator: (a: MatchedRoute, b: MatchedRoute) => number,
-      weight: number,
-    ) => {
-      const ordered = [...indexed].sort((a, b) => comparator(a.route, b.route) || a.index - b.index);
-      ordered.forEach((item, rankIndex) => {
-        compositeScores.set(item.index, (compositeScores.get(item.index) || 0) + rankIndex * weight);
-      });
-    };
-
-    applyRankScores(compareLeastTransfer, 1);
-    applyRankScores(compareFastest, 1);
-    applyRankScores(compareCheapest, 1);
-
-    const ranked = [...indexed]
-      .sort((a, b) => {
-        const scoreDiff = (compositeScores.get(a.index) || 0) - (compositeScores.get(b.index) || 0);
-        if (scoreDiff !== 0) return scoreDiff;
-
-        return (
-          compareLeastTransfer(a.route, b.route) ||
-          compareFastest(a.route, b.route) ||
-          compareCheapest(a.route, b.route) ||
-          a.index - b.index
-        );
-      })
-      .slice(0, TOP_ROUTE_LIMIT)
-      .map((item) => item.route);
-
-    return injectTransferTricycleOption(matchedRoutes, ranked, TOP_ROUTE_LIMIT);
+    const topGroups = groupRoutesByItinerary(rankedAll).slice(0, TOP_ROUTE_LIMIT);
+    return injectTransferTricycleGroupOption(matchedRoutes, topGroups, TOP_ROUTE_LIMIT);
   }, [matchedRoutes]);
+
+  const topRankedRoutes = useMemo(
+    () => topRankedGroups.map((group) => group.primary),
+    [topRankedGroups],
+  );
 
   const metricBaselines = useMemo(() => {
     if (matchedRoutes.length === 0) return null;
@@ -262,15 +339,17 @@ export default function RouteRecommenderPanel({
   }, [routeInsightText, isDark, showInsight]);
 
   const renderRouteCard = useCallback(
-    ({ item, index }: { item: MatchedRoute; index: number }) => {
-      const id = routeId(item);
+    ({ item, index }: { item: RouteGroup; index: number }) => {
+      const matched = item.primary;
+      const id = routeId(matched);
 
       return (
         <RouteResultCard
-          matched={item}
+          matched={matched}
+          alternates={item.alternates}
           isSelected={selectedRoute === id}
           rankLabel={`Option ${index + 1}`}
-          metricTags={getMetricTags(item)}
+          metricTags={getMetricTags(matched)}
           onPress={(pressedId: string) => {
             setSelectedRoute(selectedRoute === pressedId ? null : pressedId);
           }}
@@ -282,7 +361,7 @@ export default function RouteRecommenderPanel({
   );
 
   const keyExtractor = useCallback(
-    (item: MatchedRoute) => routeId(item),
+    (item: RouteGroup) => routeId(item.primary),
     [],
   );
 
@@ -312,7 +391,7 @@ export default function RouteRecommenderPanel({
       title="ROUTES"
     >
       <FlatList
-        data={topRankedRoutes}
+        data={topRankedGroups}
         keyExtractor={keyExtractor}
         renderItem={renderRouteCard}
         ListHeaderComponent={insightHeader}
