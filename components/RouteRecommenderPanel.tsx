@@ -339,7 +339,7 @@ export default function RouteRecommenderPanel({
   }, [routeInsightText, isDark, showInsight]);
 
   const renderRouteCard = useCallback(
-    ({ item, index }: { item: RouteGroup; index: number }) => {
+    ({ item }: { item: RouteGroup; index: number }) => {
       const matched = item.primary;
       const id = routeId(matched);
 
@@ -348,7 +348,6 @@ export default function RouteRecommenderPanel({
           matched={matched}
           alternates={item.alternates}
           isSelected={selectedRoute === id}
-          rankLabel={`Option ${index + 1}`}
           metricTags={getMetricTags(matched)}
           onPress={(pressedId: string) => {
             setSelectedRoute(selectedRoute === pressedId ? null : pressedId);

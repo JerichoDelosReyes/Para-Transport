@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../constants/theme';
 import type { MatchedRoute } from '../services/routeSearch';
+import type { JeepneyRoute } from '../types/routes';
 import { useTheme } from '../src/theme/ThemeContext';
 
 type Props = {
@@ -10,19 +11,50 @@ type Props = {
   isSelected: boolean;
   onPress: (id: string) => void;
   onPressStartJourney?: () => void;
-  rankLabel?: string;
   metricTags?: string[];
   /** Other matched routes covering the same physical path (same stops), served by differently-tagged jeepneys. */
   alternates?: MatchedRoute[];
 };
 
 const TAG_COLORS: Record<string, { backgroundColor: string; textColor: string }> = {
-  Fastest: { backgroundColor: '#3B82F6', textColor: '#FFFFFF' },
-  'Least Transfer': { backgroundColor: '#8B5CF6', textColor: '#FFFFFF' },
-  Cheapest: { backgroundColor: '#10B981', textColor: '#FFFFFF' },
+  Fastest: { backgroundColor: 'rgba(59,130,246,0.14)', textColor: '#3B82F6' },
+  'Least Transfer': { backgroundColor: 'rgba(139,92,246,0.14)', textColor: '#8B5CF6' },
+  Cheapest: { backgroundColor: 'rgba(16,185,129,0.14)', textColor: '#10B981' },
 };
 
-export default function RouteResultCard({ matched, isSelected, onPress, rankLabel, metricTags = [], onPressStartJourney, alternates = [] }: Props) {
+// Jeepney line names are stored as "Origin -> Destination" (e.g. "Jeepney: Dasmarinas -> PITX").
+// Riders mainly need to know where a leg drops them off, so show just the destination on the chip.
+const ARROW_PATTERN = /-{1,2}>|→/;
+
+// Some routes have no display name at all, so we fall back to their raw machine code
+// (e.g. "JEEPNEY-ROUTE-SM-MOLINO"). Strip the redundant "jeepney-route" prefix (we already
+// show a jeepney icon) and turn the remaining hyphens into a readable title-cased name.
+const humanizeCode = (code: string): string => {
+  const withoutPrefix = code.replace(/^jeepney[-_\s]*route[-_\s]*/i, '').trim();
+  const base = withoutPrefix || code;
+  return base
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+const legDestinationLabel = (route: JeepneyRoute): string => {
+  const props = route.properties;
+  if (props.toLabel && props.toLabel.trim()) return props.toLabel.trim();
+
+  const name = (props.name || '').trim();
+  const arrowMatch = name.match(ARROW_PATTERN);
+  if (arrowMatch && arrowMatch.index !== undefined) {
+    const destination = name.slice(arrowMatch.index + arrowMatch[0].length).trim();
+    if (destination) return destination;
+  }
+  if (name) return name;
+
+  return humanizeCode((props.code || '').trim());
+};
+
+export default function RouteResultCard({ matched, isSelected, onPress, metricTags = [], onPressStartJourney, alternates = [] }: Props) {
   const { theme, isDark } = useTheme();
   const [showAlternates, setShowAlternates] = useState(false);
   const { legs, distanceKm, estimatedMinutes } = matched;
@@ -62,12 +94,6 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
       {/* Top row: tags + ETA */}
       <View style={styles.topRow}>
         <View style={styles.badgeRow}>
-          {rankLabel && (
-            <View style={styles.rankBadge}>
-              <Ionicons name="trophy" size={10} color="#FFFFFF" />
-              <Text style={styles.rankBadgeText}>{rankLabel}</Text>
-            </View>
-          )}
           {metricTags.map((tag) => {
             const colors = TAG_COLORS[tag] || {
               backgroundColor: 'rgba(255,255,255,0.15)',
@@ -92,10 +118,13 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
         {legs.map((leg, i) => (
           <React.Fragment key={leg.route.properties.code}>
             {i > 0 && (
-              <Ionicons name="walk-outline" size={14} color={COLORS.textMuted} style={{ marginHorizontal: 2 }} />
+              <View style={styles.walkIconWrap}>
+                <Ionicons name="walk-outline" size={13} color={isDark ? '#FFFFFF' : COLORS.navy} />
+              </View>
             )}
             <View style={[styles.codeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
-              <Text style={styles.codeText}>{leg.route.properties.name || leg.route.properties.code}</Text>
+              <Image source={require('../assets/icons/jeepney-icon.png')} style={styles.jeepneyIcon} resizeMode="contain" />
+              <Text style={styles.codeText}>{legDestinationLabel(leg.route)}</Text>
             </View>
           </React.Fragment>
         ))}
@@ -138,10 +167,13 @@ export default function RouteResultCard({ matched, isSelected, onPress, rankLabe
               {alt.legs.map((leg, i) => (
                 <React.Fragment key={leg.route.properties.code}>
                   {i > 0 && (
-                    <Ionicons name="walk-outline" size={12} color={COLORS.textMuted} style={{ marginHorizontal: 2 }} />
+                    <View style={styles.walkIconWrap}>
+                      <Ionicons name="walk-outline" size={12} color={isDark ? '#FFFFFF' : COLORS.navy} />
+                    </View>
                   )}
                   <View style={[styles.codeBadge, styles.altCodeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
-                    <Text style={styles.codeText}>{leg.route.properties.name || leg.route.properties.code}</Text>
+                    <Image source={require('../assets/icons/jeepney-icon.png')} style={styles.jeepneyIcon} resizeMode="contain" />
+                    <Text style={styles.codeText}>{legDestinationLabel(leg.route)}</Text>
                   </View>
                 </React.Fragment>
               ))}
@@ -301,10 +333,25 @@ const styles = StyleSheet.create({
     color: '#2E7D32',
   },
   codeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: '#2196F3',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
+  },
+  jeepneyIcon: {
+    width: 13,
+    height: 13,
+  },
+  walkIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(128,128,128,0.22)',
   },
   moreButton: {
     width: 24,
@@ -345,6 +392,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.5,
+    flexShrink: 1,
   },
   etaBadge: {
     flexDirection: 'row',
@@ -425,21 +473,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#FF9800',
-  },
-  rankBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#E8A020',
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  rankBadgeText: {
-    fontFamily: 'Inter',
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFFFFF',
   },
   metricTag: {
     borderRadius: 6,
