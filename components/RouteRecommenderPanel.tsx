@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY } from '../constants/theme';
 import type { MatchedRoute } from '../services/routeSearch';
@@ -104,6 +104,7 @@ export default function RouteRecommenderPanel({
   onStartJourney,
 }: Props) {
   const { theme, isDark } = useTheme();
+  const [showInsight, setShowInsight] = useState(false);
 
   const topRankedRoutes = useMemo(() => {
     if (matchedRoutes.length <= TOP_ROUTE_LIMIT) {
@@ -204,8 +205,38 @@ export default function RouteRecommenderPanel({
   const insightHeader = useMemo(() => {
     if (!routeInsightText) return null;
 
+    if (!showInsight) {
+      return (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => setShowInsight(true)}
+          style={[
+            styles.insightButton,
+            {
+              backgroundColor: isDark ? 'rgba(245,197,24,0.14)' : '#FFF6CC',
+              borderColor: '#E8A020',
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.insightIconWrap,
+              {
+                backgroundColor: isDark ? 'rgba(232,160,32,0.24)' : 'rgba(232,160,32,0.18)',
+              },
+            ]}
+          >
+            <Ionicons name="bulb-outline" size={16} color={isDark ? '#FFD970' : '#9A6B00'} />
+          </View>
+          <Text style={[styles.insightButtonText, { color: isDark ? '#FFE8A3' : '#6D4C00' }]}>Insights</Text>
+        </TouchableOpacity>
+      );
+    }
+
     return (
-      <View
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => setShowInsight(false)}
         style={[
           styles.insightCard,
           {
@@ -225,9 +256,10 @@ export default function RouteRecommenderPanel({
           <Ionicons name="bulb-outline" size={16} color={isDark ? '#FFD970' : '#9A6B00'} />
         </View>
         <Text style={[styles.insightText, { color: isDark ? '#FFE8A3' : '#6D4C00' }]}>{routeInsightText}</Text>
-      </View>
+        <Ionicons name="close" size={16} color={isDark ? '#FFE8A3' : '#6D4C00'} />
+      </TouchableOpacity>
     );
-  }, [routeInsightText, isDark]);
+  }, [routeInsightText, isDark, showInsight]);
 
   const renderRouteCard = useCallback(
     ({ item, index }: { item: MatchedRoute; index: number }) => {
@@ -313,6 +345,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
+  },
+  insightButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    borderWidth: 2,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 12,
+  },
+  insightButtonText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    fontWeight: '700',
   },
   insightIconWrap: {
     width: 24,

@@ -191,7 +191,7 @@ export default function PoiOverlay({
       iconAllowOverlap: false,
       iconIgnorePlacement: false,
       iconAnchor: 'bottom',
-      iconPadding: 22,
+      iconPadding: [22, 22, 22, 22],
       textColor: isDark ? '#FFFFFF' : '#0A1628',
       textHaloColor: isDark ? '#000000' : '#000000',
       symbolSortKey: [
@@ -226,7 +226,7 @@ export default function PoiOverlay({
       iconAllowOverlap: true,
       iconIgnorePlacement: true,
       iconAnchor: 'bottom',
-      iconPadding: 22,
+      iconPadding: [22, 22, 22, 22],
       textColor: isDark ? '#FFFFFF' : '#0A1628',
       textHaloColor: isDark ? '#000000' : '#000000',
       symbolSortKey: 0,
