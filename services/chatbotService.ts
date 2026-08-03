@@ -2699,6 +2699,22 @@ function recentGroqHistory(history?: ChatbotHistoryMessage[]): Array<{ role: 'us
     .slice(-10);
 }
 
+// Helper: fetch with timeout and unified error handling for network requests
+async function fetchWithTimeout(input: RequestInfo, init: RequestInit = {}, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const signal = controller.signal;
+  const combinedInit = { ...init, signal } as RequestInit;
+
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(input, combinedInit);
+    return res;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function parseGuardrailDecision(raw: string): GuardrailDecision | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -2765,7 +2781,7 @@ async function callGroqGuardrail(
   ].join('\n');
 
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2786,9 +2802,9 @@ async function callGroqGuardrail(
           },
         ],
       }),
-    });
+    }, 10000);
 
-    if (!response.ok) {
+    if (!response || !response.ok) {
       return {
         allow: true,
         category: 'safe',
@@ -2813,7 +2829,8 @@ async function callGroqGuardrail(
     }
 
     return decision;
-  } catch {
+  } catch (err) {
+    console.warn('[chatbotService] Groq guardrail network error:', err);
     return {
       allow: true,
       category: 'safe',
@@ -2859,33 +2876,38 @@ async function callGroqFallback(
     ? historyTurns
     : [...historyTurns, { role: 'user' as const, content: message }];
 
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'llama-3.1-8b-instant',
-      temperature: 0.2,
-      max_tokens: 220,
-      messages: [
-        {
-          role: 'system',
-          content: strictPrompt,
-        },
-        ...userTurns,
-      ],
-    }),
-  });
+  try {
+    const response = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        temperature: 0.2,
+        max_tokens: 220,
+        messages: [
+          {
+            role: 'system',
+            content: strictPrompt,
+          },
+          ...userTurns,
+        ],
+      }),
+    }, 15000);
 
-  if (!response.ok) return null;
+    if (!response || !response.ok) return null;
 
-  const data = await response.json();
-  const text = data?.choices?.[0]?.message?.content;
-  if (typeof text !== 'string') return null;
+    const data = await response.json();
+    const text = data?.choices?.[0]?.message?.content;
+    if (typeof text !== 'string') return null;
 
-  return stripAutoTranslationParenthetical(text.trim(), language);
+    return stripAutoTranslationParenthetical(text.trim(), language);
+  } catch (err) {
+    console.warn('[chatbotService] Groq request failed:', err);
+    return null;
+  }
 }
 
 function fallbackText(language: BotLanguage, key: keyof DatasetShape['fallbackMessages']): string {

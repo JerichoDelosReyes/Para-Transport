@@ -112,7 +112,13 @@ export default function SettingsScreen() {
                   <Feather name="mail" size={20} color={theme.text} style={styles.icon} />
                   <Text style={[styles.settingLabel, { color: theme.text }]}>Email</Text>
                 </View>
-                <Text style={[styles.valueText, { color: theme.textSecondary }]}>{user?.email || 'N/A'}</Text>
+                <Text 
+                  style={[styles.valueText, { color: theme.textSecondary }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {user?.email || 'N/A'}
+                </Text>
               </View>
               <View style={[styles.divider, { backgroundColor: theme.cardBorder }]} />
             </>
@@ -271,11 +277,11 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: 'Cubao', fontSize: TYPOGRAPHY.screenTitle },
   content: { padding: SPACING.screenX, paddingTop: 24, paddingBottom: 40 },
   cardGroup: { borderRadius: RADIUS.card, marginBottom: 20, paddingVertical: 4 },
-  settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16, paddingHorizontal: 16 },
-  rowLeft: { flexDirection: 'row', alignItems: 'center' },
+  settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16, paddingHorizontal: 16, gap: 12 },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
   icon: { marginRight: 12 },
   settingLabel: { fontFamily: 'Inter', fontSize: 16 },
-  valueText: { fontFamily: 'Inter', fontSize: 15 },
+  valueText: { fontFamily: 'Inter', fontSize: 15, flex: 1, textAlign: 'right' },
   divider: { height: 1, marginLeft: 48 },
   discountSection: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 14, gap: 12 },
   helperText: { fontFamily: 'Inter', fontSize: 12, marginTop: 2 },
