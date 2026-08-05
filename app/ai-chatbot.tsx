@@ -11,7 +11,7 @@ import { getChatbotReply, type ChatbotAction, type ChatbotConversationState } fr
 import { useStore } from "../store/useStore";
 import { supabase } from '../config/supabaseClient';
 import { useTheme } from '../src/theme/ThemeContext';
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
+import { SafeSpeechRecognitionModule, useSafeSpeechRecognitionEvent, isSpeechRecognitionAvailable } from "../utils/speechRecognition";
 
 const CHATBOT_STATES = {
   IDLE: require("../assets/AIChatbot/IDLE.png"),
@@ -95,36 +95,40 @@ export default function AIChatbotScreen() {
     setStoredConversationState(conversationState);
   }, [conversationState, setStoredConversationState]);
 
-  useSpeechRecognitionEvent("result", (event) => {
+  useSafeSpeechRecognitionEvent("result", (event) => {
     if (event.results && event.results.length > 0) {
       setInputText(event.results[0].transcript);
     }
   });
 
-  useSpeechRecognitionEvent("end", () => {
+  useSafeSpeechRecognitionEvent("end", () => {
     setIsRecording(false);
   });
 
-  useSpeechRecognitionEvent("error", (event) => {
+  useSafeSpeechRecognitionEvent("error", (event) => {
     setIsRecording(false);
   });
 
   const handleMicPress = async () => {
+    if (!isSpeechRecognitionAvailable) {
+      Alert.alert("Not Available", "Voice input requires a development build.");
+      return;
+    }
     try {
       if (isRecording) {
-        await ExpoSpeechRecognitionModule.stop();
+        await SafeSpeechRecognitionModule.stop();
         setIsRecording(false);
         return;
       }
 
-      const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      const { granted } = await SafeSpeechRecognitionModule.requestPermissionsAsync();
       if (!granted) {
         Alert.alert("Permission Required", "Speech recognition requires microphone permissions.");
         return;
       }
 
       setIsRecording(true);
-      await ExpoSpeechRecognitionModule.start({
+      await SafeSpeechRecognitionModule.start({
         lang: "en-US",
         interimResults: true,
         requiresOnDeviceRecognition: false,

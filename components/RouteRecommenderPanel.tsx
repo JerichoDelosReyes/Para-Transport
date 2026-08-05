@@ -18,31 +18,24 @@ type Props = {
   onStartJourney?: (id: string) => void;
 };
 
+type SortMode = 'best' | 'fastest' | 'least_transfer' | 'cheapest' | null;
+
 const TOP_ROUTE_LIMIT = 5;
 
-const compareLeastTransfer = (a: MatchedRoute, b: MatchedRoute): number => {
-  return (
-    a.transferCount - b.transferCount ||
-    a.estimatedMinutes - b.estimatedMinutes ||
-    a.estimatedFare - b.estimatedFare
-  );
-};
+const compareLeastTransfer = (a: MatchedRoute, b: MatchedRoute): number =>
+  a.transferCount - b.transferCount ||
+  a.estimatedMinutes - b.estimatedMinutes ||
+  a.estimatedFare - b.estimatedFare;
 
-const compareFastest = (a: MatchedRoute, b: MatchedRoute): number => {
-  return (
-    a.estimatedMinutes - b.estimatedMinutes ||
-    a.transferCount - b.transferCount ||
-    a.estimatedFare - b.estimatedFare
-  );
-};
+const compareFastest = (a: MatchedRoute, b: MatchedRoute): number =>
+  a.estimatedMinutes - b.estimatedMinutes ||
+  a.transferCount - b.transferCount ||
+  a.estimatedFare - b.estimatedFare;
 
-const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number => {
-  return (
-    a.estimatedFare - b.estimatedFare ||
-    a.transferCount - b.transferCount ||
-    a.estimatedMinutes - b.estimatedMinutes
-  );
-};
+const compareCheapest = (a: MatchedRoute, b: MatchedRoute): number =>
+  a.estimatedFare - b.estimatedFare ||
+  a.transferCount - b.transferCount ||
+  a.estimatedMinutes - b.estimatedMinutes;
 
 const routeId = (route: MatchedRoute): string =>
   route.legs.map((leg) => leg.route.properties.code).join('+');
@@ -52,9 +45,6 @@ type RouteGroup = {
   alternates: MatchedRoute[];
 };
 
-// Tolerance for treating two matched routes as "the same physical trip" even
-// though they're served by differently-named/coded jeepney lines that happen
-// to run the same corridor (e.g. several lines all pass Dasma -> Trece).
 const ROUTE_GROUP_POINT_TOLERANCE_METERS = 220;
 const ROUTE_GROUP_DISTANCE_TOLERANCE_RATIO = 0.2;
 const ROUTE_GROUP_MIN_DISTANCE_TOLERANCE_KM = 0.4;
@@ -72,53 +62,34 @@ const approxMetersBetween = (
 
 const isSameItinerary = (a: MatchedRoute, b: MatchedRoute): boolean => {
   if (a.legs.length !== b.legs.length) return false;
-
   for (let i = 0; i < a.legs.length; i++) {
     const legA = a.legs[i];
     const legB = b.legs[i];
-    if (approxMetersBetween(legA.boardingPoint, legB.boardingPoint) > ROUTE_GROUP_POINT_TOLERANCE_METERS) {
-      return false;
-    }
-    if (approxMetersBetween(legA.alightingPoint, legB.alightingPoint) > ROUTE_GROUP_POINT_TOLERANCE_METERS) {
-      return false;
-    }
+    if (approxMetersBetween(legA.boardingPoint, legB.boardingPoint) > ROUTE_GROUP_POINT_TOLERANCE_METERS) return false;
+    if (approxMetersBetween(legA.alightingPoint, legB.alightingPoint) > ROUTE_GROUP_POINT_TOLERANCE_METERS) return false;
   }
-
   const distanceTolerance = Math.max(
     ROUTE_GROUP_MIN_DISTANCE_TOLERANCE_KM,
     a.distanceKm * ROUTE_GROUP_DISTANCE_TOLERANCE_RATIO,
   );
-  if (Math.abs(a.distanceKm - b.distanceKm) > distanceTolerance) return false;
-
-  return true;
+  return Math.abs(a.distanceKm - b.distanceKm) <= distanceTolerance;
 };
 
-// Collapses routes that cover the same physical path (same boarding/alighting
-// points per leg) but are served by differently-tagged jeepney lines into a
-// single group, so the UI can show one card with the alternates tucked away.
 const groupRoutesByItinerary = (routes: MatchedRoute[]): RouteGroup[] => {
   const groups: RouteGroup[] = [];
-
   for (const route of routes) {
-    const existing = groups.find((group) => isSameItinerary(group.primary, route));
-    if (existing) {
-      existing.alternates.push(route);
-    } else {
-      groups.push({ primary: route, alternates: [] });
-    }
+    const existing = groups.find((g) => isSameItinerary(g.primary, route));
+    if (existing) existing.alternates.push(route);
+    else groups.push({ primary: route, alternates: [] });
   }
-
   return groups;
 };
 
-const transferLabel = (count: number): string =>
-  count === 0 ? 'No transfer' : `${count} transfer${count === 1 ? '' : 's'}`;
-
 const totalFareForInsight = (route: MatchedRoute): number => {
-  const extensionFare = route.tricycleExtension
+  const ext = route.tricycleExtension
     ? Math.max(0, Math.round(route.tricycleExtension.estimatedFare || 0))
     : 0;
-  return Math.max(0, Math.round(route.estimatedFare)) + extensionFare;
+  return Math.max(0, Math.round(route.estimatedFare)) + ext;
 };
 
 const routeSignature = (route: MatchedRoute): string =>
@@ -132,37 +103,42 @@ const injectTransferTricycleGroupOption = (
   rankedGroups: RouteGroup[],
   limit: number,
 ): RouteGroup[] => {
-  if (rankedGroups.some((group) => hasTransferWithTricycleExtension(group.primary))) return rankedGroups;
-
+  if (rankedGroups.some((g) => hasTransferWithTricycleExtension(g.primary))) return rankedGroups;
   const candidate = [...allRoutes]
     .filter(hasTransferWithTricycleExtension)
-    .sort(
-      (a, b) =>
-        compareLeastTransfer(a, b) ||
-        compareFastest(a, b) ||
-        compareCheapest(a, b),
-    )[0];
-
+    .sort((a, b) => compareLeastTransfer(a, b) || compareFastest(a, b) || compareCheapest(a, b))[0];
   if (!candidate) return rankedGroups;
-
-  const candidateSig = routeSignature(candidate);
+  const sig = routeSignature(candidate);
   const alreadyPresent = rankedGroups.some(
-    (group) =>
-      routeSignature(group.primary) === candidateSig ||
-      group.alternates.some((alt) => routeSignature(alt) === candidateSig),
+    (g) => routeSignature(g.primary) === sig || g.alternates.some((alt) => routeSignature(alt) === sig),
   );
   if (alreadyPresent) return rankedGroups;
-
   const candidateGroup: RouteGroup = { primary: candidate, alternates: [] };
-
-  if (rankedGroups.length < limit) {
-    return [...rankedGroups, candidateGroup];
-  }
-
+  if (rankedGroups.length < limit) return [...rankedGroups, candidateGroup];
   const next = [...rankedGroups];
   next[next.length - 1] = candidateGroup;
   return next;
 };
+
+const transferLabel = (count: number): string =>
+  count === 0 ? 'No transfer' : `${count} transfer${count === 1 ? '' : 's'}`;
+
+// ─── Sort filter config ────────────────────────────────────────────────────────
+const SORT_FILTERS: { key: SortMode; label: string; icon: string }[] = [
+  { key: 'best',           label: 'Best',     icon: 'star'            },
+  { key: 'fastest',        label: 'Fastest',  icon: 'flash'           },
+  { key: 'least_transfer', label: 'Transfer', icon: 'swap-horizontal' },
+  { key: 'cheapest',       label: 'Cheapest', icon: 'cash'            },
+];
+
+const FILTER_COLORS: Record<SortMode, { active: string; text: string }> = {
+  best:           { active: '#E8A020', text: '#FFFFFF' },
+  fastest:        { active: '#3B82F6', text: '#FFFFFF' },
+  least_transfer: { active: '#8B5CF6', text: '#FFFFFF' },
+  cheapest:       { active: '#10B981', text: '#FFFFFF' },
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function RouteRecommenderPanel({
   visible,
   matchedRoutes,
@@ -173,60 +149,12 @@ export default function RouteRecommenderPanel({
   onStartJourney,
 }: Props) {
   const { theme, isDark } = useTheme();
+  const [sortMode, setSortMode] = useState<SortMode>(null);
   const [showInsight, setShowInsight] = useState(false);
 
-  const topRankedGroups = useMemo<RouteGroup[]>(() => {
-    if (matchedRoutes.length === 0) return [];
-
-    let rankedAll: MatchedRoute[];
-
-    if (matchedRoutes.length <= TOP_ROUTE_LIMIT) {
-      rankedAll = [...matchedRoutes].sort(compareLeastTransfer);
-    } else {
-      const indexed = matchedRoutes.map((route, index) => ({ route, index }));
-      const compositeScores = new Map<number, number>();
-
-      const applyRankScores = (
-        comparator: (a: MatchedRoute, b: MatchedRoute) => number,
-        weight: number,
-      ) => {
-        const ordered = [...indexed].sort((a, b) => comparator(a.route, b.route) || a.index - b.index);
-        ordered.forEach((item, rankIndex) => {
-          compositeScores.set(item.index, (compositeScores.get(item.index) || 0) + rankIndex * weight);
-        });
-      };
-
-      applyRankScores(compareLeastTransfer, 1);
-      applyRankScores(compareFastest, 1);
-      applyRankScores(compareCheapest, 1);
-
-      rankedAll = [...indexed]
-        .sort((a, b) => {
-          const scoreDiff = (compositeScores.get(a.index) || 0) - (compositeScores.get(b.index) || 0);
-          if (scoreDiff !== 0) return scoreDiff;
-
-          return (
-            compareLeastTransfer(a.route, b.route) ||
-            compareFastest(a.route, b.route) ||
-            compareCheapest(a.route, b.route) ||
-            a.index - b.index
-          );
-        })
-        .map((item) => item.route);
-    }
-
-    const topGroups = groupRoutesByItinerary(rankedAll).slice(0, TOP_ROUTE_LIMIT);
-    return injectTransferTricycleGroupOption(matchedRoutes, topGroups, TOP_ROUTE_LIMIT);
-  }, [matchedRoutes]);
-
-  const topRankedRoutes = useMemo(
-    () => topRankedGroups.map((group) => group.primary),
-    [topRankedGroups],
-  );
-
+  // ── Metric tags per option ──────────────────────────────────────────────
   const metricBaselines = useMemo(() => {
     if (matchedRoutes.length === 0) return null;
-
     return {
       fastestMinutes: Math.min(...matchedRoutes.map((route) => route.estimatedMinutes)),
       leastTransfers: Math.min(...matchedRoutes.map((route) => route.transferCount)),
@@ -237,7 +165,6 @@ export default function RouteRecommenderPanel({
   const getMetricTags = useCallback(
     (route: MatchedRoute): string[] => {
       if (!metricBaselines) return [];
-
       const tags: string[] = [];
       if (route.estimatedMinutes === metricBaselines.fastestMinutes) tags.push('Fastest');
       if (route.transferCount === metricBaselines.leastTransfers) tags.push('Least Transfer');
@@ -247,102 +174,104 @@ export default function RouteRecommenderPanel({
     [metricBaselines],
   );
 
+  // ── Best (composite) ranking ──────────────────────────────────────────────
+  const bestRankedGroups = useMemo<RouteGroup[]>(() => {
+    if (matchedRoutes.length === 0) return [];
+    let rankedAll: MatchedRoute[];
+
+    if (matchedRoutes.length <= TOP_ROUTE_LIMIT) {
+      rankedAll = [...matchedRoutes].sort(compareLeastTransfer);
+    } else {
+      const indexed = matchedRoutes.map((route, index) => ({ route, index }));
+      const scores = new Map<number, number>();
+      const applyRankScores = (cmp: (a: MatchedRoute, b: MatchedRoute) => number, w: number) => {
+        [...indexed].sort((a, b) => cmp(a.route, b.route) || a.index - b.index)
+          .forEach(({ index: idx }, rank) => scores.set(idx, (scores.get(idx) || 0) + rank * w));
+      };
+      applyRankScores(compareLeastTransfer, 1);
+      applyRankScores(compareFastest, 1);
+      applyRankScores(compareCheapest, 1);
+
+      rankedAll = [...indexed]
+        .sort((a, b) => {
+          const diff = (scores.get(a.index) || 0) - (scores.get(b.index) || 0);
+          if (diff !== 0) return diff;
+          return (
+            compareLeastTransfer(a.route, b.route) ||
+            compareFastest(a.route, b.route) ||
+            compareCheapest(a.route, b.route) ||
+            a.index - b.index
+          );
+        })
+        .map((i) => i.route);
+    }
+
+    const topGroups = groupRoutesByItinerary(rankedAll).slice(0, TOP_ROUTE_LIMIT);
+    return injectTransferTricycleGroupOption(matchedRoutes, topGroups, TOP_ROUTE_LIMIT);
+  }, [matchedRoutes]);
+
+  // ── Filtered/Sorted list based on active category button ──────────────────
+  const displayedGroups = useMemo<RouteGroup[]>(() => {
+    if (matchedRoutes.length === 0) return [];
+
+    // If no category is toggled (null), show all routes with best option first
+    if (sortMode === null) return bestRankedGroups;
+
+    let filtered: MatchedRoute[] = [];
+
+    if (sortMode === 'best') {
+      // Best category: must have 2 or 3 category tags
+      filtered = matchedRoutes.filter((r) => getMetricTags(r).length >= 2);
+    } else if (sortMode === 'fastest') {
+      filtered = matchedRoutes.filter((r) => getMetricTags(r).includes('Fastest'));
+      filtered.sort(compareFastest);
+    } else if (sortMode === 'least_transfer') {
+      filtered = matchedRoutes.filter((r) => getMetricTags(r).includes('Least Transfer'));
+      filtered.sort(compareLeastTransfer);
+    } else if (sortMode === 'cheapest') {
+      filtered = matchedRoutes.filter((r) => getMetricTags(r).includes('Cheapest'));
+      filtered.sort(compareCheapest);
+    }
+
+    // If category has no routes, fallback to best option
+    if (filtered.length === 0) {
+      return bestRankedGroups;
+    }
+
+    return groupRoutesByItinerary(filtered).slice(0, TOP_ROUTE_LIMIT);
+  }, [sortMode, matchedRoutes, bestRankedGroups, getMetricTags]);
+
+  // ── Insight text ─────────────────────────────────────────────────────────
+  const topRankedRoutes = useMemo(() => bestRankedGroups.map((g) => g.primary), [bestRankedGroups]);
+
   const routeInsightText = useMemo(() => {
     if (topRankedRoutes.length === 0) return null;
-
-    const recommendedRoute = topRankedRoutes[0];
-    const recommendedIndex = 1;
-    const fastestMinutes = Math.min(...topRankedRoutes.map((route) => route.estimatedMinutes));
+    const rec = topRankedRoutes[0];
+    const fastestMin = Math.min(...topRankedRoutes.map((r) => r.estimatedMinutes));
     const cheapestFare = Math.min(...topRankedRoutes.map(totalFareForInsight));
-    const leastTransfers = Math.min(...topRankedRoutes.map((route) => route.transferCount));
-    const recommendedFare = totalFareForInsight(recommendedRoute);
-    const transferText = transferLabel(recommendedRoute.transferCount).toLowerCase();
-
-    const recommendedTags: string[] = [];
-    if (recommendedRoute.estimatedMinutes === fastestMinutes) recommendedTags.push('fastest');
-    if (recommendedFare === cheapestFare) recommendedTags.push('cheapest');
-    if (recommendedRoute.transferCount === leastTransfers) recommendedTags.push('least transfers');
-
+    const leastXfers = Math.min(...topRankedRoutes.map((r) => r.transferCount));
+    const recFare = totalFareForInsight(rec);
+    const tags: string[] = [];
+    if (rec.estimatedMinutes === fastestMin) tags.push('fastest');
+    if (recFare === cheapestFare) tags.push('cheapest');
+    if (rec.transferCount === leastXfers) tags.push('least transfers');
     const reasonText =
-      recommendedTags.length === 0
-        ? 'balanced time, fare, and transfers'
-        : recommendedTags.length === 1
-        ? `${recommendedTags[0]} profile`
-        : recommendedTags.length === 2
-        ? `${recommendedTags[0]} and ${recommendedTags[1]} profile`
-        : 'fastest, cheapest, and least-transfer profile';
-
+      tags.length === 0 ? 'balanced time, fare, and transfers' :
+      tags.length === 1 ? `${tags[0]} profile` :
+      tags.length === 2 ? `${tags[0]} and ${tags[1]} profile` :
+      'fastest, cheapest, and least-transfer profile';
     if (topRankedRoutes.length === 1) {
-      return `Most recommended route (Option ${recommendedIndex}) has a ${reasonText}: ~${recommendedRoute.estimatedMinutes} min, ${recommendedRoute.distanceKm.toFixed(1)} km, around ₱${recommendedFare}, and ${transferText}.`;
+      return `Option 1 has a ${reasonText}: ~${rec.estimatedMinutes} min, ${rec.distanceKm.toFixed(1)} km, ₱${recFare}, ${transferLabel(rec.transferCount).toLowerCase()}.`;
     }
-
-    return `Across ${topRankedRoutes.length} suggested routes, Option ${recommendedIndex} is the most recommended with a ${reasonText}: ~${recommendedRoute.estimatedMinutes} min, ${recommendedRoute.distanceKm.toFixed(1)} km, around ₱${recommendedFare}, and ${transferText}. Fastest in this list is ~${fastestMinutes} min, cheapest is around ₱${cheapestFare}, and the least-transfer option has ${transferLabel(leastTransfers).toLowerCase()}.`;
+    return `Option 1 is recommended with a ${reasonText}: ~${rec.estimatedMinutes} min, ${rec.distanceKm.toFixed(1)} km, ₱${recFare}, ${transferLabel(rec.transferCount).toLowerCase()}. Fastest ~${fastestMin} min · Cheapest ₱${cheapestFare} · ${transferLabel(leastXfers)}.`;
   }, [topRankedRoutes]);
 
-  const insightHeader = useMemo(() => {
-    if (!routeInsightText) return null;
 
-    if (!showInsight) {
-      return (
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => setShowInsight(true)}
-          style={[
-            styles.insightButton,
-            {
-              backgroundColor: isDark ? 'rgba(245,197,24,0.14)' : '#FFF6CC',
-              borderColor: '#E8A020',
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.insightIconWrap,
-              {
-                backgroundColor: isDark ? 'rgba(232,160,32,0.24)' : 'rgba(232,160,32,0.18)',
-              },
-            ]}
-          >
-            <Ionicons name="bulb-outline" size={16} color={isDark ? '#FFD970' : '#9A6B00'} />
-          </View>
-          <Text style={[styles.insightButtonText, { color: isDark ? '#FFE8A3' : '#6D4C00' }]}>Insights</Text>
-        </TouchableOpacity>
-      );
-    }
-
-    return (
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => setShowInsight(false)}
-        style={[
-          styles.insightCard,
-          {
-            backgroundColor: isDark ? 'rgba(245,197,24,0.14)' : '#FFF6CC',
-            borderColor: '#E8A020',
-          },
-        ]}
-      >
-        <View
-          style={[
-            styles.insightIconWrap,
-            {
-              backgroundColor: isDark ? 'rgba(232,160,32,0.24)' : 'rgba(232,160,32,0.18)',
-            },
-          ]}
-        >
-          <Ionicons name="bulb-outline" size={16} color={isDark ? '#FFD970' : '#9A6B00'} />
-        </View>
-        <Text style={[styles.insightText, { color: isDark ? '#FFE8A3' : '#6D4C00' }]}>{routeInsightText}</Text>
-        <Ionicons name="close" size={16} color={isDark ? '#FFE8A3' : '#6D4C00'} />
-      </TouchableOpacity>
-    );
-  }, [routeInsightText, isDark, showInsight]);
-
+  // ── Render helpers ───────────────────────────────────────────────────────
   const renderRouteCard = useCallback(
-    ({ item }: { item: RouteGroup; index: number }) => {
+    ({ item }: { item: RouteGroup }) => {
       const matched = item.primary;
       const id = routeId(matched);
-
       return (
         <RouteResultCard
           matched={matched}
@@ -359,10 +288,7 @@ export default function RouteRecommenderPanel({
     [selectedRoute, setSelectedRoute, onStartJourney, getMetricTags],
   );
 
-  const keyExtractor = useCallback(
-    (item: RouteGroup) => routeId(item.primary),
-    [],
-  );
+  const keyExtractor = useCallback((item: RouteGroup) => routeId(item.primary), []);
 
   const emptyList = useMemo(
     () => (
@@ -376,24 +302,124 @@ export default function RouteRecommenderPanel({
         ]}
       >
         <Ionicons name="bus-outline" size={36} color={theme.textSecondary} />
-        <Text style={[styles.emptyResultTitle, { color: theme.text }]}>No {routeTypeLabel || 'transit'} routes found</Text>
-        <Text style={[styles.emptyResultText, { color: theme.textSecondary }]}>No {routeTypeLabel ? routeTypeLabel.toLowerCase() : 'transit'} routes pass near both your location and this destination.</Text>
+        <Text style={[styles.emptyResultTitle, { color: theme.text }]}>
+          No {routeTypeLabel || 'transit'} routes found
+        </Text>
+        <Text style={[styles.emptyResultText, { color: theme.textSecondary }]}>
+          No {routeTypeLabel ? routeTypeLabel.toLowerCase() : 'transit'} routes pass near both your location and this destination.
+        </Text>
       </View>
     ),
     [isDark, theme.textSecondary, theme.text, routeTypeLabel],
   );
 
+  // ── Header: sort bar + optional insight card ──────────────────────────────
+  const listHeader = useMemo(() => (
+    <View style={styles.headerWrap}>
+
+      {/* Sort filter row — all 4 buttons, full width, no scroll */}
+      <View style={styles.filterRow}>
+        {SORT_FILTERS.map(({ key, label, icon }) => {
+          const isActive = sortMode === key;
+          const colors = FILTER_COLORS[key];
+          const inactiveText = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(10,22,40,0.45)';
+          return (
+            <TouchableOpacity
+              key={key}
+              activeOpacity={0.75}
+              onPress={() => setSortMode((prev) => (prev === key ? null : key))}
+              style={[
+                styles.filterBtn,
+                {
+                  backgroundColor: isActive
+                    ? colors.active
+                    : isDark ? 'rgba(255,255,255,0.07)' : 'rgba(10,22,40,0.06)',
+                  borderColor: isActive ? colors.active : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(10,22,40,0.1)',
+                  shadowColor: isActive ? colors.active : 'transparent',
+                  shadowOpacity: isActive ? 0.45 : 0,
+                  shadowRadius: isActive ? 8 : 0,
+                  shadowOffset: { width: 0, height: 2 },
+                  elevation: isActive ? 5 : 0,
+                },
+              ]}
+            >
+              <Ionicons
+                name={icon as any}
+                size={12}
+                color={isActive ? colors.text : inactiveText}
+              />
+              <Text
+                style={[
+                  styles.filterBtnText,
+                  {
+                    color: isActive ? colors.text : inactiveText,
+                    fontWeight: isActive ? '800' : '600',
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Insights */}
+      {routeInsightText ? (
+        showInsight ? (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => setShowInsight(false)}
+            style={[
+              styles.insightCard,
+              {
+                backgroundColor: isDark ? 'rgba(245,197,24,0.12)' : '#FFF6CC',
+                borderColor: '#E8A020',
+              },
+            ]}
+          >
+            <View style={[styles.insightIconWrap, { backgroundColor: isDark ? 'rgba(232,160,32,0.24)' : 'rgba(232,160,32,0.18)' }]}>
+              <Ionicons name="bulb-outline" size={15} color={isDark ? '#FFD970' : '#9A6B00'} />
+            </View>
+            <Text style={[styles.insightText, { color: isDark ? '#FFE8A3' : '#6D4C00' }]}>
+              {routeInsightText}
+            </Text>
+            <Ionicons name="close" size={15} color={isDark ? '#FFE8A3' : '#9A6B00'} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={() => setShowInsight(true)}
+            style={[
+              styles.insightButton,
+              {
+                backgroundColor: isDark ? 'rgba(245,197,24,0.12)' : '#FFF6CC',
+                borderColor: '#E8A020',
+              },
+            ]}
+          >
+            <View style={[styles.insightIconWrap, { backgroundColor: isDark ? 'rgba(232,160,32,0.24)' : 'rgba(232,160,32,0.18)' }]}>
+              <Ionicons name="bulb-outline" size={15} color={isDark ? '#FFD970' : '#9A6B00'} />
+            </View>
+            <Text style={[styles.insightButtonText, { color: isDark ? '#FFE8A3' : '#6D4C00' }]}>
+              Insights
+            </Text>
+            <Ionicons name="chevron-down-outline" size={13} color={isDark ? '#FFE8A3' : '#9A6B00'} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
+        )
+      ) : null}
+
+    </View>
+  ), [sortMode, isDark, showInsight, routeInsightText]);
+
   return (
-    <BottomSheet
-      visible={visible}
-      onClose={onClose}
-      title="ROUTES"
-    >
+    <BottomSheet visible={visible} onClose={onClose} title="ROUTES">
       <FlatList
-        data={topRankedGroups}
+        data={displayedGroups}
         keyExtractor={keyExtractor}
         renderItem={renderRouteCard}
-        ListHeaderComponent={insightHeader}
+        ListHeaderComponent={listHeader}
         showsVerticalScrollIndicator={false}
         bounces={false}
         contentContainerStyle={styles.sheetContent}
@@ -410,44 +436,70 @@ export default function RouteRecommenderPanel({
 
 const styles = StyleSheet.create({
   sheetContent: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 350 // Reduced to standard padding
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 350,
+  },
+  // ── Header ──────────────────────────────────────────────────────────────
+  headerWrap: {
+    gap: 10,
+    marginBottom: 14,
+  },
+  // ── Filter row ──────────────────────────────────────────────────────────
+  filterRow: {
+    flexDirection: 'row',
+    gap: 7,
+  },
+  filterBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    minWidth: 0,
+  },
+  filterBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    letterSpacing: 0.1,
+    flexShrink: 1,
+  },
+  // ── Insight ─────────────────────────────────────────────────────────────
+  insightButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   insightCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    borderWidth: 2,
-    borderRadius: 12,
+    gap: 9,
+    borderWidth: 1.5,
+    borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 12,
-  },
-  insightButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 8,
-    borderWidth: 2,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: 12,
-  },
-  insightButtonText: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 12,
-    fontWeight: '700',
   },
   insightIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1,
     flexShrink: 0,
+    marginTop: 1,
+  },
+  insightButtonText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '700',
   },
   insightText: {
     flex: 1,
@@ -456,25 +508,22 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '600',
   },
+  // ── Empty state ─────────────────────────────────────────────────────────
   emptyResultCard: {
     alignItems: 'center',
     padding: 32,
-    backgroundColor: 'rgba(10,22,40,0.02)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(10,22,40,0.05)',
   },
   emptyResultTitle: {
     fontFamily: 'Inter-SemiBold',
     fontSize: TYPOGRAPHY.body,
-    color: COLORS.navy,
     marginTop: 12,
     marginBottom: 8,
   },
   emptyResultText: {
     fontFamily: 'Inter',
     fontSize: TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
     textAlign: 'center',
     lineHeight: 20,
   },

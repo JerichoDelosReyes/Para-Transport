@@ -21,7 +21,7 @@ import { fuzzyFilter } from '../utils/fuzzySearch';
 import { useRecentSearches, RecentSearch } from '../hooks/useRecentSearches';
 import { useStore } from '../store/useStore';
 import LOCAL_PLACES from '../data/local_places';
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
+import { SafeSpeechRecognitionModule, useSafeSpeechRecognitionEvent, isSpeechRecognitionAvailable } from "../utils/speechRecognition";
 
 const GEOCODING_BASE_URL =
   process.env.EXPO_PUBLIC_GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
@@ -262,7 +262,7 @@ export default function SearchScreen({
     };
   }, [activeQuery, activeField, recents, fetchGeocodingPlaces, mergeUniquePlaces]);
 
-  useSpeechRecognitionEvent("result", (event) => {
+  useSafeSpeechRecognitionEvent("result", (event) => {
     if (event.results && event.results.length > 0) {
       if (activeField === 'origin') {
         setOriginText(event.results[0].transcript);
@@ -272,12 +272,12 @@ export default function SearchScreen({
     }
   });
 
-  useSpeechRecognitionEvent("end", () => {
+  useSafeSpeechRecognitionEvent("end", () => {
     setIsRecordingOrigin(false);
     setIsRecordingDestination(false);
   });
 
-  useSpeechRecognitionEvent("error", () => {
+  useSafeSpeechRecognitionEvent("error", () => {
     setIsRecordingOrigin(false);
     setIsRecordingDestination(false);
   });
@@ -285,22 +285,27 @@ export default function SearchScreen({
   const startRecording = async (field: 'origin' | 'destination') => {
     const setRecording = field === 'origin' ? setIsRecordingOrigin : setIsRecordingDestination;
     const isRecordingThisField = field === 'origin' ? isRecordingOrigin : isRecordingDestination;
+
+    if (!isSpeechRecognitionAvailable) {
+      Alert.alert("Not Available", "Voice search requires a development build.");
+      return;
+    }
     
     try {
       if (isRecordingThisField) {
-        await ExpoSpeechRecognitionModule.stop();
+        await SafeSpeechRecognitionModule.stop();
         setRecording(false);
         return;
       }
 
-      const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      const { granted } = await SafeSpeechRecognitionModule.requestPermissionsAsync();
       if (!granted) {
         Alert.alert("Permission Required", "Speech recognition requires microphone permissions.");
         return;
       }
 
       setRecording(true);
-      await ExpoSpeechRecognitionModule.start({
+      await SafeSpeechRecognitionModule.start({
         lang: "en-US",
         interimResults: true,
         requiresOnDeviceRecognition: false,

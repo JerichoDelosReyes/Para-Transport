@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { supabase } from '../config/supabaseClient';
 import { BadgeData } from '../types/badges';
+import { triggerBadgeMint } from '../services/blockchainService';
 
 export type FareDiscountType = 'regular' | 'student' | 'senior' | 'pwd';
 
@@ -248,10 +249,13 @@ export const useStore = create<StoreState>()(
 
         const newBadges = [...(newUser.badges || [])];
         let nextBadgeToShow = state.unlockedBadgeToShow;
+        // Track which badge ids are newly unlocked this trip for on-chain minting
+        const newlyUnlocked: string[] = [];
 
         const tryUnlock = (badgeId: string) => {
            if (!newBadges.includes(badgeId)) {
                newBadges.push(badgeId);
+               newlyUnlocked.push(badgeId);
                if (!nextBadgeToShow) nextBadgeToShow = badgeId;
            }
         };
@@ -266,7 +270,8 @@ export const useStore = create<StoreState>()(
         }
 
         if (state.sessionMode === 'auth' && state.user.id) {
-          // optionally sync to supabase
+          const userId = state.user.id;
+          // Sync trip stats to Supabase
           supabase
             .from('users')
             .update({
@@ -278,10 +283,28 @@ export const useStore = create<StoreState>()(
               total_fare: newUser.spent,
               points_history: newUser.points_history,
             })
-            .eq('id', state.user.id)
+            .eq('id', userId)
             .then(({ error }) => {
               if (error && error.code !== 'PGRST204') console.log('Failed to sync trip stats to Supabase:', error.message);
             });
+
+          // Fire on-chain mint for each newly unlocked badge (non-blocking)
+          if (newlyUnlocked.length > 0) {
+            supabase
+              .from('badges')
+              .select('id, token_id, is_onchain')
+              .in('id', newlyUnlocked)
+              .eq('is_onchain', true)
+              .then(({ data: onChainBadges }) => {
+                if (onChainBadges) {
+                  onChainBadges.forEach((b) => {
+                    if (b.token_id != null) {
+                      triggerBadgeMint(userId, b.id, b.token_id);
+                    }
+                  });
+                }
+              });
+          }
         }
 
         return { user: newUser, unlockedBadgeToShow: nextBadgeToShow };
@@ -428,12 +451,26 @@ export const useStore = create<StoreState>()(
           
           // update supabase if authenticated
           if (state.sessionMode === 'auth' && state.user.id) {
+            const userId = state.user.id;
             supabase
               .from('users')
               .update({ badges: newBadges })
-              .eq('id', state.user.id)
+              .eq('id', userId)
               .then(({ error }) => {
                 if (error && error.code !== 'PGRST204') console.log('Failed to array-sync badge to Supabase:', error.message);
+              });
+
+            // Fire on-chain mint if this badge is configured as on-chain (non-blocking)
+            supabase
+              .from('badges')
+              .select('id, token_id, is_onchain')
+              .eq('id', badgeId)
+              .eq('is_onchain', true)
+              .single()
+              .then(({ data: badge }) => {
+                if (badge && badge.token_id != null) {
+                  triggerBadgeMint(userId, badge.id, badge.token_id);
+                }
               });
           }
           

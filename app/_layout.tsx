@@ -15,6 +15,7 @@ import { GlobalOfflineBanner } from '../components/GlobalOfflineBanner';
 import { GlobalBannedModal } from '../components/GlobalBannedModal';
 import { supabase } from '../config/supabaseClient';
 import { useStore } from '../store/useStore';
+import { provisionWallet } from '../services/blockchainService';
 
 // Ignore MapLibre network errors as we have our own network connectivity indicator
 LogBox.ignoreLogs([
@@ -233,6 +234,10 @@ function RootContent({ showAnimatedSplash, setShowAnimatedSplash }: { showAnimat
           clearSession();
           router.replace('/');
         }
+      }
+      // Provision a thirdweb in-app wallet on first login (idempotent — skips if already set)
+      if (event === 'SIGNED_IN' && session) {
+        provisionWallet();
       }
     });
 

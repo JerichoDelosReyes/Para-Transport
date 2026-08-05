@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, ActivityIndicator, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
 import { useStore } from '../store/useStore';
 import { supabase } from '../config/supabaseClient';
 import { useTheme } from '../src/theme/ThemeContext';
+import { fetchConfirmedMints, type BadgeMint } from '../services/blockchainService';
 
 import { BADGE_IMAGES } from '../constants/badgeImages';
 
@@ -21,6 +22,8 @@ export default function AchievementsScreen() {
   const [leaderboard, setLeaderboard] = React.useState<any[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = React.useState(true);
   const [currentUserRank, setCurrentUserRank] = React.useState<number | null>(null);
+  // On-chain confirmed mints: badge_id → BadgeMint
+  const [confirmedMints, setConfirmedMints] = React.useState<Record<string, BadgeMint>>({});
 
   React.useEffect(() => {
     const fetchLeaderboard = async () => {
@@ -64,6 +67,12 @@ export default function AchievementsScreen() {
       supabase.removeChannel(channel);
     };
   }, [user]);
+
+  // Load confirmed on-chain mints for the current user
+  React.useEffect(() => {
+    if (!user?.id || user.email === 'guest@para.ph') return;
+    fetchConfirmedMints(user.id).then(setConfirmedMints);
+  }, [user?.id]);
 
   const getProgress = (badge: any) => {
     return Number((user as any)[badge.condition_type]) || 0;
@@ -241,6 +250,20 @@ export default function AchievementsScreen() {
                   <View style={[styles.progressContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(10,22,40,0.1)' }]}>
                     <View style={[styles.progressBar, { width: fillWidth as any }]} />
                   </View>
+
+                  {/* On-chain verified pill — only shown for confirmed mints */}
+                  {isEarned && confirmedMints[badge.id] && (
+                    <TouchableOpacity
+                      style={styles.onchainPill}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        const url = confirmedMints[badge.id].explorer_url;
+                        if (url) Linking.openURL(url);
+                      }}
+                    >
+                      <Text style={styles.onchainPillText}>⛓ Verified on-chain ↗</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })}
@@ -487,5 +510,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: 'rgba(0,0,0,0.05)',
-  }
+  },
+  onchainPill: {
+    marginTop: 8,
+    backgroundColor: 'rgba(99, 102, 241, 0.10)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.25)',
+  },
+  onchainPillText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#6366F1',
+    textAlign: 'center',
+  },
 });

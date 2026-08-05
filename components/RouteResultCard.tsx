@@ -45,6 +45,14 @@ const getVehicleIcon = (route: JeepneyRoute) => {
   return require('../assets/icons/jeepney-icon.png');
 };
 
+const getVehicleTypeLabel = (route: JeepneyRoute): string => {
+  const type = (route.properties.type || '').toLowerCase();
+  if (type.includes('bus')) return 'Bus';
+  if (type.includes('modern')) return 'Modern Jeep';
+  if (type.includes('uv') || type.includes('van')) return 'UV Express';
+  return 'Jeep';
+};
+
 const legDestinationLabel = (route: JeepneyRoute): string => {
   const props = route.properties;
   if (props.toLabel && props.toLabel.trim()) return props.toLabel.trim();
@@ -121,19 +129,26 @@ export default function RouteResultCard({ matched, isSelected, onPress, metricTa
 
       {/* Routes Row */}
       <View style={styles.routeLegsRow}>
-        {legs.map((leg, i) => (
-          <React.Fragment key={leg.route.properties.code}>
-            {i > 0 && (
-              <View style={styles.walkIconWrap}>
-                <Ionicons name="walk-outline" size={13} color={isDark ? '#FFFFFF' : COLORS.navy} />
+        {legs.map((leg, i) => {
+          const vType = getVehicleTypeLabel(leg.route);
+          const dest = legDestinationLabel(leg.route);
+          const label = dest.toLowerCase().startsWith(vType.toLowerCase()) ? dest : `${vType} ${dest}`;
+
+          return (
+            <React.Fragment key={leg.route.properties.code}>
+              {i > 0 && (
+                <View style={[styles.walkBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(10,22,40,0.08)' }]}>
+                  <Ionicons name="walk-outline" size={12} color={isDark ? '#E0E0E0' : COLORS.navy} />
+                  <Text style={[styles.walkBadgeText, { color: isDark ? '#E0E0E0' : COLORS.navy }]}>Walk</Text>
+                </View>
+              )}
+              <View style={[styles.codeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
+                <Image source={getVehicleIcon(leg.route)} style={styles.jeepneyIcon} resizeMode="contain" />
+                <Text style={styles.codeText}>{label}</Text>
               </View>
-            )}
-            <View style={[styles.codeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
-              <Image source={getVehicleIcon(leg.route)} style={styles.jeepneyIcon} resizeMode="contain" />
-              <Text style={styles.codeText}>{legDestinationLabel(leg.route)}</Text>
-            </View>
-          </React.Fragment>
-        ))}
+            </React.Fragment>
+          );
+        })}
         {isTransfer && (
           <View style={styles.transferBadge}>
             <Ionicons name="swap-horizontal" size={11} color="#FF9800" />
@@ -170,19 +185,26 @@ export default function RouteResultCard({ matched, isSelected, onPress, metricTa
           </Text>
           {alternates.map((alt) => (
             <View key={alt.legs.map((leg) => leg.route.properties.code).join('+')} style={styles.alternateRow}>
-              {alt.legs.map((leg, i) => (
-                <React.Fragment key={leg.route.properties.code}>
-                  {i > 0 && (
-                    <View style={styles.walkIconWrap}>
-                      <Ionicons name="walk-outline" size={12} color={isDark ? '#FFFFFF' : COLORS.navy} />
+              {alt.legs.map((leg, i) => {
+                const vType = getVehicleTypeLabel(leg.route);
+                const dest = legDestinationLabel(leg.route);
+                const label = dest.toLowerCase().startsWith(vType.toLowerCase()) ? dest : `${vType} ${dest}`;
+
+                return (
+                  <React.Fragment key={leg.route.properties.code}>
+                    {i > 0 && (
+                      <View style={[styles.walkBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(10,22,40,0.08)' }]}>
+                        <Ionicons name="walk-outline" size={11} color={isDark ? '#E0E0E0' : COLORS.navy} />
+                        <Text style={[styles.walkBadgeText, { color: isDark ? '#E0E0E0' : COLORS.navy, fontSize: 10 }]}>Walk</Text>
+                      </View>
+                    )}
+                    <View style={[styles.codeBadge, styles.altCodeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
+                      <Image source={getVehicleIcon(leg.route)} style={styles.jeepneyIcon} resizeMode="contain" />
+                      <Text style={styles.codeText}>{label}</Text>
                     </View>
-                  )}
-                  <View style={[styles.codeBadge, styles.altCodeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
-                    <Image source={getVehicleIcon(leg.route)} style={styles.jeepneyIcon} resizeMode="contain" />
-                    <Text style={styles.codeText}>{legDestinationLabel(leg.route)}</Text>
-                  </View>
-                </React.Fragment>
-              ))}
+                  </React.Fragment>
+                );
+              })}
             </View>
           ))}
         </View>
@@ -358,6 +380,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(128,128,128,0.22)',
+  },
+  walkBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  walkBadgeText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
   },
   moreButton: {
     width: 24,
