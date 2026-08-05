@@ -39,6 +39,12 @@ const humanizeCode = (code: string): string => {
     .join(' ');
 };
 
+const getVehicleIcon = (route: JeepneyRoute) => {
+  const type = (route.properties.type || '').toLowerCase();
+  if (type.includes('bus')) return require('../assets/icons/bus-icon.png');
+  return require('../assets/icons/jeepney-icon.png');
+};
+
 const legDestinationLabel = (route: JeepneyRoute): string => {
   const props = route.properties;
   if (props.toLabel && props.toLabel.trim()) return props.toLabel.trim();
@@ -123,7 +129,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, metricTa
               </View>
             )}
             <View style={[styles.codeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
-              <Image source={require('../assets/icons/jeepney-icon.png')} style={styles.jeepneyIcon} resizeMode="contain" />
+              <Image source={getVehicleIcon(leg.route)} style={styles.jeepneyIcon} resizeMode="contain" />
               <Text style={styles.codeText}>{legDestinationLabel(leg.route)}</Text>
             </View>
           </React.Fragment>
@@ -172,7 +178,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, metricTa
                     </View>
                   )}
                   <View style={[styles.codeBadge, styles.altCodeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
-                    <Image source={require('../assets/icons/jeepney-icon.png')} style={styles.jeepneyIcon} resizeMode="contain" />
+                    <Image source={getVehicleIcon(leg.route)} style={styles.jeepneyIcon} resizeMode="contain" />
                     <Text style={styles.codeText}>{legDestinationLabel(leg.route)}</Text>
                   </View>
                 </React.Fragment>
