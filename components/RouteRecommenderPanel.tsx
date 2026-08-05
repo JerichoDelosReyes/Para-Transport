@@ -18,10 +18,6 @@ type Props = {
   onStartJourney?: (id: string) => void;
 };
 
-type SortMode = 'best' | 'fastest' | 'least_transfer' | 'cheapest' | null;
-
-const TOP_ROUTE_LIMIT = 5;
-
 const compareLeastTransfer = (a: MatchedRoute, b: MatchedRoute): number =>
   a.transferCount - b.transferCount ||
   a.estimatedMinutes - b.estimatedMinutes ||
@@ -123,15 +119,20 @@ const injectTransferTricycleGroupOption = (
 const transferLabel = (count: number): string =>
   count === 0 ? 'No transfer' : `${count} transfer${count === 1 ? '' : 's'}`;
 
+type SortCategory = 'best' | 'fastest' | 'least_transfer' | 'cheapest';
+type SortMode = SortCategory | null;
+
+const TOP_ROUTE_LIMIT = 5;
+
 // ─── Sort filter config ────────────────────────────────────────────────────────
-const SORT_FILTERS: { key: SortMode; label: string; icon: string }[] = [
+const SORT_FILTERS: { key: SortCategory; label: string; icon: string }[] = [
   { key: 'best',           label: 'Best',     icon: 'star'            },
   { key: 'fastest',        label: 'Fastest',  icon: 'flash'           },
   { key: 'least_transfer', label: 'Transfer', icon: 'swap-horizontal' },
   { key: 'cheapest',       label: 'Cheapest', icon: 'cash'            },
 ];
 
-const FILTER_COLORS: Record<SortMode, { active: string; text: string }> = {
+const FILTER_COLORS: Record<SortCategory, { active: string; text: string }> = {
   best:           { active: '#E8A020', text: '#FFFFFF' },
   fastest:        { active: '#3B82F6', text: '#FFFFFF' },
   least_transfer: { active: '#8B5CF6', text: '#FFFFFF' },
@@ -144,6 +145,7 @@ export default function RouteRecommenderPanel({
   matchedRoutes,
   selectedRoute,
   setSelectedRoute,
+  destinationName,
   onClose,
   routeTypeLabel,
   onStartJourney,
@@ -177,38 +179,17 @@ export default function RouteRecommenderPanel({
   // ── Best (composite) ranking ──────────────────────────────────────────────
   const bestRankedGroups = useMemo<RouteGroup[]>(() => {
     if (matchedRoutes.length === 0) return [];
-    let rankedAll: MatchedRoute[];
 
-    if (matchedRoutes.length <= TOP_ROUTE_LIMIT) {
-      rankedAll = [...matchedRoutes].sort(compareLeastTransfer);
-    } else {
-      const indexed = matchedRoutes.map((route, index) => ({ route, index }));
-      const scores = new Map<number, number>();
-      const applyRankScores = (cmp: (a: MatchedRoute, b: MatchedRoute) => number, w: number) => {
-        [...indexed].sort((a, b) => cmp(a.route, b.route) || a.index - b.index)
-          .forEach(({ index: idx }, rank) => scores.set(idx, (scores.get(idx) || 0) + rank * w));
-      };
-      applyRankScores(compareLeastTransfer, 1);
-      applyRankScores(compareFastest, 1);
-      applyRankScores(compareCheapest, 1);
-
-      rankedAll = [...indexed]
-        .sort((a, b) => {
-          const diff = (scores.get(a.index) || 0) - (scores.get(b.index) || 0);
-          if (diff !== 0) return diff;
-          return (
-            compareLeastTransfer(a.route, b.route) ||
-            compareFastest(a.route, b.route) ||
-            compareCheapest(a.route, b.route) ||
-            a.index - b.index
-          );
-        })
-        .map((i) => i.route);
-    }
+    // Prioritize routes with the highest number of metric tags (3 tags first: Fastest + Least Transfer + Cheapest)
+    const rankedAll = [...matchedRoutes].sort((a, b) => {
+      const tagsDiff = getMetricTags(b).length - getMetricTags(a).length;
+      if (tagsDiff !== 0) return tagsDiff;
+      return compareLeastTransfer(a, b) || compareFastest(a, b) || compareCheapest(a, b);
+    });
 
     const topGroups = groupRoutesByItinerary(rankedAll).slice(0, TOP_ROUTE_LIMIT);
     return injectTransferTricycleGroupOption(matchedRoutes, topGroups, TOP_ROUTE_LIMIT);
-  }, [matchedRoutes]);
+  }, [matchedRoutes, getMetricTags]);
 
   // ── Filtered/Sorted list based on active category button ──────────────────
   const displayedGroups = useMemo<RouteGroup[]>(() => {
@@ -220,8 +201,14 @@ export default function RouteRecommenderPanel({
     let filtered: MatchedRoute[] = [];
 
     if (sortMode === 'best') {
-      // Best category: must have 2 or 3 category tags
-      filtered = matchedRoutes.filter((r) => getMetricTags(r).length >= 2);
+      // Best category: prioritize 3-tag routes over 2-tag routes
+      filtered = matchedRoutes
+        .filter((r) => getMetricTags(r).length >= 2)
+        .sort((a, b) => {
+          const tagsDiff = getMetricTags(b).length - getMetricTags(a).length;
+          if (tagsDiff !== 0) return tagsDiff;
+          return compareLeastTransfer(a, b) || compareFastest(a, b) || compareCheapest(a, b);
+        });
     } else if (sortMode === 'fastest') {
       filtered = matchedRoutes.filter((r) => getMetricTags(r).includes('Fastest'));
       filtered.sort(compareFastest);
@@ -278,6 +265,7 @@ export default function RouteRecommenderPanel({
           alternates={item.alternates}
           isSelected={selectedRoute === id}
           metricTags={getMetricTags(matched)}
+          destinationName={destinationName}
           onPress={(pressedId: string) => {
             setSelectedRoute(selectedRoute === pressedId ? null : pressedId);
           }}
@@ -285,7 +273,7 @@ export default function RouteRecommenderPanel({
         />
       );
     },
-    [selectedRoute, setSelectedRoute, onStartJourney, getMetricTags],
+    [selectedRoute, setSelectedRoute, onStartJourney, getMetricTags, destinationName],
   );
 
   const keyExtractor = useCallback((item: RouteGroup) => routeId(item.primary), []);

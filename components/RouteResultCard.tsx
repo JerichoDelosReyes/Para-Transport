@@ -14,6 +14,7 @@ type Props = {
   metricTags?: string[];
   /** Other matched routes covering the same physical path (same stops), served by differently-tagged jeepneys. */
   alternates?: MatchedRoute[];
+  destinationName?: string;
 };
 
 const TAG_COLORS: Record<string, { backgroundColor: string; textColor: string }> = {
@@ -22,13 +23,8 @@ const TAG_COLORS: Record<string, { backgroundColor: string; textColor: string }>
   Cheapest: { backgroundColor: 'rgba(16,185,129,0.14)', textColor: '#10B981' },
 };
 
-// Jeepney line names are stored as "Origin -> Destination" (e.g. "Jeepney: Dasmarinas -> PITX").
-// Riders mainly need to know where a leg drops them off, so show just the destination on the chip.
 const ARROW_PATTERN = /-{1,2}>|→/;
 
-// Some routes have no display name at all, so we fall back to their raw machine code
-// (e.g. "JEEPNEY-ROUTE-SM-MOLINO"). Strip the redundant "jeepney-route" prefix (we already
-// show a jeepney icon) and turn the remaining hyphens into a readable title-cased name.
 const humanizeCode = (code: string): string => {
   const withoutPrefix = code.replace(/^jeepney[-_\s]*route[-_\s]*/i, '').trim();
   const base = withoutPrefix || code;
@@ -68,21 +64,99 @@ const legDestinationLabel = (route: JeepneyRoute): string => {
   return humanizeCode((props.code || '').trim());
 };
 
-export default function RouteResultCard({ matched, isSelected, onPress, metricTags = [], onPressStartJourney, alternates = [] }: Props) {
+type TimelineStep = {
+  key: string;
+  type: 'transit' | 'walk' | 'tricycle' | 'destination';
+  title: string;
+  subtitle: string;
+  iconType: 'bus' | 'jeep' | 'walk' | 'tricycle' | 'destination';
+  badgeBgColor: string;
+};
+
+export default function RouteResultCard({
+  matched,
+  isSelected,
+  onPress,
+  metricTags = [],
+  onPressStartJourney,
+  alternates = [],
+  destinationName,
+}: Props) {
   const { theme, isDark } = useTheme();
   const [showAlternates, setShowAlternates] = useState(false);
   const { legs, distanceKm, estimatedMinutes } = matched;
   const hasAlternates = alternates.length > 0;
   const tricycleExtension = matched.tricycleExtension;
   const isTransfer = legs.length > 1;
-  const id = legs.map(l => l.route.properties.code).join('+');
+  const id = legs.map((l) => l.route.properties.code).join('+');
   const formatPeso = (value: number): string => String(Math.max(0, Math.round(value)));
+
   const legFareParts = legs.map((leg) => formatPeso(leg.estimatedFare));
   const totalTransitFare = legs.reduce((sum, leg) => sum + Math.max(0, Math.round(leg.estimatedFare)), 0);
   const fareFormulaText = legFareParts.map((fare) => `₱${fare}`).join(' + ');
   const extensionFare = tricycleExtension ? Math.max(0, Math.round(tricycleExtension.estimatedFare)) : 0;
   const totalWithExtensionFare = totalTransitFare + extensionFare;
-  const hasTerminalWalk = !!tricycleExtension && tricycleExtension.walkToTerminalKm > 0.05;
+
+  // Build vertical timeline steps
+  const steps: TimelineStep[] = [];
+
+  legs.forEach((leg, i) => {
+    if (i > 0) {
+      steps.push({
+        key: `transfer-${i}`,
+        type: 'walk',
+        title: 'Walk to transfer stop',
+        subtitle: 'Transfer connection',
+        iconType: 'walk',
+        badgeBgColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(10,22,40,0.08)',
+      });
+    }
+
+    const vType = getVehicleTypeLabel(leg.route);
+    const dest = legDestinationLabel(leg.route);
+    const title = dest.toLowerCase().startsWith(vType.toLowerCase()) ? dest : `${vType} to ${dest}`;
+    const isBus = (leg.route.properties.type || '').toLowerCase().includes('bus');
+
+    steps.push({
+      key: `leg-${i}-${leg.route.properties.code}`,
+      type: 'transit',
+      title,
+      subtitle: `Ride ~${leg.estimatedMinutes} min • ${leg.distanceKm.toFixed(1)} km • ₱${formatPeso(leg.estimatedFare)}`,
+      iconType: isBus ? 'bus' : 'jeep',
+      badgeBgColor: i === 0 ? '#2196F3' : '#4CAF50',
+    });
+  });
+
+  if (tricycleExtension) {
+    if (tricycleExtension.walkToTerminalKm > 0.05) {
+      steps.push({
+        key: 'tricycle-walk',
+        type: 'walk',
+        title: `Walk to ${tricycleExtension.terminalName}`,
+        subtitle: `Walk ~${tricycleExtension.walkToTerminalKm.toFixed(1)} km`,
+        iconType: 'walk',
+        badgeBgColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(10,22,40,0.08)',
+      });
+    }
+
+    steps.push({
+      key: 'tricycle-ride',
+      type: 'tricycle',
+      title: 'Last-mile Tricycle',
+      subtitle: `${tricycleExtension.terminalName} • ~${tricycleExtension.estimatedMinutes} min • ₱${formatPeso(tricycleExtension.estimatedFare)}`,
+      iconType: 'tricycle',
+      badgeBgColor: isDark ? 'rgba(46,125,50,0.25)' : '#E8F5E9',
+    });
+  }
+
+  steps.push({
+    key: 'destination',
+    type: 'destination',
+    title: destinationName ? `Arrive at ${destinationName}` : 'Arrive at Destination',
+    subtitle: 'End of route',
+    iconType: 'destination',
+    badgeBgColor: isDark ? 'rgba(232,160,32,0.25)' : 'rgba(232,160,32,0.15)',
+  });
 
   return (
     <TouchableOpacity
@@ -91,8 +165,8 @@ export default function RouteResultCard({ matched, isSelected, onPress, metricTa
         {
           backgroundColor: isSelected
             ? isDark
-              ? 'rgba(232,160,32,0.1)' // Just a bit stronger overlay for selected dark
-              : 'rgba(232,160,32,0.06)'
+              ? 'rgba(232,160,32,0.08)'
+              : 'rgba(232,160,32,0.04)'
             : theme.cardBackground,
           borderColor: isSelected
             ? '#E8A020'
@@ -105,7 +179,7 @@ export default function RouteResultCard({ matched, isSelected, onPress, metricTa
       activeOpacity={0.8}
       onPress={() => onPress(id)}
     >
-      {/* Top row: tags + ETA */}
+      {/* Top row: tags + ETA + Fare */}
       <View style={styles.topRow}>
         <View style={styles.badgeRow}>
           {metricTags.map((tag) => {
@@ -115,60 +189,98 @@ export default function RouteResultCard({ matched, isSelected, onPress, metricTa
             };
 
             return (
-              <View key={tag} style={[styles.metricTag, { backgroundColor: colors.backgroundColor }]}> 
+              <View key={tag} style={[styles.metricTag, { backgroundColor: colors.backgroundColor }]}>
                 <Text style={[styles.metricTagText, { color: colors.textColor }]}>{tag}</Text>
               </View>
             );
           })}
         </View>
-        <View style={styles.etaBadge}>
-          <Ionicons name="time-outline" size={12} color={theme.textSecondary} />
-          <Text style={[styles.etaText, { color: theme.textSecondary }]}>{estimatedMinutes} min</Text>
+        <View style={styles.topRightWrap}>
+          <View style={styles.etaBadge}>
+            <Ionicons name="time-outline" size={13} color={theme.textSecondary} />
+            <Text style={[styles.etaText, { color: theme.textSecondary }]}>{estimatedMinutes} min</Text>
+          </View>
+          <Text style={[styles.topFareText, { color: theme.text }]}>₱{formatPeso(totalWithExtensionFare)}</Text>
         </View>
       </View>
 
-      {/* Routes Row */}
-      <View style={styles.routeLegsRow}>
-        {legs.map((leg, i) => {
-          const vType = getVehicleTypeLabel(leg.route);
-          const dest = legDestinationLabel(leg.route);
-          const label = dest.toLowerCase().startsWith(vType.toLowerCase()) ? dest : `${vType} ${dest}`;
+      {/* Vertical Timeline */}
+      <View style={styles.timelineContainer}>
+        {steps.map((step, index) => {
+          const isFirst = index === 0;
+          const isLast = index === steps.length - 1;
 
           return (
-            <React.Fragment key={leg.route.properties.code}>
-              {i > 0 && (
-                <View style={[styles.walkBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(10,22,40,0.08)' }]}>
-                  <Ionicons name="walk-outline" size={12} color={isDark ? '#E0E0E0' : COLORS.navy} />
-                  <Text style={[styles.walkBadgeText, { color: isDark ? '#E0E0E0' : COLORS.navy }]}>Walk</Text>
+            <View key={step.key} style={styles.timelineRow}>
+              {/* Left column: vertical connecting line + node icon */}
+              <View style={styles.timelineLeft}>
+                <View
+                  style={[
+                    styles.timelineLineTop,
+                    {
+                      backgroundColor: isFirst
+                        ? 'transparent'
+                        : isDark
+                        ? 'rgba(255,255,255,0.15)'
+                        : 'rgba(10,22,40,0.12)',
+                    },
+                  ]}
+                />
+                <View style={[styles.nodeBadge, { backgroundColor: step.badgeBgColor }]}>
+                  {step.iconType === 'bus' ? (
+                    <Image source={require('../assets/icons/bus-icon.png')} style={styles.nodeIconImage} resizeMode="contain" />
+                  ) : step.iconType === 'jeep' ? (
+                    <Image source={require('../assets/icons/jeepney-icon.png')} style={styles.nodeIconImage} resizeMode="contain" />
+                  ) : step.iconType === 'tricycle' ? (
+                    <Image source={require('../assets/icons/tricycle-icon.png')} style={styles.nodeIconImageTricycle} resizeMode="contain" />
+                  ) : step.iconType === 'walk' ? (
+                    <Ionicons name="walk-outline" size={13} color={isDark ? '#E0E0E0' : COLORS.navy} />
+                  ) : (
+                    <Ionicons name="location" size={13} color="#E8A020" />
+                  )}
                 </View>
-              )}
-              <View style={[styles.codeBadge, i > 0 && { backgroundColor: '#4CAF50' }]}>
-                <Image source={getVehicleIcon(leg.route)} style={styles.jeepneyIcon} resizeMode="contain" />
-                <Text style={styles.codeText}>{label}</Text>
+                <View
+                  style={[
+                    styles.timelineLineBottom,
+                    {
+                      backgroundColor: isLast
+                        ? 'transparent'
+                        : isDark
+                        ? 'rgba(255,255,255,0.15)'
+                        : 'rgba(10,22,40,0.12)',
+                    },
+                  ]}
+                />
               </View>
-            </React.Fragment>
+
+              {/* Right column: Title & Subtitle */}
+              <View style={styles.timelineRight}>
+                <Text style={[styles.stepTitle, { color: theme.text }]} numberOfLines={1}>
+                  {step.title}
+                </Text>
+                <Text style={[styles.stepSubtitle, { color: theme.textSecondary }]} numberOfLines={1}>
+                  {step.subtitle}
+                </Text>
+              </View>
+            </View>
           );
         })}
-        {isTransfer && (
-          <View style={styles.transferBadge}>
-            <Ionicons name="swap-horizontal" size={11} color="#FF9800" />
-            <Text style={styles.transferText}>Transfer</Text>
-          </View>
-        )}
-        {hasAlternates && (
-          <TouchableOpacity
-            style={styles.moreButton}
-            activeOpacity={0.7}
-            onPress={() => setShowAlternates((prev) => !prev)}
-          >
-            <Ionicons
-              name={showAlternates ? 'close' : 'ellipsis-vertical'}
-              size={14}
-              color={showAlternates ? '#EF4444' : theme.textSecondary}
-            />
-          </TouchableOpacity>
-        )}
       </View>
+
+      {/* Alternates toggle */}
+      {hasAlternates && (
+        <TouchableOpacity
+          style={[styles.alternatesToggleBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(10,22,40,0.04)' }]}
+          activeOpacity={0.7}
+          onPress={() => setShowAlternates((prev) => !prev)}
+        >
+          <Ionicons name="repeat-outline" size={13} color={theme.textSecondary} />
+          <Text style={[styles.alternatesToggleText, { color: theme.textSecondary }]}>
+            {showAlternates ? 'Hide alternate jeepneys' : `View ${alternates.length} alternate jeepney${alternates.length > 1 ? 's' : ''}`}
+          </Text>
+          <Ionicons name={showAlternates ? 'chevron-up' : 'chevron-down'} size={13} color={theme.textSecondary} />
+        </TouchableOpacity>
+      )}
 
       {hasAlternates && showAlternates ? (
         <View
@@ -210,80 +322,30 @@ export default function RouteResultCard({ matched, isSelected, onPress, metricTa
         </View>
       ) : null}
 
-      {tricycleExtension ? (
-        <View
-          style={[
-            styles.extensionWrap,
-            {
-              backgroundColor: isDark ? 'rgba(94, 197, 126, 0.14)' : 'rgba(94, 197, 126, 0.12)',
-              borderColor: isDark ? 'rgba(94, 197, 126, 0.36)' : 'rgba(94, 197, 126, 0.45)',
-            },
-          ]}
-        >
-          <View style={styles.extensionHeader}>
-            <Ionicons name="bicycle-outline" size={13} color={isDark ? '#81C784' : '#2E7D32'} />
-            <Text style={[styles.extensionTitle, isDark && { color: '#81C784' }]}>Last-mile Tricycle</Text>
-          </View>
-
-          <Text style={[styles.extensionTerminalText, isDark && { color: '#A5D6A7' }]} numberOfLines={1}>
-            {tricycleExtension.terminalName}
-          </Text>
-
-          <Text style={[styles.extensionMetaText, isDark && { color: '#81C784' }]}>
-            {hasTerminalWalk
-              ? `Walk ${(tricycleExtension.walkToTerminalKm || 0).toFixed(1)} km + Ride ${(tricycleExtension.rideDistanceKm || 0).toFixed(1)} km`
-              : `Drop-off at terminal • Ride ${(tricycleExtension.rideDistanceKm || 0).toFixed(1)} km`}
-          </Text>
-          <Text style={[styles.extensionMetaText, isDark && { color: '#81C784' }]}>
-            ~{tricycleExtension.estimatedMinutes} min • ₱{formatPeso(extensionFare)}
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={styles.fareCalcRow}>
-        <Text style={[styles.fareCalcLabel, { color: theme.textSecondary }]}>Transit fare</Text>
-        <Text style={[styles.fareCalcValue, { color: theme.text }]}> 
-          {isTransfer ? `${fareFormulaText} = ₱${formatPeso(totalTransitFare)}` : `₱${formatPeso(totalTransitFare)}`}
-        </Text>
-      </View>
-
-      {tricycleExtension ? (
-        <View style={styles.fareCalcRow}>
-          <Text style={[styles.fareCalcLabel, { color: theme.textSecondary }]}>Tricycle extension</Text>
-          <Text style={[styles.fareCalcValue, { color: theme.text }]}>₱{formatPeso(extensionFare)}</Text>
-        </View>
-      ) : null}
-
-      {/* Bottom row */}
+      {/* Bottom row: Distance & Fare formula */}
       <View style={styles.bottomRow}>
         <View style={styles.distanceWrap}>
           <Ionicons name="navigate-outline" size={13} color={theme.textSecondary} />
           <Text style={[styles.distanceText, { color: theme.textSecondary }]}>{distanceKm.toFixed(1)} km</Text>
         </View>
         <View style={styles.fareWrap}>
-          {(isTransfer || tricycleExtension) && (
-            <Text style={[styles.fareLabelText, { color: theme.textSecondary }]}>
-              {tricycleExtension ? 'Total + Last-mile' : 'Total'}
-            </Text>
-          )}
-          <Text style={[styles.fareText, { color: theme.text }]}>₱{formatPeso(totalWithExtensionFare)}</Text>
+          <Text style={[styles.fareFormulaText, { color: theme.textSecondary }]}>
+            {isTransfer || tricycleExtension
+              ? `${fareFormulaText}${tricycleExtension ? ` + ₱${formatPeso(extensionFare)}` : ''}`
+              : `Base fare ₱${formatPeso(totalTransitFare)}`}
+          </Text>
         </View>
       </View>
 
       {/* Action Buttons for Selected Route */}
-      {isSelected && (
-        <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
-          {onPressStartJourney && (
-            <TouchableOpacity
-              style={[styles.startJourneyBtn, { flex: 1, backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}
-              activeOpacity={0.9}
-              onPress={() => onPressStartJourney()}
-            >
-              <Text style={[styles.startJourneyText, { color: isDark ? COLORS.navy : '#FFFFFF' }]}>Start Journey</Text>
-            </TouchableOpacity>
-          )}
-
-        </View>
+      {isSelected && onPressStartJourney && (
+        <TouchableOpacity
+          style={[styles.startJourneyBtn, { backgroundColor: isDark ? '#E8A020' : COLORS.primary }]}
+          activeOpacity={0.9}
+          onPress={() => onPressStartJourney()}
+        >
+          <Text style={[styles.startJourneyText, { color: isDark ? COLORS.navy : '#FFFFFF' }]}>Start Journey</Text>
+        </TouchableOpacity>
       )}
     </TouchableOpacity>
   );
@@ -301,16 +363,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  cardSelected: {
-    borderColor: '#E8A020',
-    borderWidth: 2,
-    backgroundColor: 'rgba(232,160,32,0.04)',
-  },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 10,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -319,95 +376,124 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 4,
   },
-  routeLegsRow: {
+  topRightWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
+    gap: 8,
+  },
+  etaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
-    marginBottom: 10,
   },
-  extensionWrap: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 10,
-  },
-  extensionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginBottom: 4,
-  },
-  extensionTitle: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#2E7D32',
-    textTransform: 'uppercase',
-    letterSpacing: 0.2,
-  },
-  extensionTerminalText: {
+  etaText: {
     fontFamily: 'Inter',
     fontSize: 12,
-    fontWeight: '700',
-    color: '#1D5C22',
-    marginBottom: 2,
+    fontWeight: '600',
   },
-  extensionMetaText: {
+  topFareText: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#E8A020',
+  },
+  metricTag: {
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  metricTagText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  // Timeline Styles
+  timelineContainer: {
+    marginVertical: 4,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+  },
+  timelineLeft: {
+    width: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    position: 'relative',
+  },
+  timelineLineTop: {
+    position: 'absolute',
+    top: 0,
+    bottom: '50%',
+    width: 2,
+    left: 15,
+  },
+  timelineLineBottom: {
+    position: 'absolute',
+    top: '50%',
+    bottom: 0,
+    width: 2,
+    left: 15,
+  },
+  nodeBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  nodeIconImage: {
+    width: 14,
+    height: 14,
+  },
+  nodeIconImageTricycle: {
+    width: 16,
+    height: 16,
+  },
+  timelineRight: {
+    flex: 1,
+    paddingLeft: 8,
+    paddingVertical: 4,
+    justifyContent: 'center',
+  },
+  stepTitle: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  stepSubtitle: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  // Alternates styles
+  alternatesToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  alternatesToggleText: {
     fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '600',
-    color: '#2E7D32',
-  },
-  codeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#2196F3',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  jeepneyIcon: {
-    width: 13,
-    height: 13,
-  },
-  walkIconWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(128,128,128,0.22)',
-  },
-  walkBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  walkBadgeText: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  moreButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(128,128,128,0.14)',
   },
   alternatesWrap: {
     borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    marginBottom: 10,
+    marginVertical: 6,
     gap: 6,
   },
   alternatesLabel: {
@@ -427,29 +513,48 @@ const styles = StyleSheet.create({
   altCodeBadge: {
     opacity: 0.75,
   },
+  codeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#2196F3',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  jeepneyIcon: {
+    width: 13,
+    height: 13,
+  },
+  walkBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  walkBadgeText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   codeText: {
     fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.5,
-    flexShrink: 1,
   },
-  etaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  etaText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-  },
+  // Bottom Row Styles
   bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128,128,128,0.1)',
   },
   distanceWrap: {
     flexDirection: 'row',
@@ -459,89 +564,33 @@ const styles = StyleSheet.create({
   distanceText: {
     fontFamily: 'Inter',
     fontSize: TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    fontWeight: '500',
-  },
-  fareText: {
-    fontFamily: 'Inter',
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#E8A020',
+    fontWeight: '600',
   },
   fareWrap: {
     alignItems: 'flex-end',
   },
-  fareLabelText: {
-    fontFamily: 'Inter',
-    fontSize: 10,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-    marginBottom: -2,
-  },
-  fareCalcRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 8,
-  },
-  fareCalcLabel: {
+  fareFormulaText: {
     fontFamily: 'Inter',
     fontSize: 11,
-    color: COLORS.textMuted,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  fareCalcValue: {
-    flexShrink: 1,
-    textAlign: 'right',
-    fontFamily: 'Inter',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  transferBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(255,152,0,0.12)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  transferText: {
-    fontFamily: 'Inter',
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FF9800',
-  },
-  metricTag: {
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  metricTagText: {
-    fontFamily: 'Inter',
-    fontSize: 10,
-    fontWeight: '700',
   },
   startJourneyBtn: {
-    marginTop: 16,
-    height: 56,
+    marginTop: 12,
+    height: 48,
     borderRadius: RADIUS.pill,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
   },
   startJourneyText: {
     fontFamily: 'Inter',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: COLORS.navy,
   },
