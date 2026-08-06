@@ -43,13 +43,13 @@ export async function provisionWallet(): Promise<{ wallet_address: string; creat
     });
 
     if (error) {
-      console.error('[blockchainService] provisionWallet error:', error.message);
+      console.warn('[blockchainService] provisionWallet error:', error.message);
       return null;
     }
 
     return data as { wallet_address: string; created: boolean };
   } catch (err) {
-    console.error('[blockchainService] provisionWallet exception:', err);
+    console.warn('[blockchainService] provisionWallet exception:', err);
     return null;
   }
 }
@@ -91,7 +91,7 @@ export async function triggerBadgeMint(
       console.log(`[blockchainService] Badge ${badgeId} already minted for user ${userId}`);
       return;
     }
-    console.error('[blockchainService] Failed to insert badge_mint:', insertError.message);
+    console.warn('[blockchainService] Failed to insert badge_mint:', insertError.message);
     return;
   }
 
@@ -108,11 +108,11 @@ export async function triggerBadgeMint(
     });
 
     if (fnError) {
-      console.error('[blockchainService] mint-badge invoke error:', fnError.message);
+      console.warn('[blockchainService] mint-badge invoke error:', fnError.message);
       // Edge Function sets status='failed' internally; no further action needed here.
     }
   } catch (err) {
-    console.error('[blockchainService] mint-badge exception:', err);
+    console.warn('[blockchainService] mint-badge exception:', err);
   }
 }
 
@@ -132,7 +132,11 @@ export async function fetchConfirmedMints(userId: string): Promise<Record<string
     .eq('status', 'confirmed');
 
   if (error) {
-    console.error('[blockchainService] fetchConfirmedMints error:', error.message);
+    if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+      console.warn('[blockchainService] badge_mints table missing or schema cache not loaded:', error.message);
+      return {};
+    }
+    console.warn('[blockchainService] fetchConfirmedMints error:', error.message);
     return {};
   }
 

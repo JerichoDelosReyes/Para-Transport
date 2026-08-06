@@ -2,6 +2,9 @@
 -- Signature intentionally matches client call:
 --   public.get_pois_in_bbox(min_lat, max_lat, min_lng, max_lng)
 
+DROP FUNCTION IF EXISTS public.get_pois_in_bbox(double precision, double precision, double precision, double precision);
+DROP FUNCTION IF EXISTS public.get_pois_in_bbox;
+
 create or replace function public.get_pois_in_bbox(
   min_lat double precision,
   max_lat double precision,

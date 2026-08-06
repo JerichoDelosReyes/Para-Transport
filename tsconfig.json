@@ -18,6 +18,7 @@
   "exclude": [
     "claude-skills/**",
     "reference/**",
+    "supabase/functions/**",
     "node_modules/**"
   ]
 }
