@@ -1,0 +1,10 @@
+{
+  "network": "amoy",
+  "chainId": 80002,
+  "deployedAt": "2026-08-06T03:32:35.290Z",
+  "deployer": "0xE3AdA1Cd5F9F48b19dEd6712462b8Eb09aAa5198",
+  "contracts": {
+    "ParaToken": "0xd2Dd83E69748B8899403e22ca6C2E0cBD9c71751",
+    "ParaBadge": "0xB221491da91108eE52B6cC4E8325f8D99f536b16"
+  }
+}

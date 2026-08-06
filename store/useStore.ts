@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { supabase } from '../config/supabaseClient';
 import { BadgeData } from '../types/badges';
+import { ensureUserWallet, mintBadgeNFT } from '../services/blockchainService';
 
 export type FareDiscountType = 'regular' | 'student' | 'senior' | 'pwd';
 
@@ -435,6 +436,24 @@ export const useStore = create<StoreState>()(
               .then(({ error }) => {
                 if (error && error.code !== 'PGRST204') console.log('Failed to array-sync badge to Supabase:', error.message);
               });
+
+            // 🔗 Blockchain: mint NFT badge in background (fire-and-forget)
+            // This never blocks the UI — badge appears instantly in the app.
+            const userId = state.user.id;
+            (async () => {
+              try {
+                // Ensure the user has a wallet first
+                await ensureUserWallet(userId);
+                // Mint the badge NFT on Polygon
+                const result = await mintBadgeNFT(userId, badgeId);
+                if (result.success && result.txHash) {
+                  console.log(`[Blockchain] Badge '${badgeId}' NFT minted. TX: ${result.txHash}`);
+                }
+              } catch (e) {
+                // Blockchain errors never crash the app
+                console.warn('[Blockchain] Background mint failed silently:', e);
+              }
+            })();
           }
           
           return {

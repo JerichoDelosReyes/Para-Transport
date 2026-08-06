@@ -250,6 +250,22 @@ export default function ProfileScreen() {
             })}
           </View>
 
+          {/* Blockchain Demo Button */}
+          <TouchableOpacity
+            style={[styles.blockchainDemoBtn, { backgroundColor: '#0A1628', borderColor: '#1E3A5F' }]}
+            activeOpacity={0.85}
+            onPress={() => router.navigate('/blockchain-demo' as any)}
+          >
+            <View style={styles.blockchainDemoLeft}>
+              <Text style={styles.blockchainDemoIcon}>⛓️</Text>
+              <View>
+                <Text style={styles.blockchainDemoTitle}>Blockchain Demo</Text>
+                <Text style={styles.blockchainDemoSub}>Simulate a ride → earn NFT on Polygon</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.4)" />
+          </TouchableOpacity>
+
         </ScrollView>
       </View>
     </View>
@@ -560,5 +576,33 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
+  },
+  blockchainDemoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  blockchainDemoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  blockchainDemoIcon: { fontSize: 28 },
+  blockchainDemoTitle: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  blockchainDemoSub: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.55)',
   },
 });

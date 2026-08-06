@@ -99,7 +99,14 @@ export default function PointsHistoryScreen() {
             <Ionicons name="chevron-back" size={24} color="#0A1628" />
           </TouchableOpacity>
           <Text style={[styles.headerTitleText, { color: '#0A1628' }]}>POINTS</Text>
-          <View style={{ width: 44, height: 44 }} />
+          <TouchableOpacity
+            onPress={() => router.push('/vouchers' as any)}
+            style={[styles.redeemBtn, { backgroundColor: 'rgba(255,255,255,0.2)' }]}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="gift-outline" size={16} color="#0A1628" />
+            <Text style={styles.redeemBtnText}>Redeem</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -352,5 +359,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 13,
     color: '#B45309',
-  }
+  },
+  redeemBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  redeemBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0A1628',
+  },
 });

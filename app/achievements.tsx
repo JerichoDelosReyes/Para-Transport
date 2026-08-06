@@ -241,6 +241,11 @@ export default function AchievementsScreen() {
                   <View style={[styles.progressContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(10,22,40,0.1)' }]}>
                     <View style={[styles.progressBar, { width: fillWidth as any }]} />
                   </View>
+                  {isEarned && (
+                    <View style={styles.onChainPill}>
+                      <Text style={styles.onChainText}>🔗 On-chain NFT</Text>
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -487,5 +492,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: 'rgba(0,0,0,0.05)',
-  }
+  },
+  onChainPill: {
+    marginTop: 6,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(124, 58, 237, 0.12)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(124, 58, 237, 0.25)',
+  },
+  onChainText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#7C3AED',
+  },
 });
