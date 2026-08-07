@@ -148,7 +148,7 @@ export default function PointsHistoryScreen() {
                ) : (
                  <JeepIllustrationLight width={220} height={150} />
                )}
-               <Text style={[styles.emptyTitle, { color: theme.text }]}>WALA PANG POINTS.</Text>
+               <Text style={[styles.emptyTitle, { color: theme.text }]}>NO POINTS YET.</Text>
              </View>
           ) : (
             pointsHistory.map((item: any, index: number) => {

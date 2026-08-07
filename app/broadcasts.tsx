@@ -134,7 +134,7 @@ export default function BroadcastsScreen() {
               ) : (
                 <JeepIllustrationLight width={220} height={150} />
               )}
-              <Text style={[styles.emptyTitle, { color: theme.text }]}>WALA PANG BROADCASTS.</Text>
+              <Text style={[styles.emptyTitle, { color: theme.text }]}>NO BROADCASTS.</Text>
             </View>
           ) : (
             broadcasts.map((b) => (
