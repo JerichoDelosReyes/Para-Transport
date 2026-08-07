@@ -1,0 +1,35 @@
+## Paano kinukwenta ang pamasahe (base fare + per-km)
+
+Karamihan ng jeepney, bus, at UV Express ay gumagamit ng "base fare + per-kilometer" na sistema — may nakatakdang minimum na bayad para sa unang ilang kilometro (halimbawa unang 4km), tapos may dagdag na sentimos o piso para sa bawat karagdagang kilometro pagkatapos noon. Nag-iiba-iba ito depende sa uri ng sasakyan (mas mataas karaniwan sa bus kaysa jeep, at mas mataas pa sa UV Express) at sa rehiyon. Dahil regular itong inaadjust ng LTFRB, huwag mag-assume ng eksaktong halaga — tanungin na lang ang driver o tingnan ang opisyal na fare chart na madalas nakapaskil sa loob ng sasakyan.
+
+## Flat fares
+
+May ilang sasakyan o ruta na gumagamit ng flat fare — parehong bayad kahit saan ka bumaba sa loob ng saklaw ng ruta, imbes na distance-based. Karaniwan itong ginagamit sa mga tricycle na shared trip sa loob ng isang barangay, o sa ilang short jeepney route na hindi masyadong mahaba. Kung hindi ka sigurado kung flat o distance-based ang bayad sa isang ruta, mas ligtas na itanong bago pa man sumakay.
+
+## Distance-based train fares
+
+Ang MRT-3, LRT-1, at LRT-2 ay gumagamit ng distance-based fare — mas malayo ang lalakbayin mo mula sa entry station papunta sa exit station, mas mataas ang babayaran. Ang halaga ay awtomatikong nakukwenta base sa entry at exit station mo kapag naka-tap ka ng Beep card o naka-scan ng single journey ticket, kaya hindi mo na kailangang mano-manong kwentahin ang bayad — makikita mo lang ito sa ticket machine o sa fare chart na naka-display sa istasyon.
+
+## Discounts para sa estudyante
+
+May diskuwento ang mga estudyante sa ilang uri ng transportasyon (lalo na sa train at ilang bus/jeep na may student fare), pero kailangan mo munang ipakita ang balidong school ID o student discount card bilang patunay. Hindi lahat ng sasakyan o operator ay awtomatikong nagbibigay nito, kaya kung available ba ito sa partikular na sasakyan mo, mas mabuting itanong muna o tumingin sa mga nakapaskil na patakaran.
+
+## Discounts para sa senior citizen
+
+May 20% discount (at exemption sa value-added tax) ang mga senior citizen sa pampublikong transportasyon ayon sa batas, basta may maipakitang senior citizen ID. Sabihin lang nang maaga sa konduktor o sa nagbebenta ng ticket na senior ka bago magbayad, para tama agad ang singil at hindi na kailangang mag-request pa ng refund.
+
+## Discounts para sa PWD (Persons with Disabilities)
+
+Katulad ng senior citizen, may 20% discount din ang mga PWD sa pampublikong transportasyon, basta may maipakitang PWD ID na inisyu ng lokal na pamahalaan. Ipakita lang ito nang maaga sa driver, konduktor, o sa loket ng ticket bago magbayad para direktang ma-apply ang diskuwento.
+
+## Beep card basics
+
+Ang Beep card ay isang reloadable contactless card na pwedeng gamitin sa MRT-3, LRT-1, LRT-2, at ilang bus at modernized jeepney na may card reader. Bibili ka ng card (may minimal na halaga para dito), tapos nagla-"load" ka ng pera dito sa mga loading station o kiosk. Sa train, i-tap mo lang ang card sa entry at exit gate at awtomatikong makakaltas ang tamang bayad base sa distansya. Maginhawa ito dahil hindi ka na kailangang maghanda ng tamang barya, pero siguraduhin lang na sapat ang laman bago ka pumasok sa istasyon.
+
+## Cash vs. cashless
+
+Sa karamihan ng traditional jeepney, tricycle, at maliliit na provincial na sasakyan, cash pa rin ang pangunahing paraan ng pagbabayad — kaya laging magdala ng sapat na barya o maliit na denominasyon, dahil hindi laging may sukli ang driver, lalo na kung malaking pera ang ibibigay mo. Sa mga modernized jeepney, bus, at train naman, unti-unting dumarami ang cashless option gamit ang Beep card o mga katulad na contactless payment, pero tumatanggap pa rin karamihan sa kanila ng cash bilang alternatibo.
+
+## Bakit nagbabago ang pamasahe
+
+Ang pamasahe sa Pilipinas ay hindi laging pareho dahil regular itong sinusuri at ina-adjust ng LTFRB base sa mga bagay tulad ng presyo ng gasolina, implasyon, at patakaran ng gobyerno (kasama na ang mga pansamantalang fare discount program). Dahil dito, mahalagang malaman na ang eksaktong halagang nakasaad dito ay maaaring mabago anumang oras — para sa pinaka-tumpak at kasalukuyang halaga, tingnan ang opisyal na fare matrix ng LTFRB o DOTr, o ang fare chart na nakapaskil sa loob ng bawat sasakyan.

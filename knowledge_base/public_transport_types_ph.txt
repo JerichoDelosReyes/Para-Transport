@@ -1,0 +1,55 @@
+## Traditional Jeepney
+
+Ang traditional jeepney ang pinaka-kilalang sasakyan sa Pilipinas — yung classic na may mahabang katawan, magkaharap na upuan sa loob, at colorful design sa labas. Bayad ka gamit ang "bayad po" system na ipinapasa sa kapwa pasahero papunta sa driver, at "Para po" naman ang sinasabi mo pag bababa ka na. Karaniwang may nakasulat sa harap ng jeep ang mga lugar na dinadaanan niya (halimbawa: "Cubao - Quiapo"), kaya tingnan mo muna ang signboard bago sumakay. Hindi laging may nakasulat na eksaktong ruta sa bawat kanto, kaya kung baguhan ka pa, huwag mahiyang magtanong sa driver o sa kapwa pasahero kung dadaan ba siya sa gusto mong destinasyon.
+
+## Modernized Jeepney
+
+Ang modernized jeepney ay bagong henerasyon ng jeep na may aircon, mas maayos na upuan (minsan magkatapat pa rin, minsan nakaharap sa harap), at kadalasang may beep card reader o cashless payment option bukod sa cash. Mas maayos ang bentilasyon at mas ligtas ang disenyo, pero mas mataas din karaniwan ang pamasahe kumpara sa traditional jeep. Ang buzzer system dito ay mas common — may pindutan ka na lang pipindutin imbes na sisigaw ng "Para," pero gumagana pa rin ang salitang "Para" kung wala o sira ang buzzer.
+
+## UV Express
+
+Ang UV Express ay mga van (kadalasang Toyota HiAce o katulad) na tumatakbo sa mas mahahabang ruta, kadalasan terminal-to-terminal, tulad ng malayong lungsod papunta sa Metro Manila o sa pagitan ng magkalapit na probinsya. Bayad ka per-seat, mas mahal kaysa jeep pero mas mabilis at may sariling upuan ka. Karaniwang naghihintay ka sa terminal hanggang mapuno ang van bago umalis (o may schedule na), kaya mag-allow ka ng oras. Hindi laging flexible ang pagbaba — sa ilang ruta, terminal-to-terminal lang talaga, kaya magtanong muna bago sumakay kung pwede kang bumaba sa gitna ng biyahe.
+
+## Tricycle
+
+Ang tricycle ay motorsiklo na may side-car, karaniwan sa mga barangay, subdivision, at maiikling distansya na hindi masyadong abot ng jeep o bus. May dalawang uri: "shared" kung sabay-sabay kayong pasahero papunta sa magkakalapit na direksyon, at "special trip" kung ikaw lang ang sakay at direkta kayo sa gusto mong destinasyon (mas mahal ito dahil ikaw lang ang bumabayad sa buong biyahe). Sa shared trip, may fixed o pabago-bagong bayad depende sa lugar; sa special trip, karaniwang nag-uusap muna kayo ng driver bago sumakay tungkol sa bayad.
+
+## Pedicab
+
+Ang pedicab ay parang tricycle pero de-pedal (bisikleta na may side-car), kaya mas mabagal at para lang sa napakaikling distansya sa loob ng barangay o subdivision. Mas mura ito kaysa motorized tricycle dahil mas maikli rin ang saklaw niya. Karaniwan itong ginagamit ng mga estudyante o residente papunta sa malapit na palengke, paaralan, o main road kung saan sasakay na sila ng jeep o tricycle papunta sa mas malayong lugar.
+
+## EDSA Carousel / City Bus
+
+Ang EDSA Carousel ay isang bus rapid transit system sa kahabaan ng EDSA na may sariling dedicated lane, mga fixed na istasyon (parang train station design), at flat o distance-based na bayad depende sa kasalukuyang patakaran. Hindi ka basta makaka-"Para" kahit saan — kailangan mong sumakay at bumaba sa mga opisyal na istasyon lang. Ang mga ordinaryong city bus naman (yung walang dedicated lane) ay mas kahawig ng jeep sa paraan ng pagbaba — pwede kang mag-"Para" sa mga karaniwang loading/unloading zone, pero hindi rin basta-basta kahit saan lalo na sa mga highway na may mahigpit na patakaran laban sa "loading and unloading anywhere."
+
+## Provincial Bus
+
+Ang provincial bus ay para sa mahahabang biyahe papunta o mula sa ibang probinsiya (halimbawa Manila papuntang Baguio o Bicol). Karaniwang may nakatalagang terminal ang mga ito (hindi basta-basta sasakyan sa kalye), at may iba't ibang klase: ordinary, aircon, at deluxe/executive na may mas komportableng upuan pero mas mahal. Mag-book o pumila ka nang maaga sa terminal, lalo na sa peak season tulad ng Pasko o Semana Santa, dahil puwedeng ma-fully booked agad ang mga biyahe.
+
+## P2P Bus
+
+Ang P2P (point-to-point) bus ay direktang biyahe mula sa isang partikular na lugar papunta sa isa pang partikular na lugar lang, walang stop-over sa gitna, kaya mas mabilis kumpara sa ordinaryong bus o jeep na maraming hinihintuan. Karaniwan itong may aircon at nakaupong lahat ng pasahero (walang nakatayo), at minsan kailangan mo munang mag-book ng ticket online o sa terminal bago sumakay. Mas mahal ito kaysa regular na bus pero mas mabilis at komportable, bagay sa mga taong may mahigpit na oras.
+
+## MRT-3
+
+Ang MRT-3 ay ang light rail na dumadaan sa kahabaan ng EDSA, mula Taft papuntang North Avenue. Bumibili ka ng single journey ticket o gumagamit ng Beep card sa mga istasyon, tapos dumadaan ka sa turnstile papasok sa platform. Distance-based ang bayad — mas malayo ang lalakbayin mo, mas mataas ang babayaran. Sikat ito lalo na sa rush hour kaya mag-expect ng mahabang pila, lalo na sa mga peak hours ng umaga at hapon.
+
+## LRT-1
+
+Ang LRT-1 ay dumadaan mula Baclaran/Roosevelt papuntang Manila area, kahawig ng MRT-3 sa paraan ng pagbili ng ticket (single journey o Beep card) at pagsakay. Ito ang isa sa pinakamatandang light rail system sa Pilipinas, at patuloy na pinapalawak ang linya nito papunta sa mga karagdagang lungsod sa timog.
+
+## LRT-2
+
+Ang LRT-2 ay dumadaan mula Recto papuntang Antipolo, dumadaan sa mga lugar tulad ng Cubao at Marikina. Katulad din ng LRT-1 at MRT-3 ang sistema ng pagbili ng ticket at pagsakay, gamit ang single journey ticket o Beep card sa mga istasyon.
+
+## PNR (Philippine National Railways)
+
+Ang PNR ay ang commuter train na dumadaan sa southern Metro Manila papunta sa mga karatig-probinsya tulad ng Laguna. Mas mabagal at mas limitado ang saklaw kumpara sa MRT/LRT, pero mas mura karaniwan ang bayad. Bibili ka ng ticket sa istasyon bago sumakay, at dahil hindi kasing-bilis ng ibang light rail, mag-allow ka ng mas mahabang oras kung ito ang gagamitin mong sasakyan.
+
+## Habal-Habal
+
+Ang habal-habal ay motorsiklong "backride" na walang side-car — umuupo ka lang sa likod ng driver. Karaniwan itong ginagamit sa mga liblib na lugar, probinsya, o kung saan hindi umaabot ang regular na tricycle o jeep, lalo na sa mga baku-bakong daan o bundok. Mas mabilis ito para sa maiikling distansya sa mahihirap maabot na lugar, pero dapat maingat dahil kadalasan ay walang sapat na proteksyon at hindi ito laging opisyal na regulated depende sa lugar.
+
+## Grab (ride-hailing) bilang comparison
+
+Ang Grab ay isang app-based na ride-hailing service kung saan nag-book ka ng sasakyan (car o motorcycle) gamit ang app, may fixed na presyo bago pa man sumakay, at direkta kang dadalhin sa iyong destinasyon nang walang stop-over. Malaking kaibahan ito sa jeep, tricycle, o UV Express dahil hindi ito shared o pasada-based — ikaw at ang mga kasama mo lang ang sakay, at mas mahal karaniwan ang bayad kumpara sa pampublikong sasakyan. Maganda itong option kung gabi na, mabigat ang dala mong gamit, o kung gusto mong direkta at predictable ang biyahe nang walang kailangang mag-isip ng ruta.

@@ -1,0 +1,39 @@
+## Ano ang Para?
+
+Para Mobile is a multimodal transit navigation app built para sa mga Pilipinong commuter — tumutulong ito sa pagplano ng biyahe gamit ang jeepney, bus, tricycle, UV Express, at train networks. Ang layunin ay simple: gawing mas madali at mas malinaw ang pagko-commute, lalo na para sa mga rutang informal at hindi kilala ng mainstream na mapping apps, tulad ng mga jeepney at tricycle route na alam lang talaga ng mga lokal.
+
+## Ang problema na sinasagot ng Para
+
+Sa Pilipinas, ang impormasyon tungkol sa pampublikong transportasyon ay kalat-kalat at nakalilito — maraming jeepney, tricycle, at UV Express route ang "community-known" lang, ibig sabihin salita-ng-bibig lamang ang paraan ng pagkakaalam ng mga tao dito, hindi nakadokumento sa mga karaniwang mapping tool. Dahil dito, nauubos ang oras, pera, at kumpiyansa ng mga commuter, lalo na ng mga baguhan sa isang lugar, habang pinagtatagni-tagni nila ang ruta base sa alamat at tsismis lang ng iba.
+
+## Paano tumutulong ang Para
+
+Ini-analyze ng Para ang mga available na ruta at nagrerekomenda base sa oras ng biyahe, halaga ng pamasahe, bilang ng transfers, o balanseng kumbinasyon ng lahat ng ito. Layunin nitong pagsamahin ang kamalayan sa pamasahe, kasimplehan ng transfer, at kaligtasan sa iisang tool na kayang gamitin ng sinumang commuter, mula sa pangunahing biyahero hanggang sa unang beses pa lang mag-commute sa isang lugar.
+
+## Interactive map
+
+May sariling interactive map ang Para na nagpapakita ng mga ruta, hintuan, at kasalukuyang lokasyon mo — dinisenyo ito para madaling makita kung saan ka pupunta at kung ano-anong sasakyan ang kailangan mo para makarating doon.
+
+## Multi-modal route engine
+
+Ang core na feature ng Para ay ang route engine nito, na nagpapakita ng pinakamabilis, pinakamura, at pinakakaunting-transfer na opsyon, kasama ang breakdown ng pamasahe para sa bawat leg ng biyahe — kaya alam mo agad kung ano ang kailangan mong sakyan, saan lilipat, at magkano ang gagastusin bago ka pa man umalis sa bahay.
+
+## History at Saved Routes
+
+May History feature ang app na nag-iimbak ng mga nakaraang hinanap mong ruta at bagong tiningnan na destinasyon, para madali mong mabalikan kung madalas mong sinasakyan ang parehong biyahe. May Saved Routes din kung saan pwede kang mag-bookmark ng mga rutang gustong-gusto mo ulit gamitin, kumpleto ng detalye ng pamasahe, para sa mga paulit-ulit na biyahe tulad ng pupunta sa trabaho o eskwela.
+
+## Profile at stats
+
+Ang Profile ng bawat user ay nagpapakita ng mga trip stats — kabilang na ang kabuuang distansyang nalakbay, points, at ranggo sa global leaderboard. Isang magandang paraan ito para makita ng commuter ang sarili niyang pattern ng pagko-commute sa paglipas ng panahon.
+
+## Gamification at leaderboards
+
+May leaderboard at unlockable badges ang Para na nagbibigay-gantimpala sa aktibong paggamit ng app — parang laro na naka-angkla sa totoong pang-araw-araw na pagko-commute. Ang mga achievement na ito ay may karagdagang blockchain component (tingnan ang hiwalay na knowledge base file tungkol sa blockchain rewards ng Para para sa detalye).
+
+## Si Jeepie, ang in-app assistant
+
+Si Jeepie ang chatbot companion ng Para, dinisenyo para sagutin ang mga tanong tungkol sa pagko-commute at sa app mismo. Kapag nagtanong ang isang user kay Jeepie, una itong sinusuri kung tumutugma ba ang tanong sa isang listahan ng mga karaniwang FAQ na naka-store lokal sa telepono — kung meron, sagot agad ito nang mabilis nang hindi na kailangang lumabas pa sa internet. Kung walang tumutugmang lokal na sagot, dumaan muna ang tanong sa isang safety at scope check para tiyaking naaangkop at nasa tamang paksa ito (tungkol sa Para, pagko-commute, o transportasyon), bago ito sagutin ng AI model. Ang layunin ng dalawang-hakbang na proseso na ito ay panatilihing mabilis, ligtas, at naka-focus sa totoong pangangailangan ng commuter ang bawat sagot ni Jeepie.
+
+## Para kanino ang Para app
+
+Dinisenyo ang Para para sa mga pang-araw-araw na commuter na kailangang pumlano ng biyahe sa trabaho o eskwela, mga turista at bisita na hindi pamilyar sa lokal na transportasyon system, mga LGU (local government units) at transport cooperatives na gustong magkaroon ng mas malinaw na larawan ng mga ruta at gamit ng komunidad, at mga unang-beses o late-night commuter na kailangan ng dagdag na gabay o kaseguruhan kapag nagko-commute sa hindi pamilyar na oras o lugar.

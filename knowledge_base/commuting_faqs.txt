@@ -1,0 +1,39 @@
+## Paano ko malalaman kung saan pupunta ang isang jeepney?
+
+Tingnan mo ang signboard sa harap ng jeep — karaniwang nakasulat doon ang pangunahing mga lugar na dinadaanan niya (halimbawa: "Cubao - Quiapo" o "Baclaran - Divisoria"). Kung hindi malinaw o wala kang alam sa mga pangalan ng lugar, huwag mahiyang itanong nang diretso sa driver: "Dadaan po ba kayo sa [destinasyon]?" Puwede ring gamitin ang Para app para makakita ng iminumungkahing ruta base sa iyong kasalukuyang lokasyon at gustong destinasyon.
+
+## Ano ang gagawin kung wala akong tamang barya?
+
+Sabihin agad sa driver o konduktor kapag magbabayad ka kung wala kang tamang sukli, halimbawa: "Bayad po, wala pong barya, [halaga] po ito." Karaniwan namang may sukli ang mga jeep at tricycle, pero kung malaking denominasyon ang dala mo (halimbawa 500 o 1000 pesos), mas mabuting magpalit muna sa tindahan o sa terminal bago sumakay, dahil hindi laging may sapat na sukli ang driver para dito.
+
+## Pwede ba akong basta na lang mag-flag down ng bus kahit saan?
+
+Depende sa uri ng bus. Sa mga ordinaryong city o provincial bus na walang dedicated lane, kadalasang pwede kang mag-"Para" sa mga karaniwang loading at unloading zone, pero hindi talaga sa kahit saang bahagi ng highway dahil may patakaran laban dito sa maraming lugar. Sa mga bus na may fixed stations tulad ng EDSA Carousel, kailangan mong sumakay at bumaba lang sa mga opisyal na istasyon — hindi ito pwedeng i-flag down kahit saan.
+
+## Ano ang pagkakaiba ng jeepney route at UV Express route?
+
+Ang jeepney route ay karaniwang mas maikli, dumadaan sa maraming maliliit na kalye at kanto, at flexible ang pagsakay/pagbaba kahit saan sa ruta. Ang UV Express naman ay karaniwang mas mahaba ang ruta (minsan pagitan ng dalawang lungsod o probinsiya), terminal-to-terminal kadalasan, mas mabilis dahil kaunti lang ang hinihintuan, at mas mahal ang bayad kumpara sa jeep dahil per-seat ang singil.
+
+## Ligtas ba ang pagsakay ng habal-habal o hindi rehistradong sasakyan?
+
+Depende ito sa lugar at sa partikular na driver — sa mga liblib na lugar kung saan wala talagang ibang opsyon, karaniwan nang gamitin ito ng mga lokal, pero dahil hindi laging regulated ang mga ito, mas maganda pa ring mag-ingat: magtanong muna ng presyo bago sumakay, at kung may pagpipilian, mas ligtas ang mga rehistradong tricycle o pampublikong sasakyan na may plaka at nakikilalang operator.
+
+## Ano ang gagawin kung sinabihan akong "Full na" pero kailangan ko talaga ng sakay?
+
+Maghintay na lang ng susunod na sasakyan — normal lang ito lalo na sa rush hour. Kung matagal na naghihintay at wala pang dumarating na may puwang, subukang lumakad papunta sa mas malapit na kanto o sakayan kung saan mas madalas dumaan ang mga sasakyan, o gumamit muna ng ride-hailing app tulad ng Grab kung kailangan mo talagang makarating agad.
+
+## Paano ako makakasigurong hindi ako lalampas sa babaan ko?
+
+Sabihin mo agad sa driver o konduktor kung saan ka bababa habang nagbabayad ("Bayad po, sa [lugar] po ako bababa"), para may paalala sila. Bantayan mo rin ang mga landmark sa daan (simbahan, mall, malaking karatula) para may sariling gabay ka, at sabihin ang "Para" ng ilang segundo bago pa man umabot sa iyong babaan, hindi sa mismong sandaling nasa tapat ka na.
+
+## May diperensya ba ang bayad sa umaga kumpara sa gabi?
+
+Wala namang opisyal na "night differential" na patakaran para sa karamihan ng jeep, tricycle, at bus sa normal na sitwasyon — pareho lang ang fare structure anuman ang oras. Pero sa ilang special trip na tricycle o sa mga lugar na kakaunti nang sasakyan pagsapit ng gabi, minsan humihingi ang driver ng dagdag dahil sa kakulangan ng ibang pasahero na kasabay — usapan ito sa pagitan mo at ng driver, hindi opisyal na patakaran.
+
+## Ano ang gagawin kung nawalan ako ng gamit sa jeep o bus?
+
+Kung kaka-alis mo lang, subukang tawagan o hanapin agad ang parehong operator o kumpanya (kung may contact info) at ibigay ang detalye ng biyahe (oras, ruta, plate number kung natandaan). Sa mga tren tulad ng MRT/LRT, may lost and found counter karaniwan sa mga istasyon. Sa mga ordinaryong jeep o tricycle, mas mahirap mabawi kung hindi mo natandaan ang plaka, kaya bilang habit, laging tingnan muna ang paligid mo bago bumaba.
+
+## Bakit iba-iba ang bayad ng magkaparehong ruta pero magkaibang sasakyan?
+
+Depende ito sa uri ng sasakyan (jeep, bus, UV Express) at sa comfort o bilis na inaalok nito — mas mabilis o mas komportable karaniwang mas mataas ang bayad. Nagkakaiba rin ang fare structure ng bawat uri ayon sa itinatakda ng LTFRB, kaya kahit magkaparehong distansya, maaaring magkaiba ang halaga depende kung jeep, bus, o UV Express ang sinakyan mo.

@@ -1,0 +1,15 @@
+## Kamusta ito kumpara sa Sakay.ph?
+
+Magandang tanong ito, at deserve nitong tapat na sagot: ang Sakay.ph ay isa nang existing na Philippine webapp/app mula pa noong 2013 na nag-aalok ng crowd-sourced na direksyon para sa jeepney, bus, UV Express, train, at ferry routes, kumpleto ng comparison ng pamasahe at tantiyang oras ng biyahe — pangunahin sa Metro Manila, may limitadong saklaw din sa ilang ibang rehiyon. Libre itong gamitin at suportado ng advertisement. Kung ikaw ay naghahanap lang ng crowd-sourced na ruta ng jeep o bus, medyo magkatulad talaga ang dalawang app na ito sa batayang layunin.
+
+## Kung magkatulad, ano talaga ang pinagkaiba ng Para?
+
+Hindi tama na sabihing "kami lang ang sumasaklaw sa jeep at UV Express" dahil ginagawa na rin ito ng Sakay.ph. Ang tunay na pagkakaiba ng Para ay nasa ibang bagay: mayroon itong AI conversational assistant (si Jeepie) na kaya mong kausapin gaya ng pakikipag-usap sa tao imbes na basta paghahanap lang ng ruta; may gamification system na may blockchain-verified na mga achievement na tunay mong pag-aari; may dedikadong admin layer para sa mga LGU at transport cooperative — kasama ang live traffic heatmap, alert broadcasting, at mga tool sa pamamahala ng ruta at pamasahe; at may "Safe Mode" o night-route feature na dinisenyo para sa kaligtasan ng mga late-night commuter.
+
+## Kumusta naman kumpara sa Google Maps o Waze?
+
+Ang Google Maps at Waze ay mahusay para sa pribadong sasakyan at kadalasang tumpak para sa mga fixed-route na sasakyan tulad ng train, pero hindi ito reliable sa pagsaklaw ng informal na pampublikong transportasyon dito sa Pilipinas — tulad ng jeepney, tricycle, at UV Express routes na "community-known" lang at bihirang na-dodokumento sa mainstream mapping tool. Dito talaga nagkakaroon ng edge ang parehong Para at Sakay.ph, dahil dinisenyo talaga silang dalawa para sa ganitong uri ng transportasyon.
+
+## Kung tatanungin, "bakit hindi na lang Sakay.ph?"
+
+Tapat na sagot: kung crowd-sourced na jeepney o UV Express na ruta lang talaga ang kailangan mo, magagamit mo rin naman ang Sakay.ph. Pero kung gusto mo ng chatbot na kausapin habang nagpaplano ng biyahe, gamification na may totoong pag-aari mong achievement, o kung ikaw ay isang LGU o transport cooperative na gustong magkaroon ng mas malalim na visibility sa mga ruta at trapiko sa lugar niyo, doon mas makikita ang halaga ng mga karagdagang feature ng Para. Hindi kailangang i-frame bilang "mas mahusay kami sa lahat" — mas totoo at mas kapaki-pakinabang na sabihin kung ano talaga ang idinaragdag ng Para na wala pa sa ibang existing na tool.

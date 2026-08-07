@@ -1,0 +1,23 @@
+## Ano ang blockchain rewards ng Para?
+
+Ginagamit ng Para ang blockchain technology para gawing mas totoo at mas pag-aari mo ang mga badge at achievement na nakukuha mo sa app. Sa halip na basta nakatago lang ang mga ito sa isang ordinaryong database na kaya palitan o burahin, ang mga achievement mo sa Para ay naitatala sa isang blockchain — ibig sabihin, verified at hindi na basta-basta mababago o mawawala ang mga ito, kahit pa magbago man ang app sa hinaharap.
+
+## Bakit blockchain, hindi ordinaryong database lang?
+
+Kapag ordinaryong database lang ang ginamit, ang lahat ng badge at reward mo ay nasa kontrol lang ng developer — puwede itong mabago, mabura, o mawala kung magkaroon ng problema sa system. Sa pamamagitan ng blockchain, ang mga achievement mo ay parang totoong pag-aari mo na — hindi ito basta mababawi o mababago ng kahit sino, kasama na ang mismong gumawa ng app. Ito ang tinatawag na "user ownership" ng iyong mga gantimpala.
+
+## Paano ito gumagana (sa simpleng salita)
+
+Kapag nakamit mo ang isang achievement o badge sa Para, awtomatiko itong naitatala bilang isang natatanging digital token na nakalink sa iyong account — parang katulad ng digital na sertipiko na nagpapatunay na tunay mong nakamit ang achievement na iyon. Hindi mo kailangang gawin ang kahit ano nang manu-mano; nangyayari ito sa likod ng eksena habang ikaw ay masayang gumagamit ng app.
+
+## Polygon network
+
+Tumatakbo ang blockchain feature ng Para sa Polygon, isang network na pinili dahil sa napakababang bayad sa transaksyon at mabilis na oras ng kumpirmasyon — ilang segundo lang, hindi ilang minuto. Dahil dito, mabilis at halos walang dagdag na gastos ang bawat achievement na naitatala, kaya hindi ito nagiging abala sa normal na paggamit mo ng app.
+
+## Hindi mo kailangan ng crypto knowledge
+
+Hindi mo kailangang maging expert sa cryptocurrency o alamin ang mga teknikal na detalye ng blockchain para masiyahan sa feature na ito. Awtomatikong ginagawa ng Para ang lahat ng kailangan sa likod ng eksena kapag gumagamit ka ng app — parang ordinaryong paggamit mo lang ng anumang app, walang extra hakbang na kailangan mong gawin o alamin.
+
+## Points at vouchers
+
+Bukod sa mga blockchain-verified na badge, may points din na nakukuha ka sa paggamit ng Para na maaaring i-redeem para sa mga voucher o reward sa hinaharap — parang isang paraan ng pagpapasalamat sa iyo bilang aktibong commuter at user ng app. Ang eksaktong mga detalye ng kung ano-anong voucher o reward ang available ay maaaring magbago sa paglipas ng panahon, kaya laging tingnan ang loob mismo ng app para sa pinaka-updated na listahan.
