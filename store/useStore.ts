@@ -462,7 +462,6 @@ export const useStore = create<StoreState>()(
 
             // 🔗 Blockchain: mint NFT badge in background (fire-and-forget)
             // This never blocks the UI — badge appears instantly in the app.
-            const userId = state.user.id;
             (async () => {
               try {
                 // Ensure the user has a wallet first
