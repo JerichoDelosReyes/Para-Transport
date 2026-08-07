@@ -89,11 +89,11 @@ Deno.serve(async (req: Request) => {
 
     // Step 3: Connect to Polygon Amoy and mint PRT tokens
     const RPC_URL = Deno.env.get("POLYGON_AMOY_RPC_URL") || "https://rpc-amoy.polygon.technology";
-    const TREASURY_PRIVATE_KEY = Deno.env.get("PARA_TREASURY_PRIVATE_KEY")!;
-    const TOKEN_CONTRACT_ADDRESS = Deno.env.get("PARA_TOKEN_CONTRACT")!;
+    const TREASURY_PRIVATE_KEY = Deno.env.get("PARA_TREASURY_PRIVATE_KEY") || Deno.env.get("DEPLOYER_PRIVATE_KEY");
+    const TOKEN_CONTRACT_ADDRESS = Deno.env.get("PARA_TOKEN_CONTRACT") || Deno.env.get("PARA_TOKEN_CONTRACT_ADDRESS");
 
     if (!TREASURY_PRIVATE_KEY || !TOKEN_CONTRACT_ADDRESS) {
-      console.error("[mint-points] Missing env: PARA_TREASURY_PRIVATE_KEY or PARA_TOKEN_CONTRACT");
+      console.error("[mint-points] Missing env: DEPLOYER_PRIVATE_KEY or PARA_TOKEN_CONTRACT_ADDRESS");
       return new Response(
         JSON.stringify({ error: "Blockchain configuration missing" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
