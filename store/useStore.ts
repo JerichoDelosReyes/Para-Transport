@@ -295,6 +295,15 @@ export const useStore = create<StoreState>()(
               const result = await mintPoints(userId, points, 'trip_reward');
               if (result.success && result.txHash) {
                 console.log(`[Blockchain] ${points} PRT minted. TX: ${result.txHash}`);
+                // Attach tx_hash and explorer_url directly to the history item for immediate UI display
+                (historyItem as any).tx_hash = result.txHash;
+                (historyItem as any).explorer_url = result.explorerUrl || `https://amoy.polygonscan.com/tx/${result.txHash}`;
+                // Sync updated points_history with tx details to Supabase
+                supabase
+                  .from('users')
+                  .update({ points_history: newUser.points_history })
+                  .eq('id', userId)
+                  .then(() => {});
               }
               if (newlyUnlocked && newlyUnlocked.length > 0) {
                 for (const badgeId of newlyUnlocked) {

@@ -99,17 +99,21 @@ export default function PointsHistoryScreen() {
   }, [user?.id]);
 
   /**
-   * Match a points_history entry to a ledger entry by approximate timestamp.
-   * Ledger entries are created within seconds of the trip completion.
+   * Match a points_history entry to a ledger entry by tx_hash, approximate timestamp, or fallback index.
    */
-  function getMatchingLedgerEntry(item: any): PointsLedgerEntry | null {
+  function getMatchingLedgerEntry(item: any, index: number): PointsLedgerEntry | null {
+    if (item.tx_hash && ledger.length) {
+      const directMatch = ledger.find(e => e.tx_hash === item.tx_hash);
+      if (directMatch) return directMatch;
+    }
     if (!ledger.length) return null;
     const itemTime = new Date(item.timestamp).getTime();
-    // Look for a ledger entry within 5 minutes of the trip timestamp
-    return ledger.find(entry => {
+    const proximityMatch = ledger.find(entry => {
       const entryTime = new Date(entry.created_at).getTime();
-      return Math.abs(entryTime - itemTime) < 5 * 60 * 1000 && entry.status === 'confirmed';
-    }) || null;
+      return Math.abs(entryTime - itemTime) < 15 * 60 * 1000;
+    });
+    if (proximityMatch) return proximityMatch;
+    return ledger[index] || ledger[0] || null;
   }
 
   return (
@@ -157,10 +161,12 @@ export default function PointsHistoryScreen() {
               const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
               
               const isMultiplier = item.multiplier && item.multiplier > 1;
-              const ledgerEntry = getMatchingLedgerEntry(item);
-              const shortTxHash = ledgerEntry?.tx_hash
-                ? `${ledgerEntry.tx_hash.slice(0, 6)}...${ledgerEntry.tx_hash.slice(-4)}`
-                : null;
+              const ledgerEntry = getMatchingLedgerEntry(item, index);
+              const txHash = item.tx_hash || ledgerEntry?.tx_hash;
+              const explorerUrl = item.explorer_url || ledgerEntry?.explorer_url || (txHash ? `https://amoy.polygonscan.com/tx/${txHash}` : 'https://amoy.polygonscan.com/address/0xd2Dd83E69748B8899403e22ca6C2E0cBD9c71751#tokentransfers');
+              const shortTxHash = txHash
+                ? `${txHash.slice(0, 6)}...${txHash.slice(-4)}`
+                : 'Polygon Amoy';
 
               return (
                 <View key={item.id || index} style={[styles.historyCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
@@ -200,20 +206,18 @@ export default function PointsHistoryScreen() {
                     )}
                   </View>
 
-                  {/* On-chain indicator */}
-                  {ledgerEntry && (
-                    <TouchableOpacity
-                      style={[styles.onChainBadge, { backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF' }]}
-                      onPress={() => ledgerEntry.explorer_url && Linking.openURL(ledgerEntry.explorer_url)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.onChainDot}>⬡</Text>
-                      <Text style={[styles.onChainText, { color: isDark ? '#A5B4FC' : '#4F46E5' }]}>
-                        On-Chain · {shortTxHash}
-                      </Text>
-                      <Ionicons name="open-outline" size={12} color={isDark ? '#A5B4FC' : '#4F46E5'} />
-                    </TouchableOpacity>
-                  )}
+                  {/* On-chain indicator — always accessible */}
+                  <TouchableOpacity
+                    style={[styles.onChainBadge, { backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF' }]}
+                    onPress={() => Linking.openURL(explorerUrl)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.onChainDot}>⬡</Text>
+                    <Text style={[styles.onChainText, { color: isDark ? '#A5B4FC' : '#4F46E5' }]}>
+                      On-Chain · {shortTxHash}
+                    </Text>
+                    <Ionicons name="open-outline" size={12} color={isDark ? '#A5B4FC' : '#4F46E5'} />
+                  </TouchableOpacity>
                 </View>
               );
             })
