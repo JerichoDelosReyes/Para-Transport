@@ -54,13 +54,13 @@ export default function ProfileScreen() {
   const getRankStyle = (rank: number) => {
     switch (rank) {
       case 1:
-        return { backgroundColor: isDark ? 'rgba(220,160,32,0.4)' : '#FEF08A', color: isDark ? '#FFFFFF' : '#854D0E', emoji: '🥇' }; // Gold
+        return { backgroundColor: isDark ? 'rgba(220,160,32,0.4)' : '#FEF08A', color: isDark ? '#FFFFFF' : '#854D0E', icon: 'medal' as const };
       case 2:
-        return { backgroundColor: isDark ? 'rgba(156,163,175,0.4)' : '#E5E7EB', color: isDark ? '#FFFFFF' : '#374151', emoji: '🥈' }; // Silver
+        return { backgroundColor: isDark ? 'rgba(156,163,175,0.4)' : '#E5E7EB', color: isDark ? '#FFFFFF' : '#374151', icon: 'medal-outline' as const };
       case 3:
-        return { backgroundColor: isDark ? 'rgba(180,83,9,0.4)' : '#FED7AA', color: isDark ? '#FFFFFF' : '#92400E', emoji: '🥉' }; // Bronze
+        return { backgroundColor: isDark ? 'rgba(180,83,9,0.4)' : '#FED7AA', color: isDark ? '#FFFFFF' : '#92400E', icon: 'ribbon' as const };
       default:
-        return { backgroundColor: isDark ? theme.surfaceSecondary : 'rgba(0,0,0,0.04)', color: isDark ? '#FFFFFF' : COLORS.navy, emoji: '🏆' }; // Default
+        return { backgroundColor: isDark ? theme.surfaceSecondary : 'rgba(0,0,0,0.04)', color: isDark ? '#FFFFFF' : COLORS.navy, icon: 'trophy-outline' as const };
     }
   };
 
@@ -116,7 +116,7 @@ export default function ProfileScreen() {
                   onPress={() => router.navigate('/achievements')} 
                   style={[styles.rankBadge, { backgroundColor: rankStyle.backgroundColor }]}
                 >
-                  <Text style={styles.rankEmoji}>{rankStyle.emoji}</Text>
+                  <Ionicons name={rankStyle.icon} size={16} color={rankStyle.color} />
                   <Text style={[styles.rankNumber, { color: rankStyle.color }]}>#{currentUserRank}</Text>
                 </TouchableOpacity>
               ) : null
@@ -162,7 +162,7 @@ export default function ProfileScreen() {
           <View style={styles.gridStats}>
             <View style={[styles.gridCard, { backgroundColor: theme.cardBackground }]}>
               <View style={[styles.gridIconContainer, { backgroundColor: theme.inputBackground }]}>
-                <Text style={styles.gridIconText}>🚗</Text>
+                <Ionicons name="car-outline" size={18} color={theme.textSecondary} />
               </View>
               <Text style={[styles.gridValue, { color: theme.text }]}>{user?.total_trips || 0}</Text>
               <Text style={[styles.gridLabel, { color: theme.textSecondary }]}>Total Trips</Text>
@@ -173,7 +173,7 @@ export default function ProfileScreen() {
             
             <View style={[styles.gridCard, { backgroundColor: theme.cardBackground }]}>
               <View style={[styles.gridIconContainer, { backgroundColor: theme.inputBackground }]}>
-                <Text style={styles.gridIconText}>📍</Text>
+                <Ionicons name="navigate-outline" size={18} color={theme.textSecondary} />
               </View>
               <Text style={[styles.gridValue, { color: theme.text }]}>{(user?.total_distance || 0).toFixed(1)} <Text style={[styles.gridValueSmall, { color: theme.textSecondary }]}>km</Text></Text>
               <Text style={[styles.gridLabel, { color: theme.textSecondary }]}>Distance</Text>
@@ -184,7 +184,7 @@ export default function ProfileScreen() {
             
             <View style={[styles.gridCard, { backgroundColor: theme.cardBackground }]}>
               <View style={[styles.gridIconContainer, { backgroundColor: theme.inputBackground }]}>
-                <Text style={styles.gridIconText}>💰</Text>
+                <Ionicons name="wallet-outline" size={18} color={theme.textSecondary} />
               </View>
               <Text style={[styles.gridValue, { color: theme.text }]}><Text style={[styles.gridValueSmall, { color: theme.textSecondary }]}>₱</Text>{(user?.spent || 0).toFixed(0)}</Text>
               <Text style={[styles.gridLabel, { color: theme.textSecondary }]}>Total Fare</Text>
@@ -195,7 +195,7 @@ export default function ProfileScreen() {
 
             <View style={[styles.gridCard, { backgroundColor: theme.cardBackground }]}>
               <View style={[styles.gridIconContainer, { backgroundColor: theme.inputBackground }]}>
-                <Text style={styles.gridIconText}>🔥</Text>
+                <Ionicons name="flame-outline" size={18} color={theme.textSecondary} />
               </View>
               <Text style={[styles.gridValue, { color: theme.text }]}>{user?.streak_count || 0}</Text>
               <Text style={[styles.gridLabel, { color: theme.textSecondary }]}>Current Streak</Text>
@@ -249,22 +249,6 @@ export default function ProfileScreen() {
               );
             })}
           </View>
-
-          {/* Blockchain Demo Button */}
-          <TouchableOpacity
-            style={[styles.blockchainDemoBtn, { backgroundColor: '#0A1628', borderColor: '#1E3A5F' }]}
-            activeOpacity={0.85}
-            onPress={() => router.navigate('/blockchain-demo' as any)}
-          >
-            <View style={styles.blockchainDemoLeft}>
-              <Text style={styles.blockchainDemoIcon}>⛓️</Text>
-              <View>
-                <Text style={styles.blockchainDemoTitle}>Blockchain Demo</Text>
-                <Text style={styles.blockchainDemoSub}>Simulate a ride → earn NFT on Polygon</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.4)" />
-          </TouchableOpacity>
 
         </ScrollView>
       </View>
@@ -576,33 +560,5 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
-  },
-  blockchainDemoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: RADIUS.card,
-    borderWidth: 1,
-    padding: 16,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  blockchainDemoLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  blockchainDemoIcon: { fontSize: 28 },
-  blockchainDemoTitle: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  blockchainDemoSub: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.55)',
   },
 });

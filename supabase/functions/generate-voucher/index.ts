@@ -6,10 +6,12 @@ const corsHeaders = {
 };
 
 // Points required per voucher type
+// Earning rate: 2 pts/km base (3pts during rush hour, 4pts on Friday peak)
+// Avg jeepney trip ~5km = ~10 pts. Costs calibrated to require meaningful ridership.
 const VOUCHER_COSTS: Record<string, number> = {
-  discount:   100,   // ₱5 discount voucher
-  free_ride:  500,   // Free jeepney ride voucher
-  partner:    250,   // Partner merchant discount
+  discount:   500,   // ₱5 jeepney fare discount  (~25 avg trips to earn)
+  free_ride: 1000,   // 1 free jeepney ride        (~50 avg trips to earn)
+  partner:    750,   // Partner merchant discount  (~37 avg trips to earn)
 };
 
 // Voucher value descriptions

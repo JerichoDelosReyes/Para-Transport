@@ -13,12 +13,14 @@ import { supabase } from '../config/supabaseClient';
 import { generateVoucher } from '../services/blockchainService';
 
 // ─── Voucher Options ────────────────────────────────────────────────────────
+// Earning rate: 2 pts/km base (3x rush hour, 4x Friday peak)
+// Avg trip ~5km = ~10 pts
 const VOUCHER_OPTIONS = [
   {
     type: 'discount',
     title: '₱5 Fare Discount',
     description: 'Get ₱5 off your next jeepney fare',
-    points: 100,
+    points: 500,
     icon: '🎫',
     color: '#10B981',
     bg: 'rgba(16, 185, 129, 0.1)',
@@ -28,7 +30,7 @@ const VOUCHER_OPTIONS = [
     type: 'partner',
     title: 'Partner Discount',
     description: 'Discount at partner merchants',
-    points: 250,
+    points: 750,
     icon: '🛍️',
     color: '#F59E0B',
     bg: 'rgba(245, 158, 11, 0.1)',
@@ -38,7 +40,7 @@ const VOUCHER_OPTIONS = [
     type: 'free_ride',
     title: 'Free Jeepney Ride',
     description: '1 completely free jeepney ride',
-    points: 500,
+    points: 1000,
     icon: '🚌',
     color: '#6366F1',
     bg: 'rgba(99, 102, 241, 0.1)',
