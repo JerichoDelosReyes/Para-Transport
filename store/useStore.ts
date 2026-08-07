@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { supabase } from '../config/supabaseClient';
 import { BadgeData } from '../types/badges';
-import { ensureUserWallet, mintBadgeNFT } from '../services/blockchainService';
+import { ensureUserWallet, mintBadgeNFT, mintPoints } from '../services/blockchainService';
 
 export type FareDiscountType = 'regular' | 'student' | 'senior' | 'pwd';
 
@@ -283,6 +283,25 @@ export const useStore = create<StoreState>()(
             .then(({ error }) => {
               if (error && error.code !== 'PGRST204') console.log('Failed to sync trip stats to Supabase:', error.message);
             });
+
+            // 🔗 Blockchain: mint PRT tokens for points earned (fire-and-forget)
+            // In-app points are already saved above — this never blocks the UI.
+            const userId = state.user.id;
+            const earnedPoints = points;
+            (async () => {
+              try {
+                // Ensure wallet exists first (creates one if first trip)
+                await ensureUserWallet(userId);
+                // Mint PRT tokens equal to points earned
+                const result = await mintPoints(userId, earnedPoints, 'trip_reward');
+                if (result.success && result.txHash) {
+                  console.log(`[Blockchain] ${earnedPoints} PRT minted. TX: ${result.txHash}`);
+                }
+              } catch (e) {
+                // Blockchain errors never crash the app
+                console.warn('[Blockchain] Background PRT mint failed silently:', e);
+              }
+            })();
         }
 
         return { user: newUser, unlockedBadgeToShow: nextBadgeToShow };

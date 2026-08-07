@@ -6,9 +6,11 @@
  * so the app never touches private keys or raw blockchain APIs.
  *
  * Features:
- *  - Wallet provisioning (get-wallet Edge Function)
- *  - NFT badge minting (mint-badge Edge Function)
- *  - Voucher generation (generate-voucher Edge Function)
+ *  - Wallet provisioning (get-wallet / provision-wallet Edge Functions)
+ *  - PRT token minting — every point earned is minted on Polygon (mint-points)
+ *  - NFT badge minting — every badge unlocked is an NFT on Polygon (mint-badge)
+ *  - Voucher generation — redeem points for vouchers (generate-voucher)
+ *  - Points ledger — on-chain tx hash transparency via Supabase points_ledger table
  */
 
 import { supabase } from '../config/supabaseClient';
@@ -84,7 +86,7 @@ async function callEdgeFunction(
 /**
  * Ensure a user has a blockchain wallet address.
  * Creates one if they don't have it yet.
- * Called on first login or first badge unlock.
+ * Called on first login, first trip completion, or first badge unlock.
  */
 export async function ensureUserWallet(userId: string): Promise<string | null> {
   const { data, error } = await callEdgeFunction('get-wallet', { user_id: userId });
@@ -100,6 +102,9 @@ export async function ensureUserWallet(userId: string): Promise<string | null> {
 
   return data?.wallet_address || null;
 }
+
+/** Alias — explicitly provision a wallet (same as ensureUserWallet) */
+export const provisionWallet = ensureUserWallet;
 
 // ─── Badge NFT Minting ──────────────────────────────────────────────────────
 
@@ -143,6 +148,98 @@ export async function mintBadgeNFT(
 
   console.log(`[Blockchain] Badge minted! TX: ${data?.tx_hash}`);
   return { success: true, txHash: data?.tx_hash };
+}
+
+// ─── PRT Token Minting (Points on Chain) ────────────────────────────────────
+
+export interface MintPointsResult {
+  success: boolean;
+  txHash?: string;
+  walletAddress?: string;
+  explorerUrl?: string;
+  error?: string;
+}
+
+/**
+ * Mint PRT tokens to a user's wallet for points they earned.
+ *
+ * Always call fire-and-forget (don't await in UI).
+ * In-app points are already updated in Supabase before this runs.
+ * If minting fails on-chain, in-app points are unaffected.
+ *
+ * 1 in-app point = 1 PRT token on Polygon Amoy
+ *
+ * @param userId  Supabase user ID
+ * @param points  Number of points (= PRT tokens) to mint
+ * @param reason  Human-readable reason e.g. 'trip_reward', 'streak_bonus'
+ */
+export async function mintPoints(
+  userId: string,
+  points: number,
+  reason: string = 'trip_reward'
+): Promise<MintPointsResult> {
+  if (!userId || points <= 0) return { success: false, error: 'Invalid userId or points' };
+
+  console.log(`[Blockchain] Minting ${points} PRT for user ${userId} (${reason})...`);
+
+  const { data, error } = await callEdgeFunction('mint-points', {
+    user_id: userId,
+    points,
+    reason,
+  });
+
+  if (error) {
+    console.warn('[Blockchain] PRT mint failed:', error);
+    return { success: false, error };
+  }
+
+  console.log(`[Blockchain] PRT minted! TX: ${data?.tx_hash}`);
+  return {
+    success: true,
+    txHash: data?.tx_hash,
+    walletAddress: data?.wallet_address,
+    explorerUrl: data?.explorer_url,
+  };
+}
+
+// ─── Points Ledger (On-Chain Transparency) ──────────────────────────────────
+
+export interface PointsLedgerEntry {
+  id: string;
+  points_minted: number;
+  reason: string;
+  tx_hash: string | null;
+  wallet_address: string | null;
+  status: 'pending' | 'confirmed' | 'failed';
+  explorer_url: string | null;
+  created_at: string;
+}
+
+/**
+ * Fetch the on-chain points ledger for a user.
+ * Shows every PRT token mint with Polygon tx hashes.
+ * Used in points-history screen for transparency.
+ *
+ * @param userId  Supabase user ID
+ * @param limit   Max entries to return (default 50)
+ */
+export async function fetchPointsLedger(
+  userId: string,
+  limit: number = 50
+): Promise<PointsLedgerEntry[]> {
+  const { data, error } = await supabase
+    .from('points_ledger')
+    .select('id, points_minted, reason, tx_hash, wallet_address, status, explorer_url, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.warn('[Blockchain] fetchPointsLedger error:', error.message);
+    return [];
+  }
+
+  return (data || []) as PointsLedgerEntry[];
 }
 
 // ─── Voucher Generation ─────────────────────────────────────────────────────
