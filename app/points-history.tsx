@@ -132,6 +132,12 @@ export default function PointsHistoryScreen() {
             <Ionicons name="gift-outline" size={24} color="#0A1628" />
           </TouchableOpacity>
         </View>
+
+        {/* Points balance banner (Same UI as Vouchers screen) */}
+        <View style={[styles.balanceBanner, { backgroundColor: 'rgba(0,0,0,0.12)' }]}>
+          <Text style={styles.balanceLabel}>Your Points</Text>
+          <Text style={styles.balanceValue}>{user?.points || 0} pts</Text>
+        </View>
       </View>
 
       <View style={styles.bottomSection}>
@@ -370,9 +376,32 @@ const styles = StyleSheet.create({
     marginLeft: 7,
     marginVertical: 4,
   },
+  balanceBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: SPACING.screenX,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: RADIUS.card,
+  },
+  balanceLabel: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: 'rgba(10,22,40,0.7)',
+    fontWeight: '600',
+  },
+  balanceValue: {
+    fontFamily: 'Cubao',
+    fontSize: 22,
+    color: '#0A1628',
+  },
   metricsRow: {
     flexDirection: 'row',
-    gap: 12,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
   },
   metricItem: {
     flexDirection: 'row',
@@ -382,6 +411,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
+    flexShrink: 1,
   },
   metricText: {
     fontFamily: 'Inter',
@@ -397,6 +427,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
+    flexShrink: 1,
   },
   metricTextGold: {
     fontFamily: 'Inter',
@@ -411,6 +442,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
+    flexShrink: 1,
   },
   onChainDot: {
     fontSize: 12,

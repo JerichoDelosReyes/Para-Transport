@@ -96,31 +96,56 @@ export default function ProfileScreen() {
               <Text style={styles.avatarText}>{getInitials(user?.username || user?.full_name || '')}</Text>
             </View>
 
-            {/* Leaderboard Placement */}
-            {!isGuestAccount && (
-              (user?.points || 0) === 0 ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {/* Points Button */}
+              {!isGuestAccount && (
                 <TouchableOpacity 
-                  activeOpacity={0.7} 
-                  onPress={() => router.navigate('/achievements')} 
-                  style={[styles.rankBadge, { backgroundColor: '#F3F4F6' }]}
+                  style={[
+                    styles.quickStatBtn, 
+                    { 
+                      backgroundColor: isDark ? 'rgba(232, 160, 32, 0.15)' : '#FEF3C7', 
+                      borderColor: isDark ? 'rgba(232, 160, 32, 0.35)' : '#FDE68A',
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                    }
+                  ]}
+                  onPress={() => router.navigate('/points-history')}
+                  activeOpacity={0.7}
                 >
-                  <Text style={[styles.rankNumber, { color: '#6B7280', fontSize: 13 }]}>Ride to rank!</Text>
+                  <View style={{ justifyContent: 'center' }}>
+                    <Text style={[styles.quickStatValue, { color: isDark ? '#FFFFFF' : '#92400E' }]}>{user?.points || 0}</Text>
+                    <Text style={[styles.quickStatLabel, { color: isDark ? '#FCD34D' : '#B45309' }]}>Points</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={12} color={isDark ? '#FCD34D' : '#B45309'} />
                 </TouchableOpacity>
-              ) : isLoadingRank ? (
-                <View style={[styles.rankBadge, { width: 70, height: 42, justifyContent: 'center' }]}>
-                  <ActivityIndicator size="small" color={COLORS.navy} />
-                </View>
-              ) : (currentUserRank !== null && rankStyle !== null) ? (
-                <TouchableOpacity 
-                  activeOpacity={0.7} 
-                  onPress={() => router.navigate('/achievements')} 
-                  style={[styles.rankBadge, { backgroundColor: rankStyle.backgroundColor }]}
-                >
-                  <Ionicons name={rankStyle.icon} size={16} color={rankStyle.color} />
-                  <Text style={[styles.rankNumber, { color: rankStyle.color }]}>#{currentUserRank}</Text>
-                </TouchableOpacity>
-              ) : null
-            )}
+              )}
+
+              {/* Leaderboard Placement (Medal Button) */}
+              {!isGuestAccount && (
+                (user?.points || 0) === 0 ? (
+                  <TouchableOpacity 
+                    activeOpacity={0.7} 
+                    onPress={() => router.navigate('/achievements')} 
+                    style={[styles.rankBadge, { backgroundColor: '#F3F4F6' }]}
+                  >
+                    <Text style={[styles.rankNumber, { color: '#6B7280', fontSize: 13 }]}>Ride to rank!</Text>
+                  </TouchableOpacity>
+                ) : isLoadingRank ? (
+                  <View style={[styles.rankBadge, { width: 70, height: 42, justifyContent: 'center' }]}>
+                    <ActivityIndicator size="small" color={COLORS.navy} />
+                  </View>
+                ) : (currentUserRank !== null && rankStyle !== null) ? (
+                  <TouchableOpacity 
+                    activeOpacity={0.7} 
+                    onPress={() => router.navigate('/achievements')} 
+                    style={[styles.rankBadge, { backgroundColor: rankStyle.backgroundColor }]}
+                  >
+                    <Ionicons name={rankStyle.icon} size={16} color={rankStyle.color} />
+                    <Text style={[styles.rankNumber, { color: rankStyle.color }]}>#{currentUserRank}</Text>
+                  </TouchableOpacity>
+                ) : null
+              )}
+            </View>
           </View>
 
           {/* Top Info Area */}
@@ -134,27 +159,22 @@ export default function ProfileScreen() {
 
             <View style={styles.quickStatsRow}>
               <TouchableOpacity 
-                style={[styles.quickStat, { flexDirection: 'row', gap: 6, alignItems: 'center' }]}
+                style={[
+                  styles.quickStatBtn, 
+                  { 
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F3F4F6', 
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : '#E5E7EB',
+                  }
+                ]}
                 onPress={() => router.navigate('/broadcasts')}
                 activeOpacity={0.7}
               >
-                <Ionicons name="radio" size={24} color={theme.text} />
+                <View style={[styles.btnIconContainer, { backgroundColor: isDark ? 'rgba(232, 160, 32, 0.2)' : '#FEF3C7' }]}>
+                  <Ionicons name="radio" size={15} color={isDark ? '#E8A020' : '#B45309'} />
+                </View>
+                <Text style={[styles.quickStatBtnLabel, { color: theme.text }]}>Broadcasts</Text>
+                <Ionicons name="chevron-forward" size={12} color={theme.textSecondary} />
               </TouchableOpacity>
-
-              {!isGuestAccount && (
-                <>
-                  <View style={[styles.quickStatDivider, { backgroundColor: theme.cardBorder }]} />
-
-                  <TouchableOpacity 
-                    style={styles.quickStat}
-                    onPress={() => router.navigate('/points-history')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.quickStatValue, { color: theme.text }]}>{user?.points || 0}</Text>
-                    <Text style={[styles.quickStatLabel, { color: theme.textSecondary }]}>Points</Text>
-                  </TouchableOpacity>
-                </>
-              )}
             </View>
           </View>
 
@@ -374,27 +394,45 @@ const styles = StyleSheet.create({
   quickStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 16,
+    gap: 8,
+    marginLeft: 8,
   },
-  quickStat: {
+  quickStatBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  btnIconContainer: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickStatBtnLabel: {
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    fontSize: 12,
   },
   quickStatValue: {
     fontFamily: 'Cubao',
-    fontSize: 20,
-    color: COLORS.navy,
+    fontSize: 15,
+    lineHeight: 16,
   },
   quickStatLabel: {
     fontFamily: 'Inter',
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginTop: 2,
-  },
-  quickStatDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    marginHorizontal: 16,
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: -2,
   },
   gridStats: {
     flexDirection: 'row',
