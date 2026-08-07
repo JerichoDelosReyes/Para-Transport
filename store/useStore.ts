@@ -3,11 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { supabase } from '../config/supabaseClient';
 import { BadgeData } from '../types/badges';
-<<<<<<< HEAD
-import { triggerBadgeMint } from '../services/blockchainService';
-=======
 import { ensureUserWallet, mintBadgeNFT, mintPoints } from '../services/blockchainService';
->>>>>>> blockchain
 
 export type FareDiscountType = 'regular' | 'student' | 'senior' | 'pwd';
 
@@ -464,20 +460,6 @@ export const useStore = create<StoreState>()(
                 if (error && error.code !== 'PGRST204') console.log('Failed to array-sync badge to Supabase:', error.message);
               });
 
-<<<<<<< HEAD
-            // Fire on-chain mint if this badge is configured as on-chain (non-blocking)
-            supabase
-              .from('badges')
-              .select('id, token_id, is_onchain')
-              .eq('id', badgeId)
-              .eq('is_onchain', true)
-              .single()
-              .then(({ data: badge }) => {
-                if (badge && badge.token_id != null) {
-                  triggerBadgeMint(userId, badge.id, badge.token_id);
-                }
-              });
-=======
             // 🔗 Blockchain: mint NFT badge in background (fire-and-forget)
             // This never blocks the UI — badge appears instantly in the app.
             const userId = state.user.id;
@@ -495,7 +477,6 @@ export const useStore = create<StoreState>()(
                 console.warn('[Blockchain] Background mint failed silently:', e);
               }
             })();
->>>>>>> blockchain
           }
           
           return {
