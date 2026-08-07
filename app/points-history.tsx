@@ -198,6 +198,20 @@ export default function PointsHistoryScreen() {
                       <Ionicons name="time-outline" size={16} color={theme.textSecondary} />
                       <Text style={[styles.metricText, { color: theme.textSecondary }]}>{item.time || Math.round((item.distance || 0) * 3) || 5} min</Text>
                     </View>
+
+                    {/* On-chain indicator — directly to the right of 1 min indicator */}
+                    <TouchableOpacity
+                      style={[styles.onChainBadge, { backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF' }]}
+                      onPress={() => Linking.openURL(explorerUrl)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.onChainDot}>⬡</Text>
+                      <Text style={[styles.onChainText, { color: isDark ? '#A5B4FC' : '#4F46E5' }]}>
+                        On-Chain · {shortTxHash}
+                      </Text>
+                      <Ionicons name="open-outline" size={12} color={isDark ? '#A5B4FC' : '#4F46E5'} />
+                    </TouchableOpacity>
+
                     {isMultiplier && (
                        <View style={[styles.metricItemGold, { backgroundColor: isDark ? 'rgba(232, 160, 32, 0.15)' : '#FEF3C7' }]}>
                          <Ionicons name="flash" size={16} color={isDark ? '#E8A020' : '#B45309'} />
@@ -205,19 +219,6 @@ export default function PointsHistoryScreen() {
                        </View>
                     )}
                   </View>
-
-                  {/* On-chain indicator — always accessible */}
-                  <TouchableOpacity
-                    style={[styles.onChainBadge, { backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF' }]}
-                    onPress={() => Linking.openURL(explorerUrl)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.onChainDot}>⬡</Text>
-                    <Text style={[styles.onChainText, { color: isDark ? '#A5B4FC' : '#4F46E5' }]}>
-                      On-Chain · {shortTxHash}
-                    </Text>
-                    <Ionicons name="open-outline" size={12} color={isDark ? '#A5B4FC' : '#4F46E5'} />
-                  </TouchableOpacity>
                 </View>
               );
             })
@@ -407,11 +408,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    alignSelf: 'flex-start',
   },
   onChainDot: {
     fontSize: 12,
