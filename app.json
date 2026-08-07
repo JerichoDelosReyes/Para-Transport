@@ -31,9 +31,12 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO"
       ],
       "package": "com.noxencv.paratransport"
     },
@@ -54,20 +57,21 @@
           }
         }
       ],
-      "expo-speech-recognition"
+      "expo-speech-recognition",
+      "expo-font",
+      "expo-router"
     ],
     "extra": {
       "eas": {
-        "projectId": "34665852-31df-4ca2-b87a-510e5909f06c"
+        "projectId": "64f895f4-ffe8-474c-8180-5711e44e81b4"
       }
     },
-    "owner": "noxen-cv",
     "runtimeVersion": {
       "policy": "appVersion"
     },
+    "newArchEnabled": true,
     "updates": {
-      "url": "https://u.expo.dev/34665852-31df-4ca2-b87a-510e5909f06c"
-    },
-    "newArchEnabled": true
+      "url": "https://u.expo.dev/64f895f4-ffe8-474c-8180-5711e44e81b4"
+    }
   }
 }

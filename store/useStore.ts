@@ -3,7 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { supabase } from '../config/supabaseClient';
 import { BadgeData } from '../types/badges';
+<<<<<<< HEAD
 import { triggerBadgeMint } from '../services/blockchainService';
+=======
+import { ensureUserWallet, mintBadgeNFT, mintPoints } from '../services/blockchainService';
+>>>>>>> blockchain
 
 export type FareDiscountType = 'regular' | 'student' | 'senior' | 'pwd';
 
@@ -288,23 +292,23 @@ export const useStore = create<StoreState>()(
               if (error && error.code !== 'PGRST204') console.log('Failed to sync trip stats to Supabase:', error.message);
             });
 
-          // Fire on-chain mint for each newly unlocked badge (non-blocking)
-          if (newlyUnlocked.length > 0) {
-            supabase
-              .from('badges')
-              .select('id, token_id, is_onchain')
-              .in('id', newlyUnlocked)
-              .eq('is_onchain', true)
-              .then(({ data: onChainBadges }) => {
-                if (onChainBadges) {
-                  onChainBadges.forEach((b) => {
-                    if (b.token_id != null) {
-                      triggerBadgeMint(userId, b.id, b.token_id);
-                    }
-                  });
+          // 🔗 Blockchain: mint PRT tokens for points earned & mint unlocked NFT badges (non-blocking)
+          (async () => {
+            try {
+              await ensureUserWallet(userId);
+              const result = await mintPoints(userId, points, 'trip_reward');
+              if (result.success && result.txHash) {
+                console.log(`[Blockchain] ${points} PRT minted. TX: ${result.txHash}`);
+              }
+              if (newlyUnlocked && newlyUnlocked.length > 0) {
+                for (const badgeId of newlyUnlocked) {
+                  mintBadgeNFT(userId, badgeId);
                 }
-              });
-          }
+              }
+            } catch (e) {
+              console.warn('[Blockchain] Background PRT mint failed silently:', e);
+            }
+          })();
         }
 
         return { user: newUser, unlockedBadgeToShow: nextBadgeToShow };
@@ -460,6 +464,7 @@ export const useStore = create<StoreState>()(
                 if (error && error.code !== 'PGRST204') console.log('Failed to array-sync badge to Supabase:', error.message);
               });
 
+<<<<<<< HEAD
             // Fire on-chain mint if this badge is configured as on-chain (non-blocking)
             supabase
               .from('badges')
@@ -472,6 +477,25 @@ export const useStore = create<StoreState>()(
                   triggerBadgeMint(userId, badge.id, badge.token_id);
                 }
               });
+=======
+            // 🔗 Blockchain: mint NFT badge in background (fire-and-forget)
+            // This never blocks the UI — badge appears instantly in the app.
+            const userId = state.user.id;
+            (async () => {
+              try {
+                // Ensure the user has a wallet first
+                await ensureUserWallet(userId);
+                // Mint the badge NFT on Polygon
+                const result = await mintBadgeNFT(userId, badgeId);
+                if (result.success && result.txHash) {
+                  console.log(`[Blockchain] Badge '${badgeId}' NFT minted. TX: ${result.txHash}`);
+                }
+              } catch (e) {
+                // Blockchain errors never crash the app
+                console.warn('[Blockchain] Background mint failed silently:', e);
+              }
+            })();
+>>>>>>> blockchain
           }
           
           return {

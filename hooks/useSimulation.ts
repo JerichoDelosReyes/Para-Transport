@@ -89,6 +89,11 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
   const legTravelMin = useRef<number[]>([]);
   const legWaitMin = useRef<number[]>([]);
 
+  // Store transitLegs in a ref so callbacks that read it (getLegInfo, tick)
+  // don't need to re-create on every render — prevents infinite loop.
+  const transitLegsRef = useRef<TransitLeg[]>(transitLegs);
+  useEffect(() => { transitLegsRef.current = transitLegs; }, [transitLegs]);
+
   const [state, setState] = useState<SimulationState>('idle');
   const [position, setPosition] = useState<Coord | null>(null);
   const [currentSegInfo, setCurrentSegInfo] = useState<SimSegmentInfo | null>(null);
@@ -215,10 +220,12 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
   }, []);
 
   /** Given a cumulative distance, find which transit leg the marker is in */
+  // Uses transitLegsRef so this callback is stable (no re-creation on each render)
   const getLegInfo = useCallback((dist: number): SimSegmentInfo | null => {
+    const legs = transitLegsRef.current;
     for (const b of legBoundaries.current) {
       if (dist >= b.cumStart && dist <= b.cumEnd + 0.01) {
-        const leg = transitLegs[b.legIdx];
+        const leg = legs[b.legIdx];
         if (!leg) continue;
         if (leg.onTransit) {
           const routeName = leg.transitInfo?.name || leg.transitInfo?.ref || 'Transit';
@@ -230,9 +237,8 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
         return { onTransit: false, label: walkingText, color: '#808080', vehicleType: null };
       }
     }
-    // Fallback: if we're past all legs (end of route)
     return null;
-  }, [transitLegs]);
+  }, []); // stable — reads transitLegs via ref
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
@@ -249,7 +255,7 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
 
     if (distToDestination <= 0) {
       distanceTravelled.current = totalDist.current;
-      
+
       if (!warnedArrived.current) {
         warnedArrived.current = true;
         Notifications.scheduleNotificationAsync({
@@ -321,7 +327,7 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
     setProgress(distanceTravelled.current / totalDist.current);
     setCurrentSegInfo(getLegInfo(distanceTravelled.current));
     updateRemainingMetrics(distanceTravelled.current);
-  }, [speed, stopTimer, getLegInfo, updateRemainingMetrics]);
+  }, [speed, stopTimer, getLegInfo, updateRemainingMetrics]); // getLegInfo & updateRemainingMetrics are now stable
 
   const play = useCallback(() => {
     if (coords.current.length < 2) return;
@@ -375,10 +381,15 @@ export function useSimulation(routeCoordinates: Coord[], transitLegs: TransitLeg
     return stopTimer;
   }, [speed, state, tick, stopTimer]);
 
-  // Reset when route changes (new search)
-  useEffect(() => {
-    reset();
-  }, [routeCoordinates]);
+  // Reset when route changes (new search).
+  // Use a stable key string instead of array reference to avoid infinite loop
+  // when the parent re-creates the array on every render.
+  const routeKey = routeCoordinates.length > 0
+    ? `${routeCoordinates.length}:${routeCoordinates[0]?.latitude?.toFixed(5)}:${routeCoordinates[routeCoordinates.length - 1]?.latitude?.toFixed(5)}`
+    : 'empty';
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { reset(); }, [routeKey]);
 
   // Cleanup on unmount
   useEffect(() => {

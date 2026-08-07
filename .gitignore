@@ -40,6 +40,8 @@ yarn-error.*
 /ios
 /android
 .env
+blockchain/.env
+blockchain/.env.blockchain
 
 # Google Auth Client Files
 client_*.json

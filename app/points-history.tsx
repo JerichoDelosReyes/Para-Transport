@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Animated } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Animated, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
 import { useTheme } from '../src/theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { supabase } from '../config/supabaseClient';
+import { fetchPointsLedger, PointsLedgerEntry } from '../services/blockchainService';
 import JeepIllustrationLight from '../assets/illustrations/welcomeScreen-jeep2.svg';
 import JeepIllustrationDark from '../assets/illustrations/welcomeScreen-jeep2-dark.svg';
 
@@ -62,16 +63,18 @@ export default function PointsHistoryScreen() {
   const { theme, isDark } = useTheme();
   
   const [pointsHistory, setPointsHistory] = useState<any[]>(user?.points_history || []);
+  const [ledger, setLedger] = useState<PointsLedgerEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchPointsHistory() {
+    async function fetchData() {
       if (!user?.id) {
         setIsLoading(false);
         return;
       }
       
       try {
+        // Fetch in-app points history from Supabase
         const { data, error } = await supabase
           .from('users')
           .select('points_history')
@@ -81,6 +84,10 @@ export default function PointsHistoryScreen() {
         if (!error && data?.points_history) {
           setPointsHistory(data.points_history || []);
         }
+
+        // Fetch on-chain ledger (PRT mint tx hashes)
+        const ledgerEntries = await fetchPointsLedger(user.id, 100);
+        setLedger(ledgerEntries);
       } catch (err) {
         console.error(err);
       } finally {
@@ -88,8 +95,22 @@ export default function PointsHistoryScreen() {
       }
     }
     
-    fetchPointsHistory();
+    fetchData();
   }, [user?.id]);
+
+  /**
+   * Match a points_history entry to a ledger entry by approximate timestamp.
+   * Ledger entries are created within seconds of the trip completion.
+   */
+  function getMatchingLedgerEntry(item: any): PointsLedgerEntry | null {
+    if (!ledger.length) return null;
+    const itemTime = new Date(item.timestamp).getTime();
+    // Look for a ledger entry within 5 minutes of the trip timestamp
+    return ledger.find(entry => {
+      const entryTime = new Date(entry.created_at).getTime();
+      return Math.abs(entryTime - itemTime) < 5 * 60 * 1000 && entry.status === 'confirmed';
+    }) || null;
+  }
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
@@ -99,7 +120,13 @@ export default function PointsHistoryScreen() {
             <Ionicons name="chevron-back" size={24} color="#0A1628" />
           </TouchableOpacity>
           <Text style={[styles.headerTitleText, { color: '#0A1628' }]}>POINTS</Text>
-          <View style={{ width: 44, height: 44 }} />
+          <TouchableOpacity
+            onPress={() => router.push('/vouchers' as any)}
+            style={[styles.buttonBack, { backgroundColor: 'rgba(255,255,255,0.2)' }]}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="gift-outline" size={24} color="#0A1628" />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -121,7 +148,7 @@ export default function PointsHistoryScreen() {
                ) : (
                  <JeepIllustrationLight width={220} height={150} />
                )}
-               <Text style={[styles.emptyTitle, { color: theme.text }]}>WALA PANG POINTS.</Text>
+               <Text style={[styles.emptyTitle, { color: theme.text }]}>NO POINTS YET.</Text>
              </View>
           ) : (
             pointsHistory.map((item: any, index: number) => {
@@ -130,6 +157,10 @@ export default function PointsHistoryScreen() {
               const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
               
               const isMultiplier = item.multiplier && item.multiplier > 1;
+              const ledgerEntry = getMatchingLedgerEntry(item);
+              const shortTxHash = ledgerEntry?.tx_hash
+                ? `${ledgerEntry.tx_hash.slice(0, 6)}...${ledgerEntry.tx_hash.slice(-4)}`
+                : null;
 
               return (
                 <View key={item.id || index} style={[styles.historyCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
@@ -168,6 +199,21 @@ export default function PointsHistoryScreen() {
                        </View>
                     )}
                   </View>
+
+                  {/* On-chain indicator */}
+                  {ledgerEntry && (
+                    <TouchableOpacity
+                      style={[styles.onChainBadge, { backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF' }]}
+                      onPress={() => ledgerEntry.explorer_url && Linking.openURL(ledgerEntry.explorer_url)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.onChainDot}>⬡</Text>
+                      <Text style={[styles.onChainText, { color: isDark ? '#A5B4FC' : '#4F46E5' }]}>
+                        On-Chain · {shortTxHash}
+                      </Text>
+                      <Ionicons name="open-outline" size={12} color={isDark ? '#A5B4FC' : '#4F46E5'} />
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })
@@ -352,5 +398,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 13,
     color: '#B45309',
-  }
+  },
+  onChainBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  onChainDot: {
+    fontSize: 12,
+    color: '#6366F1',
+  },
+  onChainText: {
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    fontSize: 12,
+    color: '#4F46E5',
+  },
 });

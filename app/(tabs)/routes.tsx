@@ -1,4 +1,4 @@
-﻿import { ScrollView, StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
 import { useState, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -109,7 +109,7 @@ export default function RoutesScreen() {
             ) : (
               <JeepIllustrationLight width={220} height={150} />
             )}
-            <Text style={[styles.emptyTitle, { color: theme.text }]}>WALA PANG HISTORY.</Text>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>NO HISTORY YET.</Text>
           </View>
         ) : (
           <>

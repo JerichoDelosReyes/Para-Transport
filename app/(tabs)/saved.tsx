@@ -74,7 +74,7 @@ export default function SavedScreen() {
             ) : (
               <JeepIllustrationLight width={220} height={150} />
             )}
-            <Text style={[styles.emptyTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>Wala pang saved routes.</Text>
+            <Text style={[styles.emptyTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>NO SAVED ROUTES.</Text>
           </View>
         ) : (
           savedRoutes.map((route: any, idx: number) => (

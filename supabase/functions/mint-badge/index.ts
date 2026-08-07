@@ -1,171 +1,180 @@
-// supabase/functions/mint-badge/index.ts
-// Mints one ERC-1155 token to a user's thirdweb in-app wallet on Polygon Amoy.
-//
-// Flow:
-//   1. Auth gate — valid Supabase JWT required
-//   2. Load the pending badge_mints row (joined to users + badges)
-//   3. Call thirdweb Engine API to mint tokenId → wallet address
-//   4. On success → update row: status='confirmed', tx_hash, explorer_url
-//   5. On failure → update row: status='failed', log error — no crash
-//
-// Required env vars (set via `supabase secrets set`):
-//   THIRDWEB_SECRET_KEY         — thirdweb server-side secret key
-//   THIRDWEB_ENGINE_URL         — your thirdweb Engine base URL
-//                                 (e.g. https://engine.thirdweb.com)
-//   THIRDWEB_ENGINE_ACCESS_TOKEN — Engine backend wallet access token
-//   THIRDWEB_BACKEND_WALLET     — the Engine backend wallet address that pays gas
-//   SUPABASE_URL                — auto-injected
-//   SUPABASE_SERVICE_ROLE_KEY   — auto-injected
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { ethers } from "npm:ethers@5.7.2";
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
-const THIRDWEB_SECRET_KEY          = Deno.env.get('THIRDWEB_SECRET_KEY') ?? '';
-const THIRDWEB_ENGINE_URL          = Deno.env.get('THIRDWEB_ENGINE_URL') ?? 'https://engine.thirdweb.com';
-const THIRDWEB_ENGINE_ACCESS_TOKEN = Deno.env.get('THIRDWEB_ENGINE_ACCESS_TOKEN') ?? '';
-const THIRDWEB_BACKEND_WALLET      = Deno.env.get('THIRDWEB_BACKEND_WALLET') ?? '';
-const SUPABASE_URL                 = Deno.env.get('SUPABASE_URL') ?? '';
-const SUPABASE_SERVICE_ROLE_KEY    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+// ParaBadge contract ABI — only the functions we need
+const PARA_BADGE_ABI = [
+  "function mintBadge(address recipient, string calldata badgeTypeId) external returns (uint256)",
+  "function userHasBadge(address user, string calldata badgeTypeId) external view returns (bool)",
+  "function badgeTypeURI(string calldata badgeTypeId) external view returns (string)",
+  "event BadgeMinted(address indexed recipient, uint256 indexed tokenId, string badgeTypeId, string tokenURI)",
+];
 
-const AMOY_CHAIN_ID = '80002'; // Polygon Amoy testnet
-const AMOY_EXPLORER = 'https://amoy.polygonscan.com/tx';
-
-serve(async (req: Request) => {
-  // ── 1. Auth gate ──────────────────────────────────────────────────────────
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return json({ error: 'Unauthorized' }, 401);
+/**
+ * mint-badge Edge Function
+ *
+ * Called when a Para user unlocks a badge/achievement in the app.
+ * This function:
+ *   1. Gets the user's wallet address from Supabase
+ *   2. Checks if they already have this badge on-chain
+ *   3. Mints the NFT badge to their wallet using Para's treasury wallet
+ *   4. Stores the transaction hash back in Supabase
+ *
+ * Request body: { user_id: string, badge_type_id: string }
+ * Response:     { success: boolean, tx_hash: string, token_id: number }
+ *
+ * Required env vars (set in Supabase dashboard → Settings → Edge Functions):
+ *   - DEPLOYER_PRIVATE_KEY      Para's treasury wallet private key
+ *   - PARA_BADGE_CONTRACT_ADDRESS  Deployed ParaBadge contract address
+ *   - POLYGON_AMOY_RPC_URL         RPC endpoint for Polygon Amoy testnet
+ */
+Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-  const token = authHeader.replace('Bearer ', '');
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-  if (authError || !user) {
-    return json({ error: 'Invalid token' }, 401);
-  }
-
-  // ── 2. Parse body ─────────────────────────────────────────────────────────
-  let badge_mint_id: string;
   try {
-    const body = await req.json();
-    badge_mint_id = body.badge_mint_id;
-    if (!badge_mint_id) throw new Error('missing badge_mint_id');
-  } catch {
-    return json({ error: 'Body must be { badge_mint_id: string }' }, 400);
-  }
+    const { user_id, badge_type_id } = await req.json();
 
-  // ── 3. Load the pending badge_mint row ────────────────────────────────────
-  const { data: mintRow, error: fetchError } = await supabase
-    .from('badge_mints')
-    .select(`
-      id,
-      user_id,
-      badge_id,
-      token_id,
-      status,
-      users!inner ( wallet_address ),
-      badges!inner ( contract_address, is_onchain )
-    `)
-    .eq('id', badge_mint_id)
-    .eq('user_id', user.id) // ownership check
-    .single();
-
-  if (fetchError || !mintRow) {
-    return json({ error: 'badge_mint not found or not owned by caller' }, 404);
-  }
-
-  if (mintRow.status !== 'pending') {
-    // Already processed — return current state without reminting
-    return json({ status: mintRow.status });
-  }
-
-  const walletAddress: string = (mintRow.users as any).wallet_address;
-  const contractAddress: string = (mintRow.badges as any).contract_address;
-  const tokenId: number = mintRow.token_id;
-
-  if (!walletAddress) {
-    await markFailed(supabase, badge_mint_id, 'User wallet not provisioned yet');
-    return json({ error: 'Wallet not provisioned' }, 422);
-  }
-
-  if (!(mintRow.badges as any).is_onchain) {
-    await markFailed(supabase, badge_mint_id, 'Badge is not configured as on-chain');
-    return json({ error: 'Badge is not on-chain' }, 422);
-  }
-
-  // ── 4. Call thirdweb Engine to mint ───────────────────────────────────────
-  // thirdweb Engine REST API: POST /contract/{chain}/{contract}/erc1155/mint-to
-  const engineEndpoint =
-    `${THIRDWEB_ENGINE_URL}/contract/${AMOY_CHAIN_ID}/${contractAddress}/erc1155/mint-to`;
-
-  let txHash: string;
-  try {
-    const mintResp = await fetch(engineEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${THIRDWEB_ENGINE_ACCESS_TOKEN}`,
-        'x-backend-wallet-address': THIRDWEB_BACKEND_WALLET,
-      },
-      body: JSON.stringify({
-        receiver: walletAddress,
-        metadataWithSupply: {
-          // tokenId of the existing Edition NFT to mint
-          tokenId: String(tokenId),
-          supply: '1',
-        },
-      }),
-    });
-
-    if (!mintResp.ok) {
-      const errBody = await mintResp.text();
-      console.error('[mint-badge] Engine mint error:', mintResp.status, errBody);
-      await markFailed(supabase, badge_mint_id, `Engine ${mintResp.status}: ${errBody}`);
-      return json({ error: 'Mint failed', detail: mintResp.status });
+    if (!user_id || !badge_type_id) {
+      return new Response(
+        JSON.stringify({ error: "user_id and badge_type_id are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const mintData = await mintResp.json();
-    // Engine returns { result: { queueId: "...", transactionHash: "0x..." } }
-    txHash = mintData?.result?.transactionHash ?? mintData?.result?.queueId ?? 'pending';
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[mint-badge] Engine fetch error:', msg);
-    await markFailed(supabase, badge_mint_id, msg);
-    return json({ error: 'Network error calling mint' });
+    // Load required environment variables
+    const deployerPrivateKey = Deno.env.get("DEPLOYER_PRIVATE_KEY") || Deno.env.get("PARA_TREASURY_PRIVATE_KEY");
+    const contractAddress = Deno.env.get("PARA_BADGE_CONTRACT_ADDRESS") || Deno.env.get("PARA_BADGE_CONTRACT");
+    const rpcUrl = Deno.env.get("POLYGON_AMOY_RPC_URL") || "https://polygon-amoy-bor-rpc.publicnode.com";
+
+    if (!deployerPrivateKey || !contractAddress) {
+      console.error("Missing required environment variables");
+      return new Response(
+        JSON.stringify({ error: "Server configuration error" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Initialize Supabase admin client
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // Step 1: Get user's wallet address
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("wallet_address, username")
+      .eq("id", user_id)
+      .single();
+
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: "User not found" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!user.wallet_address) {
+      return new Response(
+        JSON.stringify({
+          error: "User does not have a wallet yet. Call get-wallet first.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Step 2: Connect to blockchain
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const treasuryWallet = new ethers.Wallet(deployerPrivateKey, provider);
+    const paraBadge = new ethers.Contract(contractAddress, PARA_BADGE_ABI, treasuryWallet);
+
+    // Step 3: Check if user already has this badge on-chain (prevent double mint)
+    const alreadyHasBadge = await paraBadge.userHasBadge(
+      user.wallet_address,
+      badge_type_id
+    );
+
+    if (alreadyHasBadge) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          already_minted: true,
+          message: "User already has this badge on-chain",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Step 4: Record the pending mint in Supabase
+    const { data: pendingMint, error: pendingError } = await supabase
+      .from("pending_mints")
+      .insert({
+        user_id,
+        type: "badge",
+        badge_id: badge_type_id,
+        status: "pending",
+      })
+      .select()
+      .single();
+
+    if (pendingError) {
+      console.error("Failed to create pending mint record:", pendingError);
+    }
+
+    // Step 5: Mint the badge NFT
+    console.log(`Minting badge '${badge_type_id}' to ${user.wallet_address}...`);
+
+    const tx = await paraBadge.mintBadge(user.wallet_address, badge_type_id, {
+      gasLimit: 300000, // Set explicit gas limit for reliability
+    });
+
+    console.log(`Transaction submitted: ${tx.hash}`);
+
+    // Step 6: Wait for confirmation (1 block)
+    const receipt = await tx.wait(1);
+    const tokenId = receipt.events?.[0]?.args?.tokenId?.toNumber();
+
+    console.log(`Badge minted! Token ID: ${tokenId}, TX: ${tx.hash}`);
+
+    // Step 7: Update pending_mints record with success
+    if (pendingMint?.id) {
+      await supabase
+        .from("pending_mints")
+        .update({
+          status: "completed",
+          tx_hash: tx.hash,
+        })
+        .eq("id", pendingMint.id);
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        tx_hash: tx.hash,
+        token_id: tokenId,
+        badge_type_id,
+        recipient: user.wallet_address,
+        explorer_url: `https://amoy.polygonscan.com/tx/${tx.hash}`,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (error: any) {
+    console.error("mint-badge error:", error);
+
+    return new Response(
+      JSON.stringify({
+        error: "Minting failed",
+        details: error.message,
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
-
-  // ── 5. Update badge_mints → confirmed ─────────────────────────────────────
-  const explorerUrl = `${AMOY_EXPLORER}/${txHash}`;
-  const { error: updateError } = await supabase
-    .from('badge_mints')
-    .update({
-      status: 'confirmed',
-      tx_hash: txHash,
-      explorer_url: explorerUrl,
-    })
-    .eq('id', badge_mint_id);
-
-  if (updateError) {
-    // Mint already went through — don't crash; just log
-    console.error('[mint-badge] DB update error after successful mint:', updateError.message);
-  }
-
-  return json({ status: 'confirmed', tx_hash: txHash, explorer_url: explorerUrl });
 });
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-async function markFailed(supabase: ReturnType<typeof createClient>, mintId: string, reason: string) {
-  console.error('[mint-badge] Marking failed:', mintId, reason);
-  await supabase
-    .from('badge_mints')
-    .update({ status: 'failed', error_msg: reason })
-    .eq('id', mintId);
-}
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
