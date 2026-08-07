@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { ethers } from "npm:ethers@5.7.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,8 +7,6 @@ const corsHeaders = {
 };
 
 // Points required per voucher type
-// Earning rate: 2 pts/km base (3pts during rush hour, 4pts on Friday peak)
-// Avg jeepney trip ~5km = ~10 pts. Costs calibrated to require meaningful ridership.
 const VOUCHER_COSTS: Record<string, number> = {
   discount:   500,   // ₱5 jeepney fare discount  (~25 avg trips to earn)
   free_ride: 1000,   // 1 free jeepney ride        (~50 avg trips to earn)
@@ -21,15 +20,27 @@ const VOUCHER_DESCRIPTIONS: Record<string, string> = {
   partner:   "Partner Merchant Discount",
 };
 
+// ParaToken ABI — only the mint function we need
+const PARA_TOKEN_ABI = [
+  "function mint(address to, uint256 amount) external",
+  "function balanceOf(address account) external view returns (uint256)",
+];
+
 /**
  * generate-voucher Edge Function
  *
- * Converts Para points into a redeemable voucher code.
- * No blockchain involved — pure database operation.
- * Voucher codes are unique, expire in 30 days, and can only be used once.
+ * Converts Para points into a redeemable voucher code AND records the
+ * redemption on the Polygon blockchain by minting PRT tokens to the user's wallet.
+ *
+ * Flow:
+ *   1. Validate user has enough points
+ *   2. Deduct points from DB
+ *   3. Create voucher record in DB
+ *   4. Mint PRT tokens to user's wallet on Polygon (on-chain proof)
+ *   5. Store tx_hash in voucher record
  *
  * Request body: { user_id: string, points_to_redeem: number, voucher_type?: string }
- * Response:     { success: boolean, voucher_code: string, points_used: number, expires_at: string }
+ * Response:     { success, voucher_code, points_used, expires_at, tx_hash?, explorer_url? }
  */
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -51,7 +62,7 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Step 1: Get the required points cost for this voucher type
+    // Step 1: Validate voucher type and required points
     const requiredPoints = VOUCHER_COSTS[voucher_type];
     if (!requiredPoints) {
       return new Response(
@@ -70,10 +81,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Step 2: Check the user has enough points
+    // Step 2: Get user and their wallet address
     const { data: user, error: userError } = await supabase
       .from("users")
-      .select("id, points, username")
+      .select("id, points, username, wallet_address")
       .eq("id", user_id)
       .single();
 
@@ -120,7 +131,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Step 5: Create the voucher record
+    // Step 5: Create the voucher record in DB
     const { data: voucher, error: voucherError } = await supabase
       .from("vouchers")
       .insert({
@@ -148,7 +159,49 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`Voucher ${code} created for user ${user_id} (${requiredPoints} points)`);
+    // Step 6: Record redemption on blockchain by minting PRT tokens to user's wallet
+    // This creates a permanent on-chain proof of the voucher redemption.
+    // The PRT token amount equals the points redeemed (1 pt = 1 PRT token).
+    let txHash: string | null = null;
+    let explorerUrl: string | null = null;
+
+    const privateKey = Deno.env.get("DEPLOYER_PRIVATE_KEY");
+    const tokenAddress = Deno.env.get("PARA_TOKEN_ADDRESS");
+    const rpcUrl = Deno.env.get("POLYGON_AMOY_RPC_URL") || "https://rpc-amoy.polygon.technology";
+    const userWallet = user.wallet_address;
+
+    if (privateKey && tokenAddress && userWallet) {
+      try {
+        const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+        const signer = new ethers.Wallet(privateKey, provider);
+        const paraToken = new ethers.Contract(tokenAddress, PARA_TOKEN_ABI, signer);
+
+        // Mint PRT tokens = points redeemed (e.g. 500 pts → 500 PRT tokens)
+        // This appears on PolygonScan as a "Token Transfer" to the user's wallet
+        const amount = ethers.utils.parseUnits(requiredPoints.toString(), 18);
+        const tx = await paraToken.mint(userWallet, amount);
+        await tx.wait(); // Wait for confirmation
+
+        txHash = tx.hash;
+        explorerUrl = `https://amoy.polygonscan.com/tx/${tx.hash}`;
+
+        console.log(`[Blockchain] Voucher redemption recorded on-chain. TX: ${txHash}`);
+
+        // Update the voucher record with the tx_hash
+        await supabase
+          .from("vouchers")
+          .update({ tx_hash: txHash, explorer_url: explorerUrl })
+          .eq("id", voucher.id);
+
+      } catch (blockchainError: any) {
+        // Blockchain recording failure doesn't cancel the voucher
+        console.warn("[Blockchain] PRT mint for voucher failed (non-fatal):", blockchainError.message);
+      }
+    } else {
+      console.warn("[Blockchain] Skipping on-chain recording — missing DEPLOYER_PRIVATE_KEY, PARA_TOKEN_ADDRESS, or user wallet");
+    }
+
+    console.log(`Voucher ${code} created for user ${user_id} (${requiredPoints} points)${txHash ? ` | TX: ${txHash}` : " | no on-chain record"}`);
 
     return new Response(
       JSON.stringify({
@@ -157,10 +210,12 @@ Deno.serve(async (req: Request) => {
         description: VOUCHER_DESCRIPTIONS[voucher_type],
         points_used: requiredPoints,
         expires_at: expiresAt.toISOString(),
+        tx_hash: txHash,
+        explorer_url: explorerUrl,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("generate-voucher error:", error);
     return new Response(
       JSON.stringify({ error: "Internal server error", details: error.message }),

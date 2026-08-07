@@ -119,10 +119,21 @@ export default function VouchersScreen() {
             setRedeeming(null);
 
             if (result.success) {
+              const buttons: any[] = [{ text: 'Got it!', onPress: fetchVouchers }];
+
+              // If blockchain TX was recorded, offer a PolygonScan link
+              if (result.explorer_url) {
+                const { Linking } = require('react-native');
+                buttons.unshift({
+                  text: '🔗 View on Polygon',
+                  onPress: () => Linking.openURL(result.explorer_url),
+                });
+              }
+
               Alert.alert(
                 '🎉 Voucher Created!',
-                `Your code: ${result.voucher_code}\n\nExpires in 30 days.`,
-                [{ text: 'Got it!', onPress: fetchVouchers }]
+                `Your code: ${result.voucher_code}\n\nExpires in 30 days.${result.tx_hash ? '\n\n⛓️ Recorded on Polygon blockchain!' : ''}`,
+                buttons
               );
             } else {
               Alert.alert('Failed', result.error || 'Could not generate voucher. Try again.');

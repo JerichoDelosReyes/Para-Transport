@@ -32,21 +32,40 @@ export interface BadgeMint {
 }
 
 // ─── Badge ID Mapping ──────────────────────────────────────────────────────
+// Maps the app's internal badge IDs → registered on-chain badge type IDs.
+// On-chain types registered: first_ride, 10_trips, 50_trips, streak_7, streak_30, 100km
+// Any badge NOT in this map will be skipped (app-only badge, no NFT minted).
 const BADGE_ID_TO_CHAIN_ID: Record<string, string> = {
-  first_ride:  'first_ride',
-  '10_trips':  '10_trips',
-  '50_trips':  '50_trips',
-  streak_7:    'streak_7',
-  streak_30:   'streak_30',
-  '100km':     '100km',
+  // ── Direct on-chain IDs ──────────────────────────────────────────────────
+  'first_ride':  'first_ride',
+  '10_trips':    '10_trips',
+  '50_trips':    '50_trips',
+  'streak_7':    'streak_7',
+  'streak_30':   'streak_30',
+  '100km':       '100km',
+
+  // ── App badge → nearest on-chain equivalent ──────────────────────────────
+  'route_rookie':          'first_ride',   // First trip ever
+  'path_explorer':         '10_trips',     // Explored multiple routes
+  'urban_navigator':       '50_trips',     // Heavy commuter
+  'city_roamer':           '50_trips',     // City explorer
+  'long_hauler':           '100km',        // Long distance rider
+  'frequent_rider':        '10_trips',     // Regular rider
+  'habit_builder':         'streak_7',     // 7-day streak badge
+  'dedicated_commuter':    'streak_7',     // Streak-based dedication
+  'ultimate_commuter':     '50_trips',     // Power user milestone
+  'multi_hop_master':      '50_trips',     // Multi-transfer expert
+  // All other badges (jeep_regular, bus_rider, uv_express_commuter,
+  // tricycle_veteran, multi_modal_commuter, budget_saver, fare_planner,
+  // cost_optimizer, rush_hour_survivor, speed_commuter, time_optimizer,
+  // smart_planner, route_comparator, navigator, adaptive_commuter,
+  // map_explorer, new_stop_discoverer) are app-only — no NFT minted.
 };
 
 function toChainBadgeId(appBadgeId: string): string | null {
-  if (BADGE_ID_TO_CHAIN_ID[appBadgeId]) {
-    return BADGE_ID_TO_CHAIN_ID[appBadgeId];
-  }
-  const normalized = appBadgeId.toLowerCase().replace(/[\s-]+/g, '_');
-  return normalized || null;
+  // Only return a chain ID if explicitly mapped — no fallback to raw badge ID.
+  // Sending an unregistered ID to the contract will always fail.
+  return BADGE_ID_TO_CHAIN_ID[appBadgeId] ?? null;
 }
 
 // ─── Edge Function Caller ───────────────────────────────────────────────────
