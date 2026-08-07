@@ -2425,6 +2425,11 @@ export default function HomeScreen() {
     }
 
     if (showTransitLayer) {
+      const terminalVehicleIcon =
+        selectedRouteType === 'bus'
+          ? require('../../assets/icons/bus-icon.png')
+          : require('../../assets/icons/jeepney-icon.png');
+
       tricycleTerminalPoints.forEach((terminal) => {
         if (activeTricycleTerminalId && String(terminal.id) === activeTricycleTerminalId) return;
 
@@ -2434,7 +2439,7 @@ export default function HomeScreen() {
           children: (
             <View style={styles.terminalMarker}>
               <Image
-                source={require('../../assets/icons/tricycle-icon.png')}
+                source={terminalVehicleIcon}
                 style={styles.terminalIconImage}
               />
             </View>
@@ -2560,7 +2565,7 @@ export default function HomeScreen() {
     }
 
     return markers;
-  }, [selectedPoi, activeUserPosition, currentLocation, originLocation, originQuery, destinationLocation, showTransitLayer, tricycleTerminalPoints, selectedRoute, visibleTransitLegs, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
+  }, [selectedPoi, activeUserPosition, currentLocation, originLocation, originQuery, destinationLocation, showTransitLayer, selectedRouteType, tricycleTerminalPoints, selectedRoute, visibleTransitLegs, visibleTransitMarkers, destinationQuery, visibleTransitStops]);
 
   // Log marker/line updates for diagnostics
   useEffect(() => {
@@ -3218,6 +3223,7 @@ export default function HomeScreen() {
                 ]}
                 activeOpacity={0.7}
                 onPress={() => {
+                  setShowTransitPriority(false);
                   if (sim.state !== 'idle') {
                     sim.reset();
                   } else {
