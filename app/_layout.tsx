@@ -1,5 +1,6 @@
 import '../global.css';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
+import { LanguageProvider } from '../src/i18n/LanguageContext';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState, useRef } from 'react';
@@ -213,7 +214,9 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <RootContent showAnimatedSplash={showAnimatedSplash} setShowAnimatedSplash={setShowAnimatedSplash} />
+      <LanguageProvider>
+        <RootContent showAnimatedSplash={showAnimatedSplash} setShowAnimatedSplash={setShowAnimatedSplash} />
+      </LanguageProvider>
     </ThemeProvider>
   );
 }
