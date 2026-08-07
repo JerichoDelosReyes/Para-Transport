@@ -9,6 +9,7 @@ import { useRecentSearches } from '../hooks/useRecentSearches';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { signOut, logUserAction } from '../services/authService';
 import { useTheme } from '../src/theme/ThemeContext';
+import { useLanguage } from '../src/i18n/LanguageContext';
 
 const DISCOUNT_OPTIONS: Array<{ key: FareDiscountType; label: string }> = [
   { key: 'regular', label: 'Regular' },
@@ -33,6 +34,8 @@ export default function SettingsScreen() {
   
   const { theme, isDark, themeMode, setThemeMode } = useTheme();
   const [isAppearanceModalVisible, setIsAppearanceModalVisible] = useState(false);
+  const { language, setLanguage } = useLanguage();
+  const [isLanguageModalVisible, setIsLanguageModalVisible] = useState(false);
 
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -68,6 +71,8 @@ export default function SettingsScreen() {
 
   const currentThemeLabel =
     themeMode === 'system' ? 'System' : themeMode === 'light' ? 'Light' : 'Dark';
+
+  const currentLanguageLabel = language === 'fil' ? 'Filipino' : 'English';
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
@@ -135,6 +140,22 @@ export default function SettingsScreen() {
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={{ color: theme.accent, marginRight: 8, fontSize: 16 }}>{currentThemeLabel}</Text>
+              <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+            </View>
+          </TouchableOpacity>
+          <View style={[styles.divider, { backgroundColor: theme.cardBorder }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            activeOpacity={0.7}
+            onPress={() => setIsLanguageModalVisible(true)}
+          >
+            <View style={styles.rowLeft}>
+              <Feather name="globe" size={20} color={theme.text} style={styles.icon} />
+              <Text style={[styles.settingLabel, { color: theme.text }]}>Language</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ color: theme.accent, marginRight: 8, fontSize: 16 }}>{currentLanguageLabel}</Text>
               <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
             </View>
           </TouchableOpacity>
@@ -258,6 +279,49 @@ export default function SettingsScreen() {
                 <Text style={[styles.modalOptionText, { color: theme.text }]}>Light</Text>
               </View>
               {themeMode === 'light' && <Ionicons name="checkmark" size={20} color={theme.accent} />}
+            </TouchableOpacity>
+
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Language Modal */}
+      <Modal
+        visible={isLanguageModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsLanguageModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setIsLanguageModalVisible(false)}
+        >
+          <Pressable
+            style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Language</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={() => { setLanguage('en'); setIsLanguageModalVisible(false); }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={[styles.modalOptionText, { color: theme.text }]}>English</Text>
+              </View>
+              {language === 'en' && <Ionicons name="checkmark" size={20} color={theme.accent} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={() => { setLanguage('fil'); setIsLanguageModalVisible(false); }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={[styles.modalOptionText, { color: theme.text }]}>Filipino</Text>
+              </View>
+              {language === 'fil' && <Ionicons name="checkmark" size={20} color={theme.accent} />}
             </TouchableOpacity>
 
           </Pressable>

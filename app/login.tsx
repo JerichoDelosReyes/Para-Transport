@@ -269,7 +269,7 @@ export default function LoginScreen() {
             <View style={styles.headerCenter}>
               <MinimalistJeep width={104} height={64} />
               <Text style={[styles.title, { color: '#0A1628' }]}>LOG IN</Text>
-              <Text style={[styles.headerCopy, { color: '#0A1628' }]}>Tuloy na, tara na sa byahe.</Text>
+              <Text style={[styles.headerCopy, { color: '#0A1628' }]}>Welcome back, let's get moving.</Text>
             </View>
           </View>
         </View>
