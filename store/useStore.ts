@@ -57,8 +57,8 @@ type PendingRouteSearch = {
 };
 
 const createGuestUser = (): User => ({
-  full_name: 'Komyuter',
-  username: 'Komyuter',
+  full_name: 'Commuter',
+  username: 'Commuter',
   email: 'guest@para.ph',
   points: 0,
   streak_count: 0,

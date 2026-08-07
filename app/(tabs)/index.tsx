@@ -3060,7 +3060,7 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
               <Text style={[styles.searchInputText, {color: theme.textSecondary, flex: 1, marginLeft: 6}]} numberOfLines={1}>
-                {destinationQuery ? `${originQuery || currentLocationLabel} → ${destinationQuery}` : `Saan tayo, ${user?.username || 'Komyuter'}?`}
+                {destinationQuery ? `${originQuery || currentLocationLabel} → ${destinationQuery}` : `Where to, ${user?.username || 'Commuter'}?`}
               </Text>
               <TouchableOpacity 
                 onPress={() => setIsSearchActive(true)} 

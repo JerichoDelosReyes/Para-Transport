@@ -31,7 +31,7 @@ export function generateGuidanceSteps(
   steps.push({
     id: `step-${stepCounter++}`,
     type: 'walk',
-    instruction: `Lumakad ng ${Math.round(distToFirst)}m papunta sa boarding point`,
+    instruction: `Walk ${Math.round(distToFirst)}m to the boarding point`,
     distanceMeters: Math.round(distToFirst),
     durationSeconds: Math.round((distToFirst / 1.4)), // approx 1.4m/s walking speed
     coordinate: firstBoarding,
@@ -45,7 +45,7 @@ export function generateGuidanceSteps(
     steps.push({
       id: `step-${stepCounter++}`,
       type: 'board',
-      instruction: `Sumakay sa ${mode} — ${routeName}`,
+      instruction: `Board the ${mode} — ${routeName}`,
       distanceMeters: 0,
       durationSeconds: 30, // 30s board time
       coordinate: leg.boardingPoint,
@@ -57,7 +57,7 @@ export function generateGuidanceSteps(
     steps.push({
       id: `step-${stepCounter++}`,
       type: 'ride',
-      instruction: `Sumakay hanggang sa drop-off point (approx. ${(leg.distanceKm || 0).toFixed(1)} km)`,
+      instruction: `Ride until the drop-off point (approx. ${(leg.distanceKm || 0).toFixed(1)} km)`,
       distanceMeters: Math.round(rideDist),
       durationSeconds: (leg.estimatedMinutes || 0) * 60,
       coordinate: leg.alightingPoint,
@@ -68,7 +68,7 @@ export function generateGuidanceSteps(
     steps.push({
       id: `step-${stepCounter++}`,
       type: 'alight',
-      instruction: 'Bumaba na dito — malapit ka na sa susunod na waypoint',
+      instruction: 'Get off here — you\'re close to the next waypoint',
       distanceMeters: 0,
       durationSeconds: 30, // 30s alight time
       coordinate: leg.alightingPoint,
@@ -80,7 +80,7 @@ export function generateGuidanceSteps(
       steps.push({
         id: `step-${stepCounter++}`,
         type: 'transfer',
-        instruction: `Lumipat sa susunod na terminal (${Math.round(transferDist)}m)`,
+        instruction: `Transfer to the next terminal (${Math.round(transferDist)}m)`,
         distanceMeters: Math.round(transferDist),
         durationSeconds: Math.round(transferDist / 1.4),
         coordinate: nextBoarding,
@@ -95,7 +95,7 @@ export function generateGuidanceSteps(
   steps.push({
     id: `step-${stepCounter++}`,
     type: 'arrive',
-    instruction: `Nakarating ka na! Ang iyong destinasyon ay ${Math.round(distToDest)}m mula rito`,
+    instruction: `You've arrived! Your destination is ${Math.round(distToDest)}m from here`,
     distanceMeters: Math.round(distToDest),
     durationSeconds: Math.round(distToDest / 1.4),
     coordinate: destination,
