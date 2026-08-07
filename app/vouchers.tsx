@@ -21,7 +21,7 @@ const VOUCHER_OPTIONS = [
     title: '₱5 Fare Discount',
     description: 'Get ₱5 off your next jeepney fare',
     points: 500,
-    icon: '🎫',
+    icon: 'ticket-outline' as const,
     color: '#10B981',
     bg: 'rgba(16, 185, 129, 0.1)',
     border: 'rgba(16, 185, 129, 0.3)',
@@ -31,7 +31,7 @@ const VOUCHER_OPTIONS = [
     title: 'Partner Discount',
     description: 'Discount at partner merchants',
     points: 750,
-    icon: '🛍️',
+    icon: 'bag-handle-outline' as const,
     color: '#F59E0B',
     bg: 'rgba(245, 158, 11, 0.1)',
     border: 'rgba(245, 158, 11, 0.3)',
@@ -41,7 +41,7 @@ const VOUCHER_OPTIONS = [
     title: 'Free Jeepney Ride',
     description: '1 completely free jeepney ride',
     points: 1000,
-    icon: '🚌',
+    icon: 'bus-outline' as const,
     color: '#6366F1',
     bg: 'rgba(99, 102, 241, 0.1)',
     border: 'rgba(99, 102, 241, 0.3)',
@@ -190,7 +190,9 @@ export default function VouchersScreen() {
               onPress={() => handleRedeem(opt)}
               disabled={!canAfford || !!redeeming}
             >
-              <Text style={styles.optionIcon}>{opt.icon}</Text>
+              <View style={[styles.optionIconWrap, { backgroundColor: opt.bg }]}>
+                <Ionicons name={opt.icon} size={22} color={opt.color} />
+              </View>
               <View style={styles.optionInfo}>
                 <Text style={[styles.optionTitle, { color: isDark ? '#FFFFFF' : '#0A1628' }]}>{opt.title}</Text>
                 <Text style={[styles.optionDesc, { color: theme.textSecondary }]}>{opt.description}</Text>
@@ -219,7 +221,9 @@ export default function VouchersScreen() {
           <ActivityIndicator size="small" color={COLORS.primary} style={{ marginTop: 24 }} />
         ) : vouchers.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-            <Text style={styles.emptyIcon}>🎫</Text>
+            <View style={[styles.emptyIconWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6' }]}>
+              <Ionicons name="ticket-outline" size={36} color={isDark ? '#9CA3AF' : '#6B7280'} />
+            </View>
             <Text style={[styles.emptyTitle, { color: theme.text }]}>No vouchers yet</Text>
             <Text style={[styles.emptyDesc, { color: theme.textSecondary }]}>
               Redeem your points above to get your first voucher!
@@ -309,7 +313,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 12,
   },
-  optionIcon: { fontSize: 28 },
+  optionIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   optionInfo: { flex: 1 },
   optionTitle: { fontFamily: 'Inter', fontSize: 15, fontWeight: '700', marginBottom: 2 },
   optionDesc: { fontFamily: 'Inter', fontSize: 12 },
@@ -320,7 +330,14 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.card, borderWidth: 1,
     padding: 32, alignItems: 'center', gap: 8,
   },
-  emptyIcon: { fontSize: 40 },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
   emptyTitle: { fontFamily: 'Cubao', fontSize: 18 },
   emptyDesc: { fontFamily: 'Inter', fontSize: 13, textAlign: 'center', lineHeight: 18 },
   voucherCard: {
