@@ -8,6 +8,4 @@ Ginawa ang Para ng isang maliit na team ng mga Pilipinong developer na nagtutulu
 - Christian Valenzuela
 - Justine Lawrence Coronel
 
-## Tungkol sa team
-
 Sama-samang binuo ng team na ito ang Para app — mula sa mobile application, interactive map, route engine, hanggang sa Jeepie na chatbot companion — bilang sagot sa hirap ng mga commuter na pagtagni-tagniin ang impormasyon ng pampublikong transportasyon sa Pilipinas.

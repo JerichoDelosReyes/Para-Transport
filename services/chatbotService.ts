@@ -2,6 +2,10 @@ import datasetJson from '../data/chatbot-dataset.json';
 import type { JeepneyRoute } from '../types/routes';
 import { findRoutesForDestination, rankRoutes } from './routeSearch';
 import { BADGES, type Badge } from '../constants/badges';
+import { supabase } from '../config/supabaseClient';
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 export type BotLanguage = 'en' | 'tl';
 export type ChatbotMode = 'assistant' | 'companion';
@@ -595,6 +599,14 @@ function normalizeText(text: string): string {
   if (normalizeCache.size > 5000) normalizeCache.clear();
   normalizeCache.set(text, result);
   return result;
+}
+
+// Jeepie always replies in English regardless of the language the user typed in.
+// Kept as a function (not a literal const) so BotLanguage stays widened -- the
+// file has many existing `language === 'tl'` branches that would otherwise
+// become "unreachable" type errors under a narrowed literal 'en' type.
+function replyLanguage(_message: string): BotLanguage {
+  return 'en';
 }
 
 function detectLanguage(message: string): BotLanguage {
@@ -1278,6 +1290,22 @@ function buildGeneralClarifyingQuestion(language: BotLanguage): string {
     'Your message looks a bit short or incomplete, so I want to clarify first.',
     'Please tell me what you need: a route roadmap, a fare estimate, or app guidance.',
     'Tip: sharing a destination helps a lot, and origin is optional because I can default to your current location.',
+  ].join('\n\n');
+}
+
+function buildGenericFallbackReply(language: BotLanguage): string {
+  if (language === 'tl') {
+    return [
+      'Medyo hindi ko masyadong nasundan yung tanong mo, pasensya na.',
+      'Pwede mo bang sabihin kung alin dito ang kailangan mo: route roadmap, fare estimate, o app guide?',
+      'Halimbawa, sabihin mo lang ang destination mo at tutulungan na kita.',
+    ].join('\n\n');
+  }
+
+  return [
+    "I wasn't able to fully catch what you need there, sorry about that.",
+    'Could you tell me which of these you\'re after: a route roadmap, a fare estimate, or app guidance?',
+    'For example, just naming your destination already helps me a lot.',
   ].join('\n\n');
 }
 
@@ -2715,197 +2743,65 @@ async function fetchWithTimeout(input: RequestInfo, init: RequestInit = {}, time
   }
 }
 
-function parseGuardrailDecision(raw: string): GuardrailDecision | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
+type AskJeepieResponse = {
+  inScope: boolean;
+  category?: GuardrailCategory;
+  reply: string | null;
+  similarity?: number;
+  sources?: string[];
+  error?: string;
+};
 
-  const jsonCandidate = trimmed.match(/\{[\s\S]*\}/)?.[0] ?? trimmed;
-
-  try {
-    const parsed = JSON.parse(jsonCandidate) as {
-      allow?: unknown;
-      category?: unknown;
-      reason?: unknown;
-      confidence?: unknown;
-    };
-
-    const allow = parsed.allow === true || parsed.allow === 'true';
-    const categoryRaw = typeof parsed.category === 'string' ? normalizeText(parsed.category) : 'safe';
-    const category: GuardrailCategory = categoryRaw === 'unsafe' || categoryRaw === 'out of scope' || categoryRaw === 'out_of_scope'
-      ? (categoryRaw === 'unsafe' ? 'unsafe' : 'out_of_scope')
-      : 'safe';
-    const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : undefined;
-    const confidence = typeof parsed.confidence === 'number'
-      ? Math.max(0, Math.min(1, parsed.confidence))
-      : undefined;
-
-    return {
-      allow,
-      category,
-      reason,
-      confidence,
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function callGroqGuardrail(
-  message: string,
-  language: BotLanguage,
-): Promise<GuardrailDecision> {
-  const rawKey = process.env.EXPO_PUBLIC_GROQ_GUARDRAIL_API_KEY
-    || process.env.GROQ_GUARDRAIL_API_KEY
-    || process.env.EXPO_PUBLIC_GROQ_API_KEY
-    || process.env.GROQ_API_KEY;
-  const apiKey = rawKey?.trim();
-
-  // Fail-open policy: if key is unavailable, allow fallback path to continue.
-  if (!apiKey) {
-    return {
-      allow: true,
-      category: 'safe',
-    };
-  }
-
-  const requestedLanguage = language === 'tl' ? 'Tagalog' : 'English';
-  const guardrailPrompt = [
-    'You are a strict safety guardrail classifier for Jeepie, PARA app assistant.',
-    'Decide whether the user message can be sent to the main assistant model.',
-    'Allow if message is about PARA app, commuting, routes, fares, directions, transport, or harmless social chat.',
-    'Block unsafe requests or prompts that are clearly outside scope.',
-    'Return JSON only with this exact schema:',
-    '{"allow":true|false,"category":"safe|out_of_scope|unsafe","reason":"short reason","confidence":0.0}',
-    `Write reason in ${requestedLanguage}.`,
-    'Do not add markdown or extra text.',
-  ].join('\n');
-
-  try {
-    const response = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        temperature: 0,
-        max_tokens: 90,
-        messages: [
-          {
-            role: 'system',
-            content: guardrailPrompt,
-          },
-          {
-            role: 'user',
-            content: message,
-          },
-        ],
-      }),
-    }, 10000);
-
-    if (!response || !response.ok) {
-      return {
-        allow: true,
-        category: 'safe',
-      };
-    }
-
-    const data = await response.json();
-    const text = data?.choices?.[0]?.message?.content;
-    if (typeof text !== 'string') {
-      return {
-        allow: true,
-        category: 'safe',
-      };
-    }
-
-    const decision = parseGuardrailDecision(text);
-    if (!decision) {
-      return {
-        allow: true,
-        category: 'safe',
-      };
-    }
-
-    return decision;
-  } catch (err) {
-    console.warn('[chatbotService] Groq guardrail network error:', err);
-    return {
-      allow: true,
-      category: 'safe',
-    };
-  }
-}
-
-async function callGroqFallback(
+/**
+ * Calls the ask-jeepie Supabase Edge Function, which does retrieval-augmented
+ * generation over the Jeepie knowledge base: embeds the message, checks it
+ * against kb_chunks via pgvector similarity (this IS the scope guardrail now --
+ * below-threshold messages never reach Groq), and if in-scope, asks Groq for a
+ * reply grounded in the retrieved context. Replaces the old two-call
+ * (classifier guardrail + separate Groq call) client-side flow.
+ */
+async function callAskJeepie(
   message: string,
   language: BotLanguage,
   history?: ChatbotHistoryMessage[],
-): Promise<string | null> {
-  const rawKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || process.env.GROQ_API_KEY;
-  const apiKey = rawKey?.trim();
-  if (!apiKey) return null;
-
-  const requestedLanguage = language === 'tl' ? 'Tagalog' : 'English';
-  const strictPrompt = [
-    'You are Jeepie, the built-in assistant of the PARA mobile application.',
-    'You are not a general-purpose AI.',
-    'Only answer transportation and PARA app topics: public transport, routes, directions, fares, commute tips, and app features.',
-    'For casual/friendly conversation, respond warmly and keep it related to commuting or the PARA app when possible.',
-    'Respond using one language only for each reply.',
-    'Do not add direct translations in parentheses.',
-    'Do not restate the same sentence in another language.',
-    'Do not invent or guess routes, fares, schedules, availability, traffic, or announcements.',
-    `If route data is missing, reply exactly with: ${ROUTE_DATA_UNAVAILABLE_REPLY}`,
-    `If data is unavailable, reply exactly with: ${INFO_UNAVAILABLE_REPLY}`,
-    `If the user asks strict academic/technical tasks outside PARA commuting (for example math equations or coding problems), reply exactly with: ${STRICT_OUT_OF_SCOPE_REPLY}`,
-    'Keep responses practical, concise, and commuter-friendly.',
-    'If giving fare, label it as estimated and include: Note: Fare may vary depending on local rates.',
-    'Do not mention internal system logic or model limitations.',
-    `Respond in ${requestedLanguage}.`,
-  ].join('\n');
-
-  const historyTurns = recentGroqHistory(history);
-  const currentNormalized = normalizeIntentText(message);
-  const historyAlreadyHasCurrentMessage = historyTurns.length > 0
-    && historyTurns[historyTurns.length - 1].role === 'user'
-    && normalizeIntentText(historyTurns[historyTurns.length - 1].content) === currentNormalized;
-
-  const userTurns = historyAlreadyHasCurrentMessage
-    ? historyTurns
-    : [...historyTurns, { role: 'user' as const, content: message }];
+): Promise<AskJeepieResponse | null> {
+  if (!SUPABASE_URL) return null;
 
   try {
-    const response = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token || SUPABASE_ANON_KEY;
+
+    const response = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/ask-jeepie`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${token}`,
+        apikey: SUPABASE_ANON_KEY,
       },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        temperature: 0.2,
-        max_tokens: 220,
-        messages: [
-          {
-            role: 'system',
-            content: strictPrompt,
-          },
-          ...userTurns,
-        ],
+        message,
+        language,
+        history: recentGroqHistory(history),
       }),
     }, 15000);
 
     if (!response || !response.ok) return null;
 
     const data = await response.json();
-    const text = data?.choices?.[0]?.message?.content;
-    if (typeof text !== 'string') return null;
+    const reply = typeof data?.reply === 'string'
+      ? stripAutoTranslationParenthetical(data.reply.trim(), language)
+      : null;
 
-    return stripAutoTranslationParenthetical(text.trim(), language);
+    return {
+      inScope: Boolean(data?.inScope),
+      category: data?.category === 'unsafe' ? 'unsafe' : 'out_of_scope',
+      reply,
+      similarity: typeof data?.similarity === 'number' ? data.similarity : undefined,
+      sources: Array.isArray(data?.sources) ? data.sources : undefined,
+      error: typeof data?.error === 'string' ? data.error : undefined,
+    };
   } catch (err) {
-    console.warn('[chatbotService] Groq request failed:', err);
+    console.warn('[chatbotService] ask-jeepie request failed:', err);
     return null;
   }
 }
@@ -2954,7 +2850,7 @@ function hasStrictAcademicIntent(normalized: string): boolean {
 
 export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotResponse> {
   const message = request.message.trim();
-  const language = detectLanguage(message);
+  const language = replyLanguage(message);
   const normalized = normalizeIntentText(message);
   const history = request.history ?? [];
   const mode = request.mode ?? 'assistant';
@@ -3025,120 +2921,9 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
     };
   }
 
-  if (hasBuilderOriginIntent(normalized)) {
-    return {
-      text: ensureVariedReply(builderOriginReply(language)),
-      language,
-      state: {},
-      usedGroq: false,
-    };
-  }
-
-  if (hasBuilderIntent(normalized)) {
-    return {
-      text: ensureVariedReply(dataset.builderAnswer),
-      language,
-      state: {},
-      usedGroq: false,
-    };
-  }
-
-  if (hasFareNewsIntent(normalized)) {
-    return {
-      text: supportReply(pickFareNewsReply(language, history)),
-      language,
-      state: {},
-      usedGroq: false,
-    };
-  }
-
-  if (hasTriviaIntent(normalized)) {
-    return {
-      text: supportReply(pickTrivia(language, history)),
-      language,
-      state: {},
-      usedGroq: false,
-    };
-  }
-
   const mentions = findPlaceMentions(message);
   const parsed = parseFareEndpoints(normalized, mentions);
   const pendingDestination = statePendingDestination(currentState);
-
-  const aliasGuide = findAppGuideByAliases(normalized);
-  const matchedGuide = aliasGuide ?? findAppGuide(normalized);
-  const contextGuide = !matchedGuide
-    ? findAppGuideFromConversationContext(normalized, currentState)
-    : null;
-  const resolvedGuide = matchedGuide ?? contextGuide;
-
-  if (
-    resolvedGuide
-    && !hasRouteIntent(normalized)
-    && !hasFareIntent(normalized)
-    && !hasRouteListIntent(normalized)
-    && mentions.length === 0
-    && !parsed.destination
-  ) {
-    return {
-      text: supportReply(pickAppGuideReply(resolvedGuide, language), { includeClosing: true }),
-      language,
-      state: {
-        lastTopic: 'app-guide',
-        lastAppGuideId: resolvedGuide.id,
-      },
-      usedGroq: false,
-    };
-  }
-
-  if (hasCapabilityIntent(normalized)) {
-    return {
-      text: supportReply(buildCapabilitiesReply(language), { includeClosing: true }),
-      language,
-      state: {},
-      usedGroq: false,
-    };
-  }
-
-  if (hasFarePolicyIntent(normalized)) {
-    return {
-      text: supportReply(buildFarePolicyReply(language), { includeClosing: true }),
-      language,
-      state: {},
-      usedGroq: false,
-    };
-  }
-
-  if (hasRouteListIntent(normalized)) {
-    return {
-      text: supportReply(
-        buildRouteListReply(language, routes, parsed.destination),
-        { includeClosing: true },
-      ),
-      language,
-      state: {},
-      usedGroq: false,
-    };
-  }
-
-  if (hasAchievementIntent(normalized)) {
-    const mentionedBadge = findBadgeMention(normalized);
-    return {
-      text: supportReply(buildAchievementReply(language, mentionedBadge), { includeClosing: true }),
-      language,
-      state: {},
-      usedGroq: false,
-    };
-  }
-
-  if (hasLandmarkIntent(normalized)) {
-    return {
-      text: supportReply(buildLandmarkReply(language, normalized, routes), { includeClosing: true }),
-      language,
-      state: {},
-      usedGroq: false,
-    };
-  }
 
   const fareIntentActive = false; // Intentionally disabled to boost performance
 
@@ -3339,12 +3124,13 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   const strictAcademic = hasStrictAcademicIntent(normalized);
 
   if (!strictAcademic) {
-    const guardrailDecision = await callGroqGuardrail(message, language);
-    if (!guardrailDecision.allow) {
+    const askJeepieResult = await callAskJeepie(message, language, history);
+
+    if (askJeepieResult && !askJeepieResult.inScope) {
       return {
         text: ensureVariedReply(composeSupportReply(
           language,
-          buildGuardrailBlockedReply(language, guardrailDecision.category, guardrailDecision.reason),
+          buildGuardrailBlockedReply(language, askJeepieResult.category ?? 'out_of_scope'),
           { includeClosing: true },
         )),
         language,
@@ -3353,19 +3139,129 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
       };
     }
 
-    try {
-      const groqReply = await callGroqFallback(message, language, history);
-      if (groqReply) {
-        return {
-          text: supportReply(formatForChatDisplay(groqReply), { includeClosing: true }),
-          language,
-          state: {},
-          usedGroq: true,
-        };
-      }
-    } catch {
-      // ignore and fall through to deterministic fallback
+    if (askJeepieResult?.reply) {
+      return {
+        text: supportReply(formatForChatDisplay(askJeepieResult.reply), { includeClosing: true }),
+        language,
+        state: {},
+        usedGroq: true,
+      };
     }
+
+    // askJeepieResult is null (network/edge-function error) or came back
+    // out-of-scope/without a reply -- fall through to the older deterministic
+    // dataset matchers below before giving up entirely.
+  }
+
+  if (hasBuilderOriginIntent(normalized)) {
+    return {
+      text: ensureVariedReply(builderOriginReply(language)),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasBuilderIntent(normalized)) {
+    return {
+      text: ensureVariedReply(dataset.builderAnswer),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasFareNewsIntent(normalized)) {
+    return {
+      text: supportReply(pickFareNewsReply(language, history)),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasTriviaIntent(normalized)) {
+    return {
+      text: supportReply(pickTrivia(language, history)),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  const aliasGuide = findAppGuideByAliases(normalized);
+  const matchedGuide = aliasGuide ?? findAppGuide(normalized);
+  const contextGuide = !matchedGuide
+    ? findAppGuideFromConversationContext(normalized, currentState)
+    : null;
+  const resolvedGuide = matchedGuide ?? contextGuide;
+
+  if (
+    resolvedGuide
+    && !hasRouteIntent(normalized)
+    && !hasFareIntent(normalized)
+    && !hasRouteListIntent(normalized)
+    && mentions.length === 0
+    && !parsed.destination
+  ) {
+    return {
+      text: supportReply(pickAppGuideReply(resolvedGuide, language), { includeClosing: true }),
+      language,
+      state: {
+        lastTopic: 'app-guide',
+        lastAppGuideId: resolvedGuide.id,
+      },
+      usedGroq: false,
+    };
+  }
+
+  if (hasCapabilityIntent(normalized)) {
+    return {
+      text: supportReply(buildCapabilitiesReply(language), { includeClosing: true }),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasFarePolicyIntent(normalized)) {
+    return {
+      text: supportReply(buildFarePolicyReply(language), { includeClosing: true }),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasRouteListIntent(normalized)) {
+    return {
+      text: supportReply(
+        buildRouteListReply(language, routes, parsed.destination),
+        { includeClosing: true },
+      ),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasAchievementIntent(normalized)) {
+    const mentionedBadge = findBadgeMention(normalized);
+    return {
+      text: supportReply(buildAchievementReply(language, mentionedBadge), { includeClosing: true }),
+      language,
+      state: {},
+      usedGroq: false,
+    };
+  }
+
+  if (hasLandmarkIntent(normalized)) {
+    return {
+      text: supportReply(buildLandmarkReply(language, normalized, routes), { includeClosing: true }),
+      language,
+      state: {},
+      usedGroq: false,
+    };
   }
 
   if (shouldAskGeneralClarification(normalized)) {
@@ -3387,7 +3283,7 @@ export async function getChatbotReply(request: ChatbotRequest): Promise<ChatbotR
   }
 
   return {
-    text: supportReply(buildGeneralClarifyingQuestion(language)),
+    text: supportReply(buildGenericFallbackReply(language)),
     language,
     state: currentState,
     usedGroq: false,

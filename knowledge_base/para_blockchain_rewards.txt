@@ -12,7 +12,7 @@ Kapag nakamit mo ang isang achievement o badge sa Para, awtomatiko itong naitata
 
 ## Polygon network
 
-Tumatakbo ang blockchain feature ng Para sa Polygon, isang network na pinili dahil sa napakababang bayad sa transaksyon at mabilis na oras ng kumpirmasyon — ilang segundo lang, hindi ilang minuto. Dahil dito, mabilis at halos walang dagdag na gastos ang bawat achievement na naitatala, kaya hindi ito nagiging abala sa normal na paggamit mo ng app.
+Tumatakbo ang blockchain feature ng Para sa Polygon, hindi sa Ethereum mainnet, dahil pinili ito kumpara sa Ethereum: mas mababa nang malaki ang bayad sa transaksyon (sentimos lang, hindi daan-daang piso), at mabilis ang oras ng kumpirmasyon — ilang segundo lang, hindi ilang minuto. Dahil dito, mabilis at halos walang dagdag na gastos ang bawat achievement na naitatala, kaya hindi ito nagiging abala sa normal na paggamit mo ng app.
 
 ## Hindi mo kailangan ng crypto knowledge
 
